@@ -9,6 +9,11 @@ import { ForgotPasswordPage } from './pages/Auth/ForgotPasswordPage';
 import { AcceptInvitePage } from './pages/Auth/AcceptInvitePage';
 import { ProfilePage } from './pages/Auth/ProfilePage';
 
+// import { LoginPage } from './pages/Auth/LoginPage';
+// import { ForgotPasswordPage } from './pages/Auth/ForgotPasswordPage';
+// import { AcceptInvitePage } from './pages/Auth/AcceptInvitePage';
+// import { ProfilePage } from './pages/Auth/ProfilePage';
+
 // Main Dashboard
 import { DashboardPage } from './pages/Dashboard/DashboardPage';
 
