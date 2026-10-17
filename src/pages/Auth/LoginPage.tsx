@@ -75,28 +75,23 @@ export const LoginPage: React.FC = () => {
           justifyContent: 'space-between'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-              <div style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: '1.3rem',
-                boxShadow: '0 8px 16px rgba(99, 102, 241, 0.4)'
-              }}>
-                A
+            <div style={{ marginBottom: '24px' }}>
+              <div className="brand-logo-card" style={{ padding: '8px 18px', borderRadius: '12px', marginBottom: '12px' }}>
+                <img
+                  src="/logo.png"
+                  alt="VeniLearn Logo"
+                  className="brand-logo-img"
+                  style={{
+                    height: '42px',
+                    width: 'auto',
+                    maxWidth: '200px',
+                    objectFit: 'contain'
+                  }}
+                />
               </div>
-              <div>
-                <h1 style={{ fontSize: '1.4rem', margin: 0, letterSpacing: '-0.02em' }}>
-                  Acuity<span style={{ color: 'var(--primary)' }}>LMS</span>
-                </h1>
-                <p className="text-muted text-xs">Enterprise Next-Gen Learning & Assessment</p>
-              </div>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>
+                Enterprise Next-Gen Learning & Assessment Platform
+              </p>
             </div>
 
             <h2 style={{ fontSize: '1.3rem', marginBottom: '12px', lineHeight: 1.3 }}>
@@ -218,6 +213,19 @@ export const LoginPage: React.FC = () => {
           justifyContent: 'center'
         }}>
           <div style={{ marginBottom: '24px' }}>
+            <div className="brand-logo-card" style={{ padding: '6px 14px', borderRadius: '10px', marginBottom: '16px' }}>
+              <img
+                src="/logo.png"
+                alt="VeniLearn Logo"
+                className="brand-logo-img"
+                style={{
+                  height: '32px',
+                  width: 'auto',
+                  maxWidth: '160px',
+                  objectFit: 'contain'
+                }}
+              />
+            </div>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '6px' }}>Sign in to your account</h2>
             <p className="text-secondary text-sm">Enter your organizational credentials</p>
           </div>

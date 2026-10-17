@@ -34,20 +34,35 @@ export const ForgotPasswordPage: React.FC = () => {
         padding: '36px',
         boxShadow: 'var(--shadow-xl)'
       }}>
-        <Link
-          to="/login"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.85rem',
-            color: 'var(--text-muted)',
-            marginBottom: '20px'
-          }}
-        >
-          <ArrowLeft size={16} />
-          Back to login
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <Link
+            to="/login"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)'
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back to login
+          </Link>
+
+          <div className="brand-logo-card" style={{ padding: '4px 10px' }}>
+            <img
+              src="/logo.png"
+              alt="VeniLearn Logo"
+              className="brand-logo-img"
+              style={{
+                height: '24px',
+                width: 'auto',
+                maxWidth: '120px',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        </div>
 
         {submitted ? (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>

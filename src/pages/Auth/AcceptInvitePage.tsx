@@ -58,6 +58,22 @@ export const AcceptInvitePage: React.FC = () => {
         padding: '36px',
         boxShadow: 'var(--shadow-xl)'
       }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <div className="brand-logo-card" style={{ padding: '6px 14px', borderRadius: '10px' }}>
+            <img
+              src="/logo.png"
+              alt="VeniLearn Logo"
+              className="brand-logo-img"
+              style={{
+                height: '32px',
+                width: 'auto',
+                maxWidth: '160px',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        </div>
+
         {isCompleted ? (
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
             <div style={{
@@ -74,7 +90,7 @@ export const AcceptInvitePage: React.FC = () => {
               <CheckCircle size={36} />
             </div>
 
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Welcome to Acuity LMS!</h2>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Welcome to VeniLearn LMS!</h2>
             <p className="text-secondary text-sm" style={{ marginBottom: '24px', lineHeight: 1.5 }}>
               Your account has been successfully configured. You are now enrolled in Acme Learning Corp as a <strong>Learner</strong>.
             </p>

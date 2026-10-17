@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
 import {
   LayoutDashboard, BookOpen, Route, Video, HelpCircle,
@@ -76,29 +76,30 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
           background: 'var(--bg-sidebar)',
           flexShrink: 0
         }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontWeight: 800,
-            fontSize: '1.1rem',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
-          }}>
-            A
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.02em', color: 'var(--text-main)', lineHeight: 1.1 }}>
-              Acuity<span style={{ color: 'var(--primary)' }}>LMS</span>
+          <Link
+            to="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              textDecoration: 'none',
+              color: 'inherit',
+              maxWidth: '100%'
+            }}
+          >
+            <div className="brand-logo-card">
+              <img
+                src="/logo.png"
+                alt="VeniLearn Logo"
+                className="brand-logo-img"
+                style={{
+                  height: '34px',
+                  width: 'auto',
+                  maxWidth: '165px',
+                  objectFit: 'contain'
+                }}
+              />
             </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-              Enterprise Edition
-            </div>
-          </div>
+          </Link>
         </div>
 
         {/* Navigation list */}

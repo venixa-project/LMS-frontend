@@ -54,6 +54,29 @@ export const Navbar: React.FC<Props> = ({
           <Menu size={18} />
         </button>
 
+        {/* Mobile Brand Logo */}
+        <Link
+          to="/"
+          className="mobile-header-logo"
+          style={{
+            textDecoration: 'none'
+          }}
+        >
+          <div className="brand-logo-card" style={{ padding: '4px 10px' }}>
+            <img
+              src="/logo.png"
+              alt="VeniLearn Logo"
+              className="brand-logo-img"
+              style={{
+                height: '26px',
+                width: 'auto',
+                maxWidth: '120px',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        </Link>
+
         {/* Tenant/Org Switcher (Authorized admins) */}
         {isPlatformAdmin ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
