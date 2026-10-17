@@ -24,8 +24,9 @@ import { CoursesPage } from './pages/Courses/CoursesPage';
 import { CourseBuilderPage } from './pages/Courses/CourseBuilderPage';
 import { LearningPathsPage } from './pages/Courses/LearningPathsPage';
 import { LearnerCoursePlayerPage } from './pages/Courses/LearnerCoursePlayerPage';
+import { EnrollmentsPage } from './pages/Academics/EnrollmentsPage';
 
-// Live Classes
+// Live Classes & Attendance
 import { LiveSessionsPage } from './pages/LiveSessions/LiveSessionsPage';
 
 // Assessments
@@ -78,10 +79,12 @@ export const App: React.FC = () => {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
 
-          {/* Administration */}
+          {/* Administration & Directory */}
           <Route path="organizations" element={<OrganizationsPage />} />
           <Route path="departments" element={<DepartmentsPage />} />
           <Route path="people" element={<PeoplePage />} />
+          <Route path="students" element={<PeoplePage initialMode="students" />} />
+          <Route path="faculty" element={<PeoplePage initialMode="faculty" />} />
           <Route path="cohorts" element={<CohortsPage />} />
           <Route path="roles" element={<RolesPage />} />
 
@@ -91,18 +94,22 @@ export const App: React.FC = () => {
           <Route path="catalog" element={<CoursesPage />} />
           <Route path="course-builder" element={<CourseBuilderPage />} />
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
+          <Route path="learning-materials" element={<LearnerCoursePlayerPage />} />
           <Route path="learning-paths" element={<LearningPathsPage />} />
           <Route path="my-paths" element={<LearningPathsPage />} />
+          <Route path="enrollments" element={<EnrollmentsPage />} />
 
-          {/* Live Sessions */}
+          {/* Live Sessions, Timetable & Attendance */}
           <Route path="live-sessions" element={<LiveSessionsPage />} />
           <Route path="my-sessions" element={<LiveSessionsPage />} />
+          <Route path="attendance" element={<LiveSessionsPage defaultTab="attendance" />} />
 
-          {/* Assessments */}
+          {/* Assessments & Assignments */}
+          <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
           <Route path="question-banks" element={<QuestionBanksPage />} />
           <Route path="assessments" element={<AssessmentsPage />} />
           <Route path="my-assessments" element={<AssessmentsPage />} />
-          <Route path="my-results" element={<AssessmentsPage />} />
+          <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
 
           {/* Grading & Proctoring */}
           <Route path="grading" element={<GradingPage />} />

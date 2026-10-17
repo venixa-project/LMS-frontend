@@ -1,32 +1,69 @@
 import React, { useState } from 'react';
-import { mockReports } from '../../data/mockData';
+import { useAuthStore } from '../../lib/store';
+import { mockReports, mockCohorts, mockCourses } from '../../data/mockData';
 import { Report } from '../../types';
 import {
   BarChart3, Download, Calendar, Filter, Clock, CheckCircle2,
-  TrendingUp, TrendingDown, Users, BookOpen, Video, Award, RefreshCw
+  TrendingUp, TrendingDown, Users, BookOpen, Video, Award, RefreshCw, FileSpreadsheet
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const isFaculty = user?.activeRole === 'instructor';
+
   const [reports, setReports] = useState<Report[]>(mockReports);
   const [selectedCohort, setSelectedCohort] = useState('all');
+  const [selectedCourse, setSelectedCourse] = useState('all');
   const [dateRange, setDateRange] = useState('30d');
   const [isExporting, setIsExporting] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
+  // Faculty assigned cohorts and courses
+  const facultyCohorts = mockCohorts.filter((c) => ['coh-001', 'coh-002', 'coh-004'].includes(c.id));
+  const facultyCourses = mockCourses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id));
+
+  const availableCohorts = isFaculty ? facultyCohorts : mockCohorts;
+  const availableCourses = isFaculty ? facultyCourses : mockCourses;
+
   const handleExport = (reportName: string) => {
     setIsExporting(true);
     setTimeout(() => {
+      // Generate actual CSV content
+      const csvHeader = 'Student Name,Student ID,Assigned Course,Cohort / Batch,Syllabus Progress,Attendance Rate,Average Assessment Score,Pending Submissions\n';
+      const sampleRows = [
+        '"Alex Thompson","STU-2026-001","Advanced React & TypeScript Architecture","Spring 2026 Engineering","68%","96.2%","92%","0"',
+        '"Maria Garcia","STU-2026-002","Advanced React & TypeScript Architecture","Spring 2026 Engineering","74%","91.5%","88%","1"',
+        '"David Kim","STU-2026-003","JavaScript Fundamentals v3","Spring 2026 Engineering","92%","98.0%","94%","0"',
+        '"Sarah Jenkins","STU-2026-004","Cloud Infrastructure Engineering","Summer 2026 Cloud Architects","55%","89.4%","84%","2"',
+        '"Michael Brown","STU-2026-005","Advanced React & TypeScript Architecture","Spring 2026 Engineering","81%","94.0%","90%","0"'
+      ].join('\n');
+
+      const blob = new Blob([csvHeader + sampleRows], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${reportName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       setIsExporting(false);
-      alert(`Export generated: ${reportName.toLowerCase().replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}.csv (Data minimized per privacy policy)`);
-    }, 1000);
+    }, 600);
   };
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Analytics & Compliance Reports</h1>
-          <p className="text-secondary text-sm">Role-filtered learning progress, attendance rates, assessment distributions, and automated schedules</p>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>
+            {isFaculty ? 'My Teaching Analytics & Progress Reports' : 'Analytics & Compliance Reports'}
+          </h1>
+          <p className="text-secondary text-sm">
+            {isFaculty
+              ? 'Student completion rates, assignment performance, and attendance records for your assigned classes & batches'
+              : 'Role-filtered learning progress, attendance rates, assessment distributions, and automated schedules'}
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -34,7 +71,7 @@ export const ReportsPage: React.FC = () => {
             className="btn btn-secondary"
             onClick={() => setShowScheduleModal(true)}
           >
-            <Clock size={16} /> Schedule Recurring Delivery
+            <Clock size={16} /> {isFaculty ? 'Subscribe to Class Digest' : 'Schedule Recurring Delivery'}
           </button>
         </div>
       </div>
@@ -48,9 +85,17 @@ export const ReportsPage: React.FC = () => {
           </div>
 
           <select className="form-select" value={selectedCohort} onChange={(e) => setSelectedCohort(e.target.value)} style={{ width: 'auto' }}>
-            <option value="all">All Cohorts (Spring & Summer 2026)</option>
-            <option value="coh-001">Spring 2026 Engineering</option>
-            <option value="coh-002">Summer 2026 Cloud Architects</option>
+            <option value="all">{isFaculty ? 'All Assigned Classes & Batches' : 'All Cohorts (Spring & Summer 2026)'}</option>
+            {availableCohorts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          <select className="form-select" value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} style={{ width: 'auto' }}>
+            <option value="all">{isFaculty ? 'All Assigned Courses' : 'All Institution Courses'}</option>
+            {availableCourses.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
           </select>
 
           <select className="form-select" value={dateRange} onChange={(e) => setDateRange(e.target.value)} style={{ width: 'auto' }}>

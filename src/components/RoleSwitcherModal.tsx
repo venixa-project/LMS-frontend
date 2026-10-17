@@ -18,8 +18,8 @@ const rolesList: { role: RoleName; title: string; desc: string; icon: any; color
   },
   {
     role: 'org_admin',
-    title: 'Organization Administrator',
-    desc: 'Manage departments, cohorts, invitations, learner enrollments and policies',
+    title: 'Admin (School / College / Org)',
+    desc: 'Manage institution learners, faculty, academic structure, courses, attendance & reports',
     icon: Briefcase,
     color: '#f59e0b'
   },
@@ -32,8 +32,8 @@ const rolesList: { role: RoleName; title: string; desc: string; icon: any; color
   },
   {
     role: 'instructor',
-    title: 'Instructor / Faculty',
-    desc: 'Course builder, live classes scheduling, attendance roster, learner progress',
+    title: 'Faculty / Instructor',
+    desc: 'Manage assigned classes, courses, student progress, live lectures & grading',
     icon: GraduationCap,
     color: '#06b6d4'
   },

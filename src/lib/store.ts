@@ -112,11 +112,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
 
+    // Load canonical persona from mockUsers if available for the role
+    const canonicalUser = mockUsers.find((u) => u.activeRole === role);
+    const updatedUser = canonicalUser
+      ? { ...canonicalUser, activeRole: role }
+      : { ...user, activeRole: role };
+
     const permissions = getPermissionsForRole(role);
     const navigation = getNavigationForRole(role);
 
     set({
-      user: { ...user, activeRole: role },
+      user: updatedUser,
       permissions,
       navigation,
     });

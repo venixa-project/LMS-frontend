@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 import { mockCourses } from '../../data/mockData';
 import { Course, CourseModule, Lesson } from '../../types';
 import {
   BookOpen, Plus, Trash2, ArrowLeft, ArrowRight, Save, CheckCircle2,
   Video, FileText, HelpCircle, Link as LinkIcon, MoveUp, MoveDown,
-  Eye, Check, AlertCircle, Sparkles
+  Eye, Check, AlertCircle, Sparkles, Send
 } from 'lucide-react';
 
 export const CourseBuilderPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const isFaculty = user?.activeRole === 'instructor';
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -399,6 +402,25 @@ export const CourseBuilderPage: React.FC = () => {
             </p>
           </div>
 
+          {isFaculty ? (
+            <div style={{
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontSize: '0.85rem'
+            }}>
+              <Send size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+              <div>
+                <strong>Faculty Publishing Workflow:</strong> New courses and curriculum modules are submitted to the Institution Administrator for catalog review and publication approval.
+              </div>
+            </div>
+          ) : null}
+
           <div style={{
             background: 'var(--bg-input)',
             border: '1px solid var(--border-subtle)',
@@ -409,19 +431,21 @@ export const CourseBuilderPage: React.FC = () => {
             flexDirection: 'column',
             gap: '12px'
           }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                name="lifecycle"
-                checked={publishStatus === 'published'}
-                onChange={() => setPublishStatus('published')}
-                style={{ accentColor: 'var(--primary)' }}
-              />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Publish Immediately (v1.0)</div>
-                <div className="text-muted text-xs">Visible to all enrolled learners in target cohorts</div>
-              </div>
-            </label>
+            {!isFaculty && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="lifecycle"
+                  checked={publishStatus === 'published'}
+                  onChange={() => setPublishStatus('published')}
+                  style={{ accentColor: 'var(--primary)' }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Publish Immediately (v1.0)</div>
+                  <div className="text-muted text-xs">Visible to all enrolled learners in target cohorts</div>
+                </div>
+              </label>
+            )}
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
               <input
@@ -432,8 +456,26 @@ export const CourseBuilderPage: React.FC = () => {
                 style={{ accentColor: 'var(--primary)' }}
               />
               <div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Submit for Peer / LMS Admin Review</div>
-                <div className="text-muted text-xs">Sends notification to LMS Curriculum approval queue</div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                  {isFaculty ? 'Submit for Institution Admin Review & Approval' : 'Submit for Peer / LMS Admin Review'}
+                </div>
+                <div className="text-muted text-xs">
+                  {isFaculty ? 'Sends notification to the Acme Learning Corp academic approval queue' : 'Sends notification to LMS Curriculum approval queue'}
+                </div>
+              </div>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="lifecycle"
+                checked={publishStatus === 'draft'}
+                onChange={() => setPublishStatus('draft')}
+                style={{ accentColor: 'var(--primary)' }}
+              />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Save as Private Draft</div>
+                <div className="text-muted text-xs">Keep work-in-progress materials private for continued editing</div>
               </div>
             </label>
           </div>
@@ -446,11 +488,14 @@ export const CourseBuilderPage: React.FC = () => {
               className="btn btn-primary"
               style={{ flex: 2 }}
               onClick={() => {
-                alert(`Course successfully updated to status: ${publishStatus}!`);
+                alert(isFaculty
+                  ? (publishStatus === 'in_review' ? 'Course learning materials submitted for Institution Admin approval!' : 'Course draft saved successfully!')
+                  : `Course successfully updated to status: ${publishStatus}!`
+                );
                 navigate('/courses');
               }}
             >
-              Confirm & Save Course
+              {isFaculty ? (publishStatus === 'in_review' ? 'Submit for Admin Review' : 'Save Draft') : 'Confirm & Save Course'}
             </button>
           </div>
         </div>

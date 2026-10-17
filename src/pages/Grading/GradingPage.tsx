@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuthStore } from '../../lib/store';
 import { mockGradingTasks, mockRubrics } from '../../data/mockData';
 import { GradingTask, Rubric } from '../../types';
 import {
@@ -7,9 +8,17 @@ import {
 } from 'lucide-react';
 
 export const GradingPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const isFaculty = user?.activeRole === 'instructor';
   const [tasks, setTasks] = useState<GradingTask[]>(mockGradingTasks);
   const [selectedTask, setSelectedTask] = useState<GradingTask | null>(null);
   const [activeTab, setActiveTab] = useState<'queue' | 'ai_review' | 'moderation'>('queue');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const showNotice = (msg: string) => {
+    setNotice(msg);
+    setTimeout(() => setNotice(null), 3500);
+  };
 
   // Grading form state
   const [score, setScore] = useState<number>(85);
@@ -34,6 +43,7 @@ export const GradingPage: React.FC = () => {
       status: isDraft ? 'draft_graded' : requestModeration ? 'moderation' : 'completed'
     } : t));
     setSelectedTask(null);
+    showNotice(isDraft ? 'Grade draft saved successfully.' : 'Grade and rubric feedback released to student portal (active session)!');
   };
 
   const handleAcceptAiScore = (task: GradingTask) => {
@@ -43,18 +53,48 @@ export const GradingPage: React.FC = () => {
       status: 'completed',
       feedback: 'Accepted AI suggested score following human rubric verification.'
     } : t));
+    showNotice('AI suggested score verified and accepted.');
   };
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Human Grading, Moderation & AI Review</h1>
-          <p className="text-secondary text-sm">Subjective essay assessment, rubric scoring, double-marking, and AI-assisted preliminary evaluation</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span className="badge badge-primary">{isFaculty ? 'Faculty Evaluation Scope' : 'Academic Evaluation'}</span>
+            <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
+            {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
+          </div>
+          <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
+            {isFaculty ? 'Student Submissions & Evaluation Queue' : 'Human Grading, Moderation & AI Review'}
+          </h1>
+          <p className="text-secondary text-sm">
+            {isFaculty
+              ? 'Evaluate student homework, review AI rubric suggestions, and publish grades for your assigned courses'
+              : 'Subjective essay assessment, rubric scoring, double-marking, and AI-assisted preliminary evaluation'}
+          </p>
         </div>
 
         <span className="badge badge-primary">SLA Turnaround: 24h</span>
       </div>
+
+      {notice && (
+        <div style={{
+          background: 'var(--success-bg)',
+          border: '1px solid var(--success-border)',
+          color: 'var(--success)',
+          padding: '10px 16px',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '0.85rem'
+        }}>
+          <CheckCircle2 size={16} />
+          <span>{notice}</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="tabs-nav">

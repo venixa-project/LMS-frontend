@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 import { mockCourses } from '../../data/mockData';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export const LearnerCoursePlayerPage: React.FC = () => {
+  const { user } = useAuthStore();
   const { id } = useParams<{ id: string }>();
   const course = mockCourses.find((c) => c.id === id) || mockCourses[0];
 
@@ -44,11 +46,13 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     }
   };
 
+  const exitLink = user?.activeRole === 'learner' ? '/my-learning' : '/courses';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Banner Navigation */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link to="/courses" className="btn btn-secondary btn-sm" style={{ gap: '6px' }}>
+        <Link to={exitLink} className="btn btn-secondary btn-sm" style={{ gap: '6px' }}>
           <ArrowLeft size={14} /> Exit to Courses
         </Link>
 

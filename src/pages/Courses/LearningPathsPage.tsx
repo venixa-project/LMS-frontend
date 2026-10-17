@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
+import { useAuthStore } from '../../lib/store';
 import { mockLearningPaths, mockCourses } from '../../data/mockData';
 import { LearningPath } from '../../types';
+import { Link } from 'react-router-dom';
 import {
   Route, Plus, Search, BookOpen, Clock, AlertTriangle, CheckCircle2,
-  ChevronRight, ArrowRight, X, ShieldAlert, Award
+  ChevronRight, ArrowRight, X, ShieldAlert, Award, Play
 } from 'lucide-react';
 
 export const LearningPathsPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const isLearner = user?.activeRole === 'learner';
   const [paths, setPaths] = useState<LearningPath[]>(mockLearningPaths);
   const [selectedPath, setSelectedPath] = useState<LearningPath>(mockLearningPaths[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,21 +52,38 @@ export const LearningPathsPage: React.FC = () => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Adaptive Learning Paths</h1>
-          <p className="text-secondary text-sm">Sequence multi-course tracks, configure prerequisite rules, and track career readiness milestones</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span className="badge badge-primary">{isLearner ? 'Curriculum Track' : 'Academic Curriculum'}</span>
+            <span className="text-muted text-xs">Acme Learning Corp &bull; Engineering Degree Path</span>
+            {isLearner && <span className="badge badge-active">Alex Thompson</span>}
+          </div>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>
+            {isLearner ? 'My Learning Progress & Career Paths' : 'Adaptive Learning Paths'}
+          </h1>
+          <p className="text-secondary text-sm">
+            {isLearner
+              ? 'Multi-course sequence milestones, prerequisite tracking, and career readiness certifications'
+              : 'Sequence multi-course tracks, configure prerequisite rules, and track career readiness milestones'}
+          </p>
         </div>
 
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setTitle('');
-            setDescription('');
-            setHasCircularWarning(false);
-            setIsModalOpen(true);
-          }}
-        >
-          <Plus size={16} /> Create Learning Path
-        </button>
+        {!isLearner ? (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setTitle('');
+              setDescription('');
+              setHasCircularWarning(false);
+              setIsModalOpen(true);
+            }}
+          >
+            <Plus size={16} /> Create Learning Path
+          </button>
+        ) : (
+          <Link to="/my-learning" className="btn btn-primary">
+            <BookOpen size={16} /> View Enrolled Courses
+          </Link>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '24px' }}>
@@ -120,12 +141,15 @@ export const LearningPathsPage: React.FC = () => {
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
               padding: '12px 16px',
-              textAlign: 'center'
+              textAlign: 'center',
+              minWidth: '150px'
             }}>
               <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary)' }}>
-                {selectedPath.enrolledCount}
+                {isLearner ? '65.0%' : selectedPath.enrolledCount}
               </div>
-              <div className="text-muted text-xs font-semibold">Active Learners</div>
+              <div className="text-muted text-xs font-semibold">
+                {isLearner ? 'Track Completion' : 'Active Learners'}
+              </div>
             </div>
           </div>
 
@@ -138,6 +162,11 @@ export const LearningPathsPage: React.FC = () => {
               const cCategory = fullCourse?.category || 'Technical Training';
               const cDuration = fullCourse?.durationHours || Math.round((fullCourse?.estimatedDuration || 120) / 60);
 
+              // Student progress mapping
+              const isCompleted = idx === 0 || stepItem.courseId === 'crs-004';
+              const isInProgress = idx === 1 || stepItem.courseId === 'crs-001';
+              const isSecondaryProgress = idx === 2 || stepItem.courseId === 'crs-002';
+
               return (
                 <div
                   key={stepItem.courseId || idx}
@@ -148,7 +177,9 @@ export const LearningPathsPage: React.FC = () => {
                     padding: '16px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -156,7 +187,7 @@ export const LearningPathsPage: React.FC = () => {
                       width: '32px',
                       height: '32px',
                       borderRadius: '50%',
-                      background: 'var(--primary)',
+                      background: isLearner && isCompleted ? 'var(--success)' : 'var(--primary)',
                       color: '#fff',
                       display: 'flex',
                       alignItems: 'center',
@@ -164,7 +195,7 @@ export const LearningPathsPage: React.FC = () => {
                       fontWeight: 700,
                       fontSize: '0.85rem'
                     }}>
-                      {idx + 1}
+                      {isLearner && isCompleted ? <CheckCircle2 size={16} /> : idx + 1}
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{cTitle}</div>
@@ -175,12 +206,41 @@ export const LearningPathsPage: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {idx > 0 && (
-                      <span className="badge badge-draft">
-                        Prerequisite: Step {idx}
-                      </span>
+                    {isLearner ? (
+                      isCompleted ? (
+                        <>
+                          <span className="badge badge-success">Completed &bull; Certified</span>
+                          <Link to="/my-certificates" className="btn btn-secondary btn-xs" style={{ gap: '4px' }}>
+                            <Award size={12} /> Certificate
+                          </Link>
+                        </>
+                      ) : isInProgress ? (
+                        <>
+                          <span className="badge badge-primary">In Progress (65%)</span>
+                          <Link to="/course-player/crs-001" className="btn btn-primary btn-xs" style={{ gap: '4px' }}>
+                            <Play size={12} /> Continue Learning
+                          </Link>
+                        </>
+                      ) : isSecondaryProgress ? (
+                        <>
+                          <span className="badge badge-info">In Progress (30%)</span>
+                          <Link to="/course-player/crs-002" className="btn btn-secondary btn-xs" style={{ gap: '4px' }}>
+                            <Play size={12} /> Resume Course
+                          </Link>
+                        </>
+                      ) : (
+                        <span className="badge badge-draft">Locked (Prerequisite)</span>
+                      )
+                    ) : (
+                      <>
+                        {idx > 0 && (
+                          <span className="badge badge-draft">
+                            Prerequisite: Step {idx}
+                          </span>
+                        )}
+                        <span className="badge badge-published">Published</span>
+                      </>
                     )}
-                    <span className="badge badge-published">Published</span>
                   </div>
                 </div>
               );

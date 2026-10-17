@@ -5,7 +5,8 @@ import {
   LayoutDashboard, BookOpen, Route, Video, HelpCircle,
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
   Plug, Settings, Building2, Network, Users, UsersRound,
-  Shield, Search, Trophy, GraduationCap
+  Shield, Search, Trophy, GraduationCap, Calendar,
+  UserCheck, User, Megaphone
 } from 'lucide-react';
 
 const iconMap: Record<string, any> = {
@@ -29,7 +30,11 @@ const iconMap: Record<string, any> = {
   Settings,
   Search,
   Trophy,
-  GraduationCap
+  GraduationCap,
+  Calendar,
+  UserCheck,
+  User,
+  Megaphone
 };
 
 interface Props {
@@ -62,13 +67,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         {/* Brand header */}
         <div style={{
-          height: '64px',
+          height: 'var(--navbar-height, 64px)',
           padding: '0 20px',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
           borderBottom: '1px solid var(--border-subtle)',
-          background: 'var(--bg-sidebar)'
+          background: 'var(--bg-sidebar)',
+          flexShrink: 0
         }}>
           <div style={{
             width: '36px',
@@ -185,7 +191,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
           background: 'var(--bg-surface)',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px'
+          gap: '10px',
+          flexShrink: 0
         }}>
           <div style={{
             width: '32px',
@@ -206,7 +213,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               {user?.displayName || 'User'}
             </div>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-              {user?.activeRole?.replace('_', ' ') || 'Guest'}
+              {user?.activeRole === 'org_admin' ? 'Admin' : user?.activeRole === 'instructor' ? 'Faculty' : user?.activeRole === 'learner' ? 'Student' : (user?.activeRole?.replace('_', ' ') || 'Guest')}
             </div>
           </div>
           <span style={{

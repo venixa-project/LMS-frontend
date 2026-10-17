@@ -14,28 +14,29 @@ export const AppShell: React.FC = () => {
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-app)' }}>
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Left Sidebar */}
-        <Sidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+    <div className="app-shell">
+      {/* Left Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main Wrapper */}
+      <div className="main-wrapper">
+        <Navbar
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onOpenRoleSwitcher={() => setRoleSwitcherOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenSearch={() => setSearchOpen(true)}
         />
 
-        {/* Main Content Area */}
-        <div className="main-content">
-          <Navbar
-            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-            onOpenRoleSwitcher={() => setRoleSwitcherOpen(true)}
-            onOpenNotifications={() => setNotificationsOpen(true)}
-            onOpenSearch={() => setSearchOpen(true)}
-          />
-
-          <main className="page-body">
+        {/* Independently Scrollable Main Content Area */}
+        <main className="main-content">
+          <div className="page-body">
             <Breadcrumbs />
             <Outlet />
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
 
       {/* Overlays / Modals */}

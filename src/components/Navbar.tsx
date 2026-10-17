@@ -132,7 +132,7 @@ export const Navbar: React.FC<Props> = ({
         >
           <Shield size={14} />
           <span style={{ textTransform: 'capitalize' }}>
-            Role: {user?.activeRole.replace('_', ' ') || 'Learner'}
+            Role: {user?.activeRole === 'org_admin' ? 'Admin' : user?.activeRole === 'instructor' ? 'Faculty' : user?.activeRole === 'learner' ? 'Student' : (user?.activeRole?.replace('_', ' ') || 'Student')}
           </span>
           <ChevronDown size={12} />
         </button>

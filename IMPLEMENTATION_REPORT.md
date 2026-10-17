@@ -62,3 +62,38 @@ The platform features:
 4. **Experience the Course Player:**  
    - Navigate to **Courses** (`/courses`) and click **"Learner View"** on any course.
    - Watch the video lecture simulation, review architectural notes, download resources, and click **"Mark as Complete"** to trigger celebration points.
+
+---
+
+## 4. Student / Learner Role Frontend Implementation (AY 2026–2027)
+
+### 4.1 Persona & Context
+- **Persona:** Alex Thompson (`u-007`) &bull; `alex@lms.demo`
+- **Institution:** Acme Learning Corp &bull; Department of Engineering
+- **Active Cohort:** Spring 2026 Engineering Onboarding (`coh-001`)
+- **Enrolled Courses:**
+  1. `crs-001` Distributed Systems & Cloud Architecture (65% Progress &bull; 8/12 lessons)
+  2. `crs-002` Advanced React & Component Design Patterns (30% Progress &bull; 4/12 lessons)
+  3. `crs-004` Full-Stack Web Development Bootcamp (100% Completed &bull; Certificate Issued)
+
+### 4.2 Student Navigation System (13 Canonical Routes)
+The student experience is governed by strict RBAC guards in `src/lib/permissions.ts`, providing 13 focused student routes:
+1. **Dashboard** (`/dashboard`): 5 KPI cards, Continue Learning Hero banner, Next Live Session, Pending Assignment, Scheduled Assessment, and Announcements.
+2. **My Courses** (`/my-learning`): Enrolled courses only, progress bars, filter tabs (*All Enrolled*, *In Progress*, *Completed*).
+3. **Learning Materials** (`/learning-materials`): Interactive course player defaulting to active course, video simulator, slide viewer, and lesson navigation.
+4. **My Assignments** (`/assignments`): Assignment list with Pending, Submitted, and Graded tabs, submission deliverable modal (GitHub repo/file upload, honor pledge), and graded feedback inspection.
+5. **Assessments** (`/my-assessments`): Proctored quizzes, midterm exams, and start assessment actions routing to `/exam/:id`.
+6. **Timetable / Live Classes** (`/my-sessions`): Personal weekly timetable grid filtered to student's cohort, live Zoom class room links.
+7. **Attendance** (`/attendance`): Student attendance ledger (26 sessions logged, 96.2% rate, 23 Present, 2 Late, 1 Approved Absence) with read-only security.
+8. **My Results** (`/my-results`): Official academic transcript displaying published quiz scores (25/25), assignment marks (92/100, Grade A), and final exam certifications (95/100).
+9. **Learning Progress** (`/my-paths`): Degree curriculum sequence, prerequisite status, and milestone completion indicators.
+10. **Certificates** (`/my-certificates`): Verifiable credential diploma view, cryptographically signed verification hash, and in-progress milestone requirements.
+11. **Announcements** (`/notifications`): Campus-wide notices, department advisories, and guest speaker bulletins.
+12. **Notifications** (`/notifications`): Academic reminders (upcoming live sessions, assignment due dates, published grades).
+13. **My Profile** (`/profile`): Personal credentials, password change, MFA status, and accessibility preferences.
+
+### 4.3 Permission Boundary & Multi-Tenant Enforcement
+- Reuses the canonical `learner` role key throughout the system.
+- Students cannot access administrative pages (`/organizations`, `/departments`, `/cohorts`, `/people`, `/roles`, `/grading`, `/settings`).
+- Students cannot view or modify other learners' grades, submissions, or attendance records.
+- All mock submission actions, mark-as-complete toggles, and attendance filters update local demonstration state and explicitly state that changes do not permanently persist after page reload.

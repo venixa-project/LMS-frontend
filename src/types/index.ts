@@ -136,6 +136,7 @@ export interface Course {
   learnerCount?: number;
   enrolledLearners?: number;
   completionRate?: number;
+  level?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
