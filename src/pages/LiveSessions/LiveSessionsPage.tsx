@@ -15,8 +15,8 @@ interface Props {
 
 export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
-  const isLearner = user?.activeRole === 'learner';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const facultyCohorts = mockCohorts.filter((c) => ['coh-001', 'coh-002', 'coh-004'].includes(c.id));
   const availableCohorts = isFaculty ? facultyCohorts : mockCohorts;
 

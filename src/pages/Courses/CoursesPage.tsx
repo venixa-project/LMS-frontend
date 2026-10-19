@@ -12,8 +12,8 @@ import {
 
 export const CoursesPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
-  const isLearner = user?.activeRole === 'learner';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const [courses, setCourses] = useState<Course[]>(mockCourses);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');

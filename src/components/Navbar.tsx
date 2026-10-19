@@ -155,7 +155,13 @@ export const Navbar: React.FC<Props> = ({
         >
           <Shield size={14} />
           <span style={{ textTransform: 'capitalize' }}>
-            Role: {user?.activeRole === 'org_admin' ? 'Admin' : user?.activeRole === 'instructor' ? 'Faculty' : user?.activeRole === 'learner' ? 'Student' : (user?.activeRole?.replace('_', ' ') || 'Student')}
+            Role: {
+              user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'assessment_author' || user?.activeRole === 'grader'
+                ? 'Trainer'
+                : user?.activeRole === 'student' || user?.activeRole === 'learner'
+                ? 'Student'
+                : 'Platform Admin'
+            }
           </span>
           <ChevronDown size={12} />
         </button>
@@ -306,7 +312,7 @@ export const Navbar: React.FC<Props> = ({
 
                 <a
                   href="#help"
-                  onClick={(e) => { e.preventDefault(); alert("Acuity LMS Demo Guide: Use the Role Switcher at the top to test all 7 roles and feature matrices."); }}
+                  onClick={(e) => { e.preventDefault(); alert("Acuity LMS: Use the Role Switcher at the top to test Platform Admin, Trainer, and Student perspectives."); }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

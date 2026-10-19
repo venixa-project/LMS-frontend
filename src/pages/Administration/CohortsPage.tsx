@@ -10,7 +10,7 @@ import {
 
 export const CohortsPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const [cohorts, setCohorts] = useState<Cohort[]>(mockCohorts);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);

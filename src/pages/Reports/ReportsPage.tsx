@@ -9,7 +9,7 @@ import {
 
 export const ReportsPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
 
   const [reports, setReports] = useState<Report[]>(mockReports);
   const [selectedCohort, setSelectedCohort] = useState('all');

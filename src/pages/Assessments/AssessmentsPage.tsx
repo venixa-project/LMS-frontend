@@ -35,8 +35,8 @@ interface CourseAssignment {
 
 export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' }) => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
-  const isLearner = user?.activeRole === 'learner';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(defaultTab);

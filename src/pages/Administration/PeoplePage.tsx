@@ -16,7 +16,7 @@ interface Props {
 
 export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const { user } = useAuthStore();
-  const isFacultyViewer = user?.activeRole === 'instructor';
+  const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const [activeTab, setActiveTab] = useState<'all' | 'students' | 'faculty' | 'staff'>(
     isFacultyViewer || initialMode === 'students' ? 'students' : initialMode === 'faculty' ? 'faculty' : 'all'
   );
@@ -46,7 +46,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
-  const [inviteRole, setInviteRole] = useState<RoleName>('learner');
+  const [inviteRole, setInviteRole] = useState<RoleName>('student');
   const [inviteDept, setInviteDept] = useState('dep-001');
 
   // Student Form state
@@ -76,13 +76,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
 
   // Filter users based on active tab & filters
   const filteredUsers = users.filter((u) => {
-    // Faculty only views learners
-    if (isFacultyViewer && u.activeRole !== 'learner') return false;
+    // Faculty only views students
+    if (isFacultyViewer && u.activeRole !== 'student' && u.activeRole !== 'learner') return false;
 
     // Tab filter
-    if (activeTab === 'students' && u.activeRole !== 'learner') return false;
-    if (activeTab === 'faculty' && u.activeRole !== 'instructor') return false;
-    if (activeTab === 'staff' && (u.activeRole === 'learner' || u.activeRole === 'instructor')) return false;
+    if (activeTab === 'students' && u.activeRole !== 'student' && u.activeRole !== 'learner') return false;
+    if (activeTab === 'faculty' && u.activeRole !== 'trainer' && u.activeRole !== 'instructor') return false;
+    if (activeTab === 'staff' && u.activeRole !== 'platform_admin') return false;
 
     // Search query
     const matchesSearch =
@@ -137,7 +137,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
       firstName: facultyFirstName,
       lastName: facultyLastName,
       displayName: `${facultyFirstName} ${facultyLastName}`,
-      activeRole: 'instructor',
+      activeRole: 'trainer',
       roles: [],
       organizationId: 'org-001',
       departmentId: facultyDept,
@@ -281,21 +281,21 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
             onClick={() => setActiveTab('students')}
           >
             <UserCheck size={16} />
-            Students / Learners ({users.filter((u) => u.activeRole === 'learner').length})
+            Students ({users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner').length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'faculty' ? 'active' : ''}`}
             onClick={() => setActiveTab('faculty')}
           >
             <GraduationCap size={16} />
-            Faculty / Instructors ({users.filter((u) => u.activeRole === 'instructor').length})
+            Trainers ({users.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor').length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
             onClick={() => setActiveTab('staff')}
           >
             <Shield size={16} />
-            Admins & Staff ({users.filter((u) => u.activeRole !== 'learner' && u.activeRole !== 'instructor').length})
+            Platform Admins ({users.filter((u) => u.activeRole === 'platform_admin').length})
           </button>
         </div>
       )}
@@ -365,8 +365,8 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           <tbody>
             {filteredUsers.map((u) => {
               const dept = mockDepartments.find((d) => d.id === u.departmentId);
-              const isStudent = u.activeRole === 'learner';
-              const isFaculty = u.activeRole === 'instructor';
+              const isStudent = u.activeRole === 'student' || u.activeRole === 'learner';
+              const isFaculty = u.activeRole === 'trainer' || u.activeRole === 'instructor';
 
               return (
                 <tr key={u.id}>
@@ -396,7 +396,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Roll: STU-2026-0{u.id.slice(-2)}</div>
                         )}
                         {isFaculty && (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)' }}>Lead Faculty</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)' }}>Lead Trainer</div>
                         )}
                       </div>
                     </div>
@@ -404,7 +404,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                   <td>{u.email}</td>
                   <td>
                     <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
-                      {u.activeRole === 'org_admin' ? 'Admin' : u.activeRole.replace('_', ' ')}
+                      {isFaculty ? 'Trainer' : isStudent ? 'Student' : 'Platform Admin'}
                     </span>
                   </td>
                   <td>{dept ? dept.name : 'Engineering & Technology'}</td>
@@ -879,7 +879,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                   width: '42px',
                   height: '42px',
                   borderRadius: '50%',
-                  background: selectedUserDetail.activeRole === 'instructor'
+                  background: (selectedUserDetail.activeRole === 'trainer' || selectedUserDetail.activeRole === 'instructor')
                     ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
                     : 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
                   color: '#fff',
@@ -912,7 +912,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               </div>
 
               {/* Student Academic Progress View */}
-              {selectedUserDetail.activeRole === 'learner' && (
+              {(selectedUserDetail.activeRole === 'student' || selectedUserDetail.activeRole === 'learner') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -965,7 +965,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               )}
 
               {/* Faculty Workload View */}
-              {selectedUserDetail.activeRole === 'instructor' && (
+              {(selectedUserDetail.activeRole === 'trainer' || selectedUserDetail.activeRole === 'instructor') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>

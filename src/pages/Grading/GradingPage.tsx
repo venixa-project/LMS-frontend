@@ -9,7 +9,7 @@ import {
 
 export const GradingPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'grader';
   const [tasks, setTasks] = useState<GradingTask[]>(mockGradingTasks);
   const [selectedTask, setSelectedTask] = useState<GradingTask | null>(null);
   const [activeTab, setActiveTab] = useState<'queue' | 'ai_review' | 'moderation'>('queue');

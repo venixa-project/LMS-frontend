@@ -20,9 +20,10 @@ interface Announcement {
 
 export const NotificationsCenterPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isOrgAdmin = user?.activeRole === 'org_admin';
-  const isFaculty = user?.activeRole === 'instructor';
-  const isLearner = user?.activeRole === 'learner';
+  const isPlatformAdmin = user?.activeRole === 'platform_admin';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isOrgAdmin = isPlatformAdmin;
 
   const [activeTab, setActiveTab] = useState<'announcements' | 'alerts' | 'templates' | 'logs' | 'channels'>(
     'announcements'

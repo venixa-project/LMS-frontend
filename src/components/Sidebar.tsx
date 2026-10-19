@@ -214,7 +214,11 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               {user?.displayName || 'User'}
             </div>
             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-              {user?.activeRole === 'org_admin' ? 'Admin' : user?.activeRole === 'instructor' ? 'Faculty' : user?.activeRole === 'learner' ? 'Student' : (user?.activeRole?.replace('_', ' ') || 'Guest')}
+              {user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'assessment_author' || user?.activeRole === 'grader'
+                ? 'Trainer'
+                : user?.activeRole === 'student' || user?.activeRole === 'learner'
+                ? 'Student'
+                : 'Platform Admin'}
             </div>
           </div>
           <span style={{

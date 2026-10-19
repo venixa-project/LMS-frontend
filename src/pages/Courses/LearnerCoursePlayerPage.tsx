@@ -46,7 +46,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     }
   };
 
-  const exitLink = user?.activeRole === 'learner' ? '/my-learning' : '/courses';
+  const exitLink = (user?.activeRole === 'student' || user?.activeRole === 'learner') ? '/my-learning' : '/courses';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

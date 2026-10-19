@@ -1,62 +1,36 @@
 import React from 'react';
 import { useAuthStore } from '../lib/store';
 import { RoleName } from '../types';
-import { Shield, Check, X, User, Briefcase, GraduationCap, Award, BookOpen, PenTool, Eye } from 'lucide-react';
+import { Shield, Check, X, User, GraduationCap } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const rolesList: { role: RoleName; title: string; desc: string; icon: any; color: string }[] = [
+const rolesList: {
+  role: RoleName;
+  title: string;
+  icon: any;
+  color: string;
+}[] = [
   {
     role: 'platform_admin',
-    title: 'Platform Administrator',
-    desc: 'Multi-tenant settings, global orgs, integrations, full security matrix',
+    title: 'Platform Admin',
     icon: Shield,
     color: '#ef4444'
   },
   {
-    role: 'org_admin',
-    title: 'Admin (School / College / Org)',
-    desc: 'Manage institution learners, faculty, academic structure, courses, attendance & reports',
-    icon: Briefcase,
-    color: '#f59e0b'
-  },
-  {
-    role: 'lms_admin',
-    title: 'LMS Administrator',
-    desc: 'Course management, learning paths, reports, question banks, certificates',
-    icon: BookOpen,
-    color: '#8b5cf6'
-  },
-  {
-    role: 'instructor',
-    title: 'Faculty / Instructor',
-    desc: 'Manage assigned classes, courses, student progress, live lectures & grading',
+    role: 'trainer',
+    title: 'Trainer',
     icon: GraduationCap,
     color: '#06b6d4'
   },
   {
-    role: 'assessment_author',
-    title: 'Assessment Author',
-    desc: 'Question banks, quiz creation, rubrics, exam configurations',
-    icon: PenTool,
-    color: '#ec4899'
-  },
-  {
-    role: 'grader',
-    title: 'Grader / Evaluator',
-    desc: 'Human grading queue, rubric evaluations, double marking, AI score review',
-    icon: Award,
-    color: '#10b981'
-  },
-  {
-    role: 'learner',
-    title: 'Student / Learner',
-    desc: 'Course consumption, live sessions, timed exam delivery, certificates & badges',
+    role: 'student',
+    title: 'Student',
     icon: User,
-    color: '#6366f1'
+    color: '#8b5cf6'
   }
 ];
 
@@ -65,37 +39,42 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  // Normalize user active role for comparison
+  const currentRole = user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'assessment_author' || user?.activeRole === 'grader'
+    ? 'trainer'
+    : user?.activeRole === 'student' || user?.activeRole === 'learner'
+    ? 'student'
+    : 'platform_admin';
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: 'var(--primary-light)',
-              color: 'var(--primary)',
+      <div
+        className="modal-card"
+        style={{ maxWidth: '420px', borderRadius: 'var(--radius-xl)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>Select Role</h3>
+          <button
+            onClick={onClose}
+            style={{
+              color: 'var(--text-muted)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Shield size={20} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Role Simulation Switcher</h3>
-              <p className="text-muted text-xs">Switch persona to test role-specific RBAC, navigation and dashboards</p>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}>
-            <X size={20} />
+              padding: '4px'
+            }}
+          >
+            <X size={18} />
           </button>
         </div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 24px' }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 20px' }}>
           {rolesList.map((item) => {
             const Icon = item.icon;
-            const isSelected = user?.activeRole === item.role;
+            const isSelected = currentRole === item.role;
 
             return (
               <div
@@ -108,27 +87,34 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '12px 16px',
-                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 16px',
+                  borderRadius: 'var(--radius-lg)',
                   background: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
-                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                  border: isSelected ? `2px solid ${item.color}` : '1px solid var(--border-subtle)',
                   cursor: 'pointer',
-                  transition: 'var(--transition)'
+                  transition: 'all 0.15s ease'
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-light)';
+                  if (!isSelected) {
+                    e.currentTarget.style.borderColor = item.color;
+                    e.currentTarget.style.background = 'var(--bg-surface)';
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                  if (!isSelected) {
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.background = 'var(--bg-card)';
+                  }
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{
                     width: '38px',
                     height: '38px',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     background: `${item.color}20`,
                     color: item.color,
+                    border: `1px solid ${item.color}40`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -136,39 +122,36 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   }}>
                     <Icon size={20} />
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: isSelected ? 'var(--primary)' : 'var(--text-main)' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {item.desc}
-                    </div>
-                  </div>
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                    {item.title}
+                  </span>
                 </div>
 
                 {isSelected ? (
                   <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    background: 'var(--primary)',
-                    color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    gap: '4px',
+                    background: item.color,
+                    color: '#fff',
+                    padding: '4px 10px',
+                    borderRadius: '14px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
                   }}>
-                    <Check size={14} />
+                    <Check size={13} /> Active
                   </div>
                 ) : (
-                  <span className="btn btn-secondary btn-sm" style={{ fontSize: '0.75rem' }}>Switch</span>
+                  <span
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                  >
+                    Select
+                  </span>
                 )}
               </div>
             );
           })}
-        </div>
-
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

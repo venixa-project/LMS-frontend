@@ -11,7 +11,7 @@ import {
 
 export const CourseBuilderPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isFaculty = user?.activeRole === 'instructor';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 

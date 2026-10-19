@@ -95,7 +95,7 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <h2 style={{ fontSize: '1.3rem', marginBottom: '12px', lineHeight: 1.3 }}>
-              Experience all 7 enterprise roles with instant demo credentials
+              Experience the 3 core enterprise roles with instant demo credentials
             </h2>
             <p className="text-secondary text-sm" style={{ marginBottom: '24px' }}>
               Test complete role-based permissions, course authoring, proctoring queues, AI scoring and learner workflows.
@@ -107,13 +107,9 @@ export const LoginPage: React.FC = () => {
               </div>
 
               {[
-                { name: 'Platform Admin', email: 'admin@lms.demo', badge: 'Super Admin', color: '#ef4444' },
-                { name: 'Org Admin (Marcus)', email: 'orgadmin@lms.demo', badge: 'Acme Org', color: '#f59e0b' },
-                { name: 'LMS Admin (Priya)', email: 'lmsadmin@lms.demo', badge: 'Curriculum Ops', color: '#8b5cf6' },
-                { name: 'Instructor (Dr. Wilson)', email: 'instructor@lms.demo', badge: 'Live Classes', color: '#06b6d4' },
-                { name: 'Assessment Author (Emily)', email: 'author@lms.demo', badge: 'Question Banks', color: '#ec4899' },
-                { name: 'Human Grader (Robert)', email: 'grader@lms.demo', badge: 'Moderator', color: '#10b981' },
-                { name: 'Learner (Alex Rivera)', email: 'alex@lms.demo', badge: 'Enrolled', color: '#6366f1' },
+                { name: 'Platform Admin', email: 'admin@lms.demo', persona: 'Sarah Chen', badge: 'Super Admin', color: '#ef4444' },
+                { name: 'Trainer / Faculty', email: 'trainer@lms.demo', persona: 'Dr. James Wilson', badge: 'Faculty Lead', color: '#06b6d4' },
+                { name: 'Student / Learner', email: 'student@lms.demo', persona: 'Alex Thompson', badge: 'Enrolled Scholar', color: '#8b5cf6' },
               ].map((role) => (
                 <button
                   key={role.email}
@@ -123,12 +119,13 @@ export const LoginPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '8px 12px',
+                    padding: '12px 14px',
                     borderRadius: 'var(--radius-md)',
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border-subtle)',
                     transition: 'var(--transition)',
-                    textAlign: 'left'
+                    textAlign: 'left',
+                    cursor: 'pointer'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = role.color;
@@ -139,27 +136,27 @@ export const LoginPage: React.FC = () => {
                     e.currentTarget.style.transform = 'translateX(0)';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <span style={{
-                      width: '8px',
-                      height: '8px',
+                      width: '10px',
+                      height: '10px',
                       borderRadius: '50%',
                       background: role.color
                     }} />
                     <div>
-                      <div style={{ fontSize: '0.825rem', fontWeight: 600 }}>{role.name}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{role.email}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{role.name} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem' }}>({role.persona})</span></div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{role.email}</div>
                     </div>
                   </div>
                   <span style={{
-                    fontSize: '0.68rem',
-                    padding: '2px 8px',
+                    fontSize: '0.7rem',
+                    padding: '3px 8px',
                     borderRadius: '4px',
                     background: `${role.color}18`,
                     color: role.color,
                     fontWeight: 600
                   }}>
-                    {role.badge}
+                    {role.badge} &rarr;
                   </span>
                 </button>
               ))}

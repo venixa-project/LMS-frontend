@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { Link } from 'react-router-dom';
 import {
@@ -12,17 +12,23 @@ import {
   ClipboardCheck, Clock, ArrowRight, Play, CheckCircle2,
   AlertCircle, Sparkles, Flame, Plus, Shield, PenTool,
   GraduationCap, Calendar, Network, Bell, FileText, Activity,
-  Layers, Check, UserCheck, UsersRound, Route, HelpCircle
+  Layers, Check, UserCheck, UsersRound, Route, HelpCircle, Building2
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
-  const role = user?.activeRole || 'learner';
+  const [adminScope, setAdminScope] = useState<'platform' | 'institution'>('platform');
+  const rawRole = user?.activeRole || 'student';
+  const role = (rawRole === 'trainer' || rawRole === 'instructor' || rawRole === 'assessment_author' || rawRole === 'grader')
+    ? 'trainer'
+    : (rawRole === 'student' || rawRole === 'learner' || rawRole === 'guest')
+      ? 'student'
+      : 'platform_admin';
 
   // -------------------------------------------------------------
-  // 1. LEARNER DASHBOARD VIEW
+  // 1. STUDENT DASHBOARD VIEW
   // -------------------------------------------------------------
-  if (role === 'learner') {
+  if (role === 'student') {
     const activeCourse = mockCourses[0];
     const nextSession = mockLiveSessions.find((s) => s.status === 'scheduled');
     const dueAssessment = mockAssessments[0];
@@ -368,9 +374,9 @@ export const DashboardPage: React.FC = () => {
   }
 
   // -------------------------------------------------------------
-  // 2. FACULTY / INSTRUCTOR DASHBOARD VIEW
+  // 2. TRAINER / FACULTY DASHBOARD VIEW
   // -------------------------------------------------------------
-  if (role === 'instructor') {
+  if (role === 'trainer') {
     const assignedCourses = mockCourses.filter((c) => c.instructors?.includes('u-004') || c.createdBy === 'u-004');
     const assignedCohorts = mockCohorts.filter((c) => c.instructors?.includes('u-004') || c.id === 'coh-001' || c.id === 'coh-002');
     const totalAssignedStudents = assignedCohorts.reduce((acc, c) => acc + (c.learnerCount || 0), 0) || 65;
@@ -392,14 +398,14 @@ export const DashboardPage: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <span className="badge badge-primary">
-                Faculty Portal &bull; Dr. James Wilson
+                Trainer Portal &bull; {user?.displayName || 'Dr. James Wilson'}
               </span>
               <span className="text-muted text-xs">Acme Learning Corp (org-001) &bull; Dept. of Engineering</span>
-              <span className="simulation-pill">Demo Simulation</span>
+              <span className="simulation-pill">Trainer Perspective</span>
             </div>
-            <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Faculty Teaching Command Center</h1>
+            <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Trainer Teaching & Evaluation Center</h1>
             <p className="text-secondary text-sm">
-              Manage your assigned classes, courses, live lectures, student grading queue, and attendance rosters
+              Manage assigned batches, course curriculum, live webinars, attendance rosters, and student grading queue
             </p>
           </div>
 
@@ -722,611 +728,551 @@ export const DashboardPage: React.FC = () => {
   }
 
   // -------------------------------------------------------------
-  // 3. HUMAN GRADER DASHBOARD VIEW
+  // 3. PLATFORM ADMINISTRATOR COMMAND CENTER
   // -------------------------------------------------------------
-  if (role === 'grader') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Grading & Moderation Queue</h1>
-            <p className="text-secondary text-sm">Evaluate subjective submissions, review BOT-assisted preliminary scoring, and resolve appeals</p>
-          </div>
-          <Link to="/grading" className="btn btn-primary">
-            <PenTool size={16} /> Open Full Grading Console
-          </Link>
-        </div>
+  const studentCount = 124;
+  const facultyCount = 18;
+  const courseCount = mockCourses.length;
+  const deptCount = mockDepartments.length;
+  const cohortCount = mockCohorts.length;
+  const avgAttendance = 94.6;
 
-        <div className="grid-3">
-          <div className="stat-card">
-            <span className="text-muted text-xs font-semibold">Submissions Awaiting Grading</span>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--warning)' }}>18</div>
-            <p className="text-muted text-xs">Average SLA: 24 hours</p>
-          </div>
-          <div className="stat-card">
-            <span className="text-muted text-xs font-semibold">AI Preliminary Suggestions</span>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>12</div>
-            <p className="text-muted text-xs">Ready for human verification</p>
-          </div>
-          <div className="stat-card">
-            <span className="text-muted text-xs font-semibold">Moderation / Second Marking</span>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-purple)' }}>3</div>
-            <p className="text-muted text-xs">Discrepancy &gt; 15%</p>
-          </div>
-        </div>
+  const recentActivities = [
+    { id: 'act-1', text: 'New student Kwesi Mensah enrolled in Spring 2026 Engineering', time: '12 mins ago', type: 'student' },
+    { id: 'act-2', text: 'Dr. James Wilson submitted grades for React Fundamentals Midterm', time: '45 mins ago', type: 'grade' },
+    { id: 'act-3', text: 'Live session "Cloud Microservices Lab" conducted (96.2% attendance)', time: '2 hours ago', type: 'class' },
+    { id: 'act-4', text: 'Department Curriculum Review completed by Computer Science Faculty', time: '5 hours ago', type: 'academic' },
+    { id: 'act-5', text: 'Course "Full-Stack Web Architecture" published to institution catalogue', time: '1 day ago', type: 'course' },
+  ];
 
-        <div className="card">
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Assigned Evaluation Tasks</h3>
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Learner</th>
-                  <th>Assessment</th>
-                  <th>Submitted</th>
-                  <th>AI Suggestion</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockGradingTasks.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontWeight: 600 }}>{t.learnerName}</td>
-                    <td>{t.assessmentTitle}</td>
-                    <td>{t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Recent'}</td>
-                    <td>
-                      {t.aiPreliminaryScore !== undefined || t.aiSuggestion ? (
-                        <span className="badge badge-info">
-                          {t.aiPreliminaryScore || t.aiSuggestion?.score} / {t.maxScore || t.totalMarks} (92% Conf.)
-                        </span>
-                      ) : (
-                        <span className="text-muted text-xs">Manual only</span>
-                      )}
-                    </td>
-                    <td><span className={`badge badge-${t.status}`}>{t.status.replace('_', ' ')}</span></td>
-                    <td>
-                      <Link to="/grading" className="btn btn-primary btn-sm">
-                        Grade Now &rarr;
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+      {/* Scope Toggle for Platform Admin */}
+      <div className="tabs-nav" style={{ marginBottom: '-8px' }}>
+        <button
+          className={`tab-btn ${adminScope === 'platform' ? 'active' : ''}`}
+          onClick={() => setAdminScope('platform')}
+        >
+          <Shield size={16} />
+          Global Platform Telemetry & Operations
+        </button>
+        <button
+          className={`tab-btn ${adminScope === 'institution' ? 'active' : ''}`}
+          onClick={() => setAdminScope('institution')}
+        >
+          <Building2 size={16} />
+          Institution Academic Command Center
+        </button>
       </div>
-    );
-  }
 
-  // -------------------------------------------------------------
-  // 4. INSTITUTION ADMIN (SCHOOL / COLLEGE / ORG ADMIN) DASHBOARD
-  // -------------------------------------------------------------
-  if (role === 'org_admin') {
-    const studentCount = 124;
-    const facultyCount = 18;
-    const courseCount = mockCourses.length;
-    const deptCount = mockDepartments.length;
-    const cohortCount = mockCohorts.length;
-    const avgAttendance = 94.6;
-
-    const recentActivities = [
-      { id: 'act-1', text: 'New student Kwesi Mensah enrolled in Spring 2026 Engineering', time: '12 mins ago', type: 'student' },
-      { id: 'act-2', text: 'Dr. James Wilson submitted grades for React Fundamentals Midterm', time: '45 mins ago', type: 'grade' },
-      { id: 'act-3', text: 'Live session "Cloud Microservices Lab" conducted (96.2% attendance)', time: '2 hours ago', type: 'class' },
-      { id: 'act-4', text: 'Department Curriculum Review completed by Computer Science Faculty', time: '5 hours ago', type: 'academic' },
-      { id: 'act-5', text: 'Course "Full-Stack Web Architecture" published to institution catalogue', time: '1 day ago', type: 'course' },
-    ];
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-        {/* Top Header & Quick Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <span className="badge badge-primary">
-                Admin &bull; Institution Portal
-              </span>
-              <span className="text-muted text-xs">Acme Learning Academy (org-001) &bull; AY 2026–2027</span>
-              <span className="simulation-pill">Demo Simulation</span>
-            </div>
-            <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Institution Academic Command Center</h1>
-            <p className="text-secondary text-sm">Oversee learners, faculty, academic departments, class batches, attendance, and exam compliance</p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <Link to="/students" className="btn btn-primary">
-              <Plus size={16} /> Add Student
-            </Link>
-            <Link to="/faculty" className="btn btn-secondary">
-              <GraduationCap size={16} /> Add Faculty
-            </Link>
-            <Link to="/courses" className="btn btn-secondary">
-              <BookOpen size={16} /> New Course
-            </Link>
-            <Link to="/attendance" className="btn btn-secondary">
-              <Calendar size={16} /> Schedule Class
-            </Link>
-            <Link to="/notifications" className="btn btn-secondary" title="Broadcast institution announcement">
-              <Bell size={16} /> Announce
-            </Link>
-          </div>
-        </div>
-
-        {/* Institution KPI Metrics Grid */}
-        <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Total Students</span>
-              <Users size={16} color="var(--primary)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{studentCount}</div>
-            <p className="text-success text-xs" style={{ margin: 0 }}>+12 new this month</p>
-          </div>
-
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Total Faculty</span>
-              <GraduationCap size={16} color="var(--accent-purple)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{facultyCount}</div>
-            <p className="text-muted text-xs" style={{ margin: 0 }}>Across 3 departments</p>
-          </div>
-
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Total Courses</span>
-              <BookOpen size={16} color="var(--accent-cyan)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{courseCount}</div>
-            <p className="text-muted text-xs" style={{ margin: 0 }}>4 published &bull; 2 in review</p>
-          </div>
-
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Departments</span>
-              <Network size={16} color="var(--warning)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{deptCount}</div>
-            <p className="text-muted text-xs" style={{ margin: 0 }}>100% active units</p>
-          </div>
-
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Classes / Batches</span>
-              <UsersRound size={16} color="var(--info)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{cohortCount}</div>
-            <p className="text-muted text-xs" style={{ margin: 0 }}>Fall & Spring 2026</p>
-          </div>
-
-          <div className="stat-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">Attendance Avg</span>
-              <Calendar size={16} color="var(--success)" />
-            </div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--success)', marginTop: '4px' }}>{avgAttendance}%</div>
-            <p className="text-success text-xs" style={{ margin: 0 }}>&uarr; 1.4% vs last term</p>
-          </div>
-        </div>
-
-        {/* 2-Column Core Operations & Academic Tracking */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.9fr 1.1fr', gap: '24px' }}>
-          {/* Left Column: Attendance & Timetable + Student Progress Summary */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Attendance & Class Timetable Widget */}
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Attendance Overview & Today's Classes</h3>
-                  <p className="text-muted text-xs">Live schedule and verified attendance across cohorts</p>
-                </div>
-                <Link to="/attendance" className="btn btn-secondary btn-sm">
-                  View Full Timetable &rarr;
-                </Link>
+      {adminScope === 'institution' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+          {/* Top Header & Quick Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span className="badge badge-primary">
+                  Platform Admin &bull; Institution Scope
+                </span>
+                <span className="text-muted text-xs">Acme Learning Academy (org-001) &bull; AY 2026–2027</span>
+                <span className="simulation-pill">Multi-Tenant View</span>
               </div>
+              <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Institution Academic Command Center</h1>
+              <p className="text-secondary text-sm">Oversee learners, faculty, academic departments, class batches, attendance, and exam compliance</p>
+            </div>
 
-              {/* Class-wise Attendance Progress Bars */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '20px' }}>
-                <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 600 }}>Spring Engineering</span>
-                    <strong style={{ color: 'var(--success)' }}>96.2%</strong>
-                  </div>
-                  <div className="progress-bar-bg" style={{ height: '6px' }}>
-                    <div className="progress-bar-fill" style={{ width: '96.2%' }} />
-                  </div>
-                  <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>58 / 60 present</span>
-                </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <Link to="/students" className="btn btn-primary">
+                <Plus size={16} /> Add Student
+              </Link>
+              <Link to="/faculty" className="btn btn-secondary">
+                <GraduationCap size={16} /> Add Faculty
+              </Link>
+              <Link to="/courses" className="btn btn-secondary">
+                <BookOpen size={16} /> New Course
+              </Link>
+              <Link to="/attendance" className="btn btn-secondary">
+                <Calendar size={16} /> Schedule Class
+              </Link>
+              <Link to="/notifications" className="btn btn-secondary" title="Broadcast institution announcement">
+                <Bell size={16} /> Announce
+              </Link>
+            </div>
+          </div>
 
-                <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 600 }}>Cloud Architects</span>
-                    <strong style={{ color: 'var(--info)' }}>93.8%</strong>
-                  </div>
-                  <div className="progress-bar-bg" style={{ height: '6px' }}>
-                    <div className="progress-bar-fill" style={{ width: '93.8%' }} />
-                  </div>
-                  <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>45 / 48 present</span>
-                </div>
-
-                <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 600 }}>Data Science Batch</span>
-                    <strong style={{ color: 'var(--success)' }}>95.1%</strong>
-                  </div>
-                  <div className="progress-bar-bg" style={{ height: '6px' }}>
-                    <div className="progress-bar-fill" style={{ width: '95.1%' }} />
-                  </div>
-                  <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>39 / 41 present</span>
-                </div>
+          {/* Institution KPI Metrics Grid */}
+          <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Total Students</span>
+                <Users size={16} color="var(--primary)" />
               </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{studentCount}</div>
+              <p className="text-success text-xs" style={{ margin: 0 }}>+12 new this month</p>
+            </div>
 
-              {/* Today's Classes List */}
-              <div className="table-container">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Class & Course</th>
-                      <th>Cohort</th>
-                      <th>Faculty</th>
-                      <th>Room / Link</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockLiveSessions.slice(0, 3).map((s, idx) => (
-                      <tr key={s.id || idx}>
-                        <td style={{ fontWeight: 600, fontSize: '0.8rem' }}>
-                          {idx === 0 ? '10:00 AM' : idx === 1 ? '02:00 PM' : '04:30 PM'}
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{s.title}</div>
-                          <span className="text-muted text-xs">{s.durationMinutes} mins &bull; Lecture</span>
-                        </td>
-                        <td>
-                          <span className="badge badge-secondary">{mockCohorts[idx % mockCohorts.length]?.name || 'Batch A'}</span>
-                        </td>
-                        <td>Dr. James Wilson</td>
-                        <td>
-                          <span className="text-primary text-xs" style={{ fontWeight: 600 }}>Zoom Room 102</span>
-                        </td>
-                        <td>
-                          <span className={`badge badge-${s.status}`}>{s.status}</span>
-                        </td>
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Total Faculty</span>
+                <GraduationCap size={16} color="var(--accent-purple)" />
+              </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{facultyCount}</div>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>Across 3 departments</p>
+            </div>
+
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Total Courses</span>
+                <BookOpen size={16} color="var(--accent-cyan)" />
+              </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{courseCount}</div>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>4 published &bull; 2 in review</p>
+            </div>
+
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Departments</span>
+                <Network size={16} color="var(--warning)" />
+              </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{deptCount}</div>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>100% active units</p>
+            </div>
+
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Classes / Batches</span>
+                <UsersRound size={16} color="var(--info)" />
+              </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>{cohortCount}</div>
+              <p className="text-muted text-xs" style={{ margin: 0 }}>Fall & Spring 2026</p>
+            </div>
+
+            <div className="stat-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs font-semibold">Attendance Avg</span>
+                <Calendar size={16} color="var(--success)" />
+              </div>
+              <div style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--success)', marginTop: '4px' }}>{avgAttendance}%</div>
+              <p className="text-success text-xs" style={{ margin: 0 }}>&uarr; 1.4% vs last term</p>
+            </div>
+          </div>
+
+          {/* 2-Column Core Operations & Academic Tracking */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.9fr 1.1fr', gap: '24px' }}>
+            {/* Left Column: Attendance & Timetable + Student Progress Summary */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Attendance & Class Timetable Widget */}
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Attendance Overview & Today's Classes</h3>
+                    <p className="text-muted text-xs">Live schedule and verified attendance across cohorts</p>
+                  </div>
+                  <Link to="/attendance" className="btn btn-secondary btn-sm">
+                    View Full Timetable &rarr;
+                  </Link>
+                </div>
+
+                {/* Class-wise Attendance Progress Bars */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '20px' }}>
+                  <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: 600 }}>Spring Engineering</span>
+                      <strong style={{ color: 'var(--success)' }}>96.2%</strong>
+                    </div>
+                    <div className="progress-bar-bg" style={{ height: '6px' }}>
+                      <div className="progress-bar-fill" style={{ width: '96.2%' }} />
+                    </div>
+                    <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>58 / 60 present</span>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: 600 }}>Cloud Architects</span>
+                      <strong style={{ color: 'var(--info)' }}>93.8%</strong>
+                    </div>
+                    <div className="progress-bar-bg" style={{ height: '6px' }}>
+                      <div className="progress-bar-fill" style={{ width: '93.8%' }} />
+                    </div>
+                    <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>45 / 48 present</span>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: 600 }}>Data Science Batch</span>
+                      <strong style={{ color: 'var(--success)' }}>95.1%</strong>
+                    </div>
+                    <div className="progress-bar-bg" style={{ height: '6px' }}>
+                      <div className="progress-bar-fill" style={{ width: '95.1%' }} />
+                    </div>
+                    <span className="text-muted text-xs" style={{ marginTop: '4px', display: 'block' }}>39 / 41 present</span>
+                  </div>
+                </div>
+
+                {/* Today's Classes List */}
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Class & Course</th>
+                        <th>Cohort</th>
+                        <th>Faculty</th>
+                        <th>Room / Link</th>
+                        <th>Status</th>
                       </tr>
+                    </thead>
+                    <tbody>
+                      {mockLiveSessions.slice(0, 3).map((s, idx) => (
+                        <tr key={s.id || idx}>
+                          <td style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                            {idx === 0 ? '10:00 AM' : idx === 1 ? '02:00 PM' : '04:30 PM'}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{s.title}</div>
+                            <span className="text-muted text-xs">{s.durationMinutes} mins &bull; Lecture</span>
+                          </td>
+                          <td>
+                            <span className="badge badge-secondary">{mockCohorts[idx % mockCohorts.length]?.name || 'Batch A'}</span>
+                          </td>
+                          <td>Dr. James Wilson</td>
+                          <td>
+                            <span className="text-primary text-xs" style={{ fontWeight: 600 }}>Zoom Room 102</span>
+                          </td>
+                          <td>
+                            <span className={`badge badge-${s.status}`}>{s.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Student Progress & Performance Summary */}
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Student Academic Progress & Risk Summary</h3>
+                    <p className="text-muted text-xs">Curriculum velocity, completion status, and at-risk early detection</p>
+                  </div>
+                  <Link to="/students" className="btn btn-secondary btn-sm">
+                    View Student Directory &rarr;
+                  </Link>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ borderLeft: '4px solid var(--success)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--success)' }}>78%</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>On-Track Students</div>
+                    <div className="text-muted text-xs">97 learners meeting curriculum milestones</div>
+                  </div>
+
+                  <div style={{ borderLeft: '4px solid var(--warning)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--warning)' }}>16%</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Needs Attention</div>
+                    <div className="text-muted text-xs">20 learners slightly behind schedule</div>
+                  </div>
+
+                  <div style={{ borderLeft: '4px solid var(--danger)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--danger)' }}>6%</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Flagged / At-Risk</div>
+                    <div className="text-muted text-xs">7 learners with &lt;75% attendance / low grades</div>
+                  </div>
+                </div>
+
+                {/* Upcoming Assessments Widget */}
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                      Upcoming Scheduled Assessments
+                    </span>
+                    <Link to="/assessments" className="text-primary text-xs font-semibold">Manage Assessments &rarr;</Link>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    {mockAssessments.slice(0, 2).map((a) => (
+                      <div key={a.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.title}</span>
+                          <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Proctored</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {a.durationMinutes} mins &bull; Passing Score: {a.passingMarks} &bull; 60 Candidates
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Student Progress & Performance Summary */}
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Student Academic Progress & Risk Summary</h3>
-                  <p className="text-muted text-xs">Curriculum velocity, completion status, and at-risk early detection</p>
-                </div>
-                <Link to="/students" className="btn btn-secondary btn-sm">
-                  View Student Directory &rarr;
-                </Link>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
-                <div style={{ borderLeft: '4px solid var(--success)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--success)' }}>78%</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>On-Track Students</div>
-                  <div className="text-muted text-xs">97 learners meeting curriculum milestones</div>
+            {/* Right Column: Recent Activities + Department Snapshot + Multi-Tenant Context */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Recent Institution Activities */}
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Recent Activities</h3>
+                  <span className="text-muted text-xs font-semibold">Live Feed</span>
                 </div>
 
-                <div style={{ borderLeft: '4px solid var(--warning)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--warning)' }}>16%</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Needs Attention</div>
-                  <div className="text-muted text-xs">20 learners slightly behind schedule</div>
-                </div>
-
-                <div style={{ borderLeft: '4px solid var(--danger)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--danger)' }}>6%</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Flagged / At-Risk</div>
-                  <div className="text-muted text-xs">7 learners with &lt;75% attendance / low grades</div>
-                </div>
-              </div>
-
-              {/* Upcoming Assessments Widget */}
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
-                    Upcoming Scheduled Assessments
-                  </span>
-                  <Link to="/assessments" className="text-primary text-xs font-semibold">Manage Assessments &rarr;</Link>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {mockAssessments.slice(0, 2).map((a) => (
-                    <div key={a.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.title}</span>
-                        <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Proctored</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {recentActivities.map((act) => (
+                    <div key={act.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'var(--primary-light)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '2px'
+                      }}>
+                        <Activity size={14} />
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {a.durationMinutes} mins &bull; Passing Score: {a.passingMarks} &bull; 60 Candidates
+                      <div>
+                        <div style={{ fontSize: '0.825rem', color: 'var(--text-main)', lineHeight: 1.35 }}>
+                          {act.text}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {act.time}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
+
+                <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <Link to="/reports" className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
+                    View All Audit & Activity Logs
+                  </Link>
+                </div>
+              </div>
+
+              {/* Academic Departments Overview */}
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Academic Structure</h3>
+                  <Link to="/departments" className="text-primary text-xs font-semibold">Manage &rarr;</Link>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {mockDepartments.map((d) => (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{d.name}</div>
+                        <span className="text-muted text-xs">{d.memberCount} enrolled members</span>
+                      </div>
+                      <span className="badge badge-active">{d.status}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: '14px', display: 'flex', gap: '8px' }}>
+                  <Link to="/cohorts" className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+                    <UsersRound size={14} /> Classes & Batches
+                  </Link>
+                  <Link to="/enrollments" className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
+                    <Route size={14} /> Enrollments
+                  </Link>
+                </div>
+              </div>
+
+              {/* Multi-Tenant Governance Notice */}
+              <div style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: 'var(--primary)', fontWeight: 700 }}>
+                  <Shield size={15} /> Institution Boundary Enforcement
+                </div>
+                <p style={{ margin: 0, lineHeight: 1.4 }}>
+                  All student records, faculty rosters, course materials, and grade distributions shown here are strictly isolated to <strong>Acme Learning Corp (org-001)</strong>. Cross-tenant access is restricted by policy.
+                </p>
               </div>
             </div>
           </div>
-
-          {/* Right Column: Recent Activities + Department Snapshot + Multi-Tenant Context */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Recent Institution Activities */}
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Recent Activities</h3>
-                <span className="text-muted text-xs font-semibold">Live Feed</span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+          {/* Top Header & Quick Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span className="badge badge-primary">
+                  Platform Admin Perspective
+                </span>
+                <span className="text-muted text-xs">Global Controller &bull; Acme Learning Corp (org-001)</span>
+                <span className="simulation-pill">Super Admin</span>
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {recentActivities.map((act) => (
-                  <div key={act.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '8px',
-                      background: 'var(--primary-light)',
-                      color: 'var(--primary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      marginTop: '2px'
-                    }}>
-                      <Activity size={14} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.825rem', color: 'var(--text-main)', lineHeight: 1.35 }}>
-                        {act.text}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {act.time}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
-                <Link to="/reports" className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
-                  View All Audit & Activity Logs
-                </Link>
-              </div>
-            </div>
-
-            {/* Academic Departments Overview */}
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Academic Structure</h3>
-                <Link to="/departments" className="text-primary text-xs font-semibold">Manage &rarr;</Link>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {mockDepartments.map((d) => (
-                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{d.name}</div>
-                      <span className="text-muted text-xs">{d.memberCount} enrolled members</span>
-                    </div>
-                    <span className="badge badge-active">{d.status}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ marginTop: '14px', display: 'flex', gap: '8px' }}>
-                <Link to="/cohorts" className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
-                  <UsersRound size={14} /> Classes & Batches
-                </Link>
-                <Link to="/enrollments" className="btn btn-secondary btn-sm" style={{ flex: 1 }}>
-                  <Route size={14} /> Enrollments
-                </Link>
-              </div>
-            </div>
-
-            {/* Multi-Tenant Governance Notice */}
-            <div style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '16px',
-              fontSize: '0.75rem',
-              color: 'var(--text-secondary)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: 'var(--primary)', fontWeight: 700 }}>
-                <Shield size={15} /> Institution Boundary Enforcement
-              </div>
-              <p style={{ margin: 0, lineHeight: 1.4 }}>
-                All student records, faculty rosters, course materials, and grade distributions shown here are strictly isolated to <strong>Acme Learning Corp (org-001)</strong>. Cross-tenant access is restricted by policy.
+              <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Platform Administration & Operations Center</h1>
+              <p className="text-secondary text-sm">
+                System-wide multi-tenancy, academic hierarchy, user directory, global RBAC policies, and health telemetry
               </p>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  // -------------------------------------------------------------
-  // 5. PLATFORM ADMIN / LMS ADMIN GLOBAL DASHBOARD
-  // -------------------------------------------------------------
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-      {/* Top Header & Quick Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
-              {role.replace('_', ' ')} Perspective
-            </span>
-            <span className="text-muted text-xs">Tenant: Acme Learning Corp (org-001)</span>
-          </div>
-          <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Executive Learning Dashboard</h1>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <Link to="/courses" className="btn btn-primary">
-            <Plus size={16} /> Create Course
-          </Link>
-          <Link to="/people" className="btn btn-secondary">
-            <Users size={16} /> Invite People
-          </Link>
-          <Link to="/reports" className="btn btn-secondary">
-            Analytics & Reports
-          </Link>
-        </div>
-      </div>
-
-      {/* KPI Cards Grid */}
-      <div className="grid-4">
-        {adminDashboardMetrics.map((metric, idx) => (
-          <div key={idx} className="stat-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span className="text-muted text-xs font-semibold">{metric.label}</span>
-              {metric.trend === 'up' && (
-                <span className="text-success text-xs" style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>
-                  <TrendingUp size={14} /> +{metric.change}%
-                </span>
-              )}
-              {metric.trend === 'down' && (
-                <span className="text-danger text-xs" style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>
-                  <TrendingDown size={14} /> {metric.change}
-                </span>
-              )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Link to="/courses" className="btn btn-primary">
+                <Plus size={16} /> Create Course
+              </Link>
+              <Link to="/people" className="btn btn-secondary">
+                <Users size={16} /> Invite People
+              </Link>
+              <Link to="/reports" className="btn btn-secondary">
+                Analytics & Reports
+              </Link>
             </div>
-
-            <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {metric.value}
-            </div>
-
-            <p className="text-muted text-xs">{metric.description}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Two Column Layout: Charts & Operations */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: '24px' }}>
-        {/* Synthetic Analytics Chart & Cohorts */}
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-            <div>
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Learner Enrollment & Completion Trends</h3>
-              <p className="text-muted text-xs">Simulated 6-Month Rolling Performance</p>
-            </div>
-            <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
-              <option>Last 6 Months</option>
-              <option>Year to Date</option>
-            </select>
           </div>
 
-          {/* Bar Chart Representation */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '180px', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            {[
-              { month: 'May', enrolled: 180, completed: 110 },
-              { month: 'Jun', enrolled: 240, completed: 160 },
-              { month: 'Jul', enrolled: 310, completed: 210 },
-              { month: 'Aug', enrolled: 290, completed: 230 },
-              { month: 'Sep', enrolled: 420, completed: 340 },
-              { month: 'Oct', enrolled: 490, completed: 410 },
-            ].map((d) => (
-              <div key={d.month} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '140px' }}>
-                  <div
-                    title={`Enrolled: ${d.enrolled}`}
-                    style={{
-                      width: '20px',
-                      height: `${(d.enrolled / 500) * 120}px`,
-                      background: 'var(--primary)',
-                      borderRadius: '4px 4px 0 0',
-                      transition: 'height 0.3s'
-                    }}
-                  />
-                  <div
-                    title={`Completed: ${d.completed}`}
-                    style={{
-                      width: '20px',
-                      height: `${(d.completed / 500) * 120}px`,
-                      background: 'var(--success)',
-                      borderRadius: '4px 4px 0 0',
-                      transition: 'height 0.3s'
-                    }}
-                  />
+          {/* KPI Cards Grid */}
+          <div className="grid-4">
+            {adminDashboardMetrics.map((metric, idx) => (
+              <div key={idx} className="stat-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <span className="text-muted text-xs font-semibold">{metric.label}</span>
+                  {metric.trend === 'up' && (
+                    <span className="text-success text-xs" style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>
+                      <TrendingUp size={14} /> +{metric.change}%
+                    </span>
+                  )}
+                  {metric.trend === 'down' && (
+                    <span className="text-danger text-xs" style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>
+                      <TrendingDown size={14} /> {metric.change}
+                    </span>
+                  )}
                 </div>
-                <span className="text-muted text-xs font-semibold">{d.month}</span>
+
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+                  {metric.value}
+                </div>
+
+                <p className="text-muted text-xs">{metric.description}</p>
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px', fontSize: '0.8rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '12px', height: '12px', background: 'var(--primary)', borderRadius: '2px' }} />
-              <span>New Enrollments</span>
+          {/* Two Column Layout: Charts & Operations */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr', gap: '24px' }}>
+            {/* Synthetic Analytics Chart & Cohorts */}
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Learner Enrollment & Completion Trends</h3>
+                  <p className="text-muted text-xs">Simulated 6-Month Rolling Performance</p>
+                </div>
+                <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
+                  <option>Last 6 Months</option>
+                  <option>Year to Date</option>
+                </select>
+              </div>
+
+              {/* Bar Chart Representation */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '180px', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                {[
+                  { month: 'May', enrolled: 180, completed: 110 },
+                  { month: 'Jun', enrolled: 240, completed: 160 },
+                  { month: 'Jul', enrolled: 310, completed: 210 },
+                  { month: 'Aug', enrolled: 290, completed: 230 },
+                  { month: 'Sep', enrolled: 420, completed: 340 },
+                  { month: 'Oct', enrolled: 490, completed: 410 },
+                ].map((d) => (
+                  <div key={d.month} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '140px' }}>
+                      <div
+                        title={`Enrolled: ${d.enrolled}`}
+                        style={{
+                          width: '20px',
+                          height: `${(d.enrolled / 500) * 120}px`,
+                          background: 'var(--primary)',
+                          borderRadius: '4px 4px 0 0',
+                          transition: 'height 0.3s'
+                        }}
+                      />
+                      <div
+                        title={`Completed: ${d.completed}`}
+                        style={{
+                          width: '20px',
+                          height: `${(d.completed / 500) * 120}px`,
+                          background: 'var(--success)',
+                          borderRadius: '4px 4px 0 0',
+                          transition: 'height 0.3s'
+                        }}
+                      />
+                    </div>
+                    <span className="text-muted text-xs font-semibold">{d.month}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px', fontSize: '0.8rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '12px', height: '12px', background: 'var(--primary)', borderRadius: '2px' }} />
+                  <span>New Enrollments</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '12px', height: '12px', background: 'var(--success)', borderRadius: '2px' }} />
+                  <span>Graduated / Completed</span>
+                </div>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ width: '12px', height: '12px', background: 'var(--success)', borderRadius: '2px' }} />
-              <span>Graduated / Completed</span>
+
+            {/* Quick Operations Checklist */}
+            <div className="card">
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Operational Readiness</h3>
+              <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
+                Core enterprise governance check
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} color="var(--success)" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Active Multi-Tenant Scopes</span>
+                  </div>
+                  <span className="badge badge-active">3 Orgs</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} color="var(--success)" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>RBAC Permission Matrix</span>
+                  </div>
+                  <span className="badge badge-active">3 Roles (Unified)</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} color="var(--success)" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Proctoring Incident Flagging</span>
+                  </div>
+                  <span className="badge badge-warning">2 In Review</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} color="var(--success)" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>BOT / AI Assisted Scoring</span>
+                  </div>
+                  <span className="badge badge-primary">Active</span>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '20px' }}>
+                <Link to="/settings" className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
+                  View Platform Settings & Audit Logs
+                </Link>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Quick Operations Checklist */}
-        <div className="card">
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Operational Readiness</h3>
-          <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-            Core enterprise governance check
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={16} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Active Multi-Tenant Scopes</span>
-              </div>
-              <span className="badge badge-active">3 Orgs</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={16} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>RBAC Permission Matrix</span>
-              </div>
-              <span className="badge badge-active">7 Roles</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={16} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Proctoring Incident Flagging</span>
-              </div>
-              <span className="badge badge-warning">2 In Review</span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={16} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>BOT / AI Assisted Scoring</span>
-              </div>
-              <span className="badge badge-primary">Active</span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: '20px' }}>
-            <Link to="/settings" className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
-              View Platform Settings & Audit Logs
-            </Link>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

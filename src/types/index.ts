@@ -13,8 +13,9 @@ export type ProctoringIncidentStatus = 'new' | 'in_review' | 'cleared' | 'escala
 export type SessionStatus = 'scheduled' | 'live' | 'ended' | 'cancelled' | 'failed' | 'rescheduled';
 export type NotificationDeliveryStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'retrying' | 'bounced';
 
-// --- Roles & Permissions ---
-export type RoleName = 'platform_admin' | 'org_admin' | 'lms_admin' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
+// --- Roles & Permissions (3 Core Platform Roles: platform_admin, trainer, student) ---
+export type CanonicalRole = 'platform_admin' | 'trainer' | 'student';
+export type RoleName = 'platform_admin' | 'trainer' | 'student' | 'org_admin' | 'lms_admin' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'archive' | 'publish' | 'assign' | 'enroll' | 'invite' | 'grade' | 'moderate' | 'release_results' | 'export' | 'configure' | 'review' | 'revoke' | 'delete';
 export type PermissionResource = 'users' | 'organizations' | 'cohorts' | 'courses' | 'lessons' | 'paths' | 'live_sessions' | 'question_banks' | 'assessments' | 'submissions' | 'grading' | 'proctoring' | 'reports' | 'notifications' | 'integrations' | 'platform_settings' | 'roles' | 'certificates' | 'departments';
 export type PermissionScope = 'global' | 'organization' | 'department' | 'cohort' | 'course' | 'assessment' | 'assigned' | 'own';

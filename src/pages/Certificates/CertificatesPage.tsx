@@ -10,7 +10,7 @@ import {
 
 export const CertificatesPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isLearner = user?.activeRole === 'learner';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const [certificates, setCertificates] = useState<Certificate[]>(mockCertificates);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);

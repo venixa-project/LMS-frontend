@@ -10,7 +10,7 @@ import {
 
 export const LearningPathsPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isLearner = user?.activeRole === 'learner';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const [paths, setPaths] = useState<LearningPath[]>(mockLearningPaths);
   const [selectedPath, setSelectedPath] = useState<LearningPath>(mockLearningPaths[0]);
   const [isModalOpen, setIsModalOpen] = useState(false);

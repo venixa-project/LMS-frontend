@@ -41,10 +41,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
 
     // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    // Support legacy and alias emails
+    let normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail === 'instructor@lms.demo' || normalizedEmail === 'author@lms.demo' || normalizedEmail === 'grader@lms.demo') {
+      normalizedEmail = 'trainer@lms.demo';
+    } else if (normalizedEmail === 'learner@lms.demo' || normalizedEmail === 'alex@lms.demo' || normalizedEmail === 'alex.rivera@lms.demo') {
+      normalizedEmail = 'student@lms.demo';
+    } else if (normalizedEmail === 'orgadmin@lms.demo' || normalizedEmail === 'lmsadmin@lms.demo') {
+      normalizedEmail = 'admin@lms.demo';
+    }
 
     const foundUser = mockUsers.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
+      (u) => u.email.toLowerCase() === normalizedEmail
     );
 
     if (!foundUser || password.length < 3) {
@@ -112,14 +122,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
 
-    // Load canonical persona from mockUsers if available for the role
-    const canonicalUser = mockUsers.find((u) => u.activeRole === role);
-    const updatedUser = canonicalUser
-      ? { ...canonicalUser, activeRole: role }
-      : { ...user, activeRole: role };
+    // Normalize to the 3 canonical roles
+    let targetRole: RoleName = role;
+    if (role === 'instructor' || role === 'assessment_author' || role === 'grader') {
+      targetRole = 'trainer';
+    } else if (role === 'learner' || role === 'guest') {
+      targetRole = 'student';
+    } else if (role === 'org_admin' || role === 'lms_admin') {
+      targetRole = 'platform_admin';
+    }
 
-    const permissions = getPermissionsForRole(role);
-    const navigation = getNavigationForRole(role);
+    // Load canonical persona from mockUsers if available for the role
+    const canonicalUser = mockUsers.find((u) => u.activeRole === targetRole);
+    const updatedUser = canonicalUser
+      ? { ...canonicalUser, activeRole: targetRole }
+      : { ...user, activeRole: targetRole };
+
+    const permissions = getPermissionsForRole(targetRole);
+    const navigation = getNavigationForRole(targetRole);
 
     set({
       user: updatedUser,

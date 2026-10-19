@@ -20,13 +20,9 @@ interface RoleItem {
 }
 
 const initialRoles: RoleItem[] = [
-  { id: 'r-1', role: 'platform_admin', name: 'Platform Administrator', description: 'Full system-wide administrative control across all tenant organizations', isTemplate: true, memberCount: 2, scope: 'Global', status: 'active', updatedAt: '2026-10-15' },
-  { id: 'r-2', role: 'org_admin', name: 'Organization Administrator', description: 'Full administrative access restricted to tenant organization scope', isTemplate: true, memberCount: 5, scope: 'Organization', status: 'active', updatedAt: '2026-10-14' },
-  { id: 'r-3', role: 'lms_admin', name: 'LMS Administrator', description: 'Course authoring, learning paths, assessment policies, and certificate approvals', isTemplate: true, memberCount: 8, scope: 'Organization', status: 'active', updatedAt: '2026-10-12' },
-  { id: 'r-4', role: 'instructor', name: 'Instructor / Faculty', description: 'Assigned courses, live classroom hosting, attendance roster, and progress review', isTemplate: true, memberCount: 24, scope: 'Assigned Records', status: 'active', updatedAt: '2026-10-10' },
-  { id: 'r-5', role: 'assessment_author', name: 'Assessment Author', description: 'Authoring question banks, configuring timed exams, rubrics, and answer keys', isTemplate: true, memberCount: 12, scope: 'Assigned Records', status: 'active', updatedAt: '2026-09-28' },
-  { id: 'r-6', role: 'grader', name: 'Grader / Evaluator', description: 'Evaluation queue, scoring criteria, double-marking, and preliminary AI review', isTemplate: true, memberCount: 16, scope: 'Assigned Records', status: 'active', updatedAt: '2026-09-20' },
-  { id: 'r-7', role: 'learner', name: 'Student / Learner', description: 'Course consumption, timed exam delivery, certificate attainment, and live attendance', isTemplate: true, memberCount: 890, scope: 'Own Records', status: 'active', updatedAt: '2026-10-01' },
+  { id: 'r-1', role: 'platform_admin', name: 'Platform Administrator', description: 'Full system-wide administrative control across multi-tenant organizations, departments, user directory, global RBAC, and system integrations', isTemplate: true, memberCount: 2, scope: 'Global & Organization', status: 'active', updatedAt: '2026-10-18' },
+  { id: 'r-2', role: 'trainer', name: 'Trainer / Faculty', description: 'Course authoring studio, live webinar hosting, attendance rosters, question banks, quizzes, grading queue, and AI evaluation review', isTemplate: true, memberCount: 28, scope: 'Assigned Cohorts & Classes', status: 'active', updatedAt: '2026-10-18' },
+  { id: 'r-3', role: 'student', name: 'Student / Learner', description: 'Interactive course player, live classes, assignment deliverable submission, timed proctored exam engine, and verifiable digital credentials', isTemplate: true, memberCount: 940, scope: 'Own Records & Enrolled Cohorts', status: 'active', updatedAt: '2026-10-18' },
 ];
 
 const modulesList: { resource: PermissionResource; label: string }[] = [
@@ -56,7 +52,7 @@ export const RolesPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
 
   // Simulation role picker
-  const [simRole, setSimRole] = useState<RoleName>('instructor');
+  const [simRole, setSimRole] = useState<RoleName>('trainer');
 
   const permissions = getPermissionsForRole(selectedRole.role);
   const simulatedNav = getNavigationForRole(simRole);
@@ -227,12 +223,8 @@ export const RolesPage: React.FC = () => {
                 style={{ width: 'auto' }}
               >
                 <option value="platform_admin">Platform Admin</option>
-                <option value="org_admin">Org Admin</option>
-                <option value="lms_admin">LMS Admin</option>
-                <option value="instructor">Instructor</option>
-                <option value="assessment_author">Assessment Author</option>
-                <option value="grader">Grader</option>
-                <option value="learner">Learner</option>
+                <option value="trainer">Trainer / Faculty</option>
+                <option value="student">Student / Learner</option>
               </select>
             </div>
           </div>
