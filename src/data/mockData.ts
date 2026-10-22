@@ -267,9 +267,9 @@ export const mockProctoringIncidents: ProctoringIncident[] = [
 
 // --- Certificates ---
 export const mockCertificates: Certificate[] = [
-  { id: 'cert-001', learnerId: 'u-007', learnerName: 'Alex Thompson', courseId: 'crs-004', courseName: 'TypeScript Mastery', issueDate: '2026-08-15', status: 'active', verificationUrl: '#verify/cert-001', templateId: 'tpl-001' },
-  { id: 'cert-002', learnerId: 'u-010', learnerName: 'David Kim', courseId: 'crs-001', courseName: 'JavaScript Fundamentals', issueDate: '2026-09-20', status: 'active', verificationUrl: '#verify/cert-002', templateId: 'tpl-001' },
-  { id: 'cert-003', learnerId: 'u-009', learnerName: 'Maria Garcia', courseId: 'crs-004', courseName: 'TypeScript Mastery', issueDate: '2026-07-01', expiryDate: '2027-07-01', status: 'active', verificationUrl: '#verify/cert-003', templateId: 'tpl-001' },
+  { id: 'cert-001', learnerId: 'u-007', learnerName: 'Alex Thompson', courseId: 'crs-004', courseName: 'TypeScript Mastery', courseTitle: 'TypeScript Mastery & Advanced Type Systems', issueDate: '2026-08-15', issuedAt: '2026-08-15T10:00:00Z', status: 'active', verificationUrl: 'https://verify.acmelearning.com/cert/cert-001', verificationHash: '9a4f8c2b7e1d5a3f6e8c0b2d4f7a1e3c8821fa5d', templateId: 'tpl-001' },
+  { id: 'cert-002', learnerId: 'u-010', learnerName: 'David Kim', courseId: 'crs-001', courseName: 'JavaScript Fundamentals', courseTitle: 'JavaScript Fundamentals & Modern ESNext', issueDate: '2026-09-20', issuedAt: '2026-09-20T14:30:00Z', status: 'active', verificationUrl: 'https://verify.acmelearning.com/cert/cert-002', verificationHash: '7b2d5f1a9e3c8821fa5d9a4f8c2b7e1d4f7a1e3c', templateId: 'tpl-001' },
+  { id: 'cert-003', learnerId: 'u-009', learnerName: 'Maria Garcia', courseId: 'crs-004', courseName: 'TypeScript Mastery', courseTitle: 'TypeScript Mastery & Advanced Type Systems', issueDate: '2026-07-01', issuedAt: '2026-07-01T09:00:00Z', expiryDate: '2027-07-01', status: 'active', verificationUrl: 'https://verify.acmelearning.com/cert/cert-003', verificationHash: '1e3c8821fa5d9a4f8c2b7e1d4f7a1e3c7b2d5f1a', templateId: 'tpl-001' },
 ];
 
 // --- Integrations ---

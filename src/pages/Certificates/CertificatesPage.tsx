@@ -5,8 +5,9 @@ import { Certificate } from '../../types';
 import { Link } from 'react-router-dom';
 import {
   Award, Download, ExternalLink, ShieldCheck, Search,
-  Eye, Calendar, CheckCircle2, X, Printer, Lock, BookOpen, Clock
+  Eye, Calendar, CheckCircle2, X, Printer, Lock, BookOpen, Clock, FileCheck
 } from 'lucide-react';
+import { generateCertificatePdf, printCertificateDiploma } from '../../lib/certificatePdf';
 
 export const CertificatesPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -20,22 +21,20 @@ export const CertificatesPage: React.FC = () => {
     ? certificates.filter((c) => c.learnerName.includes('Alex') || c.learnerId === 'u-007' || c.learnerId === user?.id)
     : certificates;
 
-  const handleSimulatedDownload = (cert: Certificate) => {
-    setDownloadNotice(`Downloading digital credential diploma PDF for "${cert.courseTitle}" (ECDSA verification embedded)...`);
+  const handleDownloadPdf = (cert: Certificate) => {
+    const title = cert.courseTitle || cert.courseName || 'Certified Program';
+    setDownloadNotice(`Generating and downloading cryptographically verified PDF diploma for "${title}"...`);
     setTimeout(() => {
-      setDownloadNotice(null);
-      // Trigger a clean text/pdf-like blob download
-      const content = `ACUITY LMS VERIFIED CREDENTIAL DIPLOMA\n======================================\n\nRecipient: ${cert.learnerName}\nCredential ID: ${cert.id}\nCourse Title: ${cert.courseTitle}\nIssue Date: ${new Date(cert.issuedAt || cert.issueDate || Date.now()).toLocaleDateString()}\nStatus: Verified\nCryptographic Proof: SHA256-${(cert.verificationHash || cert.id)}\nAuthority: Acme Learning Corp & Academic Affairs\n`;
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Certificate_${cert.id}_${cert.learnerName.replace(/\s+/g, '_')}.txt`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 800);
+      try {
+        generateCertificatePdf(cert);
+        setDownloadNotice(`✓ Downloaded official certificate PDF for "${title}"!`);
+        setTimeout(() => setDownloadNotice(null), 3500);
+      } catch (err) {
+        console.error('Failed to generate certificate PDF:', err);
+        setDownloadNotice('Failed to generate PDF. Opening print preview instead...');
+        printCertificateDiploma(cert);
+      }
+    }, 400);
   };
 
   return (
@@ -127,7 +126,7 @@ export const CertificatesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle}</h3>
+                <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle || cert.courseName}</h3>
                 <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
                   Recipient: <strong>{cert.learnerName}</strong>
                 </p>
@@ -163,9 +162,9 @@ export const CertificatesPage: React.FC = () => {
                 <button
                   className="btn btn-primary btn-sm"
                   style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                  onClick={() => handleSimulatedDownload(cert)}
+                  onClick={() => handleDownloadPdf(cert)}
                 >
-                  <Download size={14} /> Download
+                  <Download size={14} /> Download PDF
                 </button>
               </div>
             </div>
@@ -313,14 +312,22 @@ export const CertificatesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ gap: '10px', flexWrap: 'wrap' }}>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => alert("Printing simulated PDF diploma...")}
+                onClick={() => printCertificateDiploma(selectedCert)}
+                style={{ gap: '6px' }}
               >
-                <Printer size={14} /> Print / Export PDF
+                <Printer size={14} /> Print / Save as PDF
               </button>
-              <button className="btn btn-primary btn-sm" onClick={() => setSelectedCert(null)}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => handleDownloadPdf(selectedCert)}
+                style={{ gap: '6px' }}
+              >
+                <Download size={14} /> Download Verified PDF
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedCert(null)}>
                 Close
               </button>
             </div>
