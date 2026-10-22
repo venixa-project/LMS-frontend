@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { mockUsers } from '../../data/mockUsers';
 import { mockDepartments, mockCohorts, mockCourses } from '../../data/mockData';
 import { User, RoleName, UserAccountStatus } from '../../types';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Users, UserPlus, Upload, Search, Filter, Mail, CheckCircle2,
   Clock, AlertCircle, X, Download, Shield, Eye, MoreHorizontal,
@@ -16,10 +17,31 @@ interface Props {
 
 export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
-  const [activeTab, setActiveTab] = useState<'all' | 'students' | 'faculty' | 'staff'>(
-    isFacultyViewer || initialMode === 'students' ? 'students' : initialMode === 'faculty' ? 'faculty' : 'all'
-  );
+
+  const getTabFromRoute = (pathname: string): 'all' | 'students' | 'faculty' | 'staff' => {
+    if (isFacultyViewer) return 'students';
+    if (pathname.includes('/students')) return 'students';
+    if (pathname.includes('/faculty')) return 'faculty';
+    if (initialMode === 'students') return 'students';
+    if (initialMode === 'faculty') return 'faculty';
+    return 'all';
+  };
+
+  const [activeTab, setActiveTab] = useState<'all' | 'students' | 'faculty' | 'staff'>(() => getTabFromRoute(location.pathname));
+
+  useEffect(() => {
+    setActiveTab(getTabFromRoute(location.pathname));
+  }, [location.pathname, initialMode]);
+
+  const handleTabChange = (tab: 'all' | 'students' | 'faculty' | 'staff') => {
+    setActiveTab(tab);
+    if (tab === 'students') navigate('/students');
+    else if (tab === 'faculty') navigate('/faculty');
+    else if (tab === 'all') navigate('/people');
+  };
 
   const [users, setUsers] = useState<User[]>(mockUsers);
   const [search, setSearch] = useState('');
@@ -271,28 +293,28 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         <div className="tabs-nav" style={{ marginBottom: '20px' }}>
           <button
             className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveTab('all')}
+            onClick={() => handleTabChange('all')}
           >
             <Users size={16} />
             All People ({users.length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'students' ? 'active' : ''}`}
-            onClick={() => setActiveTab('students')}
+            onClick={() => handleTabChange('students')}
           >
             <UserCheck size={16} />
             Students ({users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner').length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'faculty' ? 'active' : ''}`}
-            onClick={() => setActiveTab('faculty')}
+            onClick={() => handleTabChange('faculty')}
           >
             <GraduationCap size={16} />
             Trainers ({users.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor').length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
-            onClick={() => setActiveTab('staff')}
+            onClick={() => handleTabChange('staff')}
           >
             <Shield size={16} />
             Platform Admins ({users.filter((u) => u.activeRole === 'platform_admin').length})

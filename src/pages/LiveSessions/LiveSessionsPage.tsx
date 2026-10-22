@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { mockLiveSessions, mockCohorts, mockCourses } from '../../data/mockData';
 import { LiveSession } from '../../types';
 import { useAuthStore } from '../../lib/store';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Video, Plus, Calendar, Clock, Users, ExternalLink,
   Edit2, X, CheckCircle2, AlertTriangle, Play, Radio,
@@ -15,13 +16,34 @@ interface Props {
 
 export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const facultyCohorts = mockCohorts.filter((c) => ['coh-001', 'coh-002', 'coh-004'].includes(c.id));
   const availableCohorts = isFaculty ? facultyCohorts : mockCohorts;
 
   const [sessions, setSessions] = useState<LiveSession[]>(mockLiveSessions);
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'timetable' | 'attendance'>(defaultTab);
+
+  const getTabFromRoute = (pathname: string): 'upcoming' | 'past' | 'timetable' | 'attendance' => {
+    if (pathname.includes('/attendance')) return 'attendance';
+    return defaultTab;
+  };
+
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'timetable' | 'attendance'>(() => getTabFromRoute(location.pathname));
+
+  useEffect(() => {
+    setActiveTab(getTabFromRoute(location.pathname));
+  }, [location.pathname, defaultTab]);
+
+  const handleTabChange = (tab: 'upcoming' | 'past' | 'timetable' | 'attendance') => {
+    setActiveTab(tab);
+    if (tab === 'attendance') {
+      navigate('/attendance');
+    } else {
+      navigate(isLearner ? '/my-sessions' : '/live-sessions');
+    }
+  };
 
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -249,28 +271,28 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
       <div className="tabs-nav" style={{ marginBottom: '20px' }}>
         <button
           className={`tab-btn ${activeTab === 'upcoming' ? 'active' : ''}`}
-          onClick={() => setActiveTab('upcoming')}
+          onClick={() => handleTabChange('upcoming')}
         >
           <Video size={16} />
           {isLearner ? 'Upcoming Live Classes' : 'Live Classes'} ({sessions.filter((s) => s.status === 'scheduled').length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'timetable' ? 'active' : ''}`}
-          onClick={() => setActiveTab('timetable')}
+          onClick={() => handleTabChange('timetable')}
         >
           <Calendar size={16} />
           {isLearner ? 'My Weekly Timetable' : 'Weekly Timetable & Schedule'}
         </button>
         <button
           className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('attendance')}
+          onClick={() => handleTabChange('attendance')}
         >
           <UserCheck size={16} />
           {isLearner ? 'My Attendance History (96.2%)' : 'Attendance Rosters & Compliance'}
         </button>
         <button
           className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
-          onClick={() => setActiveTab('past')}
+          onClick={() => handleTabChange('past')}
         >
           <Clock size={16} />
           {isLearner ? 'Recorded Classes' : 'Past & Recorded'} ({sessions.filter((s) => s.status === 'ended').length})

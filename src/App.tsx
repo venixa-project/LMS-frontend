@@ -83,42 +83,42 @@ export const App: React.FC = () => {
           {/* Administration & Directory */}
           <Route path="organizations" element={<OrganizationsPage />} />
           <Route path="departments" element={<DepartmentsPage />} />
-          <Route path="people" element={<PeoplePage />} />
-          <Route path="students" element={<PeoplePage initialMode="students" />} />
-          <Route path="faculty" element={<PeoplePage initialMode="faculty" />} />
+          <Route path="people" element={<PeoplePage key="people" initialMode="all" />} />
+          <Route path="students" element={<PeoplePage key="students" initialMode="students" />} />
+          <Route path="faculty" element={<PeoplePage key="faculty" initialMode="faculty" />} />
           <Route path="cohorts" element={<CohortsPage />} />
           <Route path="roles" element={<RolesPage />} />
 
           {/* Course Management & Learning */}
-          <Route path="courses" element={<CoursesPage />} />
-          <Route path="my-learning" element={<CoursesPage />} />
-          <Route path="catalog" element={<CoursesPage />} />
+          <Route path="courses" element={<CoursesPage key="courses" />} />
+          <Route path="my-learning" element={<CoursesPage key="my-learning" />} />
+          <Route path="catalog" element={<CoursesPage key="catalog" />} />
           <Route path="course-builder" element={<CourseBuilderPage />} />
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
           <Route path="learning-materials" element={<LearnerCoursePlayerPage />} />
-          <Route path="learning-paths" element={<LearningPathsPage />} />
-          <Route path="my-paths" element={<LearningPathsPage />} />
+          <Route path="learning-paths" element={<LearningPathsPage key="learning-paths" />} />
+          <Route path="my-paths" element={<LearningPathsPage key="my-paths" />} />
           <Route path="enrollments" element={<EnrollmentsPage />} />
 
           {/* Live Sessions, Timetable & Attendance */}
-          <Route path="live-sessions" element={<LiveSessionsPage />} />
-          <Route path="my-sessions" element={<LiveSessionsPage />} />
-          <Route path="attendance" element={<LiveSessionsPage defaultTab="attendance" />} />
+          <Route path="live-sessions" element={<LiveSessionsPage key="live-sessions" />} />
+          <Route path="my-sessions" element={<LiveSessionsPage key="my-sessions" />} />
+          <Route path="attendance" element={<LiveSessionsPage key="attendance" defaultTab="attendance" />} />
 
           {/* Assessments & Assignments */}
-          <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
+          <Route path="assignments" element={<AssessmentsPage key="assignments" defaultTab="assignments" />} />
           <Route path="question-banks" element={<QuestionBanksPage />} />
-          <Route path="assessments" element={<AssessmentsPage />} />
-          <Route path="my-assessments" element={<AssessmentsPage />} />
-          <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
+          <Route path="assessments" element={<AssessmentsPage key="assessments" defaultTab="assessments" />} />
+          <Route path="my-assessments" element={<AssessmentsPage key="my-assessments" defaultTab="assessments" />} />
+          <Route path="my-results" element={<AssessmentsPage key="my-results" defaultTab="results" />} />
 
           {/* Grading & Proctoring */}
           <Route path="grading" element={<GradingPage />} />
           <Route path="proctoring" element={<ProctoringPage />} />
 
           {/* Certificates & Analytics */}
-          <Route path="certificates" element={<CertificatesPage />} />
-          <Route path="my-certificates" element={<CertificatesPage />} />
+          <Route path="certificates" element={<CertificatesPage key="certificates" />} />
+          <Route path="my-certificates" element={<CertificatesPage key="my-certificates" />} />
           <Route path="reports" element={<ReportsPage />} />
 
           {/* System & Notifications */}

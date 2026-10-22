@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { mockAssessments, mockCourses, mockCohorts } from '../../data/mockData';
 import { Assessment } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
@@ -38,8 +38,32 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(defaultTab);
+  const getTabFromPath = (path: string): 'assessments' | 'assignments' | 'results' => {
+    if (path.includes('assignments')) return 'assignments';
+    if (path.includes('results')) return 'results';
+    if (path.includes('assessments')) return 'assessments';
+    return defaultTab;
+  };
+
+  const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(() => getTabFromPath(location.pathname));
+
+  useEffect(() => {
+    const tabFromPath = getTabFromPath(location.pathname);
+    setActiveTab(tabFromPath);
+  }, [location.pathname, defaultTab]);
+
+  const handleTabChange = (tab: 'assessments' | 'assignments' | 'results') => {
+    setActiveTab(tab);
+    if (tab === 'assignments') {
+      navigate('/assignments');
+    } else if (tab === 'results') {
+      navigate('/my-results');
+    } else {
+      navigate(isLearner ? '/my-assessments' : '/assessments');
+    }
+  };
   const [assessments, setAssessments] = useState<Assessment[]>(mockAssessments);
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
@@ -294,14 +318,14 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       <div className="tabs-nav">
         <button
           className={`tab-btn ${activeTab === 'assignments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assignments')}
+          onClick={() => handleTabChange('assignments')}
         >
           <ClipboardCheck size={16} />
           {isLearner ? 'My Assignments' : 'Course Assignments'} ({assignments.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'assessments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assessments')}
+          onClick={() => handleTabChange('assessments')}
         >
           <Clock size={16} />
           Quizzes & Exams ({filteredAssessments.length})
@@ -309,7 +333,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         {isLearner && (
           <button
             className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
-            onClick={() => setActiveTab('results')}
+            onClick={() => handleTabChange('results')}
           >
             <Award size={16} />
             My Results & Grades (3)
@@ -558,7 +582,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                       <button
                         className="btn btn-secondary btn-sm"
                         style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                        onClick={() => setActiveTab('results')}
+                        onClick={() => handleTabChange('results')}
                       >
                         <Award size={13} /> View Result (100%)
                       </button>
