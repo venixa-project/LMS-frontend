@@ -6,7 +6,7 @@ import {
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
   Plug, Settings, Building2, Network, Users, UsersRound,
   Shield, Search, Trophy, GraduationCap, Calendar,
-  UserCheck, User, Megaphone, Compass, Library, Layers
+  UserCheck, User, Megaphone, Compass, Library, Layers, X
 } from 'lucide-react';
 import { getNavigationForRole } from '../lib/permissions';
 
@@ -60,12 +60,12 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop - only visible on mobile screens <= 768px */}
       {isOpen && (
         <div
-          className="modal-overlay"
-          style={{ zIndex: 29 }}
+          className="sidebar-backdrop"
           onClick={onClose}
+          aria-label="Close navigation sidebar"
         />
       )}
 
@@ -73,9 +73,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Brand header */}
         <div style={{
           height: 'var(--navbar-height, 64px)',
-          padding: '0 20px',
+          padding: '0 16px 0 20px',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           gap: '10px',
           borderBottom: '1px solid var(--border-subtle)',
           background: 'var(--bg-sidebar)',
@@ -83,6 +84,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         }}>
           <Link
             to="/"
+            onClick={onClose}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -105,6 +107,28 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               />
             </div>
           </Link>
+
+          {/* Close button for mobile drawer */}
+          <button
+            onClick={onClose}
+            className="mobile-sidebar-close-btn"
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-muted)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              cursor: 'pointer'
+            }}
+            title="Close menu"
+            aria-label="Close navigation"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Navigation list */}

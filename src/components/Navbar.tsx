@@ -50,6 +50,8 @@ export const Navbar: React.FC<Props> = ({
           className="btn btn-secondary btn-sm"
           onClick={onToggleSidebar}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px' }}
+          title="Toggle sidebar navigation (Ctrl+B)"
+          aria-label="Toggle sidebar navigation"
         >
           <Menu size={18} />
         </button>
@@ -248,23 +250,28 @@ export const Navbar: React.FC<Props> = ({
           </button>
 
           {showProfileMenu && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                width: '220px',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: '6px',
-                zIndex: 50,
-                animation: 'scaleUp 0.15s ease'
-              }}
-              onClick={() => setShowProfileMenu(false)}
-            >
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
+                onClick={() => setShowProfileMenu(false)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  width: '220px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: 'var(--radius-lg)',
+                  boxShadow: 'var(--shadow-lg)',
+                  padding: '6px',
+                  zIndex: 50,
+                  animation: 'scaleUp 0.15s ease'
+                }}
+                onClick={() => setShowProfileMenu(false)}
+              >
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{user?.displayName}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user?.email}</div>
@@ -352,7 +359,8 @@ export const Navbar: React.FC<Props> = ({
                 </button>
               </div>
             </div>
-          )}
+          </>
+        )}
         </div>
       </div>
     </header>

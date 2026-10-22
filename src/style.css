@@ -229,8 +229,13 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   flex-shrink: 0;
   z-index: 30;
-  transition: transform 0.25s ease, left 0.25s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+}
+
+/* Collapsed sidebar on desktop */
+.app-shell.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
 }
 
 .main-wrapper {
@@ -243,6 +248,12 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 0;
   overflow: hidden;
   position: relative;
+  transition: margin-left 0.25s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-shell.sidebar-collapsed .main-wrapper {
+  margin-left: 0;
+  width: 100%;
 }
 
 .topbar {
@@ -259,6 +270,16 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0 24px;
   z-index: 20;
   box-sizing: border-box;
+  transition: left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-shell.sidebar-collapsed .topbar {
+  left: 0;
+}
+
+/* Mobile Sidebar Backdrop - NEVER visible on desktop */
+.sidebar-backdrop {
+  display: none;
 }
 
 .main-content {
@@ -706,23 +727,43 @@ h1, h2, h3, h4, h5, h6 {
     position: fixed;
     top: 0;
     bottom: 0;
-    left: calc(-1 * var(--sidebar-width) - 10px);
+    left: 0;
+    transform: translateX(-105%);
     width: var(--sidebar-width);
     height: 100dvh;
     box-shadow: none;
+    z-index: 30;
   }
   .sidebar.open {
-    left: 0;
+    transform: translateX(0);
     box-shadow: var(--shadow-xl);
   }
   .main-wrapper {
-    margin-left: 0;
-    width: 100%;
+    margin-left: 0 !important;
+    width: 100% !important;
   }
   .topbar {
-    left: 0;
+    left: 0 !important;
     right: 0;
     padding: 0 16px;
+  }
+  .app-shell.sidebar-collapsed .sidebar {
+    transform: translateX(-105%);
+  }
+  .app-shell.sidebar-collapsed .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--bg-overlay);
+    backdrop-filter: blur(4px);
+    z-index: 29;
+    animation: fadeIn 0.15s ease-out;
+  }
+  .mobile-sidebar-close-btn {
+    display: flex !important;
   }
   .main-content {
     margin-top: var(--navbar-height);
