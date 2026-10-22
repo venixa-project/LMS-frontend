@@ -21,20 +21,18 @@ export const CertificatesPage: React.FC = () => {
     ? certificates.filter((c) => c.learnerName.includes('Alex') || c.learnerId === 'u-007' || c.learnerId === user?.id)
     : certificates;
 
-  const handleDownloadPdf = (cert: Certificate) => {
+  const handleDownloadPdf = async (cert: Certificate) => {
     const title = cert.courseTitle || cert.courseName || 'Certified Program';
-    setDownloadNotice(`Generating and downloading cryptographically verified PDF diploma for "${title}"...`);
-    setTimeout(() => {
-      try {
-        generateCertificatePdf(cert);
-        setDownloadNotice(`✓ Downloaded official certificate PDF for "${title}"!`);
-        setTimeout(() => setDownloadNotice(null), 3500);
-      } catch (err) {
-        console.error('Failed to generate certificate PDF:', err);
-        setDownloadNotice('Failed to generate PDF. Opening print preview instead...');
-        printCertificateDiploma(cert);
-      }
-    }, 400);
+    setDownloadNotice(`Generating and downloading cryptographically verified PDF diploma with company logo for "${title}"...`);
+    try {
+      await generateCertificatePdf(cert);
+      setDownloadNotice(`✓ Official verified certificate PDF with company branding downloaded successfully!`);
+      setTimeout(() => setDownloadNotice(null), 3500);
+    } catch (err) {
+      console.error('Failed to generate certificate PDF:', err);
+      setDownloadNotice('Opening print preview instead...');
+      printCertificateDiploma(cert);
+    }
   };
 
   return (
@@ -264,50 +262,130 @@ export const CertificatesPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="modal-body" style={{ padding: '36px', textAlign: 'center' }}>
+            <div className="modal-body" style={{ padding: '28px', textAlign: 'center' }}>
               <div style={{
-                border: '4px double rgba(16, 185, 129, 0.4)',
+                border: '3px double #d97706',
                 borderRadius: 'var(--radius-lg)',
-                padding: '36px 28px',
-                background: 'radial-gradient(ellipse at center, rgba(16, 185, 129, 0.08) 0%, transparent 70%)'
+                padding: '32px 28px',
+                background: 'radial-gradient(ellipse at center, rgba(254, 243, 199, 0.08) 0%, transparent 80%), var(--bg-card)',
+                boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.15)',
+                position: 'relative'
               }}>
-                <Award size={48} color="var(--success)" style={{ margin: '0 auto 12px' }} />
-                <div style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                  Certificate of Professional Achievement
+                {/* Official Company Logo */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+                  <img
+                    src="/logo.png"
+                    alt="VeniLearn Logo"
+                    style={{
+                      height: '42px',
+                      width: 'auto',
+                      maxWidth: '180px',
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+                    }}
+                  />
                 </div>
 
-                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                  This acknowledges that
+                <div style={{ fontSize: '0.725rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                  VeniLearn Enterprise LMS &bull; Acme Learning Corp
                 </div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
+                <div style={{ fontSize: '0.65rem', letterSpacing: '0.06em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>
+                  Department of Academic Affairs &bull; Official Credentials Registry
+                </div>
+                <div style={{ width: '90px', height: '2px', background: 'linear-gradient(90deg, transparent, #d97706, transparent)', margin: '0 auto 14px' }} />
+
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-main)', marginBottom: '2px' }}>
+                  Certificate of Achievement
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#d97706', marginBottom: '12px' }}>
+                  Excellence in Professional & Technical Mastery
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                  This credential is officially conferred upon
+                </div>
+                <div style={{
+                  fontSize: '2rem',
+                  fontWeight: 800,
+                  color: 'var(--primary)',
+                  marginBottom: '6px',
+                  fontFamily: 'Georgia, serif',
+                  letterSpacing: '-0.02em'
+                }}>
                   {selectedCert.learnerName}
                 </div>
 
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto 16px', lineHeight: 1.5 }}>
-                  has successfully completed the comprehensive enterprise curriculum and practical evaluations for
+                <div style={{ width: '180px', height: '2px', background: 'linear-gradient(90deg, transparent, #d97706, transparent)', margin: '0 auto 14px' }} />
+
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 12px', lineHeight: 1.5 }}>
+                  for successfully satisfying all rigorous academic standards, proctored examinations, and applied laboratory competencies required for the professional credential in
                 </div>
 
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '24px' }}>
-                  {selectedCert.courseTitle || selectedCert.courseName || 'Certified Course'}
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--accent-cyan)', marginBottom: '4px' }}>
+                  {selectedCert.courseTitle || selectedCert.courseName || 'Certified Program'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '24px' }}>
+                  Demonstrating advanced engineering rigor, technical competency, and verified professional excellence.
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-around', borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>Dr. James Wilson</div>
-                    <div>Lead Instructor</div>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                      {new Date(selectedCert.issuedAt || selectedCert.issueDate || Date.now()).toLocaleDateString()}
+                {/* Signatures & Seal Row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', paddingLeft: '16px', paddingRight: '16px' }}>
+                  <div style={{ textAlign: 'center', width: '150px' }}>
+                    <div style={{ fontFamily: 'Georgia, cursive', fontStyle: 'italic', fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '2px' }}>
+                      Dr. James Wilson
                     </div>
-                    <div>Date of Issuance</div>
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                      SHA256-{(selectedCert.verificationHash || selectedCert.id).slice(0, 10)}...
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px', fontWeight: 700, fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                      Dr. James Wilson, Ph.D.
                     </div>
-                    <div>Cryptographic Proof</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Lead Academic Faculty</div>
                   </div>
+
+                  {/* Golden Seal in Modal */}
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    border: '3px solid #d97706',
+                    background: 'rgba(217, 119, 6, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 16px rgba(217, 119, 6, 0.25)',
+                    margin: '0 10px'
+                  }}>
+                    <Award size={20} color="#d97706" />
+                    <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      OFFICIAL
+                    </span>
+                  </div>
+
+                  <div style={{ textAlign: 'center', width: '150px' }}>
+                    <div style={{ fontFamily: 'Georgia, cursive', fontStyle: 'italic', fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '2px' }}>
+                      Sarah Chen
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px', fontWeight: 700, fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                      Sarah Chen, M.Sc.
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Dean of Academic Affairs</div>
+                  </div>
+                </div>
+
+                {/* Security Bottom Bar */}
+                <div style={{
+                  marginTop: '20px',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-muted)'
+                }}>
+                  <div><strong>Issued:</strong> {new Date(selectedCert.issuedAt || selectedCert.issueDate || Date.now()).toLocaleDateString()} &bull; <strong>ID:</strong> {selectedCert.id}</div>
+                  <div><strong>Proof:</strong> SHA256-{(selectedCert.verificationHash || selectedCert.id).slice(0, 10)}...</div>
+                  <div style={{ color: 'var(--primary)', fontWeight: 600 }}>Cryptographically Verified &bull; Active</div>
                 </div>
               </div>
             </div>
