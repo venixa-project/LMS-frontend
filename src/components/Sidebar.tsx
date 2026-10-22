@@ -6,8 +6,9 @@ import {
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
   Plug, Settings, Building2, Network, Users, UsersRound,
   Shield, Search, Trophy, GraduationCap, Calendar,
-  UserCheck, User, Megaphone
+  UserCheck, User, Megaphone, Compass, Library, Layers
 } from 'lucide-react';
+import { getNavigationForRole } from '../lib/permissions';
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -34,7 +35,10 @@ const iconMap: Record<string, any> = {
   Calendar,
   UserCheck,
   User,
-  Megaphone
+  Megaphone,
+  Compass,
+  Library,
+  Layers
 };
 
 interface Props {
@@ -44,10 +48,11 @@ interface Props {
 
 export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
   const { navigation, user } = useAuthStore();
+  const navItems = user ? getNavigationForRole(user.activeRole) : navigation;
 
   // Group nav items by group property
-  const groups: Record<string, typeof navigation> = {};
-  navigation.forEach((item) => {
+  const groups: Record<string, typeof navItems> = {};
+  navItems.forEach((item) => {
     const grp = item.group || 'Other';
     if (!groups[grp]) groups[grp] = [];
     groups[grp].push(item);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
+import { useCourseStore } from '../../lib/courseStore';
 import { mockCourses } from '../../data/mockData';
 import { Course, CourseModule, Lesson } from '../../types';
 import {
@@ -11,6 +12,7 @@ import {
 
 export const CourseBuilderPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { addCourse } = useCourseStore();
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -45,7 +47,7 @@ export const CourseBuilderPage: React.FC = () => {
   ]);
 
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
-  const [publishStatus, setPublishStatus] = useState<'draft' | 'in_review' | 'published'>('draft');
+  const [publishStatus, setPublishStatus] = useState<'draft' | 'in_review' | 'published'>('published');
 
   // Handlers for modules
   const handleAddModule = () => {
@@ -74,6 +76,47 @@ export const CourseBuilderPage: React.FC = () => {
     setModules(updatedModules);
   };
 
+  const handleSaveCourse = (statusOverride?: 'draft' | 'in_review' | 'published') => {
+    const finalStatus = statusOverride || publishStatus || 'published';
+    const newCourse: Course = {
+      id: `crs-${Date.now()}`,
+      title: title.trim() || 'New Course',
+      shortDescription: description.slice(0, 100),
+      description: description.trim() || 'Comprehensive course syllabus authored by institution administrator.',
+      category,
+      durationHours: Number(durationHours) || 20,
+      completionPolicy,
+      modules: modules.length > 0 ? modules : [
+        {
+          id: `mod-${Date.now()}`,
+          title: 'Module 1: Introduction & Fundamentals',
+          order: 1,
+          lessons: [
+            { id: `les-${Date.now()}-1`, title: '1.1 Overview & Course Syllabus', type: 'video', durationMinutes: 15, isCompleted: false, order: 1 }
+          ]
+        }
+      ],
+      instructors: ['u-004'],
+      status: finalStatus,
+      visibility: 'public',
+      version: 1,
+      level: 'All Levels',
+      learnerCount: 1,
+      enrolledLearners: 1,
+      completionRate: 0,
+      createdBy: user?.id || 'admin',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    addCourse(newCourse);
+    alert(isFaculty
+      ? (finalStatus === 'in_review' ? 'Course learning materials submitted for Institution Admin approval!' : 'Course draft saved successfully!')
+      : `Course "${newCourse.title}" successfully saved with status: ${finalStatus}! It is now visible in the student portal.`
+    );
+    navigate('/courses');
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -89,7 +132,7 @@ export const CourseBuilderPage: React.FC = () => {
           <span className="badge badge-warning">Lifecycle: {publishStatus} (v1.0)</span>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => alert("Draft autosaved to local session.")}
+            onClick={() => handleSaveCourse('draft')}
           >
             <Save size={14} /> Save Draft
           </button>
@@ -487,13 +530,7 @@ export const CourseBuilderPage: React.FC = () => {
             <button
               className="btn btn-primary"
               style={{ flex: 2 }}
-              onClick={() => {
-                alert(isFaculty
-                  ? (publishStatus === 'in_review' ? 'Course learning materials submitted for Institution Admin approval!' : 'Course draft saved successfully!')
-                  : `Course successfully updated to status: ${publishStatus}!`
-                );
-                navigate('/courses');
-              }}
+              onClick={() => handleSaveCourse()}
             >
               {isFaculty ? (publishStatus === 'in_review' ? 'Submit for Admin Review' : 'Save Draft') : 'Confirm & Save Course'}
             </button>

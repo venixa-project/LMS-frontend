@@ -1,31 +1,48 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../lib/store';
-import { mockCourses, mockDepartments, mockCohorts } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
+import { mockDepartments, mockCohorts } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
 import { Course, EntityStatus } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   BookOpen, Plus, Search, Filter, Eye, Edit2, Archive,
   Clock, Users, CheckCircle2, AlertCircle, Play, Layers,
-  GraduationCap, Check, X, UserPlus, Award, Send
+  GraduationCap, Check, X, UserPlus, Award, Send, Compass
 } from 'lucide-react';
 
 export const CoursesPage: React.FC = () => {
   const { user } = useAuthStore();
+  const location = useLocation();
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
-  const [courses, setCourses] = useState<Course[]>(mockCourses);
+  const isMyLearning = location.pathname.includes('my-learning');
+
+  const {
+    courses,
+    enrolledCourseIds,
+    enrollCourse,
+    updateCourse,
+    archiveCourse
+  } = useCourseStore();
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [learnerTab, setLearnerTab] = useState<'all' | 'in_progress' | 'completed'>('all');
 
-  const enrolledCourseIds = ['crs-001', 'crs-002', 'crs-004'];
   const progressData: Record<string, { progress: number; completedLessons: number; totalLessons: number; status: 'in_progress' | 'completed' }> = {
     'crs-001': { progress: 65, completedLessons: 8, totalLessons: 12, status: 'in_progress' },
     'crs-002': { progress: 30, completedLessons: 4, totalLessons: 12, status: 'in_progress' },
+    'crs-003': { progress: 20, completedLessons: 2, totalLessons: 10, status: 'in_progress' },
     'crs-004': { progress: 100, completedLessons: 10, totalLessons: 10, status: 'completed' },
+    'crs-005': { progress: 40, completedLessons: 3, totalLessons: 8, status: 'in_progress' },
+    'crs-006': { progress: 15, completedLessons: 2, totalLessons: 14, status: 'in_progress' },
+  };
+
+  const getCourseProgress = (courseId: string) => {
+    return progressData[courseId] || { progress: 0, completedLessons: 0, totalLessons: 10, status: 'in_progress' as const };
   };
 
   // Modals
@@ -41,16 +58,34 @@ export const CoursesPage: React.FC = () => {
     setTimeout(() => setNotice(null), 3500);
   };
 
+  const handleEnrollCourse = (course: Course) => {
+    enrollCourse(course.id);
+    showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
+  };
+
+  // Dynamic counts for learner tabs
+  const nonArchivedCourses = courses.filter((c) => c.status !== 'archived');
+  const enrolledCourses = nonArchivedCourses.filter((c) => enrolledCourseIds.includes(c.id));
+  const inProgressCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'in_progress');
+  const completedCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'completed');
+
   const filteredCourses = courses.filter((c) => {
     const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || c.category === categoryFilter;
 
     if (isLearner) {
-      if (!enrolledCourseIds.includes(c.id) || c.status !== 'published') return false;
-      const prog = progressData[c.id];
-      if (learnerTab === 'in_progress' && prog?.status !== 'in_progress') return false;
-      if (learnerTab === 'completed' && prog?.status !== 'completed') return false;
+      // In student portal: show all courses added by admin (exclude only archived)
+      if (c.status === 'archived') return false;
+
+      // On /my-learning: only show enrolled courses and respect learnerTab
+      if (isMyLearning) {
+        if (!enrolledCourseIds.includes(c.id)) return false;
+        const prog = getCourseProgress(c.id);
+        if (learnerTab === 'in_progress' && prog.status !== 'in_progress') return false;
+        if (learnerTab === 'completed' && prog.status !== 'completed') return false;
+      }
+
       return matchesSearch && matchesCategory;
     }
 
@@ -66,13 +101,13 @@ export const CoursesPage: React.FC = () => {
 
   const handleArchive = (id: string) => {
     if (confirm('Archive this course? It will be hidden from new enrollments.')) {
-      setCourses(courses.map((c) => c.id === id ? { ...c, status: 'archived' } : c));
+      archiveCourse(id);
       showNotice('Course moved to archived state.');
     }
   };
 
   const handleStatusChange = (courseId: string, newStatus: EntityStatus) => {
-    setCourses(courses.map((c) => c.id === courseId ? { ...c, status: newStatus } : c));
+    updateCourse(courseId, { status: newStatus });
     showNotice(`Course status updated to ${newStatus}.`);
   };
 
@@ -98,28 +133,46 @@ export const CoursesPage: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">
-              {isLearner ? 'Student Learning Portal' : isFaculty ? 'Faculty Teaching Scope' : 'Academic Offerings'}
+              {isLearner
+                ? (isMyLearning ? 'Student Learning Portal' : 'Academic Offerings & Catalog')
+                : isFaculty
+                ? 'Faculty Teaching Scope'
+                : 'Academic Offerings'}
             </span>
             <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
             {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {isLearner
-              ? 'My Enrolled Courses & Learning History'
+              ? (isMyLearning ? 'My Enrolled Courses & Learning History' : 'Courses & Curriculum Catalog')
               : isFaculty
               ? 'My Assigned Courses & Learning Content'
               : 'Course Management & Curriculum Catalog'}
           </h1>
           <p className="text-secondary text-sm">
             {isLearner
-              ? 'Access your enrolled curriculum, track lesson completion, and resume learning.'
+              ? (isMyLearning
+                  ? 'Access your enrolled curriculum, track lesson completion, and resume learning.'
+                  : 'Explore available institutional courses, review syllabus lessons, and enroll in new learning paths.')
               : isFaculty
               ? 'Manage curriculum modules, learning lessons, student rosters, and approval submissions for your courses'
               : 'Oversee institutional syllabus, assign appointed faculty, manage student rosters, and publish courses'}
           </p>
         </div>
 
-        {!isLearner && (
+        {isLearner ? (
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {isMyLearning ? (
+              <Link to="/courses" className="btn btn-secondary">
+                <Compass size={16} /> Browse Course Catalog
+              </Link>
+            ) : (
+              <Link to="/my-learning" className="btn btn-primary">
+                <BookOpen size={16} /> My Enrolled Courses ({enrolledCourseIds.length})
+              </Link>
+            )}
+          </div>
+        ) : (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {isFaculty ? (
               <Link to="/course-builder" className="btn btn-primary">
@@ -160,27 +213,61 @@ export const CoursesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Learner Tabs */}
+      {/* Learner Primary Tabs */}
       {isLearner && (
-        <div className="tabs-nav" style={{ marginBottom: '20px' }}>
-          <button
-            className={`tab-btn ${learnerTab === 'all' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('all')}
-          >
-            <BookOpen size={16} /> All Enrolled Courses (3)
-          </button>
-          <button
-            className={`tab-btn ${learnerTab === 'in_progress' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('in_progress')}
-          >
-            <Play size={16} /> In Progress (2)
-          </button>
-          <button
-            className={`tab-btn ${learnerTab === 'completed' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('completed')}
-          >
-            <Award size={16} /> Completed &bull; Certificate Issued (1)
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+          <div className="tabs-nav">
+            <Link
+              to="/courses"
+              className={`tab-btn ${!isMyLearning ? 'active' : ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <Compass size={16} /> Courses ({nonArchivedCourses.length} Offered)
+            </Link>
+            <Link
+              to="/my-learning"
+              className={`tab-btn ${isMyLearning ? 'active' : ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <BookOpen size={16} /> My Enrolled Courses ({enrolledCourses.length})
+            </Link>
+          </div>
+
+          {/* Sub-filters when on My Enrolled Courses */}
+          {isMyLearning && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className={`tab-btn ${learnerTab === 'all' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('all')}
+                >
+                  <BookOpen size={14} /> All Enrolled Courses ({enrolledCourses.length})
+                </button>
+                <button
+                  className={`tab-btn ${learnerTab === 'in_progress' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('in_progress')}
+                >
+                  <Play size={14} /> In Progress ({inProgressCourses.length})
+                </button>
+                <button
+                  className={`tab-btn ${learnerTab === 'completed' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('completed')}
+                >
+                  <Award size={14} /> Completed &bull; Certificate Issued ({completedCourses.length})
+                </button>
+              </div>
+
+              {nonArchivedCourses.length > enrolledCourses.length && (
+                <Link
+                  to="/courses"
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: '6px' }}
+                >
+                  <Compass size={14} /> Browse Catalog ({nonArchivedCourses.length - enrolledCourses.length} Available to Enroll) &rarr;
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -301,19 +388,36 @@ export const CoursesPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Learner Progress Bar */}
+              {/* Learner Progress Bar or Enrollment Status */}
               {isLearner && (
-                <div style={{ marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
-                    <span className="text-muted">Curriculum Progress:</span>
-                    <strong style={{ color: progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
-                      {progressData[c.id]?.progress || 0}% ({progressData[c.id]?.completedLessons || 0}/{progressData[c.id]?.totalLessons || 12} Lessons)
-                    </strong>
+                enrolledCourseIds.includes(c.id) ? (
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
+                      <span className="text-muted">Curriculum Progress:</span>
+                      <strong style={{ color: getCourseProgress(c.id).status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
+                        {getCourseProgress(c.id).progress || 0}% ({getCourseProgress(c.id).completedLessons || 0}/{getCourseProgress(c.id).totalLessons || 12} Lessons)
+                      </strong>
+                    </div>
+                    <div className="progress-bar-bg" style={{ height: '6px' }}>
+                      <div className="progress-bar-fill" style={{ width: `${getCourseProgress(c.id).progress || 0}%` }} />
+                    </div>
                   </div>
-                  <div className="progress-bar-bg" style={{ height: '6px' }}>
-                    <div className="progress-bar-fill" style={{ width: `${progressData[c.id]?.progress || 0}%` }} />
+                ) : (
+                  <div style={{
+                    marginBottom: '14px',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px dashed var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.78rem'
+                  }}>
+                    <span className="text-secondary">Open Enrollment for AY 2026–2027</span>
+                    <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>Available</span>
                   </div>
-                </div>
+                )
               )}
             </div>
 
@@ -332,8 +436,10 @@ export const CoursesPage: React.FC = () => {
                   </button>
                 ) : (
                   <span className="text-muted text-xs">
-                    Status: <strong style={{ color: progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
-                      {progressData[c.id]?.status === 'completed' ? 'Completed' : 'Active Enrollment'}
+                    Status: <strong style={{ color: enrolledCourseIds.includes(c.id) ? (getCourseProgress(c.id).status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)') : 'var(--primary)' }}>
+                      {enrolledCourseIds.includes(c.id)
+                        ? (getCourseProgress(c.id).status === 'completed' ? 'Completed' : 'Active Enrollment')
+                        : 'Open in Catalog'}
                     </strong>
                   </span>
                 )}
@@ -344,31 +450,50 @@ export const CoursesPage: React.FC = () => {
 
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {isLearner ? (
-                  progressData[c.id]?.status === 'completed' ? (
+                  enrolledCourseIds.includes(c.id) ? (
+                    getCourseProgress(c.id).status === 'completed' ? (
+                      <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                        <Link
+                          to={`/course-player/${c.id}`}
+                          className="btn btn-secondary btn-sm"
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          <Play size={13} /> Review Lessons
+                        </Link>
+                        <Link
+                          to="/my-certificates"
+                          className="btn btn-primary btn-sm"
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          <Award size={13} /> View Certificate
+                        </Link>
+                      </div>
+                    ) : (
+                      <Link
+                        to={`/course-player/${c.id}`}
+                        className="btn btn-primary btn-sm"
+                        style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <Play size={13} /> Continue Learning &rarr;
+                      </Link>
+                    )
+                  ) : (
                     <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <button
+                        onClick={() => handleEnrollCourse(c)}
+                        className="btn btn-primary btn-sm"
+                        style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                      >
+                        <UserPlus size={14} /> Enroll in Course
+                      </button>
                       <Link
                         to={`/course-player/${c.id}`}
                         className="btn btn-secondary btn-sm"
-                        style={{ flex: 1, justifyContent: 'center' }}
+                        style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
                       >
-                        <Play size={13} /> Review Lessons
-                      </Link>
-                      <Link
-                        to="/my-certificates"
-                        className="btn btn-primary btn-sm"
-                        style={{ flex: 1, justifyContent: 'center' }}
-                      >
-                        <Award size={13} /> View Certificate
+                        <Play size={14} /> Preview Syllabus
                       </Link>
                     </div>
-                  ) : (
-                    <Link
-                      to={`/course-player/${c.id}`}
-                      className="btn btn-primary btn-sm"
-                      style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
-                    >
-                      <Play size={13} /> Continue Learning &rarr;
-                    </Link>
                   )
                 ) : (
                   <>
@@ -452,6 +577,23 @@ export const CoursesPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {filteredCourses.length === 0 && (
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center', marginTop: '16px' }}>
+          <BookOpen size={40} color="var(--text-muted)" style={{ margin: '0 auto 12px', opacity: 0.6 }} />
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '6px' }}>No courses found</h3>
+          <p className="text-secondary text-sm" style={{ maxWidth: '440px', margin: '0 auto 16px' }}>
+            {isLearner && isMyLearning
+              ? "You have not enrolled in any courses in this category yet. Explore the course catalog to start learning!"
+              : "No courses matched your current search and filter criteria."}
+          </p>
+          {isLearner && isMyLearning && (
+            <Link to="/courses" className="btn btn-primary" style={{ display: 'inline-flex', gap: '6px' }}>
+              <Compass size={16} /> Browse Course Catalog
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Assign Faculty Modal */}
       {assignFacultyCourse && (

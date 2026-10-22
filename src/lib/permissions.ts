@@ -210,6 +210,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'dashboard', label: 'Student Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
     // Academics & Learning Player
+    { id: 'courses', label: 'Courses', icon: 'Compass', path: '/courses', group: 'Academics & Learning' },
     { id: 'my-learning', label: 'My Enrolled Courses', icon: 'BookOpen', path: '/my-learning', group: 'Academics & Learning' },
     { id: 'learning-materials', label: 'Course Player & Materials', icon: 'Play', path: '/learning-materials', group: 'Academics & Learning' },
     { id: 'my-paths', label: 'Degree Curriculum & Progress', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
