@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../lib/store';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -8,6 +9,12 @@ import { NotificationsDrawer } from './NotificationsDrawer';
 import { GlobalSearchModal } from './GlobalSearchModal';
 
 export const AppShell: React.FC = () => {
+  const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);

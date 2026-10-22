@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './lib/store';
 import { AppShell } from './components/AppShell';
 
 // Auth Pages
@@ -55,15 +54,6 @@ import { NotFoundPage } from './pages/ErrorPages/NotFoundPage';
 import { UnauthorizedPage } from './pages/ErrorPages/UnauthorizedPage';
 
 export const App: React.FC = () => {
-  const { isAuthenticated, login } = useAuthStore();
-
-  // Initialize with default demo login on initial load if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated) {
-      login('admin@lms.demo', 'password123');
-    }
-  }, [isAuthenticated, login]);
-
   return (
     <BrowserRouter>
       <Routes>

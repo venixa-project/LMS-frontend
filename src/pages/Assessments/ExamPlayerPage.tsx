@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 import { mockAssessments, mockQuestions } from '../../data/mockData';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
@@ -7,6 +8,11 @@ import {
 } from 'lucide-react';
 
 export const ExamPlayerPage: React.FC = () => {
+  const { isAuthenticated } = useAuthStore();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   const { id } = useParams<{ id: string }>();
   const assessment = mockAssessments.find((a) => a.id === id) || mockAssessments[0];
   const navigate = useNavigate();

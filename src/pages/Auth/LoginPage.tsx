@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import {
   GraduationCap, Eye, EyeOff, Lock, Mail, AlertCircle,
@@ -14,8 +14,18 @@ export const LoginPage: React.FC = () => {
   const [mfaModal, setMfaModal] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+  const destination = from && from !== '/login' ? from : '/dashboard';
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +33,7 @@ export const LoginPage: React.FC = () => {
     await login(email, password);
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate('/dashboard');
+      navigate(destination, { replace: true });
     }
   };
 
@@ -34,7 +44,7 @@ export const LoginPage: React.FC = () => {
     await login(demoEmail, 'demoPass123');
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     }
   };
 
