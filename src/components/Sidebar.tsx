@@ -6,7 +6,7 @@ import {
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
   Plug, Settings, Building2, Network, Users, UsersRound,
   Shield, Search, Trophy, GraduationCap, Calendar,
-  UserCheck, User, Megaphone, Compass, Library, Layers, X
+  UserCheck, User, Megaphone, Compass, Library, Layers, X, Play, Flame
 } from 'lucide-react';
 import { getNavigationForRole } from '../lib/permissions';
 
@@ -38,7 +38,9 @@ const iconMap: Record<string, any> = {
   Megaphone,
   Compass,
   Library,
-  Layers
+  Layers,
+  Play,
+  Flame
 };
 
 interface Props {

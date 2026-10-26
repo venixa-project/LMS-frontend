@@ -25,6 +25,8 @@ import { CourseBuilderPage } from './pages/Courses/CourseBuilderPage';
 import { LearningPathsPage } from './pages/Courses/LearningPathsPage';
 import { LearnerCoursePlayerPage } from './pages/Courses/LearnerCoursePlayerPage';
 import { EnrollmentsPage } from './pages/Academics/EnrollmentsPage';
+import { LeaderboardPage } from './pages/Academics/LeaderboardPage';
+import { MomentumPage } from './pages/Academics/MomentumPage';
 
 // Live Classes & Attendance
 import { LiveSessionsPage } from './pages/LiveSessions/LiveSessionsPage';
@@ -89,10 +91,13 @@ export const App: React.FC = () => {
           <Route path="learning-paths" element={<LearningPathsPage key="learning-paths" />} />
           <Route path="my-paths" element={<LearningPathsPage key="my-paths" />} />
           <Route path="enrollments" element={<EnrollmentsPage />} />
+          <Route path="leaderboard" element={<LeaderboardPage />} />
 
-          {/* Live Sessions, Timetable & Attendance */}
+          {/* Live Sessions, Timetable & Momentum */}
           <Route path="live-sessions" element={<LiveSessionsPage key="live-sessions" />} />
           <Route path="my-sessions" element={<LiveSessionsPage key="my-sessions" />} />
+          <Route path="momentum" element={<MomentumPage />} />
+          <Route path="login-history" element={<MomentumPage />} />
           <Route path="attendance" element={<LiveSessionsPage key="attendance" defaultTab="attendance" />} />
 
           {/* Assessments & Assignments */}

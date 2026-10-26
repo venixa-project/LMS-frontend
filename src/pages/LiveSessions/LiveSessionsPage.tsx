@@ -10,11 +10,13 @@ import {
   Filter, UserCheck, Shield, ChevronRight
 } from 'lucide-react';
 
+import { AcademicCalendar } from '../../components/Calendar/AcademicCalendar';
+
 interface Props {
   defaultTab?: 'upcoming' | 'past' | 'timetable' | 'attendance';
 }
 
-export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) => {
+export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'timetable' }) => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,7 +28,8 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
   const [sessions, setSessions] = useState<LiveSession[]>(mockLiveSessions);
 
   const getTabFromRoute = (pathname: string): 'upcoming' | 'past' | 'timetable' | 'attendance' => {
-    if (pathname.includes('/attendance')) return 'attendance';
+    if (pathname.includes('/attendance')) return isLearner ? 'timetable' : 'attendance';
+    if (pathname.includes('/my-sessions')) return 'timetable';
     return defaultTab;
   };
 
@@ -228,19 +231,21 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
             {isLearner && <span className="badge badge-active">Alex Thompson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
-            {isLearner ? 'My Timetable & Attendance Record' : 'Attendance & Timetable Coordination'}
+            {isLearner ? 'My Timetable & Live Sessions' : 'Attendance & Timetable Coordination'}
           </h1>
           <p className="text-secondary text-sm">
             {isLearner
-              ? 'Personal weekly lecture schedule, upcoming live class rooms, verified attendance record, and compliance'
+              ? 'Your weekly academic schedule, upcoming live classes, and recorded sessions.'
               : 'Institution class schedules, weekly timetable grid, daily attendance rosters, and compliance summaries'}
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary" onClick={handleExportAttendanceReport}>
-            <Download size={16} /> {isLearner ? 'Download Attendance Statement' : 'Export Attendance Report'}
-          </button>
+          {!isLearner && (
+            <button className="btn btn-secondary" onClick={handleExportAttendanceReport}>
+              <Download size={16} /> Export Attendance Report
+            </button>
+          )}
           {!isLearner && (
             <button className="btn btn-primary" onClick={() => setIsScheduleModalOpen(true)}>
               <Plus size={16} /> Schedule Live Session
@@ -283,13 +288,15 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
           <Calendar size={16} />
           {isLearner ? 'My Weekly Timetable' : 'Weekly Timetable & Schedule'}
         </button>
-        <button
-          className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
-          onClick={() => handleTabChange('attendance')}
-        >
-          <UserCheck size={16} />
-          {isLearner ? 'My Attendance History (96.2%)' : 'Attendance Rosters & Compliance'}
-        </button>
+        {!isLearner && (
+          <button
+            className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
+            onClick={() => handleTabChange('attendance')}
+          >
+            <UserCheck size={16} />
+            Attendance Rosters & Compliance
+          </button>
+        )}
         <button
           className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
           onClick={() => handleTabChange('past')}
@@ -303,248 +310,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
       {/* 1. TIMETABLE & CLASS SCHEDULE TAB */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'timetable' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Timetable Header Filter */}
-          <div className="card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Calendar size={18} color="var(--primary)" />
-                <div>
-                  <h3 style={{ fontSize: '1rem', margin: 0 }}>Weekly Class Timetable &bull; Fall Semester 2026</h3>
-                  <span className="text-muted text-xs">Standard academic slot intervals &bull; 90 min lectures</span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                {isFaculty && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={facultyOnlyTimetable}
-                      onChange={(e) => setFacultyOnlyTimetable(e.target.checked)}
-                    />
-                    <span>My Assigned Lectures Only</span>
-                  </label>
-                )}
-
-                {isLearner ? (
-                  <span className="badge badge-primary">Cohort: Spring 2026 Engineering</span>
-                ) : (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span className="text-muted text-xs font-semibold">Filter Batch:</span>
-                    <select
-                      className="form-select"
-                      value={timetableCohort}
-                      onChange={(e) => setTimetableCohort(e.target.value)}
-                      style={{ width: 'auto' }}
-                    >
-                      <option value="all">{isFaculty ? 'All Assigned Batches' : 'All Cohorts / Classes'}</option>
-                      {availableCohorts.map((co) => (
-                        <option key={co.id} value={co.name}>{co.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Timetable Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-            {weeklySchedule.map((daySchedule) => (
-              <div
-                key={daySchedule.day}
-                className="card"
-                style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}
-              >
-                <div style={{
-                  paddingBottom: '10px',
-                  borderBottom: '2px solid var(--primary)',
-                  fontWeight: 700,
-                  fontSize: '0.95rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <span>{daySchedule.day}</span>
-                  <span className="text-muted text-xs">{daySchedule.slots.length} Classes</span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {daySchedule.slots.map((slot, sIdx) => {
-                    const isMatch = isLearner
-                      ? (slot.cohort === 'Spring 2026 Engineering' || slot.cohort === 'All Cohorts')
-                      : (timetableCohort === 'all' || slot.cohort.includes(timetableCohort) || slot.cohort === 'All Cohorts');
-                    if (!isMatch) return null;
-                    if (isFaculty && facultyOnlyTimetable && !slot.faculty.includes('Wilson')) return null;
-
-                    return (
-                      <div
-                        key={sIdx}
-                        style={{
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '12px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 700 }}>
-                          <Clock size={12} /> {slot.time}
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: '0.825rem', lineHeight: 1.25 }}>
-                          {slot.title}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {slot.cohort}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '0.7rem' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>{slot.faculty}</span>
-                          <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>{slot.room}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 16px',
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <Shield size={16} color="var(--primary)" />
-            <span><strong>Demo Interaction Notice:</strong> Timetable slots and room allocations are maintained in frontend simulation state.</span>
-          </div>
-        </div>
+        <AcademicCalendar onSwitchTab={(tab) => handleTabChange(tab)} />
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. ATTENDANCE ROSTERS & COMPLIANCE TAB */}
-      {activeTab === 'attendance' && (
-        isLearner ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Student Personal Attendance KPI Cards */}
-            <div className="grid-4">
-              <div className="stat-card">
-                <span className="text-muted text-xs font-semibold">My Attendance Rate</span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)' }}>96.2%</div>
-                <p className="text-success text-xs">&uarr; 21.2% above policy requirement (75%)</p>
-              </div>
-              <div className="stat-card">
-                <span className="text-muted text-xs font-semibold">Total Classes Logged</span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>26</div>
-                <p className="text-muted text-xs">AY 2026-2027 to date</p>
-              </div>
-              <div className="stat-card">
-                <span className="text-muted text-xs font-semibold">Attended & Punctual</span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>25 Classes</div>
-                <p className="text-muted text-xs">23 Present &bull; 2 Late Arrivals</p>
-              </div>
-              <div className="stat-card">
-                <span className="text-muted text-xs font-semibold">Excused Absences</span>
-                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--info)' }}>1</div>
-                <p className="text-muted text-xs">Dean approved & documented</p>
-              </div>
-            </div>
-
-            {/* Course Filter & Attendance Ledger */}
-            <div className="card">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Personal Attendance Record & Verification Ledger</h3>
-                  <p className="text-muted text-xs">Immutable attendance logs recorded by biometric terminal and classroom telemetry</p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Filter size={15} color="var(--primary)" />
-                    <span className="text-muted text-xs font-semibold">Filter Course:</span>
-                  </div>
-                  <select
-                    className="form-select"
-                    value={selectedStudentCourseFilter}
-                    onChange={(e) => setSelectedStudentCourseFilter(e.target.value)}
-                    style={{ padding: '6px 10px', fontSize: '0.8rem', width: 'auto' }}
-                  >
-                    <option value="all">All Enrolled Courses (3)</option>
-                    <option value="Distributed Systems & Cloud Architecture">Distributed Systems & Cloud Architecture</option>
-                    <option value="Advanced React & Component Design Patterns">Advanced React & Component Design Patterns</option>
-                    <option value="Full-Stack Web Development Bootcamp">Full-Stack Web Development Bootcamp</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="table-container">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Course</th>
-                      <th>Session Topic</th>
-                      <th>Faculty</th>
-                      <th>Time Slot</th>
-                      <th>Status</th>
-                      <th>Verification Method</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {studentAttendanceHistory
-                      .filter((att) => selectedStudentCourseFilter === 'all' || att.course === selectedStudentCourseFilter)
-                      .map((att) => (
-                        <tr key={att.id}>
-                          <td style={{ fontWeight: 600 }}>{att.date}</td>
-                          <td>{att.course}</td>
-                          <td className="text-secondary text-sm">{att.topic}</td>
-                          <td>{att.faculty}</td>
-                          <td className="text-muted text-xs">{att.time}</td>
-                          <td>
-                            <span className={`badge badge-${att.status === 'present' ? 'success' : att.status === 'late' ? 'warning' : 'info'}`}>
-                              {att.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="text-muted text-xs font-mono">
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <ShieldCheck size={13} color="var(--success)" />
-                              {att.method}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{
-                marginTop: '18px',
-                padding: '14px',
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid var(--success-border)',
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '0.8rem'
-              }}>
-                <CheckCircle2 size={20} color="var(--success)" style={{ flexShrink: 0 }} />
-                <div>
-                  <strong>Academic Standing: Exemplary (96.2%).</strong> Your attendance exceeds the 75% institutional threshold required to sit for final semester examinations. Attendance records are verified and finalized by institution faculty.
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 2. ATTENDANCE ROSTERS & COMPLIANCE TAB (FACULTY / ADMIN ONLY) */}
+      {activeTab === 'attendance' && !isLearner && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Attendance KPI Cards */}
           <div className="grid-4">
             <div className="stat-card">
@@ -782,7 +554,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'upcoming' }) =
             </div>
           </div>
         </div>
-        )
       )}
 
       {/* ------------------------------------------------------------- */}

@@ -260,7 +260,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {activeTab === 'assignments'
-              ? isLearner ? 'My Course Assignments & Capstones' : 'Course Assignments & Deliverables'
+              ? isLearner ? 'My Course Assignments & Capstones (live classes)' : 'Course Assignments & Deliverables'
               : activeTab === 'results'
               ? 'My Academic Results & Grades'
               : isLearner ? 'Quizzes & Scheduled Examinations' : 'Assessments & Timed Examinations'}

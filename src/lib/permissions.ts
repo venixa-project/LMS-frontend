@@ -161,6 +161,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Curriculum & Programs' },
     { id: 'certificates', label: 'Certificate Templates', icon: 'Award', path: '/certificates', group: 'Curriculum & Programs' },
     { id: 'enrollments', label: 'Enrollments', icon: 'UserCheck', path: '/enrollments', group: 'Curriculum & Programs' },
+    { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Curriculum & Programs' },
 
     // Assessment & Quality Control
     { id: 'assessments', label: 'Assessments & Quizzes', icon: 'ClipboardCheck', path: '/assessments', group: 'Assessment & Moderation' },
@@ -186,6 +187,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'course-builder', label: 'Course Studio', icon: 'PenTool', path: '/course-builder', group: 'Teaching & Curriculum' },
     { id: 'learning-materials', label: 'Learning Materials', icon: 'FileText', path: '/learning-materials', group: 'Teaching & Curriculum' },
     { id: 'cohorts', label: 'Classes & Batches', icon: 'UsersRound', path: '/cohorts', group: 'Teaching & Curriculum' },
+    { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Teaching & Curriculum' },
 
     // Live Classes & Attendance
     { id: 'live-sessions', label: 'Live Classes & Webinars', icon: 'Video', path: '/live-sessions', group: 'Live Sessions' },
@@ -213,11 +215,12 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'courses', label: 'Courses', icon: 'Compass', path: '/courses', group: 'Academics & Learning' },
     { id: 'my-learning', label: 'My Enrolled Courses', icon: 'BookOpen', path: '/my-learning', group: 'Academics & Learning' },
     { id: 'learning-materials', label: 'Course Player & Materials', icon: 'Play', path: '/learning-materials', group: 'Academics & Learning' },
-    { id: 'my-paths', label: 'Degree Curriculum & Progress', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
+    { id: 'my-paths', label: 'My Learning Paths & Progress', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Academics & Learning' },
 
     // Schedule & Attendance
     { id: 'timetable', label: 'Timetable & Live Sessions', icon: 'Calendar', path: '/my-sessions', group: 'Schedule & Attendance' },
-    { id: 'attendance', label: 'My Attendance Ledger', icon: 'UserCheck', path: '/attendance', group: 'Schedule & Attendance' },
+    { id: 'momentum', label: 'Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
 
     // Evaluations & Results
     { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Tests' },

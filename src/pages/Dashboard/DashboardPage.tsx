@@ -12,12 +12,15 @@ import {
   ClipboardCheck, Clock, ArrowRight, Play, CheckCircle2,
   AlertCircle, Sparkles, Flame, Plus, Shield, PenTool,
   GraduationCap, Calendar, Network, Bell, FileText, Activity,
-  Layers, Check, UserCheck, UsersRound, Route, HelpCircle, Building2
+  Layers, Check, UserCheck, UsersRound, Route, HelpCircle, Building2,
+  Star, Zap
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const [adminScope, setAdminScope] = useState<'platform' | 'institution'>('platform');
+  const [recommendedCategory, setRecommendedCategory] = useState<'all' | 'web' | 'data' | 'cloud'>('all');
+  const [enrolledNotice, setEnrolledNotice] = useState<string | null>(null);
   const rawRole = user?.activeRole || 'student';
   const role = (rawRole === 'trainer' || rawRole === 'instructor' || rawRole === 'assessment_author' || rawRole === 'grader')
     ? 'trainer'
@@ -32,6 +35,81 @@ export const DashboardPage: React.FC = () => {
     const activeCourse = mockCourses[0];
     const nextSession = mockLiveSessions.find((s) => s.status === 'scheduled');
     const dueAssessment = mockAssessments[0];
+
+    const recommendedCourses = [
+      {
+        id: 'rec-001',
+        title: 'Full-Stack Web Development Bootcamp',
+        category: 'web',
+        categoryName: 'Web Development',
+        badge: '🔥 #1 Most Popular',
+        badgeColor: 'var(--danger)',
+        rating: '4.9',
+        ratingCount: 512,
+        learnersCount: 412,
+        duration: '48 Hours',
+        modulesCount: 14,
+        level: 'Intermediate',
+        instructor: 'Dr. James Wilson',
+        description: 'Master full-stack JavaScript, React 19, Node.js microservices, PostgreSQL, and AWS deployment with hands-on capstone projects.',
+        accentColor: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+        courseId: 'crs-004'
+      },
+      {
+        id: 'rec-002',
+        title: 'Python for Data Science & Machine Learning',
+        category: 'data',
+        categoryName: 'Data Science',
+        badge: '⭐ Top Rated',
+        badgeColor: 'var(--warning)',
+        rating: '4.8',
+        ratingCount: 384,
+        learnersCount: 328,
+        duration: '36 Hours',
+        modulesCount: 10,
+        level: 'Beginner to Intermediate',
+        instructor: 'Dr. Marcus Bell',
+        description: 'Practical data analysis with Pandas, NumPy, scikit-learn models, predictive modeling, and real-world enterprise datasets.',
+        accentColor: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+        courseId: 'crs-003'
+      },
+      {
+        id: 'rec-003',
+        title: 'Docker, Kubernetes & Cloud Architecture',
+        category: 'cloud',
+        categoryName: 'Cloud & DevOps',
+        badge: '🚀 Trending Track',
+        badgeColor: 'var(--accent-purple)',
+        rating: '4.9',
+        ratingCount: 295,
+        learnersCount: 295,
+        duration: '28 Hours',
+        modulesCount: 8,
+        level: 'Advanced',
+        instructor: 'Prof. Elena Rostova',
+        description: 'Container orchestration, production Kubernetes clusters, Helm charts, CI/CD automated deployments, and zero-downtime rollouts.',
+        accentColor: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+        courseId: 'crs-001'
+      },
+      {
+        id: 'rec-004',
+        title: 'TypeScript Mastery & Enterprise Design Patterns',
+        category: 'web',
+        categoryName: 'Web Development',
+        badge: '⚡ High Demand',
+        badgeColor: 'var(--accent-cyan)',
+        rating: '4.8',
+        ratingCount: 220,
+        learnersCount: 240,
+        duration: '20 Hours',
+        modulesCount: 6,
+        level: 'Intermediate',
+        instructor: 'Dr. James Wilson',
+        description: 'Advanced generics, mapped types, conditional typing, decorator patterns, and building bulletproof scalable enterprise APIs.',
+        accentColor: 'linear-gradient(135deg, #3b82f6 0%, #10b981 100%)',
+        courseId: 'crs-004'
+      }
+    ];
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
@@ -96,7 +174,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Student Metric KPIs */}
-        <div className="grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
+        <div className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
           <div className="stat-card">
             <span className="text-muted text-xs font-semibold">Enrolled Courses</span>
             <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>3</div>
@@ -119,12 +197,6 @@ export const DashboardPage: React.FC = () => {
             <span className="text-muted text-xs font-semibold">Curriculum Progress</span>
             <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-purple)' }}>65.0%</div>
             <p className="text-muted text-xs">28 of 43 lessons completed</p>
-          </div>
-
-          <div className="stat-card">
-            <span className="text-muted text-xs font-semibold">Class Attendance</span>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)' }}>96.2%</div>
-            <p className="text-success text-xs">Good Standing (&ge;75% required)</p>
           </div>
         </div>
 
@@ -336,6 +408,167 @@ export const DashboardPage: React.FC = () => {
                 </Link>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Recommended & Most Popular Courses Section */}
+        <div className="card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span className="badge badge-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Sparkles size={12} /> Recommended For You
+                </span>
+                <span className="badge badge-warning" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Flame size={12} /> Popular Courses
+                </span>
+              </div>
+              <h3 style={{ fontSize: '1.25rem', margin: 0 }}>Recommended & Most Popular Courses</h3>
+              <p className="text-secondary text-xs" style={{ margin: '4px 0 0 0' }}>
+                Top-enrolled courses and trending specializations chosen by high-achieving learners in your academy
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-input)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                {(['all', 'web', 'data', 'cloud'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setRecommendedCategory(cat)}
+                    className="btn btn-sm"
+                    style={{
+                      background: recommendedCategory === cat ? 'var(--primary)' : 'transparent',
+                      color: recommendedCategory === cat ? '#fff' : 'var(--text-secondary)',
+                      padding: '4px 10px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      borderRadius: 'var(--radius-sm)',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {cat === 'all' ? 'All Tracks' : cat === 'web' ? 'Web Dev' : cat === 'data' ? 'Data Science' : 'Cloud & DevOps'}
+                  </button>
+                ))}
+              </div>
+
+              <Link to="/courses" className="btn btn-secondary btn-sm" style={{ gap: '6px' }}>
+                Explore Full Catalog <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+
+          {enrolledNotice && (
+            <div style={{
+              background: 'var(--success-bg)',
+              border: '1px solid var(--success-border)',
+              color: 'var(--success)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '18px',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{enrolledNotice}</span>
+            </div>
+          )}
+
+          {/* Recommended Courses Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+            {recommendedCourses
+              .filter((c) => recommendedCategory === 'all' || c.category === recommendedCategory)
+              .map((course) => (
+                <div
+                  key={course.id}
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '4px',
+                    background: course.accentColor
+                  }} />
+
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span className="badge" style={{
+                        background: `${course.badgeColor}22`,
+                        color: course.badgeColor,
+                        border: `1px solid ${course.badgeColor}44`,
+                        fontSize: '0.7rem',
+                        fontWeight: 700
+                      }}>
+                        {course.badge}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.78rem', fontWeight: 700, color: '#f59e0b' }}>
+                        <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                        <span>{course.rating}</span>
+                        <span className="text-muted text-xs" style={{ fontWeight: 400 }}>({course.ratingCount})</span>
+                      </div>
+                    </div>
+
+                    <h4 style={{ fontSize: '1.05rem', margin: '0 0 8px 0', lineHeight: 1.3 }}>{course.title}</h4>
+                    <p className="text-secondary text-xs" style={{ margin: '0 0 14px 0', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {course.description}
+                    </p>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={12} color="var(--primary)" /> {course.learnersCount} enrolled
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} /> {course.duration}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <BookOpen size={12} /> {course.modulesCount} modules
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)', marginBottom: '12px', fontSize: '0.75rem' }}>
+                      <span className="text-muted text-xs">Instructor: <strong style={{ color: 'var(--text-main)' }}>{course.instructor}</strong></span>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>{course.level}</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <Link
+                        to={`/course-player/${course.courseId}`}
+                        className="btn btn-secondary btn-sm"
+                        style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
+                      >
+                        Syllabus
+                      </Link>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          setEnrolledNotice(`Successfully enrolled in "${course.title}"! Course materials are now added to My Learning.`);
+                          setTimeout(() => setEnrolledNotice(null), 5000);
+                        }}
+                      >
+                        Quick Enroll
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
 
