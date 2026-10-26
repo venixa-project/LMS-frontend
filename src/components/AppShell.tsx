@@ -14,10 +14,45 @@ export const AppShell: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setMobileOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleToggleSidebar = () => {
+    if (window.innerWidth <= 768) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      setDesktopCollapsed((prev) => !prev);
+    }
+  };
+
+  // Global keyboard shortcuts: Cmd/Ctrl + K (Search), Cmd/Ctrl + B (Sidebar)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        handleToggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Validate active route permissions against the active role on role switch, direct navigation, refresh, or history navigation
   useEffect(() => {
@@ -61,17 +96,17 @@ export const AppShell: React.FC = () => {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${desktopCollapsed ? 'sidebar-collapsed' : ''}`}>
       {/* Left Sidebar */}
       <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        isOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
       />
 
       {/* Main Wrapper */}
       <div className="main-wrapper">
         <Navbar
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onToggleSidebar={handleToggleSidebar}
           onOpenRoleSwitcher={() => setRoleSwitcherOpen(true)}
           onOpenNotifications={() => setNotificationsOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}

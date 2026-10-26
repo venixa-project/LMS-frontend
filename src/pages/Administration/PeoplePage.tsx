@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useSearchParams, Link } from 'react-router-dom';
+import { useLocation, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { mockDepartments, mockCohorts, mockCourses } from '../../data/mockData';
@@ -17,9 +17,10 @@ interface Props {
 
 export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
 
   const { users, toggleUserStatus } = usePeopleStore();
 

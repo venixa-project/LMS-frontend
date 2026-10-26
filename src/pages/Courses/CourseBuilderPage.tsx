@@ -340,7 +340,7 @@ export const CourseBuilderPage: React.FC = () => {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
   });
 
   // Load existing course if editing
@@ -639,9 +639,8 @@ export const CourseBuilderPage: React.FC = () => {
     const targetMod = modules[modIndex];
     const newLesson: Lesson = {
       id: `les-${Date.now()}-${targetMod.lessons.length + 1}`,
-      title: `Lesson ${targetMod.lessons.length + 1}: ${
-        type === 'video' ? 'Video Lecture' : type === 'document' ? 'Reading Material' : 'Knowledge Check'
-      }`,
+      title: `Lesson ${targetMod.lessons.length + 1}: ${type === 'video' ? 'Video Lecture' : type === 'document' ? 'Reading Material' : 'Knowledge Check'
+        }`,
       type,
       durationMinutes: type === 'quiz' ? 15 : 20,
       isCompleted: false,
@@ -1749,8 +1748,8 @@ export const CourseBuilderPage: React.FC = () => {
                                   lesson.type === 'video'
                                     ? 'rgba(99, 102, 241, 0.12)'
                                     : lesson.type === 'document'
-                                    ? 'rgba(6, 182, 212, 0.12)'
-                                    : 'rgba(245, 158, 11, 0.12)',
+                                      ? 'rgba(6, 182, 212, 0.12)'
+                                      : 'rgba(245, 158, 11, 0.12)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -2244,13 +2243,13 @@ export const CourseBuilderPage: React.FC = () => {
                       background: isSelected
                         ? 'var(--primary-light, rgba(99, 102, 241, 0.12))'
                         : isInactive
-                        ? 'var(--bg-input)'
-                        : 'var(--bg-card)',
+                          ? 'var(--bg-input)'
+                          : 'var(--bg-card)',
                       border: isSelected
                         ? '2px solid var(--primary)'
                         : isInactive
-                        ? '1px dashed var(--border-subtle)'
-                        : '1px solid var(--border-subtle)',
+                          ? '1px dashed var(--border-subtle)'
+                          : '1px solid var(--border-subtle)',
                       cursor: isInactive ? 'not-allowed' : 'pointer',
                       opacity: isInactive ? 0.6 : 1,
                       display: 'flex',
@@ -2342,38 +2341,40 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
 
             {/* Currently selected lead faculty confirmation bar */}
-            {selectedFacultyMember && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginTop: '14px',
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  fontSize: '0.85rem'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Shield size={16} color="var(--primary)" />
-                  <span>
-                    Selected Lead Faculty:{' '}
-                    <strong>{selectedFacultyMember.displayName || selectedFacultyMember.firstName}</strong> (
-                    {selectedFacultyMember.rollNo || selectedFacultyMember.id}) &bull;{' '}
-                    <span className="text-muted">{selectedFacultyMember.email}</span>
+            {
+              selectedFacultyMember && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: '14px',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={16} color="var(--primary)" />
+                    <span>
+                      Selected Lead Faculty:{' '}
+                      <strong>{selectedFacultyMember.displayName || selectedFacultyMember.firstName}</strong> (
+                      {selectedFacultyMember.rollNo || selectedFacultyMember.id}) &bull;{' '}
+                      <span className="text-muted">{selectedFacultyMember.email}</span>
+                    </span>
+                  </div>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                    Active & Certified
                   </span>
                 </div>
-                <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                  Active & Certified
-                </span>
-              </div>
-            )}
-          </div>
+              )
+            }
+          </div >
 
           {/* SECTION B: SELECT STUDENTS (OPTIONAL) */}
-          <div className="card">
+          < div className="card" >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span
@@ -2632,10 +2633,10 @@ export const CourseBuilderPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
+          </div >
 
           {/* SECTION C: ASSIGNMENT SUMMARY CARD */}
-          <div
+          < div
             className="card"
             style={{
               background: 'var(--bg-input)',
@@ -2677,52 +2678,54 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
 
             {/* Selected student name preview pills */}
-            {selectedStudentIds.size > 0 && (
-              <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-                <span className="text-muted text-xs" style={{ display: 'block', marginBottom: '6px' }}>
-                  Selected Students Preview:
-                </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '70px', overflowY: 'auto' }}>
-                  {Array.from(selectedStudentIds).map((sId) => {
-                    const st = allStudents.find((s) => s.id === sId);
-                    if (!st) return null;
-                    return (
-                      <span
-                        key={st.id}
-                        className="badge badge-secondary"
-                        style={{
-                          fontSize: '0.72rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '2px 8px'
-                        }}
-                      >
-                        {st.displayName || st.firstName} ({st.rollNo || st.id})
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStudent(st.id)}
+            {
+              selectedStudentIds.size > 0 && (
+                <div style={{ marginTop: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                  <span className="text-muted text-xs" style={{ display: 'block', marginBottom: '6px' }}>
+                    Selected Students Preview:
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '70px', overflowY: 'auto' }}>
+                    {Array.from(selectedStudentIds).map((sId) => {
+                      const st = allStudents.find((s) => s.id === sId);
+                      if (!st) return null;
+                      return (
+                        <span
+                          key={st.id}
+                          className="badge badge-secondary"
                           style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: 0,
-                            color: 'inherit',
-                            marginLeft: '2px'
+                            fontSize: '0.72rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px'
                           }}
                         >
-                          &times;
-                        </button>
-                      </span>
-                    );
-                  })}
+                          {st.displayName || st.firstName} ({st.rollNo || st.id})
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStudent(st.id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
+                              color: 'inherit',
+                              marginLeft: '2px'
+                            }}
+                          >
+                            &times;
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )
+            }
+          </div >
 
           {/* Step 3 Action Navigation */}
-          <div
+          < div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -2747,751 +2750,757 @@ export const CourseBuilderPage: React.FC = () => {
             >
               Continue to Preview & Publish <ArrowRight size={16} />
             </button>
-          </div>
-        </div>
+          </div >
+        </div >
       )}
 
       {/* ========================================================= */}
       {/* STEP 4: FINAL PREVIEW & PUBLISH                           */}
       {/* ========================================================= */}
-      {step === 4 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}
-          >
-            <div>
-              <span className="badge badge-primary" style={{ marginBottom: '6px' }}>
-                Step 4 of 4: Final Review
-              </span>
-              <h2 style={{ fontSize: '1.35rem', margin: '4px 0', fontWeight: 800 }}>Preview & Publish Course</h2>
-              <p className="text-secondary text-sm" style={{ margin: 0 }}>
-                Perform the final governance audit. Review curriculum structure, faculty assignment, and enrolled learners.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setStep(1)}
-                style={{ fontSize: '0.78rem' }}
-              >
-                Edit Basic Info
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setStep(2)}
-                style={{ fontSize: '0.78rem' }}
-              >
-                Edit Curriculum
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setStep(3)}
-                style={{ fontSize: '0.78rem' }}
-              >
-                Edit Assignments
-              </button>
-            </div>
-          </div>
-
-          {publishError && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--danger-bg, rgba(239, 68, 68, 0.1))',
-                border: '1px solid var(--danger, #ef4444)',
-                color: 'var(--danger, #ef4444)',
-                fontSize: '0.85rem'
-              }}
-            >
-              <AlertCircle size={16} />
-              <span>{publishError}</span>
-            </div>
-          )}
-
-          {/* Full Course Preview Card */}
-          <div
-            className="card"
-            style={{
-              padding: 0,
-              overflow: 'hidden',
-              border: '1px solid var(--border-light)'
-            }}
-          >
-            {/* Hero Banner with Thumbnail and Metadata */}
-            <div
-              style={{
-                padding: '28px',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(59, 130, 246, 0.1))',
-                borderBottom: '1px solid var(--border-subtle)',
-                display: 'grid',
-                gridTemplateColumns: thumbnailUrl ? '180px 1fr' : '1fr',
-                gap: '24px',
-                alignItems: 'center'
-              }}
-            >
-              {thumbnailUrl && (
-                <div
-                  style={{
-                    width: '100%',
-                    height: '120px',
-                    borderRadius: 'var(--radius-lg)',
-                    overflow: 'hidden',
-                    background: 'var(--bg-input)',
-                    boxShadow: 'var(--shadow-md)'
-                  }}
-                >
-                  <img
-                    src={thumbnailUrl}
-                    alt={title}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      (e.target as any).style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-
-              <div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                  <span className="badge badge-primary">{category}</span>
-                  <span className="badge badge-secondary" style={{ textTransform: 'capitalize' }}>
-                    Level: {difficultyLevel}
-                  </span>
-                  <span className="badge badge-secondary">Dept: {getDepartmentName(departmentId)}</span>
-                </div>
-
-                <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0 0 8px' }}>
-                  {title} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>({courseCode})</span>
-                </h1>
-                <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '780px' }}>
-                  {description}
-                </p>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '16px',
-                    marginTop: '14px',
-                    fontSize: '0.82rem',
-                    color: 'var(--text-muted)',
-                    flexWrap: 'wrap'
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={14} /> {durationHours} Hours Duration
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Layers size={14} /> {modules.length} Modules &bull; {totalLessonsCount} Lessons
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Award size={14} /> Certificate Eligible
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Evaluation Metrics Summary Bar */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                gap: '12px',
-                padding: '16px 24px',
-                background: 'var(--bg-input)',
-                borderBottom: '1px solid var(--border-subtle)'
-              }}
-            >
-              <div>
-                <span className="text-muted text-xs">Curriculum Units</span>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                  <Layers size={14} color="var(--primary)" />
-                  {modules.length} Modules &bull; {totalLessonsCount} Lessons
-                </div>
-              </div>
-
-              <div>
-                <span className="text-muted text-xs">Evaluative Assessments</span>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                  <HelpCircle size={14} color="var(--warning, #f59e0b)" />
-                  {evaluationStats.totalAssessments} Total ({evaluationStats.lessonQuizzesCount} Quizzes, {evaluationStats.moduleAssessmentsCount} Mod)
-                </div>
-              </div>
-
-              <div>
-                <span className="text-muted text-xs">Final Course Capstone</span>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                  <Award size={14} color="var(--accent-purple, #a855f7)" />
-                  {evaluationStats.hasFinal ? 'Configured & Active' : 'None Configured'}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-muted text-xs">Total Evaluative Marks</span>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                  <Sparkles size={14} />
-                  {evaluationStats.totalMarks} Marks ({evaluationStats.totalQuestions} Qs)
-                </div>
-              </div>
-            </div>
-
-            {/* Split Details: Left Syllabus, Right Governance & Roster */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', padding: '24px' }}>
-              {/* Left Column: Syllabus Breakdown with Assessments */}
-              <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <BookOpen size={16} color="var(--primary)" /> Course Syllabus & Evaluation Blueprint
-                </h3>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {modules.map((m) => (
-                    <div
-                      key={m.id}
-                      style={{
-                        background: 'var(--bg-input)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '14px',
-                        border: '1px solid var(--border-subtle)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                          {m.title}
-                        </div>
-                        <span className="text-muted text-xs">
-                          {m.lessons.length} {m.lessons.length === 1 ? 'lesson' : 'lessons'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {m.lessons.map((l) => (
-                          <div
-                            key={l.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              fontSize: '0.82rem',
-                              padding: '5px 8px',
-                              background: 'var(--bg-surface)',
-                              borderRadius: '4px',
-                              border: '1px solid var(--border-subtle)'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                              {l.type === 'video' && <Video size={13} color="var(--primary)" />}
-                              {l.type === 'document' && <FileText size={13} color="var(--accent-cyan, #06b6d4)" />}
-                              {l.type === 'quiz' && <HelpCircle size={13} color="var(--warning, #f59e0b)" />}
-                              <span style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {l.title}
-                              </span>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                              {l.type === 'quiz' && l.quizConfig && (
-                                <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                                  {l.quizConfig.questions?.length || 0} Qs &bull; {l.quizConfig.totalMarks} Marks
-                                </span>
-                              )}
-                              {l.type === 'document' && l.uploadedDocument && (
-                                <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                                  PDF/Doc attached
-                                </span>
-                              )}
-                              <span className="text-muted text-xs">{l.durationMinutes}m</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Attached Module Assessment in preview */}
-                      {m.assessment && (
-                        <div
-                          style={{
-                            marginTop: '10px',
-                            padding: '10px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'rgba(168, 85, 247, 0.08)',
-                            border: '1px solid rgba(168, 85, 247, 0.25)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: '8px',
-                            fontSize: '0.8rem'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 700, color: 'var(--accent-purple, #a855f7)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Award size={13} /> Module Assessment: {m.assessment.title}
-                            </div>
-                            <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-                              <strong>{m.assessment.questions?.length || 0} Questions</strong> &bull; Total Marks: {m.assessment.totalMarks} &bull; Pass: {m.assessment.passingPercentage}% &bull; Time: {m.assessment.timeLimitMinutes}m &bull; Attempts: {m.assessment.allowedAttempts}
-                            </div>
-                          </div>
-                          <span className="badge badge-secondary" style={{ fontSize: '0.68rem', textTransform: 'capitalize' }}>
-                            {m.assessment.difficulty}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Final Course Assessment Preview Card in Syllabus */}
-                  {finalAssessment ? (
-                    <div
-                      style={{
-                        padding: '14px 16px',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))',
-                        border: '1px solid var(--primary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
-                          Final Course Capstone Exam
-                        </span>
-                        <span className="badge badge-secondary" style={{ fontSize: '0.7rem', textTransform: 'capitalize' }}>
-                          Difficulty: {finalAssessment.difficulty}
-                        </span>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{finalAssessment.title}</div>
-                      <p className="text-secondary text-xs" style={{ margin: 0 }}>
-                        {finalAssessment.description}
-                      </p>
-                      <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-                        <strong>{finalAssessment.questions?.length || 0} Questions</strong> &bull; Total Marks: {finalAssessment.totalMarks} &bull; Passing Score: {finalAssessment.passingPercentage}% &bull; Time Limit: {finalAssessment.timeLimitMinutes} mins &bull; Allowed Attempts: {finalAssessment.allowedAttempts}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px dashed var(--border-subtle)',
-                        background: 'var(--bg-input)',
-                        fontSize: '0.82rem',
-                        color: 'var(--text-muted)'
-                      }}
-                    >
-                      No Final Course Assessment configured. You can configure one in Step 2 if required.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Faculty & Enrollment Summary */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                {/* Lead Faculty Card */}
-                <div
-                  style={{
-                    background: 'var(--bg-input)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px',
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Award size={15} color="var(--primary)" /> Assigned Lead Faculty
-                  </h4>
-
-                  {selectedFacultyMember ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div
-                        style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '50%',
-                          background: 'var(--primary)',
-                          color: '#fff',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700
-                        }}
-                      >
-                        {selectedFacultyMember.displayName
-                          ? selectedFacultyMember.displayName.slice(0, 2).toUpperCase()
-                          : selectedFacultyMember.firstName.slice(0, 1)}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          {selectedFacultyMember.displayName || `${selectedFacultyMember.firstName} ${selectedFacultyMember.lastName}`}
-                        </div>
-                        <div className="text-muted text-xs">
-                          ID: <strong style={{ color: 'var(--text-primary)' }}>{selectedFacultyMember.rollNo || selectedFacultyMember.id}</strong> &bull;{' '}
-                          {getDepartmentName(selectedFacultyMember.departmentId)}
-                        </div>
-                        <div className="text-muted text-xs">{selectedFacultyMember.email}</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted text-xs">No faculty member assigned. (A default instructor will be assigned).</div>
-                  )}
-                </div>
-
-                {/* Pre-Enrolled Students Summary */}
-                <div
-                  style={{
-                    background: 'var(--bg-input)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px',
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Users size={15} color="var(--accent-cyan, #06b6d4)" /> Pre-Enrolled Learners
-                    </h4>
-                    <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>
-                      {selectedStudentIds.size} Enrolled
-                    </span>
-                  </div>
-
-                  {selectedStudentIds.size > 0 ? (
-                    <div>
-                      <p className="text-secondary text-xs" style={{ margin: '0 0 10px' }}>
-                        These students will be registered into the course immediately upon publishing:
-                      </p>
-                      <div
-                        style={{
-                          maxHeight: '120px',
-                          overflowY: 'auto',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px'
-                        }}
-                      >
-                        {Array.from(selectedStudentIds).map((sId) => {
-                          const st = allStudents.find((s) => s.id === sId);
-                          if (!st) return null;
-                          return (
-                            <div
-                              key={st.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: '0.8rem',
-                                padding: '4px 8px',
-                                background: 'var(--bg-surface)',
-                                borderRadius: '4px'
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>{st.displayName || st.firstName}</span>
-                              <span className="text-muted text-xs">{st.rollNo || st.id} &bull; {getDepartmentName(st.departmentId)}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: '8px 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                      No students pre-assigned. The course will be published with 0 enrolled learners. You can invite learners later using <strong>Share Course</strong> or the <strong>Assign Students</strong> roster.
-                    </div>
-                  )}
-                </div>
-
-                {/* Governance & Publication Settings */}
-                <div
-                  style={{
-                    background: 'var(--bg-input)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px',
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Shield size={15} color="var(--success)" /> Publication & Enrollment Settings
-                  </h4>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="publishStatus"
-                        checked={publishStatus === 'published'}
-                        onChange={() => setPublishStatus('published')}
-                        style={{ accentColor: 'var(--primary)' }}
-                      />
-                      <div>
-                        <strong>Publish Immediately (Live in Catalog)</strong>
-                        <div className="text-muted text-xs">Visible to enrolled students and catalog discovery</div>
-                      </div>
-                    </label>
-
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="publishStatus"
-                        checked={publishStatus === 'draft'}
-                        onChange={() => setPublishStatus('draft')}
-                        style={{ accentColor: 'var(--primary)' }}
-                      />
-                      <div>
-                        <strong>Save as Private Draft</strong>
-                        <div className="text-muted text-xs">Keeps materials private for continuing revisions</div>
-                      </div>
-                    </label>
-
-                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={shareableLinkEnabled}
-                          onChange={(e) => setShareableLinkEnabled(e.target.checked)}
-                          style={{ accentColor: 'var(--primary)' }}
-                        />
-                        <span>Enable instant public/shareable enrollment link</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Actions Bar */}
+      {
+        step === 4 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Header */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '20px 24px',
-                borderTop: '1px solid var(--border-subtle)',
-                background: 'var(--bg-input)',
                 flexWrap: 'wrap',
                 gap: '12px'
               }}
             >
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setStep(3)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                <ArrowLeft size={16} /> Back to Faculty & Students
-              </button>
+              <div>
+                <span className="badge badge-primary" style={{ marginBottom: '6px' }}>
+                  Step 4 of 4: Final Review
+                </span>
+                <h2 style={{ fontSize: '1.35rem', margin: '4px 0', fontWeight: 800 }}>Preview & Publish Course</h2>
+                <p className="text-secondary text-sm" style={{ margin: 0 }}>
+                  Perform the final governance audit. Review curriculum structure, faculty assignment, and enrolled learners.
+                </p>
+              </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setStep(1)}
+                  style={{ fontSize: '0.78rem' }}
+                >
+                  Edit Basic Info
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setStep(2)}
+                  style={{ fontSize: '0.78rem' }}
+                >
+                  Edit Curriculum
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setStep(3)}
+                  style={{ fontSize: '0.78rem' }}
+                >
+                  Edit Assignments
+                </button>
+              </div>
+            </div>
+
+            {publishError && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--danger-bg, rgba(239, 68, 68, 0.1))',
+                  border: '1px solid var(--danger, #ef4444)',
+                  color: 'var(--danger, #ef4444)',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>{publishError}</span>
+              </div>
+            )}
+
+            {/* Full Course Preview Card */}
+            <div
+              className="card"
+              style={{
+                padding: 0,
+                overflow: 'hidden',
+                border: '1px solid var(--border-light)'
+              }}
+            >
+              {/* Hero Banner with Thumbnail and Metadata */}
+              <div
+                style={{
+                  padding: '28px',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(59, 130, 246, 0.1))',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  display: 'grid',
+                  gridTemplateColumns: thumbnailUrl ? '180px 1fr' : '1fr',
+                  gap: '24px',
+                  alignItems: 'center'
+                }}
+              >
+                {thumbnailUrl && (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '120px',
+                      borderRadius: 'var(--radius-lg)',
+                      overflow: 'hidden',
+                      background: 'var(--bg-input)',
+                      boxShadow: 'var(--shadow-md)'
+                    }}
+                  >
+                    <img
+                      src={thumbnailUrl}
+                      alt={title}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => {
+                        (e.target as any).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <span className="badge badge-primary">{category}</span>
+                    <span className="badge badge-secondary" style={{ textTransform: 'capitalize' }}>
+                      Level: {difficultyLevel}
+                    </span>
+                    <span className="badge badge-secondary">Dept: {getDepartmentName(departmentId)}</span>
+                  </div>
+
+                  <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0 0 8px' }}>
+                    {title} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>({courseCode})</span>
+                  </h1>
+                  <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '780px' }}>
+                    {description}
+                  </p>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '16px',
+                      marginTop: '14px',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={14} /> {durationHours} Hours Duration
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Layers size={14} /> {modules.length} Modules &bull; {totalLessonsCount} Lessons
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Award size={14} /> Certificate Eligible
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Evaluation Metrics Summary Bar */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                  gap: '12px',
+                  padding: '16px 24px',
+                  background: 'var(--bg-input)',
+                  borderBottom: '1px solid var(--border-subtle)'
+                }}
+              >
+                <div>
+                  <span className="text-muted text-xs">Curriculum Units</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <Layers size={14} color="var(--primary)" />
+                    {modules.length} Modules &bull; {totalLessonsCount} Lessons
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-muted text-xs">Evaluative Assessments</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <HelpCircle size={14} color="var(--warning, #f59e0b)" />
+                    {evaluationStats.totalAssessments} Total ({evaluationStats.lessonQuizzesCount} Quizzes, {evaluationStats.moduleAssessmentsCount} Mod)
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-muted text-xs">Final Course Capstone</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <Award size={14} color="var(--accent-purple, #a855f7)" />
+                    {evaluationStats.hasFinal ? 'Configured & Active' : 'None Configured'}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-muted text-xs">Total Evaluative Marks</span>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <Sparkles size={14} />
+                    {evaluationStats.totalMarks} Marks ({evaluationStats.totalQuestions} Qs)
+                  </div>
+                </div>
+              </div>
+
+              {/* Split Details: Left Syllabus, Right Governance & Roster */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', padding: '24px' }}>
+                {/* Left Column: Syllabus Breakdown with Assessments */}
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <BookOpen size={16} color="var(--primary)" /> Course Syllabus & Evaluation Blueprint
+                  </h3>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {modules.map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          background: 'var(--bg-input)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '14px',
+                          border: '1px solid var(--border-subtle)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                            {m.title}
+                          </div>
+                          <span className="text-muted text-xs">
+                            {m.lessons.length} {m.lessons.length === 1 ? 'lesson' : 'lessons'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {m.lessons.map((l) => (
+                            <div
+                              key={l.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '0.82rem',
+                                padding: '5px 8px',
+                                background: 'var(--bg-surface)',
+                                borderRadius: '4px',
+                                border: '1px solid var(--border-subtle)'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                                {l.type === 'video' && <Video size={13} color="var(--primary)" />}
+                                {l.type === 'document' && <FileText size={13} color="var(--accent-cyan, #06b6d4)" />}
+                                {l.type === 'quiz' && <HelpCircle size={13} color="var(--warning, #f59e0b)" />}
+                                <span style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {l.title}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                {l.type === 'quiz' && l.quizConfig && (
+                                  <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                                    {l.quizConfig.questions?.length || 0} Qs &bull; {l.quizConfig.totalMarks} Marks
+                                  </span>
+                                )}
+                                {l.type === 'document' && l.uploadedDocument && (
+                                  <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                                    PDF/Doc attached
+                                  </span>
+                                )}
+                                <span className="text-muted text-xs">{l.durationMinutes}m</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Attached Module Assessment in preview */}
+                        {m.assessment && (
+                          <div
+                            style={{
+                              marginTop: '10px',
+                              padding: '10px 12px',
+                              borderRadius: 'var(--radius-md)',
+                              background: 'rgba(168, 85, 247, 0.08)',
+                              border: '1px solid rgba(168, 85, 247, 0.25)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: '8px',
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 700, color: 'var(--accent-purple, #a855f7)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Award size={13} /> Module Assessment: {m.assessment.title}
+                              </div>
+                              <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                                <strong>{m.assessment.questions?.length || 0} Questions</strong> &bull; Total Marks: {m.assessment.totalMarks} &bull; Pass: {m.assessment.passingPercentage}% &bull; Time: {m.assessment.timeLimitMinutes}m &bull; Attempts: {m.assessment.allowedAttempts}
+                              </div>
+                            </div>
+                            <span className="badge badge-secondary" style={{ fontSize: '0.68rem', textTransform: 'capitalize' }}>
+                              {m.assessment.difficulty}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Final Course Assessment Preview Card in Syllabus */}
+                    {finalAssessment ? (
+                      <div
+                        style={{
+                          padding: '14px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))',
+                          border: '1px solid var(--primary)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
+                            Final Course Capstone Exam
+                          </span>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.7rem', textTransform: 'capitalize' }}>
+                            Difficulty: {finalAssessment.difficulty}
+                          </span>
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{finalAssessment.title}</div>
+                        <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                          {finalAssessment.description}
+                        </p>
+                        <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
+                          <strong>{finalAssessment.questions?.length || 0} Questions</strong> &bull; Total Marks: {finalAssessment.totalMarks} &bull; Passing Score: {finalAssessment.passingPercentage}% &bull; Time Limit: {finalAssessment.timeLimitMinutes} mins &bull; Allowed Attempts: {finalAssessment.allowedAttempts}
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px dashed var(--border-subtle)',
+                          background: 'var(--bg-input)',
+                          fontSize: '0.82rem',
+                          color: 'var(--text-muted)'
+                        }}
+                      >
+                        No Final Course Assessment configured. You can configure one in Step 2 if required.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Faculty & Enrollment Summary */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                  {/* Lead Faculty Card */}
+                  <div
+                    style={{
+                      background: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      border: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Award size={15} color="var(--primary)" /> Assigned Lead Faculty
+                    </h4>
+
+                    {selectedFacultyMember ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            background: 'var(--primary)',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700
+                          }}
+                        >
+                          {selectedFacultyMember.displayName
+                            ? selectedFacultyMember.displayName.slice(0, 2).toUpperCase()
+                            : selectedFacultyMember.firstName.slice(0, 1)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
+                            {selectedFacultyMember.displayName || `${selectedFacultyMember.firstName} ${selectedFacultyMember.lastName}`}
+                          </div>
+                          <div className="text-muted text-xs">
+                            ID: <strong style={{ color: 'var(--text-primary)' }}>{selectedFacultyMember.rollNo || selectedFacultyMember.id}</strong> &bull;{' '}
+                            {getDepartmentName(selectedFacultyMember.departmentId)}
+                          </div>
+                          <div className="text-muted text-xs">{selectedFacultyMember.email}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-muted text-xs">No faculty member assigned. (A default instructor will be assigned).</div>
+                    )}
+                  </div>
+
+                  {/* Pre-Enrolled Students Summary */}
+                  <div
+                    style={{
+                      background: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      border: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Users size={15} color="var(--accent-cyan, #06b6d4)" /> Pre-Enrolled Learners
+                      </h4>
+                      <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>
+                        {selectedStudentIds.size} Enrolled
+                      </span>
+                    </div>
+
+                    {selectedStudentIds.size > 0 ? (
+                      <div>
+                        <p className="text-secondary text-xs" style={{ margin: '0 0 10px' }}>
+                          These students will be registered into the course immediately upon publishing:
+                        </p>
+                        <div
+                          style={{
+                            maxHeight: '120px',
+                            overflowY: 'auto',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px'
+                          }}
+                        >
+                          {Array.from(selectedStudentIds).map((sId) => {
+                            const st = allStudents.find((s) => s.id === sId);
+                            if (!st) return null;
+                            return (
+                              <div
+                                key={st.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  fontSize: '0.8rem',
+                                  padding: '4px 8px',
+                                  background: 'var(--bg-surface)',
+                                  borderRadius: '4px'
+                                }}
+                              >
+                                <span style={{ fontWeight: 600 }}>{st.displayName || st.firstName}</span>
+                                <span className="text-muted text-xs">{st.rollNo || st.id} &bull; {getDepartmentName(st.departmentId)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ padding: '8px 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        No students pre-assigned. The course will be published with 0 enrolled learners. You can invite learners later using <strong>Share Course</strong> or the <strong>Assign Students</strong> roster.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Governance & Publication Settings */}
+                  <div
+                    style={{
+                      background: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      border: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Shield size={15} color="var(--success)" /> Publication & Enrollment Settings
+                    </h4>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="publishStatus"
+                          checked={publishStatus === 'published'}
+                          onChange={() => setPublishStatus('published')}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <div>
+                          <strong>Publish Immediately (Live in Catalog)</strong>
+                          <div className="text-muted text-xs">Visible to enrolled students and catalog discovery</div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="publishStatus"
+                          checked={publishStatus === 'draft'}
+                          onChange={() => setPublishStatus('draft')}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <div>
+                          <strong>Save as Private Draft</strong>
+                          <div className="text-muted text-xs">Keeps materials private for continuing revisions</div>
+                        </div>
+                      </label>
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '10px', marginTop: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={shareableLinkEnabled}
+                            onChange={(e) => setShareableLinkEnabled(e.target.checked)}
+                            style={{ accentColor: 'var(--primary)' }}
+                          />
+                          <span>Enable instant public/shareable enrollment link</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Actions Bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '20px 24px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-input)',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}
+              >
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => {
-                    setPublishStatus('draft');
-                    setIsConfirmModalOpen(true);
+                  onClick={() => setStep(3)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <ArrowLeft size={16} /> Back to Faculty & Students
+                </button>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setPublishStatus('draft');
+                      setIsConfirmModalOpen(true);
+                    }}
+                  >
+                    Save as Draft
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setPublishStatus('published');
+                      setIsConfirmModalOpen(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '12px 28px',
+                      fontWeight: 700,
+                      fontSize: '0.95rem'
+                    }}
+                  >
+                    <Send size={16} /> Publish Course
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* ========================================================= */}
+      {/* PUBLISH CONFIRMATION DIALOG MODAL                         */}
+      {/* ========================================================= */}
+      {
+        isConfirmModalOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.65)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              padding: '16px'
+            }}
+          >
+            <div
+              className="card"
+              style={{
+                maxWidth: '520px',
+                width: '100%',
+                padding: '28px',
+                boxShadow: 'var(--shadow-xl)',
+                animation: 'modalSlideUp 0.2s ease-out'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    background: 'var(--primary-light, rgba(99, 102, 241, 0.15))',
+                    color: 'var(--primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
                   }}
                 >
-                  Save as Draft
+                  <Send size={22} />
+                </div>
+
+                <div>
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                    Publish Course
+                  </h3>
+                  <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                    Please confirm publishing details before releasing to the catalog.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'var(--bg-input)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 16px',
+                  marginBottom: '20px',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Course Title:</span>
+                  <strong>{title}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Course Code:</span>
+                  <strong>{courseCode}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Department:</span>
+                  <strong>{getDepartmentName(departmentId)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Lead Faculty:</span>
+                  <strong>
+                    {selectedFacultyMember ? selectedFacultyMember.displayName || selectedFacultyMember.firstName : 'Unassigned'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Pre-Enrolled Students:</span>
+                  <strong style={{ color: selectedStudentIds.size > 0 ? 'var(--primary)' : 'inherit' }}>
+                    {selectedStudentIds.size > 0 ? `${selectedStudentIds.size} Students` : 'None (Optional)'}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="text-muted">Curriculum Content:</span>
+                  <strong>{modules.length} Modules &bull; {totalLessonsCount} Lessons</strong>
+                </div>
+              </div>
+
+              <p className="text-secondary text-xs" style={{ marginBottom: '24px' }}>
+                Once published, the course will be discoverable in the course catalog. Pre-assigned students will have immediate access to all curriculum modules.
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={isPublishing}
+                  onClick={() => setIsConfirmModalOpen(false)}
+                >
+                  Cancel
                 </button>
 
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => {
-                    setPublishStatus('published');
-                    setIsConfirmModalOpen(true);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 28px',
-                    fontWeight: 700,
-                    fontSize: '0.95rem'
-                  }}
+                  disabled={isPublishing}
+                  onClick={handleConfirmPublish}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px' }}
                 >
-                  <Send size={16} /> Publish Course
+                  {isPublishing ? (
+                    <span>Publishing...</span>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} /> Confirm Publish
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* PUBLISH CONFIRMATION DIALOG MODAL                         */}
-      {/* ========================================================= */}
-      {isConfirmModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: '16px'
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              maxWidth: '520px',
-              width: '100%',
-              padding: '28px',
-              boxShadow: 'var(--shadow-xl)',
-              animation: 'modalSlideUp 0.2s ease-out'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  background: 'var(--primary-light, rgba(99, 102, 241, 0.15))',
-                  color: 'var(--primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <Send size={22} />
-              </div>
-
-              <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
-                  Publish Course
-                </h3>
-                <p className="text-secondary text-xs" style={{ margin: 0 }}>
-                  Please confirm publishing details before releasing to the catalog.
-                </p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                background: 'var(--bg-input)',
-                borderRadius: 'var(--radius-md)',
-                padding: '14px 16px',
-                marginBottom: '20px',
-                fontSize: '0.85rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Course Title:</span>
-                <strong>{title}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Course Code:</span>
-                <strong>{courseCode}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Department:</span>
-                <strong>{getDepartmentName(departmentId)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Lead Faculty:</span>
-                <strong>
-                  {selectedFacultyMember ? selectedFacultyMember.displayName || selectedFacultyMember.firstName : 'Unassigned'}
-                </strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Pre-Enrolled Students:</span>
-                <strong style={{ color: selectedStudentIds.size > 0 ? 'var(--primary)' : 'inherit' }}>
-                  {selectedStudentIds.size > 0 ? `${selectedStudentIds.size} Students` : 'None (Optional)'}
-                </strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="text-muted">Curriculum Content:</span>
-                <strong>{modules.length} Modules &bull; {totalLessonsCount} Lessons</strong>
-              </div>
-            </div>
-
-            <p className="text-secondary text-xs" style={{ marginBottom: '24px' }}>
-              Once published, the course will be discoverable in the course catalog. Pre-assigned students will have immediate access to all curriculum modules.
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={isPublishing}
-                onClick={() => setIsConfirmModalOpen(false)}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={isPublishing}
-                onClick={handleConfirmPublish}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px' }}
-              >
-                {isPublishing ? (
-                  <span>Publishing...</span>
-                ) : (
-                  <>
-                    <CheckCircle2 size={16} /> Confirm Publish
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       {/* ========================================================= */}
       {/* REUSABLE ASSESSMENT CONFIGURATION MODAL (AI / MANUAL)      */}
       {/* ========================================================= */}
-      {assessmentModalState.isOpen && (
-        <AssessmentConfigModal
-          isOpen={assessmentModalState.isOpen}
-          onClose={() => setAssessmentModalState((prev) => ({ ...prev, isOpen: false }))}
-          scope={assessmentModalState.scope}
-          courseTitle={title}
-          moduleTitle={
-            assessmentModalState.modIndex !== null ? modules[assessmentModalState.modIndex]?.title : ''
-          }
-          lessonTitle={
-            assessmentModalState.modIndex !== null && assessmentModalState.lessonIndex !== null
-              ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.title
-              : ''
-          }
-          category={category}
-          availableDocuments={
-            assessmentModalState.scope === 'lesson_quiz' &&
-            assessmentModalState.modIndex !== null &&
-            assessmentModalState.lessonIndex !== null
-              ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.uploadedDocument
-                ? [modules[assessmentModalState.modIndex].lessons[assessmentModalState.lessonIndex].uploadedDocument!]
-                : allCourseDocuments
-              : assessmentModalState.scope === 'module_assessment' && assessmentModalState.modIndex !== null
-              ? modules[assessmentModalState.modIndex]?.lessons
-                  .filter((l) => Boolean(l.uploadedDocument))
-                  .map((l) => l.uploadedDocument!)
-              : allCourseDocuments
-          }
-          initialConfig={assessmentModalState.config}
-          onSave={handleSaveAssessmentConfig}
-        />
-      )}
+      {
+        assessmentModalState.isOpen && (
+          <AssessmentConfigModal
+            isOpen={assessmentModalState.isOpen}
+            onClose={() => setAssessmentModalState((prev) => ({ ...prev, isOpen: false }))}
+            scope={assessmentModalState.scope}
+            courseTitle={title}
+            moduleTitle={
+              assessmentModalState.modIndex !== null ? modules[assessmentModalState.modIndex]?.title : ''
+            }
+            lessonTitle={
+              assessmentModalState.modIndex !== null && assessmentModalState.lessonIndex !== null
+                ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.title
+                : ''
+            }
+            category={category}
+            availableDocuments={
+              assessmentModalState.scope === 'lesson_quiz' &&
+                assessmentModalState.modIndex !== null &&
+                assessmentModalState.lessonIndex !== null
+                ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.uploadedDocument
+                  ? [modules[assessmentModalState.modIndex].lessons[assessmentModalState.lessonIndex].uploadedDocument!]
+                  : allCourseDocuments
+                : assessmentModalState.scope === 'module_assessment' && assessmentModalState.modIndex !== null
+                  ? modules[assessmentModalState.modIndex]?.lessons
+                    .filter((l) => Boolean(l.uploadedDocument))
+                    .map((l) => l.uploadedDocument!)
+                  : allCourseDocuments
+            }
+            initialConfig={assessmentModalState.config}
+            onSave={handleSaveAssessmentConfig}
+          />
+        )
+      }
 
       {/* ========================================================= */}
       {/* REUSABLE DELETION & RESET CONFIRMATION MODAL              */}
@@ -3504,6 +3513,6 @@ export const CourseBuilderPage: React.FC = () => {
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         isDestructive={true}
       />
-    </div>
+    </div >
   );
 };

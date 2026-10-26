@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { mockCourses, mockCohorts } from '../../data/mockData';
 import { Assessment } from '../../types';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CreateAssessmentModal } from './components/CreateAssessmentModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
@@ -40,8 +40,32 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(defaultTab);
+  const getTabFromPath = (path: string): 'assessments' | 'assignments' | 'results' => {
+    if (path.includes('assignments')) return 'assignments';
+    if (path.includes('results')) return 'results';
+    if (path.includes('assessments')) return 'assessments';
+    return defaultTab;
+  };
+
+  const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(() => getTabFromPath(location.pathname));
+
+  useEffect(() => {
+    const tabFromPath = getTabFromPath(location.pathname);
+    setActiveTab(tabFromPath);
+  }, [location.pathname, defaultTab]);
+
+  const handleTabChange = (tab: 'assessments' | 'assignments' | 'results') => {
+    setActiveTab(tab);
+    if (tab === 'assignments') {
+      navigate('/assignments');
+    } else if (tab === 'results') {
+      navigate('/my-results');
+    } else {
+      navigate(isLearner ? '/my-assessments' : '/assessments');
+    }
+  };
   const {
     assessments,
     drafts,
@@ -76,8 +100,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const assignedCourses = isFaculty
     ? mockCourses.filter((c) => c.instructors?.includes('u-004') || c.createdBy === 'u-004' || c.id === 'crs-001' || c.id === 'crs-002')
     : isLearner
-    ? mockCourses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id))
-    : mockCourses;
+      ? mockCourses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id))
+      : mockCourses;
 
   // Assignments mock data
   const [assignments, setAssignments] = useState<CourseAssignment[]>([
@@ -236,21 +260,21 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {activeTab === 'assignments'
-              ? isLearner ? 'My Course Assignments & Capstones' : 'Course Assignments & Deliverables'
+              ? isLearner ? 'My Course Assignments & Capstones (live classes)' : 'Course Assignments & Deliverables'
               : activeTab === 'results'
-              ? 'My Academic Results & Grades'
-              : isLearner ? 'Quizzes & Scheduled Examinations' : 'Assessments & Timed Examinations'}
+                ? 'My Academic Results & Grades'
+                : isLearner ? 'Quizzes & Scheduled Examinations' : 'Assessments & Timed Examinations'}
           </h1>
           <p className="text-secondary text-sm">
             {isFaculty
               ? 'Create course assignments, schedule proctored quizzes, and view learner assessment submissions'
               : isLearner
-              ? activeTab === 'assignments'
-                ? 'Review project requirements, submit GitHub repositories or project files, and view instructor feedback.'
-                : activeTab === 'results'
-                ? 'Verified transcript of completed quizzes, midterms, capstone evaluations, and faculty remarks.'
-                : 'Take timed course evaluations and proctored quizzes. Ensure your system meets proctoring criteria.'
-              : 'Configured quizzes, high-stakes proctored exams, rubrics, and release policies'}
+                ? activeTab === 'assignments'
+                  ? 'Review project requirements, submit GitHub repositories or project files, and view instructor feedback.'
+                  : activeTab === 'results'
+                    ? 'Verified transcript of completed quizzes, midterms, capstone evaluations, and faculty remarks.'
+                    : 'Take timed course evaluations and proctored quizzes. Ensure your system meets proctoring criteria.'
+                : 'Configured quizzes, high-stakes proctored exams, rubrics, and release policies'}
           </p>
         </div>
 
@@ -300,14 +324,14 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       <div className="tabs-nav">
         <button
           className={`tab-btn ${activeTab === 'assignments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assignments')}
+          onClick={() => handleTabChange('assignments')}
         >
           <ClipboardCheck size={16} />
           {isLearner ? 'My Assignments' : 'Course Assignments'} ({assignments.length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'assessments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('assessments')}
+          onClick={() => handleTabChange('assessments')}
         >
           <Clock size={16} />
           Quizzes & Exams ({filteredAssessments.length})
@@ -315,7 +339,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         {isLearner && (
           <button
             className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
-            onClick={() => setActiveTab('results')}
+            onClick={() => handleTabChange('results')}
           >
             <Award size={16} />
             My Results & Grades (3)
@@ -1049,8 +1073,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     {submittingAssignment.submissionFormat === 'repo'
                       ? 'Git Repository URL (GitHub, GitLab, Bitbucket)'
                       : submittingAssignment.submissionFormat === 'file'
-                      ? 'Attachment File (Archive or Document)'
-                      : 'Response Content'}
+                        ? 'Attachment File (Archive or Document)'
+                        : 'Response Content'}
                     <span className="required">*</span>
                   </label>
                   <input

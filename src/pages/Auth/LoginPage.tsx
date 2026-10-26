@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import {
   GraduationCap, Eye, EyeOff, Lock, Mail, AlertCircle,
@@ -14,16 +14,18 @@ export const LoginPage: React.FC = () => {
   const [mfaModal, setMfaModal] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
-  const [searchParams] = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || '/dashboard';
-  const navigate = useNavigate();
   const { login, isLoading, error, clearError, isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  React.useEffect(() => {
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+  const destination = from && from !== '/login' ? from : '/dashboard';
+
+  useEffect(() => {
     if (isAuthenticated) {
-      navigate(redirectUrl, { replace: true });
+      navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate, redirectUrl]);
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +34,7 @@ export const LoginPage: React.FC = () => {
     await login(email, password);
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate(redirectUrl);
+      navigate(destination, { replace: true });
     }
   };
 
@@ -44,7 +46,7 @@ export const LoginPage: React.FC = () => {
     await login(demoEmail, 'demoPass123');
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate(redirectUrl);
+      navigate('/dashboard', { replace: true });
     }
   };
 

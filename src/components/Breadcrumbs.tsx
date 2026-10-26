@@ -27,20 +27,19 @@ const routeNames: Record<string, string> = {
   attendance: 'Attendance Ledger',
   'attendance-ledger': 'Attendance Ledger',
   'question-banks': 'Question Banks',
+  assignments: 'Course Assignments',
   assessments: 'Assessments & Quizzes',
+  'my-assessments': 'Quizzes & Timed Exams',
+  'my-results': 'Academic Results & Grades',
   grading: 'Grading & Moderation',
   proctoring: 'Proctoring Center',
   certificates: 'Certificates & Credentials',
+  'my-certificates': 'Diplomas & Certificates',
   reports: 'Reports & Analytics',
   notifications: 'Notification Center',
   integrations: 'Integrations & APIs',
   settings: 'Platform Settings',
   profile: 'My Profile',
-  'my-learning': 'My Learning',
-  'my-assessments': 'My Assessments',
-  'my-certificates': 'My Certificates',
-  'my-results': 'Assessment Results',
-  new: 'Create'
 };
 
 export const Breadcrumbs: React.FC = () => {

@@ -29,6 +29,11 @@ interface CourseState {
     message: string;
     requiresApproval?: boolean;
   };
+  enrollCourse: (courseId: string, userId?: string) => {
+    success: boolean;
+    message: string;
+    requiresApproval?: boolean;
+  };
   requestToJoinCourse: (courseId: string, userId?: string) => {
     success: boolean;
     message: string;
@@ -139,10 +144,10 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       const updatedCourses = state.courses.map((c) =>
         c.id === courseId
           ? {
-              ...c,
-              ...settings,
-              updatedAt: new Date().toISOString(),
-            }
+            ...c,
+            ...settings,
+            updatedAt: new Date().toISOString(),
+          }
           : c
       );
       try {
@@ -159,12 +164,12 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       const updatedCourses = state.courses.map((c) =>
         c.id === courseId
           ? {
-              ...c,
-              status,
-              // If unpublishing, optionally reflect link restriction
-              shareableLinkEnabled: status === 'published' ? (c.shareableLinkEnabled ?? true) : false,
-              updatedAt: new Date().toISOString(),
-            }
+            ...c,
+            status,
+            // If unpublishing, optionally reflect link restriction
+            shareableLinkEnabled: status === 'published' ? (c.shareableLinkEnabled ?? true) : false,
+            updatedAt: new Date().toISOString(),
+          }
           : c
       );
       try {
@@ -220,7 +225,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         set({ requestedCourseIds: nextRequested });
         try {
           localStorage.setItem(STORAGE_KEY_REQUESTED, JSON.stringify(nextRequested));
-        } catch (e) {}
+        } catch (e) { }
       }
       return {
         success: true,
@@ -243,11 +248,11 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     const updatedCourses = courses.map((c) =>
       c.id === courseId
         ? {
-            ...c,
-            learnerCount: (c.learnerCount || 0) + 1,
-            enrolledLearners: (c.enrolledLearners || 0) + 1,
-            updatedAt: new Date().toISOString(),
-          }
+          ...c,
+          learnerCount: (c.learnerCount || 0) + 1,
+          enrolledLearners: (c.enrolledLearners || 0) + 1,
+          updatedAt: new Date().toISOString(),
+        }
         : c
     );
 
@@ -260,7 +265,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(nextEnrolled));
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,
@@ -268,6 +273,8 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       message: `Successfully enrolled in "${course.title}". Welcome to the course!`,
     };
   },
+
+  enrollCourse: (courseId, userId) => get().enrollInCourse(courseId, userId),
 
   requestToJoinCourse: (courseId) => {
     const { requestedCourseIds } = get();
@@ -278,7 +285,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     set({ requestedCourseIds: nextRequested });
     try {
       localStorage.setItem(STORAGE_KEY_REQUESTED, JSON.stringify(nextRequested));
-    } catch (e) {}
+    } catch (e) { }
     return { success: true, message: 'Join request submitted to campus administrator.' };
   },
 
@@ -305,7 +312,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     set({ courses: updatedCourses });
     try {
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-    } catch (e) {}
+    } catch (e) { }
 
     return { success: true, message: 'Lead faculty assigned successfully.' };
   },
@@ -373,7 +380,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
       localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
-    } catch (e) {}
+    } catch (e) { }
 
     return {
       success: true,
@@ -391,7 +398,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         : [course, ...state.courses];
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) {}
+      } catch (e) { }
       return { courses: updatedCourses };
     });
   },
@@ -401,7 +408,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       const updatedCourses = state.courses.filter((c) => c.id !== courseId);
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) {}
+      } catch (e) { }
       return { courses: updatedCourses };
     });
   },

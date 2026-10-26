@@ -4,13 +4,12 @@ import { useAuthStore } from '../lib/store';
 import {
   LayoutDashboard, BookOpen, Route, Video, HelpCircle,
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
-  Plug, Settings, Building2, Building, Briefcase, MapPin,
-  Network, Users, UsersRound, Shield, Search, Trophy,
-  GraduationCap, Calendar, Clock, UserCheck, User, Megaphone,
-  Compass, Link2, Share2, ChevronDown, ChevronRight, Play,
-  FileText, CheckCircle
+  Plug, Settings, Building2, Building, Briefcase, MapPin, Network, Users, UsersRound,
+  Shield, Search, Trophy, GraduationCap, Calendar, Clock,
+  UserCheck, User, Megaphone, Compass, Library, Layers, X, Play, Flame,
+  Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle
 } from 'lucide-react';
-import { NavItem } from '../lib/permissions';
+import { getNavigationForRole, type NavItem } from '../lib/permissions';
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -43,11 +42,14 @@ const iconMap: Record<string, any> = {
   User,
   Megaphone,
   Compass,
+  Library,
+  Layers,
+  Play,
+  Flame,
   Link2,
   Share2,
   ChevronDown,
   ChevronRight,
-  Play,
   FileText,
   CheckCircle,
 };
@@ -325,12 +327,12 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop - only visible on mobile screens <= 768px */}
       {isOpen && (
         <div
-          className="modal-overlay"
-          style={{ zIndex: 29 }}
+          className="sidebar-backdrop"
           onClick={onClose}
+          aria-label="Close navigation sidebar"
         />
       )}
 
@@ -352,6 +354,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         >
           <Link
             to="/"
+            onClick={onClose}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -374,6 +377,28 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               />
             </div>
           </Link>
+
+          {/* Close button for mobile drawer */}
+          <button
+            onClick={onClose}
+            className="mobile-sidebar-close-btn"
+            style={{
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-muted)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              cursor: 'pointer'
+            }}
+            title="Close menu"
+            aria-label="Close navigation"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* ======================================================== */}
@@ -401,8 +426,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               focusedGroup !== null
                 ? focusedGroup === groupName
                 : hoveredGroup !== null
-                ? hoveredGroup === groupName
-                : openGroup === groupName || (isMainGroup && hasActiveChild);
+                  ? hoveredGroup === groupName
+                  : openGroup === groupName || (isMainGroup && hasActiveChild);
 
             // Compute total badge count for this group if items have badges
             const groupBadgeCount = items.reduce((acc, curr) => acc + (curr.badge || 0), 0);
@@ -534,13 +559,13 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                     color: hasActiveChild
                       ? 'var(--primary)'
                       : isExpanded
-                      ? 'var(--text-main)'
-                      : 'var(--text-secondary)',
+                        ? 'var(--text-main)'
+                        : 'var(--text-secondary)',
                     background: hasActiveChild
                       ? 'var(--primary-light)'
                       : isExpanded
-                      ? 'var(--bg-input)'
-                      : 'transparent',
+                        ? 'var(--bg-input)'
+                        : 'transparent',
                     border: 'none',
                     borderLeft: hasActiveChild ? '3px solid var(--primary)' : '3px solid transparent',
                     width: '100%',
@@ -571,8 +596,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                         color: hasActiveChild
                           ? 'var(--primary)'
                           : isExpanded
-                          ? 'var(--text-main)'
-                          : 'var(--text-muted)',
+                            ? 'var(--text-main)'
+                            : 'var(--text-muted)',
                         transition: 'color 0.18s ease',
                       }}
                     />
@@ -803,14 +828,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                   {!user
                     ? 'Guest'
                     : user.activeRole === 'trainer' || user.activeRole === 'instructor' || user.activeRole === 'assessment_author' || user.activeRole === 'grader'
-                    ? 'Faculty / Trainer'
-                    : user.activeRole === 'student' || user.activeRole === 'learner'
-                    ? 'Enrolled Student'
-                    : user.activeRole === 'org_admin' || user.activeRole === 'lms_admin'
-                    ? 'Institution Admin'
-                    : user.activeRole === 'platform_admin'
-                    ? 'Platform Admin'
-                    : 'Authorized User'}
+                      ? 'Faculty / Trainer'
+                      : user.activeRole === 'student' || user.activeRole === 'learner'
+                        ? 'Enrolled Student'
+                        : user.activeRole === 'org_admin' || user.activeRole === 'lms_admin'
+                          ? 'Institution Admin'
+                          : user.activeRole === 'platform_admin'
+                            ? 'Platform Admin'
+                            : 'Authorized User'}
                 </div>
               </div>
               <span

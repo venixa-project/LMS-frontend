@@ -30,8 +30,9 @@ export const CoursesPage: React.FC = () => {
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isAdmin = isPlatformAdmin || isOrgAdmin || (!isFaculty && !isLearner);
   const isCatalog = location.pathname === '/catalog';
+  const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
 
-  const { courses, enrolledCourseIds, updateCourseStatus, assignLeadFaculty, deleteCourse } = useCourseStore();
+  const { courses, enrolledCourseIds, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
   const { getFaculty } = usePeopleStore();
   const allFaculty = getFaculty();
 
@@ -65,7 +66,14 @@ export const CoursesPage: React.FC = () => {
   const progressData: Record<string, { progress: number; completedLessons: number; totalLessons: number; status: 'in_progress' | 'completed' }> = {
     'crs-001': { progress: 65, completedLessons: 8, totalLessons: 12, status: 'in_progress' },
     'crs-002': { progress: 30, completedLessons: 4, totalLessons: 12, status: 'in_progress' },
+    'crs-003': { progress: 20, completedLessons: 2, totalLessons: 10, status: 'in_progress' },
     'crs-004': { progress: 100, completedLessons: 10, totalLessons: 10, status: 'completed' },
+    'crs-005': { progress: 40, completedLessons: 3, totalLessons: 8, status: 'in_progress' },
+    'crs-006': { progress: 15, completedLessons: 2, totalLessons: 14, status: 'in_progress' },
+  };
+
+  const getCourseProgress = (courseId: string) => {
+    return progressData[courseId] || { progress: 0, completedLessons: 0, totalLessons: 10, status: 'in_progress' as const };
   };
 
   // Modals
@@ -186,6 +194,17 @@ export const CoursesPage: React.FC = () => {
     setTimeout(() => setNotice(null), 3500);
   };
 
+  const handleEnrollCourse = (course: Course) => {
+    enrollCourse(course.id);
+    showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
+  };
+
+  // Dynamic counts for learner tabs
+  const nonArchivedCourses = courses.filter((c) => c.status !== 'archived');
+  const enrolledCourses = nonArchivedCourses.filter((c) => enrolledCourseIds.includes(c.id));
+  const inProgressCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'in_progress');
+  const completedCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'completed');
+
   const filteredCourses = courses.filter((c) => {
     const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase());
@@ -198,10 +217,17 @@ export const CoursesPage: React.FC = () => {
     }
 
     if (isLearner) {
-      if (!enrolledCourseIds.includes(c.id) || c.status !== 'published') return false;
-      const prog = progressData[c.id];
-      if (learnerTab === 'in_progress' && prog?.status !== 'in_progress') return false;
-      if (learnerTab === 'completed' && prog?.status !== 'completed') return false;
+      // In student portal: show all courses added by admin (exclude only archived)
+      if (c.status === 'archived') return false;
+
+      // On /my-learning: only show enrolled courses and respect learnerTab
+      if (isMyLearning) {
+        if (!enrolledCourseIds.includes(c.id)) return false;
+        const prog = getCourseProgress(c.id);
+        if (learnerTab === 'in_progress' && prog.status !== 'in_progress') return false;
+        if (learnerTab === 'completed' && prog.status !== 'completed') return false;
+      }
+
       return matchesSearch && matchesCategory;
     }
 
@@ -336,10 +362,10 @@ export const CoursesPage: React.FC = () => {
               {isCatalog
                 ? 'Curriculum Catalog'
                 : isLearner
-                ? 'Student Learning Portal'
-                : isFaculty
-                ? 'Faculty Teaching Scope'
-                : 'Academic Offerings'}
+                  ? 'Student Learning Portal'
+                  : isFaculty
+                    ? 'Faculty Teaching Scope'
+                    : 'Academic Offerings'}
             </span>
             <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
             {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
@@ -348,19 +374,19 @@ export const CoursesPage: React.FC = () => {
             {isCatalog
               ? 'Course Catalog & Discovery'
               : isLearner
-              ? 'My Enrolled Courses & Learning History'
-              : isFaculty
-              ? 'My Assigned Courses & Learning Content'
-              : 'Course Management & Curriculum Catalog'}
+                ? 'My Enrolled Courses & Learning History'
+                : isFaculty
+                  ? 'My Assigned Courses & Learning Content'
+                  : 'Course Management & Curriculum Catalog'}
           </h1>
           <p className="text-secondary text-sm">
             {isCatalog
               ? 'Explore open curriculum courses, preview syllabi, and enroll directly in academic programs.'
               : isLearner
-              ? 'Access your enrolled curriculum, track lesson completion, and resume learning.'
-              : isFaculty
-              ? 'Manage curriculum modules, learning lessons, student rosters, and approval submissions for your courses'
-              : 'Oversee institutional syllabus, assign appointed faculty, generate shareable links, and publish courses'}
+                ? 'Access your enrolled curriculum, track lesson completion, and resume learning.'
+                : isFaculty
+                  ? 'Manage curriculum modules, learning lessons, student rosters, and approval submissions for your courses'
+                  : 'Oversee institutional syllabus, assign appointed faculty, generate shareable links, and publish courses'}
           </p>
         </div>
 
@@ -423,27 +449,61 @@ export const CoursesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Learner Tabs */}
+      {/* Learner Primary Tabs */}
       {isLearner && (
-        <div className="tabs-nav" style={{ marginBottom: '20px' }}>
-          <button
-            className={`tab-btn ${learnerTab === 'all' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('all')}
-          >
-            <BookOpen size={16} /> All Enrolled Courses (3)
-          </button>
-          <button
-            className={`tab-btn ${learnerTab === 'in_progress' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('in_progress')}
-          >
-            <Play size={16} /> In Progress (2)
-          </button>
-          <button
-            className={`tab-btn ${learnerTab === 'completed' ? 'active' : ''}`}
-            onClick={() => setLearnerTab('completed')}
-          >
-            <Award size={16} /> Completed &bull; Certificate Issued (1)
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+          <div className="tabs-nav">
+            <Link
+              to="/courses"
+              className={`tab-btn ${!isMyLearning ? 'active' : ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <Compass size={16} /> Courses ({nonArchivedCourses.length} Offered)
+            </Link>
+            <Link
+              to="/my-learning"
+              className={`tab-btn ${isMyLearning ? 'active' : ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              <BookOpen size={16} /> My Enrolled Courses ({enrolledCourses.length})
+            </Link>
+          </div>
+
+          {/* Sub-filters when on My Enrolled Courses */}
+          {isMyLearning && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className={`tab-btn ${learnerTab === 'all' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('all')}
+                >
+                  <BookOpen size={14} /> All Enrolled Courses ({enrolledCourses.length})
+                </button>
+                <button
+                  className={`tab-btn ${learnerTab === 'in_progress' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('in_progress')}
+                >
+                  <Play size={14} /> In Progress ({inProgressCourses.length})
+                </button>
+                <button
+                  className={`tab-btn ${learnerTab === 'completed' ? 'active' : ''}`}
+                  onClick={() => setLearnerTab('completed')}
+                >
+                  <Award size={14} /> Completed &bull; Certificate Issued ({completedCourses.length})
+                </button>
+              </div>
+
+              {nonArchivedCourses.length > enrolledCourses.length && (
+                <Link
+                  to="/courses"
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: '6px' }}
+                >
+                  <Compass size={14} /> Browse Catalog ({nonArchivedCourses.length - enrolledCourses.length} Available to Enroll) &rarr;
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -644,15 +704,14 @@ export const CoursesPage: React.FC = () => {
                     {/* Compact Status Badge */}
                     <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
                       <span
-                        className={`badge badge-${
-                          c.status === 'published'
-                            ? 'active'
-                            : c.status === 'in_review'
+                        className={`badge badge-${c.status === 'published'
+                          ? 'active'
+                          : c.status === 'in_review'
                             ? 'warning'
                             : c.status === 'archived'
-                            ? 'danger'
-                            : 'draft'
-                        }`}
+                              ? 'danger'
+                              : 'draft'
+                          }`}
                         style={{ fontWeight: 700, textTransform: 'capitalize' }}
                       >
                         {c.status.replace('_', ' ')}
@@ -1453,8 +1512,8 @@ export const CoursesPage: React.FC = () => {
                                 background: isSelected
                                   ? 'rgba(99, 102, 241, 0.08)'
                                   : isInactive
-                                  ? 'rgba(0, 0, 0, 0.02)'
-                                  : 'var(--card-bg)',
+                                    ? 'rgba(0, 0, 0, 0.02)'
+                                    : 'var(--card-bg)',
                                 cursor: isInactive ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -1734,15 +1793,14 @@ export const CoursesPage: React.FC = () => {
                     Current Lifecycle State:
                   </div>
                   <span
-                    className={`badge badge-${
-                      statusModalCourse.status === 'published'
-                        ? 'active'
-                        : statusModalCourse.status === 'in_review'
+                    className={`badge badge-${statusModalCourse.status === 'published'
+                      ? 'active'
+                      : statusModalCourse.status === 'in_review'
                         ? 'warning'
                         : statusModalCourse.status === 'archived'
-                        ? 'danger'
-                        : 'draft'
-                    }`}
+                          ? 'danger'
+                          : 'draft'
+                      }`}
                     style={{ fontWeight: 700, textTransform: 'capitalize' }}
                   >
                     {statusModalCourse.status.replace('_', ' ')}
@@ -1791,15 +1849,14 @@ export const CoursesPage: React.FC = () => {
                             </div>
                           </div>
                           <span
-                            className={`badge badge-${
-                              item.status === 'published'
-                                ? 'active'
-                                : item.status === 'in_review'
+                            className={`badge badge-${item.status === 'published'
+                              ? 'active'
+                              : item.status === 'in_review'
                                 ? 'warning'
                                 : item.status === 'archived'
-                                ? 'danger'
-                                : 'draft'
-                            }`}
+                                  ? 'danger'
+                                  : 'draft'
+                              }`}
                             style={{ fontSize: '0.7rem' }}
                           >
                             {item.status}
