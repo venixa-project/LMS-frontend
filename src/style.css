@@ -178,7 +178,7 @@ textarea {
 .brand-logo-card {
   display: inline-flex;
   align-items: center;
-  justifyContent: center;
+  justify-content: center;
   background: #ffffff;
   padding: 6px 12px;
   border-radius: var(--radius-md);
