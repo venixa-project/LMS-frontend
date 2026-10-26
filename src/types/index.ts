@@ -343,6 +343,12 @@ export interface LiveSession {
   isDraft?: boolean;
   status: SessionStatus;
   attendance: AttendanceRecord[];
+  recordingThumbnail?: string;
+  recordingViews?: number;
+  recordingChapters?: { time: string; title: string }[];
+  recordingNotes?: string;
+  isBookmarked?: boolean;
+  watchProgressPercentage?: number;
   createdAt: string;
   updatedAt: string;
   room?: string;
@@ -503,6 +509,8 @@ export interface Assessment {
   resultReleasePolicy?: 'immediate' | 'after_window' | 'manual';
   mode?: 'human' | 'ai_assisted' | 'automated';
   proctoringRequired: boolean;
+  proctoringPolicyLevel?: ProctoringPolicyLevel;
+  proctoringPolicy?: ProctoringPolicy;
   aiGradingEnabled?: boolean;
   version?: number;
   status: EntityStatus;
@@ -677,6 +685,114 @@ export interface ProctoringIncident {
   reviewerNotes?: string;
   decision?: string;
   evidence?: string[];
+  studentExplanation?: string;
+  policyLevel?: 'basic' | 'monitored' | 'strict';
+}
+
+export type ProctoringPolicyLevel = 'basic' | 'monitored' | 'strict';
+
+export interface ProctoringPolicy {
+  id: string;
+  name: string;
+  level: ProctoringPolicyLevel;
+  description: string;
+  requireScreenShare: boolean;
+  requireMicrophone: boolean;
+  requireWebcam: boolean;
+  requireFullscreen: boolean;
+  pauseOnScreenShareLoss: boolean;
+  pauseOnTabSwitch: boolean;
+  pauseOnNetworkLoss: boolean;
+  disclosureText: string;
+  retentionDays: number;
+}
+
+export type ProctoringEventCategory =
+  | 'tab_visibility'
+  | 'window_focus'
+  | 'fullscreen_exit'
+  | 'screen_share_interruption'
+  | 'mic_interruption'
+  | 'webcam_interruption'
+  | 'network_interruption'
+  | 'jitsi_conference'
+  | 'timing_event';
+
+export type ProctoringSeverity = 'informational' | 'warning' | 'critical' | 'review_required';
+
+export interface ProctoringEvent {
+  id: string;
+  sessionId: string;
+  assessmentId: string;
+  learnerId: string;
+  category: ProctoringEventCategory;
+  timestamp: string;
+  clientTimestamp: number;
+  relativeSeconds: number;
+  severity: ProctoringSeverity;
+  title: string;
+  description: string;
+  technicalMetadata?: Record<string, unknown>;
+  evidenceSnapshot?: string;
+  evidenceType?: 'screenshot' | 'audio_sample' | 'telemetry_log';
+  studentExplanation?: string;
+  studentExplanationSubmittedAt?: string;
+  instructorVerdict?: 'no_violation' | 'warning' | 'violation' | 'technical_accepted';
+}
+
+export type ProctoringSessionStatus =
+  | 'pre_flight'
+  | 'ready'
+  | 'in_progress'
+  | 'warning'
+  | 'paused'
+  | 'recovering'
+  | 'submitted'
+  | 'under_review'
+  | 'reviewed';
+
+export interface ProctoringSession {
+  id: string;
+  attemptId: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  learnerId: string;
+  learnerName: string;
+  policy: ProctoringPolicy;
+  status: ProctoringSessionStatus;
+  startedAt: string;
+  endedAt?: string;
+  totalDurationSeconds?: number;
+  activeScreenShare: boolean;
+  activeMic: boolean;
+  activeWebcam: boolean;
+  isFullscreen: boolean;
+  isOnline: boolean;
+  jitsiRoomName?: string;
+  jitsiRoomUrl?: string;
+  jitsiStatus?: 'connected' | 'connecting' | 'disconnected';
+  events: ProctoringEvent[];
+  recordingUrl?: string;
+  recordingDuration?: number;
+  isSimulatedRecording?: boolean;
+  studentAppeal?: {
+    appealId: string;
+    explanation: string;
+    submittedAt: string;
+    status: 'pending' | 'reviewed';
+  };
+  reviewDecision?: {
+    reviewerId: string;
+    reviewerName: string;
+    outcome:
+      | 'no_violation'
+      | 'warning_issued'
+      | 'further_review'
+      | 'violation_confirmed'
+      | 'technical_incident_accepted';
+    explanation: string;
+    timestamp: string;
+  };
 }
 
 // --- Certificate ---

@@ -672,7 +672,7 @@ export const CoursesPage: React.FC = () => {
                       borderRadius: 'var(--radius-md)',
                       background: c.thumbnail
                         ? `url(${c.thumbnail}) center/cover no-repeat`
-                        : 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.5))',
+                        : 'linear-gradient(135deg, rgba(37, 99, 235, 0.45) 0%, rgba(84, 71, 255, 0.35) 50%, rgba(244, 114, 182, 0.25) 100%)',
                       marginBottom: '14px',
                       display: 'flex',
                       alignItems: 'center',

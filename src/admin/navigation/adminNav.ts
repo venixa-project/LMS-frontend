@@ -21,6 +21,7 @@ export const adminNav: NavItem[] = [
   { id: 'calendar', label: 'Activity & Planner', icon: 'Calendar', path: '/calendar', group: 'Schedule & Attendance' },
   { id: 'timetable', label: 'Classes & Timetable', icon: 'Clock', path: '/classes-timetable', group: 'Schedule & Attendance' },
   { id: 'live-sessions', label: 'Live Sessions', icon: 'Video', path: '/live-sessions', group: 'Schedule & Attendance' },
+  { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
   { id: 'attendance', label: 'Attendance Ledger', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
 
   // Assessments & Evaluations

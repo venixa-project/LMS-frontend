@@ -10,19 +10,22 @@ import { NotificationsDrawer } from './NotificationsDrawer';
 import { GlobalSearchModal } from './GlobalSearchModal';
 
 export const AppShell: React.FC = () => {
+  // 1. Auth & Router Hooks (always called at top level)
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
 
+  // 2. UI Layout States
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // 3. Responsive Resize Handler
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth > 768) {
+      if (window.innerWidth > 1024) {
         setMobileOpen(false);
       }
     };
@@ -30,15 +33,16 @@ export const AppShell: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // 4. Sidebar Toggle Handler
   const handleToggleSidebar = () => {
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 1024) {
       setMobileOpen((prev) => !prev);
     } else {
       setDesktopCollapsed((prev) => !prev);
     }
   };
 
-  // Global keyboard shortcuts: Cmd/Ctrl + K (Search), Cmd/Ctrl + B (Sidebar)
+  // 5. Global Keyboard Shortcuts: Ctrl+K (Search), Ctrl+B (Sidebar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -54,7 +58,7 @@ export const AppShell: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Validate active route permissions against the active role on role switch, direct navigation, refresh, or history navigation
+  // 6. Role Permission Validation
   useEffect(() => {
     if (isAuthenticated && user && !isLoading) {
       if (!isRouteAllowedForRole(location.pathname, user.activeRole)) {
@@ -63,7 +67,7 @@ export const AppShell: React.FC = () => {
     }
   }, [user?.activeRole, location.pathname, isAuthenticated, isLoading, navigate]);
 
-  // Allow guest browsing for publicly discoverable catalog and course preview pages
+  // Public Routes (allowed for unauthenticated preview)
   const isPublicRoute =
     location.pathname.startsWith('/course/') ||
     location.pathname.startsWith('/courses/') ||

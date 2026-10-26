@@ -20,7 +20,8 @@ import {
   Question,
   UploadedDocumentInfo,
   AssessmentDifficultySetting,
-  AssessmentQuestionTypeSetting
+  AssessmentQuestionTypeSetting,
+  ProctoringPolicyLevel
 } from '../../../types';
 import { mockCourses } from '../../../data/mockData';
 import { extractDocumentContent } from '../../../lib/documentParser';
@@ -83,6 +84,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const [maxAttempts, setMaxAttempts] = useState(initialDraft?.maxAttempts || 2);
   const [instructions, setInstructions] = useState(initialDraft?.instructions || 'Read every question carefully. Ensure stable connectivity during the session.');
   const [proctoringRequired, setProctoringRequired] = useState(initialDraft?.proctoringRequired ?? true);
+  const [proctoringPolicyLevel, setProctoringPolicyLevel] = useState<ProctoringPolicyLevel>(
+    initialDraft?.proctoringPolicyLevel || 'monitored'
+  );
   const [aiGradingEnabled, setAiGradingEnabled] = useState(initialDraft?.aiGradingEnabled ?? true);
 
   // AI Document Upload & AI State
@@ -157,6 +161,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setTotalMarks(initialDraft.totalMarks || 100);
       setPassingMarks(initialDraft.passingMarks || initialDraft.passmark || 70);
       setProctoringRequired(initialDraft.proctoringRequired ?? true);
+      setProctoringPolicyLevel(initialDraft.proctoringPolicyLevel || 'monitored');
       setAiGradingEnabled(initialDraft.aiGradingEnabled ?? true);
       if (initialDraft.instructions) setInstructions(initialDraft.instructions);
 
@@ -743,6 +748,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       passmark: Math.round((passingMarks / totalMarks) * 100),
       maxAttempts,
       proctoringRequired,
+      proctoringPolicyLevel: proctoringRequired ? proctoringPolicyLevel : 'basic',
       aiGradingEnabled,
       questionIds: convertedQuestions.map((q) => q.id),
       questions: convertedQuestions.map((q) => q.id),
@@ -1266,12 +1272,57 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     style={{ accentColor: 'var(--primary)', marginTop: '3px' }}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Enable Automated Proctoring Protocol</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Enable VeniGuard Assessment Proctoring</div>
                     <div className="text-muted text-xs">
-                      Enforces webcam permissions, mic verification, browser tab-focus monitoring, and incident timeline telemetry.
+                      Enforces verified pre-exam checklist, screen capture telemetry, smart pause recovery, and human evidence moderation.
                     </div>
                   </div>
                 </label>
+
+                {proctoringRequired && (
+                  <div
+                    style={{
+                      marginLeft: '26px',
+                      padding: '12px',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Monitoring Policy Level:
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className={`btn ${proctoringPolicyLevel === 'monitored' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                        onClick={() => setProctoringPolicyLevel('monitored')}
+                        style={{ fontSize: '0.75rem', justifyContent: 'center' }}
+                      >
+                        Monitored (Screen + Focus)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${proctoringPolicyLevel === 'strict' ? 'btn-danger' : 'btn-secondary'} btn-sm`}
+                        onClick={() => setProctoringPolicyLevel('strict')}
+                        style={{ fontSize: '0.75rem', justifyContent: 'center' }}
+                      >
+                        Strict (Webcam + Mic + Screen)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${proctoringPolicyLevel === 'basic' ? 'btn-secondary' : 'btn-secondary'} btn-sm`}
+                        onClick={() => setProctoringPolicyLevel('basic')}
+                        style={{ fontSize: '0.75rem', justifyContent: 'center' }}
+                      >
+                        Basic (Timer + Network only)
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
                   <input

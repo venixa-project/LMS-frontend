@@ -70,7 +70,7 @@ export const DashboardPage: React.FC = () => {
         level: 'Intermediate',
         instructor: 'Dr. James Wilson',
         description: 'Master full-stack JavaScript, React 19, Node.js microservices, PostgreSQL, and AWS deployment with hands-on capstone projects.',
-        accentColor: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+        accentColor: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
         courseId: 'crs-004'
       },
       {
@@ -88,7 +88,7 @@ export const DashboardPage: React.FC = () => {
         level: 'Beginner to Intermediate',
         instructor: 'Dr. Marcus Bell',
         description: 'Practical data analysis with Pandas, NumPy, scikit-learn models, predictive modeling, and real-world enterprise datasets.',
-        accentColor: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+        accentColor: 'linear-gradient(135deg, #5447FF 0%, #F232A9 100%)',
         courseId: 'crs-003'
       },
       {
@@ -106,7 +106,7 @@ export const DashboardPage: React.FC = () => {
         level: 'Advanced',
         instructor: 'Prof. Elena Rostova',
         description: 'Container orchestration, production Kubernetes clusters, Helm charts, CI/CD automated deployments, and zero-downtime rollouts.',
-        accentColor: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+        accentColor: 'linear-gradient(135deg, #2563EB 0%, #F472B6 100%)',
         courseId: 'crs-001'
       },
       {
@@ -124,7 +124,7 @@ export const DashboardPage: React.FC = () => {
         level: 'Intermediate',
         instructor: 'Dr. James Wilson',
         description: 'Advanced generics, mapped types, conditional typing, decorator patterns, and building bulletproof scalable enterprise APIs.',
-        accentColor: 'linear-gradient(135deg, #3b82f6 0%, #10b981 100%)',
+        accentColor: 'linear-gradient(135deg, #2563EB 0%, #818CF8 50%, #F472B6 100%)',
         courseId: 'crs-004'
       }
     ];
@@ -133,8 +133,8 @@ export const DashboardPage: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
         {/* Welcome & Gamification Banner */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15))',
-          border: '1px solid rgba(99, 102, 241, 0.3)',
+          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.22) 0%, rgba(84, 71, 255, 0.18) 50%, rgba(244, 114, 182, 0.15) 100%)',
+          border: '1px solid rgba(129, 140, 248, 0.32)',
           borderRadius: 'var(--radius-xl)',
           padding: '24px 28px',
           display: 'flex',

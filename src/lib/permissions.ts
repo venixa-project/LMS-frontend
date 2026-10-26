@@ -216,6 +216,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'calendar', label: 'Activity & Planner', icon: 'Calendar', path: '/calendar', group: 'Schedule & Attendance' },
     { id: 'timetable', label: 'Classes & Timetable', icon: 'Clock', path: '/classes-timetable', group: 'Schedule & Attendance' },
     { id: 'live-sessions', label: 'Live Sessions', icon: 'Video', path: '/live-sessions', group: 'Schedule & Attendance' },
+    { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
     { id: 'attendance', label: 'Attendance Ledger', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
 
     // Evaluations & Grading
@@ -244,13 +245,16 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'leaderboard', label: 'Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Academics & Learning' },
 
     // Schedule & Attendance
-    { id: 'timetable', label: 'Timetable & Live Sessions', icon: 'Calendar', path: '/my-sessions', group: 'Schedule & Attendance' },
+    { id: 'timetable', label: 'Timetable & Live Lessons', icon: 'Video', path: '/my-sessions', group: 'Schedule & Attendance' },
+    { id: 'weekly-timetable', label: 'My Weekly Timetable', icon: 'Calendar', path: '/weekly-timetable', group: 'Schedule & Attendance' },
+    { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
     { id: 'momentum', label: 'Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
 
     // Evaluations & Results
     { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Tests' },
     { id: 'assessments', label: 'Quizzes & Timed Exams', icon: 'HelpCircle', path: '/my-assessments', group: 'Assessments & Tests' },
     { id: 'my-results', label: 'Academic Transcript & Marks', icon: 'Trophy', path: '/my-results', group: 'Assessments & Tests' },
+    { id: 'my-proctoring-reports', label: 'My Proctoring Reports', icon: 'Shield', path: '/my-proctoring-reports', group: 'Assessments & Tests' },
 
     // Credentials & Communication
     { id: 'my-certificates', label: 'Diplomas & Certificates', icon: 'Award', path: '/my-certificates', group: 'Credentials & Profile' },
@@ -308,12 +312,19 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '' ||
     cleanPath === '/' ||
     cleanPath === '/dashboard' ||
+    cleanPath === '/courses' ||
+    cleanPath === '/my-courses' ||
+    cleanPath === '/momentum' ||
+    cleanPath === '/leaderboard' ||
     cleanPath === '/profile' ||
     cleanPath === '/notifications' ||
     cleanPath === '/timetable' ||
+    cleanPath === '/weekly-timetable' ||
     cleanPath === '/classes-timetable' ||
     cleanPath === '/live-sessions' ||
     cleanPath === '/my-sessions' ||
+    cleanPath === '/recorded-classes' ||
+    cleanPath === '/recordings' ||
     cleanPath === '/attendance' ||
     cleanPath === '/attendance-ledger' ||
     cleanPath === '/join-course' ||
@@ -323,6 +334,8 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '/learning-paths' ||
     cleanPath === '/my-assessments' ||
     cleanPath === '/my-results' ||
+    cleanPath === '/my-proctoring-reports' ||
+    cleanPath.startsWith('/my-proctoring-report') ||
     cleanPath === '/my-certificates' ||
     cleanPath === '/assignments' ||
     cleanPath === '/certificates' ||
@@ -376,7 +389,6 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '/cohorts' ||
     cleanPath.startsWith('/cohorts/') ||
     cleanPath === '/students' ||
-    cleanPath === '/courses' ||
     cleanPath === '/course-builder' ||
     cleanPath === '/learning-paths' ||
     cleanPath === '/calendar' ||

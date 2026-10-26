@@ -21,21 +21,35 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
   const [currentTime, setCurrentTime] = useState(145); // 02:25 into recording
   const totalDuration = (session?.durationMinutes || 60) * 60;
 
-  if (!isOpen || !session) return null;
-
-  const chapters = [
-    { time: '00:00', title: 'Session Introduction & Agenda' },
-    { time: '12:30', title: 'Theoretical Framework & Architecture Diagrams' },
-    { time: '28:45', title: 'Live Code Walkthrough & Best Practices' },
-    { time: '48:10', title: 'Student Debugging & Q&A Clinic' },
-    { time: '58:00', title: 'Homework Assignment & Capstone Review' },
-  ];
-
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
+
+  if (!isOpen || !session) return null;
+
+  // Dynamic chapters based on session agenda or smart timestamps
+  const chapters = React.useMemo(() => {
+    if (session.agenda) {
+      const lines = session.agenda.split('\n').filter(Boolean);
+      if (lines.length > 0) {
+        const step = Math.floor(totalDuration / (lines.length + 1));
+        return lines.map((line, idx) => {
+          const timeSecs = idx * step;
+          const cleanTitle = line.replace(/^[0-9]+[\.\-\)]\s*/, '');
+          return { time: formatTime(timeSecs), title: cleanTitle };
+        });
+      }
+    }
+    return [
+      { time: '00:00', title: 'Lecture Introduction & Learning Objectives' },
+      { time: formatTime(Math.floor(totalDuration * 0.2)), title: 'Core Architectural Concepts & Theory' },
+      { time: formatTime(Math.floor(totalDuration * 0.45)), title: 'Live Coding Demo & Problem Solving' },
+      { time: formatTime(Math.floor(totalDuration * 0.75)), title: 'Student Debugging & Interactive Q&A' },
+      { time: formatTime(Math.floor(totalDuration * 0.9)), title: 'Summary Takeaways & Assignment Brief' },
+    ];
+  }, [session, totalDuration]);
 
   return (
     <div
@@ -80,10 +94,11 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         >
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="badge badge-secondary">Recorded Session Archival</span>
-              <span className="text-muted text-xs font-mono">{session.date}</span>
+              <span className="badge badge-secondary" style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}>Recorded Class Replay</span>
+              <span className="text-muted text-xs font-mono">{session.date || 'Recorded Lecture'}</span>
+              <span className="text-muted text-xs">• {session.instructorName || 'Faculty Trainer'}</span>
             </div>
-            <h3 style={{ margin: '4px 0 0 0', fontSize: '1.15rem', fontWeight: 700 }}>
+            <h3 style={{ margin: '4px 0 0 0', fontSize: '1.15rem', fontWeight: 800 }}>
               {session.title}
             </h3>
           </div>
@@ -128,7 +143,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
           </div>
 
           <div style={{ marginTop: '16px', color: '#94a3b8', fontSize: '0.85rem' }}>
-            {isPlaying ? 'Playing on-demand video stream...' : 'Click play to start video replay'}
+            {isPlaying ? 'Streaming High-Definition Lecture Stream (1080p)...' : 'Click play to start video replay'}
           </div>
 
           {/* Bottom Video Controls Bar */}
@@ -227,7 +242,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
                   }}
                   onClick={() => {
                     const [m, s] = ch.time.split(':').map(Number);
-                    setCurrentTime(m * 60 + s);
+                    setCurrentTime(m * 60 + (s || 0));
                     setIsPlaying(true);
                   }}
                 >
@@ -245,22 +260,37 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               <span>AI Executive Takeaways</span>
             </div>
             <p className="text-secondary text-xs" style={{ margin: '0 0 12px 0', lineHeight: 1.5 }}>
-              Faculty Dr. James Wilson demonstrated compound component hooks, optimized cache invalidation in TanStack Query, and resolved student race-condition errors during asynchronous mutations.
+              {session.description || `In this session, ${session.instructorName || 'the instructor'} conducted a detailed code walkthrough covering architectural best practices and practical implementations.`}
             </p>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => alert('Downloading official session lecture slide deck (PDF demo)')}
-              >
-                <Download size={13} /> Slide Deck (PDF)
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => alert('Downloading verified attendance and Q&A chat log')}
-              >
-                <FileText size={13} /> Chat Log (.txt)
-              </button>
+              {session.materials && session.materials.length > 0 ? (
+                session.materials.map((mat, i) => (
+                  <button
+                    key={i}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => alert(`Downloading "${mat}"`)}
+                    style={{ fontSize: '0.75rem', gap: '4px' }}
+                  >
+                    <Download size={13} /> {mat}
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => alert('Downloading official lecture slide deck (PDF)')}
+                  >
+                    <Download size={13} /> Slide Deck (PDF)
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => alert('Downloading transcript and chat log')}
+                  >
+                    <FileText size={13} /> Transcript (.txt)
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
