@@ -13,14 +13,17 @@ import {
   ArrowRight, ArrowLeft, RefreshCw, Trash2, Copy, MoveUp, MoveDown,
   Eye, Check, Shield, Award, Clock, HelpCircle, ChevronRight, Layers, FileCheck,
   FileSpreadsheet, UploadCloud, Download, CheckSquare, Square, Search, Filter,
-  AlertCircle, Edit3
+  AlertCircle, Edit3, Video, FileVideo, Play, Languages, Film, Volume2,
+  Users, Mic, Camera, Monitor, Radio, Lock
 } from 'lucide-react';
 import {
   Assessment,
   Question,
   UploadedDocumentInfo,
   AssessmentDifficultySetting,
-  AssessmentQuestionTypeSetting
+  AssessmentQuestionTypeSetting,
+  ProctoringMode,
+  ProctoringSettings
 } from '../../../types';
 import { mockCourses } from '../../../data/mockData';
 import { extractDocumentContent } from '../../../lib/documentParser';
@@ -32,6 +35,15 @@ import {
   validateQuestionSchema,
   convertSchemaToQuestion
 } from '../../../lib/aiAssessmentService';
+import {
+  processVideoForAssessment,
+  validateVideoFile,
+  checkAIServiceHealth,
+  loadSampleVideoFile,
+  VideoSegmentItem,
+  VideoProcessResponse,
+  AI_SERVICE_URL
+} from '../../../lib/videoAssessmentService';
 import {
   downloadExcelTemplate,
   downloadCsvTemplate,
@@ -67,22 +79,72 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 }) => {
   const { user } = useAuthStore();
   const aiFileInputRef = useRef<HTMLInputElement>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const videoPlayerRef = useRef<HTMLVideoElement>(null);
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
 
   // Wizard Navigation
   const [step, setStep] = useState<WizardStep>('mode_select');
   const [selectedMode, setSelectedMode] = useState<CreationMode>('bulk');
 
+  // AI Source Selection: Document vs Video
+  const [aiSourceType, setAiSourceType] = useState<'document' | 'video'>('document');
+
   // Assessment Settings
   const [title, setTitle] = useState(initialDraft?.title || '');
   const [courseId, setCourseId] = useState(initialDraft?.courseId || defaultCourseId || mockCourses[0]?.id || 'crs-001');
-  const [targetQuestionCount, setTargetQuestionCount] = useState<number>(initialDraft?.questionsData?.length || 10);
-  const [durationMinutes, setDurationMinutes] = useState(initialDraft?.durationMinutes || initialDraft?.duration || 45);
-  const [totalMarks, setTotalMarks] = useState(initialDraft?.totalMarks || 100);
-  const [passingMarks, setPassingMarks] = useState(initialDraft?.passingMarks || initialDraft?.passmark || 70);
-  const [maxAttempts, setMaxAttempts] = useState(initialDraft?.maxAttempts || 2);
+
+  // Numeric Form States (Number + Raw String to support uninhibited typing, select-all, backspace, and cursor preservation)
+  const initialTargetCount = initialDraft?.questionsData?.length || 10;
+  const [targetQuestionCount, setTargetQuestionCount] = useState<number>(initialTargetCount);
+  const [rawTargetQuestions, setRawTargetQuestions] = useState<string>(String(initialTargetCount));
+
+  const initialDuration = initialDraft?.durationMinutes || initialDraft?.duration || 45;
+  const [durationMinutes, setDurationMinutes] = useState<number>(initialDuration);
+  const [rawDuration, setRawDuration] = useState<string>(String(initialDuration));
+
+  const initialTotal = initialDraft?.totalMarks || 100;
+  const [totalMarks, setTotalMarks] = useState<number>(initialTotal);
+  const [rawTotalMarks, setRawTotalMarks] = useState<string>(String(initialTotal));
+
+  const initialPass = initialDraft?.passingMarks || initialDraft?.passmark || 70;
+  const [passingMarks, setPassingMarks] = useState<number>(initialPass);
+  const [rawPassMarks, setRawPassMarks] = useState<string>(String(initialPass));
+
+  const initialAttempts = initialDraft?.maxAttempts || 2;
+  const [maxAttempts, setMaxAttempts] = useState<number>(initialAttempts);
+  const [rawMaxAttempts, setRawMaxAttempts] = useState<string>(String(initialAttempts));
+
+  const [numericErrors, setNumericErrors] = useState<{
+    duration?: string;
+    totalMarks?: string;
+    passMarks?: string;
+    maxAttempts?: string;
+    targetQuestions?: string;
+  }>({});
+
   const [instructions, setInstructions] = useState(initialDraft?.instructions || 'Read every question carefully. Ensure stable connectivity during the session.');
-  const [proctoringRequired, setProctoringRequired] = useState(initialDraft?.proctoringRequired ?? true);
+
+  // Hybrid Proctoring Protocol Configuration
+  const [proctoringMode, setProctoringMode] = useState<ProctoringMode>(
+    initialDraft?.proctoringMode || (initialDraft?.proctoringRequired === false ? 'none' : 'combined')
+  );
+  const [proctoringRequired, setProctoringRequired] = useState<boolean>(
+    initialDraft?.proctoringRequired ?? (initialDraft?.proctoringMode ? initialDraft.proctoringMode !== 'none' : true)
+  );
+  const [jitsiRoomId, setJitsiRoomId] = useState<string>(
+    initialDraft?.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`
+  );
+  const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings>(
+    initialDraft?.proctoringSettings || {
+      camera: true,
+      mic: true,
+      screenShare: false,
+      faceDetection: true,
+      noiseDetection: true,
+      tabSwitchDetection: true,
+    }
+  );
   const [aiGradingEnabled, setAiGradingEnabled] = useState(initialDraft?.aiGradingEnabled ?? true);
 
   // AI Document Upload & AI State
@@ -92,6 +154,27 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const [uploadStageText, setUploadStageText] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Video AI Upload & Processing State
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [videoLanguage, setVideoLanguage] = useState<'auto' | 'en' | 'te'>('auto');
+  const [videoTranscript, setVideoTranscript] = useState<string>('');
+  const [videoSegments, setVideoSegments] = useState<VideoSegmentItem[]>([]);
+  const [isVideoProcessing, setIsVideoProcessing] = useState<boolean>(false);
+  const [videoStageText, setVideoStageText] = useState<string>('');
+  const [videoProgress, setVideoProgress] = useState<number>(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoTranscriptModalOpen, setIsVideoTranscriptModalOpen] = useState<boolean>(false);
+  const [aiBackendStatus, setAiBackendStatus] = useState<{
+    available: boolean;
+    ffmpeg: boolean;
+    whisper: boolean;
+    ollama: boolean;
+    message: string;
+  } | null>(null);
+  const [transcriptSearch, setTranscriptSearch] = useState<string>('');
 
   // AI Configuration State
   const [aiDifficulty, setAiDifficulty] = useState<AssessmentDifficultySetting>('mixed');
@@ -153,10 +236,22 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     if (initialDraft) {
       setTitle(initialDraft.title);
       setCourseId(initialDraft.courseId || defaultCourseId || mockCourses[0]?.id || 'crs-001');
-      setDurationMinutes(initialDraft.durationMinutes || initialDraft.duration || 45);
-      setTotalMarks(initialDraft.totalMarks || 100);
-      setPassingMarks(initialDraft.passingMarks || initialDraft.passmark || 70);
+      const dur = initialDraft.durationMinutes || initialDraft.duration || 45;
+      setDurationMinutes(dur);
+      setRawDuration(String(dur));
+      const tot = initialDraft.totalMarks || 100;
+      setTotalMarks(tot);
+      setRawTotalMarks(String(tot));
+      const pass = initialDraft.passingMarks || initialDraft.passmark || 70;
+      setPassingMarks(pass);
+      setRawPassMarks(String(pass));
+      const att = initialDraft.maxAttempts || 2;
+      setMaxAttempts(att);
+      setRawMaxAttempts(String(att));
       setProctoringRequired(initialDraft.proctoringRequired ?? true);
+      setProctoringMode(initialDraft.proctoringMode || (initialDraft.proctoringRequired === false ? 'none' : 'combined'));
+      setJitsiRoomId(initialDraft.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`);
+      if (initialDraft.proctoringSettings) setProctoringSettings(initialDraft.proctoringSettings);
       setAiGradingEnabled(initialDraft.aiGradingEnabled ?? true);
       if (initialDraft.instructions) setInstructions(initialDraft.instructions);
 
@@ -177,10 +272,35 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         }));
         setQuestions(converted);
         setTargetQuestionCount(converted.length);
+        setRawTargetQuestions(String(converted.length));
         setStep('review_edit');
       }
     }
   }, [initialDraft]);
+
+  // Check Local Python AI backend health on mount
+  useEffect(() => {
+    checkAIServiceHealth().then((status) => {
+      setAiBackendStatus(status);
+    }).catch(() => {
+      setAiBackendStatus({
+        available: false,
+        ffmpeg: false,
+        whisper: false,
+        ollama: false,
+        message: 'Could not connect to local AI service.'
+      });
+    });
+  }, []);
+
+  // Cleanup video object URL on unmount or URL replacement
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+    };
+  }, [videoPreviewUrl]);
 
   if (!isOpen) return null;
 
@@ -543,6 +663,131 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   };
 
   // ==============================================================
+  // VIDEO AI PROCESSING PIPELINE HANDLERS
+  // ==============================================================
+  const handleVideoFileChange = (file?: File) => {
+    if (!file) return;
+    setVideoError(null);
+    const validation = validateVideoFile(file);
+    if (!validation.valid) {
+      setVideoError(validation.error || 'Invalid video file.');
+      return;
+    }
+
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
+    const url = URL.createObjectURL(file);
+    setVideoPreviewUrl(url);
+    setVideoFile(file);
+    setVideoTranscript('');
+    setVideoSegments([]);
+
+    if (!title.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      const capitalized = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+      setTitle(`${capitalized} Video Assessment`);
+    }
+  };
+
+  const handleLoadSampleVideo = async () => {
+    try {
+      setVideoError(null);
+      setIsVideoProcessing(true);
+      setVideoStageText('Loading sample learning video...');
+      setVideoProgress(15);
+      const file = await loadSampleVideoFile();
+      setIsVideoProcessing(false);
+      handleVideoFileChange(file);
+    } catch (err: any) {
+      setIsVideoProcessing(false);
+      setVideoError(err?.message || 'Failed to load sample video.');
+    }
+  };
+
+  const handleRemoveVideo = () => {
+    if (videoPreviewUrl) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+    setVideoFile(null);
+    setVideoPreviewUrl(null);
+    setVideoDuration(0);
+    setVideoTranscript('');
+    setVideoSegments([]);
+    setVideoError(null);
+    if (videoFileInputRef.current) {
+      videoFileInputRef.current.value = '';
+    }
+  };
+
+  const handleGenerateFromVideo = async () => {
+    if (!videoFile) {
+      setVideoError('Please upload or select a learning video first.');
+      return;
+    }
+
+    const count = isCustomCount ? parseInt(customCountInput) || 10 : aiQuestionCount;
+    if (count < 1 || count > MAX_ASSESSMENT_QUESTIONS) {
+      setVideoError(`Question count must be between 1 and ${MAX_ASSESSMENT_QUESTIONS}.`);
+      return;
+    }
+
+    if (questions.length + count > MAX_ASSESSMENT_QUESTIONS) {
+      setVideoError(`Cannot generate ${count} questions. Current assessment has ${questions.length} questions, and maximum capacity is ${MAX_ASSESSMENT_QUESTIONS}.`);
+      return;
+    }
+
+    if (selectedQuestionTypes.length === 0) {
+      setVideoError('Select at least one question type.');
+      return;
+    }
+
+    setIsVideoProcessing(true);
+    setVideoError(null);
+    setVideoProgress(5);
+    setVideoStageText('Uploading video to local AI transcription pipeline...');
+
+    try {
+      const res = await processVideoForAssessment({
+        file: videoFile,
+        questionCount: count,
+        difficulty: aiDifficulty,
+        questionTypes: selectedQuestionTypes,
+        language: videoLanguage,
+        onProgress: (stage, percent) => {
+          setVideoStageText(stage);
+          setVideoProgress(percent);
+        }
+      });
+
+      if (!res.success || !res.questions || res.questions.length === 0) {
+        setVideoError(res.error || 'Video AI question generation failed.');
+        setIsVideoProcessing(false);
+        return;
+      }
+
+      setVideoTranscript(res.transcript);
+      setVideoSegments(res.segments || []);
+
+      const merged = [...questions, ...res.questions];
+      setQuestions(merged);
+
+      const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
+      if (totalPoints > 0) {
+        setTotalMarks(totalPoints);
+        setPassingMarks(Math.round(totalPoints * 0.7));
+      }
+
+      setIsVideoProcessing(false);
+      setStep('review_edit');
+    } catch (err: any) {
+      setVideoError(err?.message || 'Error processing video.');
+      setIsVideoProcessing(false);
+    }
+  };
+
+  // ==============================================================
   // QUESTION LIST ACTIONS
   // ==============================================================
   const handleDeleteQuestion = (id: string) => {
@@ -673,13 +918,49 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
   const handleSyncMarks = () => {
     setTotalMarks(sumOfQuestionMarks);
-    setPassingMarks(Math.round(sumOfQuestionMarks * 0.7));
+    setRawTotalMarks(String(sumOfQuestionMarks));
+    const newPass = Math.round(sumOfQuestionMarks * 0.7);
+    setPassingMarks(newPass);
+    setRawPassMarks(String(newPass));
+    setNumericErrors((prev) => ({ ...prev, totalMarks: undefined, passMarks: undefined }));
   };
 
   // Final Publish or Save Draft Validation
   const handleFinalizeAssessment = (publish: boolean) => {
     if (!title.trim()) {
       alert('Assessment title is required.');
+      return;
+    }
+
+    // Validate numeric fields before saving/publishing
+    const durVal = parseInt(rawDuration, 10);
+    const totVal = parseInt(rawTotalMarks, 10);
+    const passVal = parseInt(rawPassMarks, 10);
+    const attVal = parseInt(rawMaxAttempts, 10);
+    const qCountVal = parseInt(rawTargetQuestions, 10);
+
+    if (isNaN(durVal) || durVal < 1) {
+      alert('Duration must be a positive integer (at least 1 minute).');
+      return;
+    }
+    if (isNaN(totVal) || totVal < 1) {
+      alert('Total Marks must be a positive integer (at least 1 mark).');
+      return;
+    }
+    if (isNaN(passVal) || passVal < 1) {
+      alert('Pass Marks must be at least 1.');
+      return;
+    }
+    if (passVal > totVal) {
+      alert(`Pass Marks (${passVal}) cannot exceed Total Marks (${totVal}).`);
+      return;
+    }
+    if (isNaN(attVal) || attVal < 1) {
+      alert('Max Attempts must be at least 1.');
+      return;
+    }
+    if (isNaN(qCountVal) || qCountVal < 1 || qCountVal > MAX_ASSESSMENT_QUESTIONS) {
+      alert(`Target Questions Limit must be between 1 and ${MAX_ASSESSMENT_QUESTIONS}.`);
       return;
     }
 
@@ -736,13 +1017,16 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       instructions,
       courseId,
       cohortId: 'coh-001',
-      durationMinutes,
-      duration: durationMinutes,
-      totalMarks,
-      passingMarks,
-      passmark: Math.round((passingMarks / totalMarks) * 100),
-      maxAttempts,
-      proctoringRequired,
+      durationMinutes: durVal,
+      duration: durVal,
+      totalMarks: totVal,
+      passingMarks: passVal,
+      passmark: Math.round((passVal / totVal) * 100),
+      maxAttempts: attVal,
+      proctoringRequired: proctoringMode !== 'none',
+      proctoringMode,
+      jitsiRoomId: proctoringMode === 'manual' || proctoringMode === 'combined' ? jitsiRoomId : undefined,
+      proctoringSettings,
       aiGradingEnabled,
       questionIds: convertedQuestions.map((q) => q.id),
       questions: convertedQuestions.map((q) => q.id),
@@ -754,6 +1038,13 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             size: uploadedDoc.size,
             type: uploadedDoc.type,
             extractedWordCount: uploadedDoc.wordCount || 0
+          }
+        : videoFile
+        ? {
+            name: videoFile.name,
+            size: videoFile.size,
+            type: 'video/mp4',
+            extractedWordCount: videoTranscript ? videoTranscript.split(/\s+/).length : 0
           }
         : undefined,
       difficultyDistribution: difficultyBreakdown,
@@ -1075,12 +1366,12 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>2. Generate with AI</h3>
                     </div>
                     <p className="text-muted text-xs" style={{ lineHeight: '1.5', margin: 0 }}>
-                      Upload curriculum document (PDF, DOCX, TXT). Configure difficulty and question types. AI generates questions strictly grounded in document text.
+                      Upload curriculum documents (PDF, DOCX, TXT) or learning videos (MP4, WebM, MOV). Audio is transcribed via Whisper and questions are generated strictly from the content.
                     </p>
                     <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <span className="badge badge-primary text-xs">PDF / DOCX / TXT</span>
-                      <span className="badge badge-draft text-xs">Grounded Citations</span>
-                      <span className="badge badge-active text-xs">Single/Batch Regen</span>
+                      <span className="badge badge-primary text-xs">Documents & Videos</span>
+                      <span className="badge badge-draft text-xs">Whisper Speech-to-Text</span>
+                      <span className="badge badge-active text-xs">Local Pipeline / Ollama</span>
                     </div>
                   </div>
 
@@ -1170,67 +1461,265 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       Target Questions Limit (1 – {MAX_ASSESSMENT_QUESTIONS}) <span className="required">*</span>
                     </label>
                     <input
-                      type="number"
-                      min="1"
-                      max={MAX_ASSESSMENT_QUESTIONS}
-                      className="form-input"
-                      value={targetQuestionCount}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={`form-input ${numericErrors.targetQuestions ? 'input-error' : ''}`}
+                      value={rawTargetQuestions}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1;
-                        setTargetQuestionCount(Math.min(MAX_ASSESSMENT_QUESTIONS, Math.max(1, val)));
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setRawTargetQuestions(val);
+                          if (val !== '') {
+                            const num = parseInt(val, 10);
+                            if (num >= 1 && num <= MAX_ASSESSMENT_QUESTIONS) {
+                              setTargetQuestionCount(num);
+                              setNumericErrors((prev) => ({ ...prev, targetQuestions: undefined }));
+                            } else if (num < 1) {
+                              setNumericErrors((prev) => ({ ...prev, targetQuestions: 'Must be at least 1.' }));
+                            } else {
+                              setNumericErrors((prev) => ({ ...prev, targetQuestions: `Max limit is ${MAX_ASSESSMENT_QUESTIONS}.` }));
+                            }
+                          } else {
+                            setNumericErrors((prev) => ({ ...prev, targetQuestions: 'Question limit is required.' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (rawTargetQuestions === '' || parseInt(rawTargetQuestions, 10) < 1) {
+                          setRawTargetQuestions('10');
+                          setTargetQuestionCount(10);
+                          setNumericErrors((prev) => ({ ...prev, targetQuestions: undefined }));
+                        } else {
+                          const num = Math.min(MAX_ASSESSMENT_QUESTIONS, Math.max(1, parseInt(rawTargetQuestions, 10)));
+                          setTargetQuestionCount(num);
+                          setRawTargetQuestions(String(num));
+                          setNumericErrors((prev) => ({ ...prev, targetQuestions: undefined }));
+                        }
                       }}
                     />
-                    <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-                      Enforces maximum limit of {MAX_ASSESSMENT_QUESTIONS} questions per assessment.
-                    </div>
+                    {numericErrors.targetQuestions ? (
+                      <div style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', fontWeight: 500 }}>
+                        {numericErrors.targetQuestions}
+                      </div>
+                    ) : (
+                      <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
+                        Maximum limit of {MAX_ASSESSMENT_QUESTIONS} questions per assessment.
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '16px' }}>
+                  {/* Duration (Mins) */}
                   <div className="form-group">
-                    <label className="form-label">Duration (Mins)</label>
+                    <label className="form-label">Duration (Mins) <span className="required">*</span></label>
                     <input
-                      type="number"
-                      min="5"
-                      max="360"
-                      className="form-input"
-                      value={durationMinutes}
-                      onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 45)}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={`form-input ${numericErrors.duration ? 'input-error' : ''}`}
+                      value={rawDuration}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setRawDuration(val);
+                          if (val !== '') {
+                            const num = parseInt(val, 10);
+                            if (num >= 1 && num <= 720) {
+                              setDurationMinutes(num);
+                              setNumericErrors((prev) => ({ ...prev, duration: undefined }));
+                            } else if (num < 1) {
+                              setNumericErrors((prev) => ({ ...prev, duration: 'Min 1 minute.' }));
+                            } else {
+                              setNumericErrors((prev) => ({ ...prev, duration: 'Max 720 minutes.' }));
+                            }
+                          } else {
+                            setNumericErrors((prev) => ({ ...prev, duration: 'Duration is required.' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (rawDuration === '' || parseInt(rawDuration, 10) < 1) {
+                          setRawDuration('45');
+                          setDurationMinutes(45);
+                          setNumericErrors((prev) => ({ ...prev, duration: undefined }));
+                        } else {
+                          const num = Math.min(720, Math.max(1, parseInt(rawDuration, 10)));
+                          setDurationMinutes(num);
+                          setRawDuration(String(num));
+                          setNumericErrors((prev) => ({ ...prev, duration: undefined }));
+                        }
+                      }}
                     />
+                    {numericErrors.duration && (
+                      <div style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', fontWeight: 500 }}>
+                        {numericErrors.duration}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Total Marks */}
                   <div className="form-group">
-                    <label className="form-label">Total Marks</label>
+                    <label className="form-label">Total Marks <span className="required">*</span></label>
                     <input
-                      type="number"
-                      min="5"
-                      className="form-input"
-                      value={totalMarks}
-                      onChange={(e) => setTotalMarks(parseInt(e.target.value) || 100)}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={`form-input ${numericErrors.totalMarks ? 'input-error' : ''}`}
+                      value={rawTotalMarks}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setRawTotalMarks(val);
+                          if (val !== '') {
+                            const num = parseInt(val, 10);
+                            if (num >= 1) {
+                              setTotalMarks(num);
+                              const curPass = parseInt(rawPassMarks, 10);
+                              if (!isNaN(curPass) && curPass > num) {
+                                setNumericErrors((prev) => ({
+                                  ...prev,
+                                  totalMarks: undefined,
+                                  passMarks: `Pass marks (${curPass}) cannot exceed total marks (${num}).`
+                                }));
+                              } else {
+                                setNumericErrors((prev) => ({ ...prev, totalMarks: undefined, passMarks: undefined }));
+                              }
+                            } else {
+                              setNumericErrors((prev) => ({ ...prev, totalMarks: 'Must be at least 1.' }));
+                            }
+                          } else {
+                            setNumericErrors((prev) => ({ ...prev, totalMarks: 'Total marks is required.' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (rawTotalMarks === '' || parseInt(rawTotalMarks, 10) < 1) {
+                          setRawTotalMarks('100');
+                          setTotalMarks(100);
+                          setNumericErrors((prev) => ({ ...prev, totalMarks: undefined }));
+                        } else {
+                          const num = parseInt(rawTotalMarks, 10);
+                          setTotalMarks(num);
+                          setRawTotalMarks(String(num));
+                          setNumericErrors((prev) => ({ ...prev, totalMarks: undefined }));
+                        }
+                      }}
                     />
+                    {numericErrors.totalMarks && (
+                      <div style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', fontWeight: 500 }}>
+                        {numericErrors.totalMarks}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Pass Marks */}
                   <div className="form-group">
-                    <label className="form-label">Pass Marks</label>
+                    <label className="form-label">Pass Marks <span className="required">*</span></label>
                     <input
-                      type="number"
-                      min="1"
-                      className="form-input"
-                      value={passingMarks}
-                      onChange={(e) => setPassingMarks(parseInt(e.target.value) || 70)}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={`form-input ${numericErrors.passMarks ? 'input-error' : ''}`}
+                      value={rawPassMarks}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setRawPassMarks(val);
+                          if (val !== '') {
+                            const num = parseInt(val, 10);
+                            const curTotal = parseInt(rawTotalMarks, 10) || totalMarks;
+                            if (num > curTotal) {
+                              setNumericErrors((prev) => ({
+                                ...prev,
+                                passMarks: `Pass marks (${num}) cannot exceed total marks (${curTotal}).`
+                              }));
+                            } else if (num < 1) {
+                              setNumericErrors((prev) => ({ ...prev, passMarks: 'Must be at least 1.' }));
+                            } else {
+                              setPassingMarks(num);
+                              setNumericErrors((prev) => ({ ...prev, passMarks: undefined }));
+                            }
+                          } else {
+                            setNumericErrors((prev) => ({ ...prev, passMarks: 'Pass marks is required.' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        const curTotal = parseInt(rawTotalMarks, 10) || totalMarks;
+                        if (rawPassMarks === '' || parseInt(rawPassMarks, 10) < 1) {
+                          const defPass = Math.min(curTotal, Math.max(1, Math.round(curTotal * 0.7)));
+                          setRawPassMarks(String(defPass));
+                          setPassingMarks(defPass);
+                          setNumericErrors((prev) => ({ ...prev, passMarks: undefined }));
+                        } else {
+                          const num = parseInt(rawPassMarks, 10);
+                          if (num > curTotal) {
+                            setRawPassMarks(String(curTotal));
+                            setPassingMarks(curTotal);
+                            setNumericErrors((prev) => ({ ...prev, passMarks: undefined }));
+                          } else {
+                            setPassingMarks(num);
+                            setRawPassMarks(String(num));
+                            setNumericErrors((prev) => ({ ...prev, passMarks: undefined }));
+                          }
+                        }
+                      }}
                     />
+                    {numericErrors.passMarks && (
+                      <div style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', fontWeight: 500 }}>
+                        {numericErrors.passMarks}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Max Attempts */}
                   <div className="form-group">
-                    <label className="form-label">Max Attempts</label>
+                    <label className="form-label">Max Attempts <span className="required">*</span></label>
                     <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      className="form-input"
-                      value={maxAttempts}
-                      onChange={(e) => setMaxAttempts(parseInt(e.target.value) || 1)}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className={`form-input ${numericErrors.maxAttempts ? 'input-error' : ''}`}
+                      value={rawMaxAttempts}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setRawMaxAttempts(val);
+                          if (val !== '') {
+                            const num = parseInt(val, 10);
+                            if (num >= 1 && num <= 20) {
+                              setMaxAttempts(num);
+                              setNumericErrors((prev) => ({ ...prev, maxAttempts: undefined }));
+                            } else if (num < 1) {
+                              setNumericErrors((prev) => ({ ...prev, maxAttempts: 'Must be at least 1.' }));
+                            } else {
+                              setNumericErrors((prev) => ({ ...prev, maxAttempts: 'Max 20 attempts.' }));
+                            }
+                          } else {
+                            setNumericErrors((prev) => ({ ...prev, maxAttempts: 'Attempts is required.' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (rawMaxAttempts === '' || parseInt(rawMaxAttempts, 10) < 1) {
+                          setRawMaxAttempts('1');
+                          setMaxAttempts(1);
+                          setNumericErrors((prev) => ({ ...prev, maxAttempts: undefined }));
+                        } else {
+                          const num = Math.min(20, Math.max(1, parseInt(rawMaxAttempts, 10)));
+                          setMaxAttempts(num);
+                          setRawMaxAttempts(String(num));
+                          setNumericErrors((prev) => ({ ...prev, maxAttempts: undefined }));
+                        }
+                      }}
                     />
+                    {numericErrors.maxAttempts && (
+                      <div style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '4px', fontWeight: 500 }}>
+                        {numericErrors.maxAttempts}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1245,35 +1734,228 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Proctoring & AI Evaluation Toggles */}
+              {/* Hybrid Proctoring Protocol Configuration */}
               <div
                 style={{
-                  background: 'var(--bg-input)',
+                  background: 'var(--bg-card)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '18px',
                   marginBottom: '24px'
                 }}
               >
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={proctoringRequired}
-                    onChange={(e) => setProctoringRequired(e.target.checked)}
-                    style={{ accentColor: 'var(--primary)', marginTop: '3px' }}
-                  />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Enable Automated Proctoring Protocol</div>
-                    <div className="text-muted text-xs">
-                      Enforces webcam permissions, mic verification, browser tab-focus monitoring, and incident timeline telemetry.
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={18} color="var(--primary)" />
+                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+                      Proctoring & Academic Integrity Protocol
+                    </h4>
+                  </div>
+                  <span className="badge badge-primary text-xs">
+                    {proctoringMode === 'combined'
+                      ? 'Automated + Manual Jitsi'
+                      : proctoringMode === 'automated'
+                      ? 'Automated Signals Only'
+                      : proctoringMode === 'manual'
+                      ? 'Manual Jitsi Proctoring'
+                      : 'No Proctoring'}
+                  </span>
+                </div>
+
+                {/* 4 Proctoring Configuration Choices */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                  {/* 1. Combined (Automated + Manual) */}
+                  <div
+                    onClick={() => {
+                      setProctoringMode('combined');
+                      setProctoringRequired(true);
+                    }}
+                    style={{
+                      background: proctoringMode === 'combined' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
+                      border: proctoringMode === 'combined' ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem' }}>
+                        <Shield size={14} color="var(--primary)" /> Automated + Manual
+                      </div>
+                      <span className="badge badge-completed text-xs" style={{ fontSize: '0.65rem' }}>Recommended</span>
+                    </div>
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
+                      AI webcam presence, audio noise & tab focus checks combined with live Jitsi invigilator monitoring room.
+                    </p>
+                  </div>
+
+                  {/* 2. Automated Proctoring */}
+                  <div
+                    onClick={() => {
+                      setProctoringMode('automated');
+                      setProctoringRequired(true);
+                    }}
+                    style={{
+                      background: proctoringMode === 'automated' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
+                      border: proctoringMode === 'automated' ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                      <Camera size={14} color="var(--primary)" /> Automated Only
+                    </div>
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
+                      Background browser telemetry, webcam validation, audio activity, and tab focus monitoring without live human meeting.
+                    </p>
+                  </div>
+
+                  {/* 3. Manual Proctoring (Jitsi Meet) */}
+                  <div
+                    onClick={() => {
+                      setProctoringMode('manual');
+                      setProctoringRequired(true);
+                    }}
+                    style={{
+                      background: proctoringMode === 'manual' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
+                      border: proctoringMode === 'manual' ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                      <Video size={14} color="var(--primary)" /> Manual (Jitsi Meet)
+                    </div>
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
+                      Live Jitsi video monitoring session where authorized proctors monitor participants and dispatch real-time warnings.
+                    </p>
+                  </div>
+
+                  {/* 4. No Proctoring */}
+                  <div
+                    onClick={() => {
+                      setProctoringMode('none');
+                      setProctoringRequired(false);
+                    }}
+                    style={{
+                      background: proctoringMode === 'none' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-input)',
+                      border: proctoringMode === 'none' ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                      <Lock size={14} color="var(--text-muted)" /> No Proctoring
+                    </div>
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
+                      Standard unmonitored evaluation. Permitted for formative low-stakes practice quizzes and homework.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Granular Telemetry Settings (When Automated or Combined is selected) */}
+                {(proctoringMode === 'automated' || proctoringMode === 'combined') && (
+                  <div
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px 14px',
+                      marginBottom: '14px'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      Automated Signals Telemetry:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '0.825rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={proctoringSettings.camera}
+                          onChange={(e) => setProctoringSettings({ ...proctoringSettings, camera: e.target.checked })}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>Webcam Presence & Video Validation</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={proctoringSettings.mic}
+                          onChange={(e) => setProctoringSettings({ ...proctoringSettings, mic: e.target.checked })}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>Mic Audio & Unusual Noise Activity</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={proctoringSettings.tabSwitchDetection}
+                          onChange={(e) => setProctoringSettings({ ...proctoringSettings, tabSwitchDetection: e.target.checked })}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>Browser Focus & Tab Switch Detection</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={proctoringSettings.screenShare}
+                          onChange={(e) => setProctoringSettings({ ...proctoringSettings, screenShare: e.target.checked })}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>Screen Sharing Requirement</span>
+                      </label>
                     </div>
                   </div>
-                </label>
+                )}
 
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                {/* Jitsi Room Assignment (When Manual or Combined is selected) */}
+                {(proctoringMode === 'manual' || proctoringMode === 'combined') && (
+                  <div
+                    style={{
+                      background: 'rgba(6, 182, 212, 0.05)',
+                      border: '1px solid rgba(6, 182, 212, 0.25)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      marginBottom: '14px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                        Associated Jitsi Monitoring Room
+                      </div>
+                      <div className="text-muted text-xs">
+                        Unique session room: <code style={{ color: 'var(--primary)', fontWeight: 600 }}>{jitsiRoomId}</code> &bull; Authorized invigilators access via Proctoring Console.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                      onClick={() => setJitsiRoomId(`vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`)}
+                      title="Generate new unique room identifier"
+                    >
+                      <RefreshCw size={12} /> Regenerate Room ID
+                    </button>
+                  </div>
+                )}
+
+                {/* AI Evaluation Assistance Toggle */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginTop: '6px' }}>
                   <input
                     type="checkbox"
                     checked={aiGradingEnabled}
@@ -1302,6 +1984,37 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   type="button"
                   className="btn btn-primary"
                   onClick={() => {
+                    const durVal = parseInt(rawDuration, 10);
+                    const totVal = parseInt(rawTotalMarks, 10);
+                    const passVal = parseInt(rawPassMarks, 10);
+                    const attVal = parseInt(rawMaxAttempts, 10);
+                    const qCountVal = parseInt(rawTargetQuestions, 10);
+
+                    if (isNaN(durVal) || durVal < 1) {
+                      alert('Duration must be a positive integer (at least 1 minute).');
+                      return;
+                    }
+                    if (isNaN(totVal) || totVal < 1) {
+                      alert('Total Marks must be a positive integer.');
+                      return;
+                    }
+                    if (isNaN(passVal) || passVal < 1) {
+                      alert('Pass Marks must be at least 1.');
+                      return;
+                    }
+                    if (passVal > totVal) {
+                      alert(`Pass Marks (${passVal}) cannot exceed Total Marks (${totVal}).`);
+                      return;
+                    }
+                    if (isNaN(attVal) || attVal < 1) {
+                      alert('Max Attempts must be at least 1.');
+                      return;
+                    }
+                    if (isNaN(qCountVal) || qCountVal < 1 || qCountVal > MAX_ASSESSMENT_QUESTIONS) {
+                      alert(`Target Questions Limit must be between 1 and ${MAX_ASSESSMENT_QUESTIONS}.`);
+                      return;
+                    }
+
                     if (selectedMode === 'bulk') setStep('bulk_import');
                     else if (selectedMode === 'ai') setStep('ai_config');
                     else setStep('manual_builder');
@@ -2021,153 +2734,574 @@ export const CreateAssessmentModal: React.FC<Props> = ({
           {/* ============================================================== */}
           {step === 'ai_config' && (
             <div>
-              {/* Document Drag and Drop Upload Card */}
-              <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <h4 style={{ fontSize: '0.95rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Upload size={18} color="var(--primary)" />
-                    Upload Learning Document (PDF, DOCX, TXT)
-                  </h4>
-                  {uploadedDoc && (
-                    <span className="badge badge-active text-xs">
-                      <CheckCircle2 size={12} /> {(uploadedDoc.wordCount || 0).toLocaleString()} Words Extracted
-                    </span>
-                  )}
-                </div>
-
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                  onDragLeave={() => setIsDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDragOver(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                      handleAiFileChange(e.dataTransfer.files[0]);
-                    }
-                  }}
-                  onClick={() => aiFileInputRef.current?.click()}
+              {/* AI Source Selector Tabs: Document vs Video */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  background: 'var(--bg-input)',
+                  padding: '6px',
+                  borderRadius: 'var(--radius-lg)',
+                  marginBottom: '20px',
+                  border: '1px solid var(--border-subtle)'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setAiSourceType('document')}
                   style={{
-                    border: isDragOver
-                      ? '2px dashed var(--primary)'
-                      : uploadedDoc
-                      ? '2px solid var(--success-border)'
-                      : '2px dashed var(--border-light)',
-                    background: isDragOver
-                      ? 'rgba(99, 102, 241, 0.08)'
-                      : uploadedDoc
-                      ? 'rgba(16, 185, 129, 0.05)'
-                      : 'var(--bg-input)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '28px 20px',
-                    textAlign: 'center',
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
                     cursor: 'pointer',
+                    background: aiSourceType === 'document' ? 'var(--primary)' : 'transparent',
+                    color: aiSourceType === 'document' ? '#ffffff' : 'var(--text-muted)',
+                    boxShadow: aiSourceType === 'document' ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
                     transition: 'all 0.2s ease'
                   }}
                 >
+                  <FileText size={16} /> Learning Document (PDF, DOCX, TXT)
+                  {uploadedDoc && <CheckCircle2 size={14} color="#ffffff" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAiSourceType('video')}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '10px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    background: aiSourceType === 'video' ? 'var(--primary)' : 'transparent',
+                    color: aiSourceType === 'video' ? '#ffffff' : 'var(--text-muted)',
+                    boxShadow: aiSourceType === 'video' ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Video size={16} /> Learning Video (MP4, WebM, MOV)
+                  <span
+                    style={{
+                      background: aiSourceType === 'video' ? 'rgba(255,255,255,0.25)' : 'rgba(99, 102, 241, 0.15)',
+                      color: aiSourceType === 'video' ? '#ffffff' : 'var(--primary)',
+                      fontSize: '0.7rem',
+                      padding: '2px 7px',
+                      borderRadius: '10px',
+                      fontWeight: 700
+                    }}
+                  >
+                    Local AI
+                  </span>
+                  {videoFile && <CheckCircle2 size={14} color="#ffffff" />}
+                </button>
+              </div>
+
+              {/* 1. DOCUMENT UPLOAD CARD (Active when aiSourceType === 'document') */}
+              {aiSourceType === 'document' && (
+                <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <h4 style={{ fontSize: '0.95rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Upload size={18} color="var(--primary)" />
+                      Upload Learning Document (PDF, DOCX, TXT)
+                    </h4>
+                    {uploadedDoc && (
+                      <span className="badge badge-active text-xs">
+                        <CheckCircle2 size={12} /> {(uploadedDoc.wordCount || 0).toLocaleString()} Words Extracted
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleAiFileChange(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => aiFileInputRef.current?.click()}
+                    style={{
+                      border: isDragOver
+                        ? '2px dashed var(--primary)'
+                        : uploadedDoc
+                        ? '2px solid var(--success-border)'
+                        : '2px dashed var(--border-light)',
+                      background: isDragOver
+                        ? 'rgba(99, 102, 241, 0.08)'
+                        : uploadedDoc
+                        ? 'rgba(16, 185, 129, 0.05)'
+                        : 'var(--bg-input)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '28px 20px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <input
+                      ref={aiFileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleAiFileChange(e.target.files[0]);
+                        }
+                      }}
+                    />
+
+                    {isUploading ? (
+                      <div>
+                        <RefreshCw size={32} className="spin" color="var(--primary)" style={{ margin: '0 auto 12px auto' }} />
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>{uploadStageText}</div>
+                        <div
+                          style={{
+                            width: '260px',
+                            height: '8px',
+                            background: 'var(--border-subtle)',
+                            borderRadius: '4px',
+                            margin: '8px auto',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${uploadProgress}%`,
+                              height: '100%',
+                              background: 'var(--primary)',
+                              transition: 'width 0.3s ease'
+                            }}
+                          />
+                        </div>
+                        <span className="text-muted text-xs">{uploadProgress}% complete</span>
+                      </div>
+                    ) : uploadedDoc ? (
+                      <div>
+                        <div
+                          style={{
+                            width: '44px',
+                            height: '44px',
+                            borderRadius: '50%',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: 'var(--success)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 10px auto'
+                          }}
+                        >
+                          <FileCheck size={24} />
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                          {uploadedDoc.name}
+                        </div>
+                        <div className="text-muted text-xs" style={{ marginBottom: '12px' }}>
+                          {(uploadedDoc.size / 1024).toFixed(1)} KB &bull; {uploadedDoc.type} &bull; {(uploadedDoc.wordCount || 0).toLocaleString()} words &bull; {uploadedDoc.pageCount ? `${uploadedDoc.pageCount} pages` : 'Plain text stream'}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            aiFileInputRef.current?.click();
+                          }}
+                        >
+                          Change Document
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <Upload size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px auto' }} />
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '4px' }}>
+                          Drag & drop curriculum document, or <span style={{ color: 'var(--primary)' }}>browse</span>
+                        </div>
+                        <div className="text-muted text-xs">
+                          Supports PDF (.pdf), Microsoft Word (.docx), and Plain Text (.txt) up to 25 MB
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {uploadError && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '10px 14px',
+                        background: 'var(--danger-bg)',
+                        border: '1px solid var(--danger-border)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--danger)',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <AlertTriangle size={16} />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. VIDEO UPLOAD & PROCESSING CARD (Active when aiSourceType === 'video') */}
+              {aiSourceType === 'video' && (
+                <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', marginBottom: '20px' }}>
+                  {/* Service Connectivity Banner */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: aiBackendStatus?.available ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                      border: aiBackendStatus?.available ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                      borderRadius: 'var(--radius-md)',
+                      marginBottom: '16px',
+                      fontSize: '0.82rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          width: '9px',
+                          height: '9px',
+                          borderRadius: '50%',
+                          background: aiBackendStatus?.available ? 'var(--success)' : 'var(--danger)',
+                          boxShadow: aiBackendStatus?.available ? '0 0 8px rgba(16, 185, 129, 0.8)' : 'none'
+                        }}
+                      />
+                      <span style={{ fontWeight: 600 }}>
+                        {aiBackendStatus?.available
+                          ? 'Local AI Processing Engine: Online & Ready'
+                          : 'Local AI Processing Service: Offline / Connecting'}
+                      </span>
+                      <span className="text-muted text-xs">
+                        ({AI_SERVICE_URL} &bull; FFmpeg &bull; faster-whisper &bull; Ollama)
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                      onClick={() => checkAIServiceHealth().then(setAiBackendStatus)}
+                    >
+                      <RefreshCw size={12} /> Test Ping
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <h4 style={{ fontSize: '0.95rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Video size={18} color="var(--primary)" />
+                      Upload Learning Video (MP4, WebM, MOV)
+                    </h4>
+                    {videoFile && (
+                      <span className="badge badge-active text-xs">
+                        <CheckCircle2 size={12} /> {(videoFile.size / (1024 * 1024)).toFixed(1)} MB Video Ready
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Hidden File Input */}
                   <input
-                    ref={aiFileInputRef}
+                    ref={videoFileInputRef}
                     type="file"
-                    accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                    accept=".mp4,.webm,.mov,.mkv,video/mp4,video/webm,video/quicktime,video/x-matroska"
                     style={{ display: 'none' }}
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
-                        handleAiFileChange(e.target.files[0]);
+                        handleVideoFileChange(e.target.files[0]);
                       }
                     }}
                   />
 
-                  {isUploading ? (
+                  {/* Video Drag & Drop or Video Player Preview */}
+                  {videoFile && videoPreviewUrl ? (
+                    <div
+                      style={{
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: 'var(--bg-input)',
+                        padding: '16px',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                        {/* Video Player */}
+                        <div
+                          style={{
+                            width: '280px',
+                            maxHeight: '170px',
+                            borderRadius: 'var(--radius-md)',
+                            overflow: 'hidden',
+                            background: '#000',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}
+                        >
+                          <video
+                            ref={videoPlayerRef}
+                            src={videoPreviewUrl}
+                            controls
+                            style={{ width: '100%', maxHeight: '170px', objectFit: 'contain' }}
+                            onLoadedMetadata={(e) => {
+                              const el = e.currentTarget;
+                              setVideoDuration(el.duration);
+                            }}
+                          />
+                        </div>
+
+                        {/* Video Info & Controls */}
+                        <div style={{ flex: 1, minWidth: '220px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            <Film size={18} color="var(--primary)" />
+                            <h5 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, wordBreak: 'break-all' }}>
+                              {videoFile.name}
+                            </h5>
+                          </div>
+
+                          <div className="text-muted text-xs" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                            <span>Size: <strong>{(videoFile.size / (1024 * 1024)).toFixed(2)} MB</strong></span>
+                            <span>Format: <strong>{videoFile.type || 'video/mp4'}</strong></span>
+                            {videoDuration > 0 && (
+                              <span>Duration: <strong>{Math.floor(videoDuration / 60)}m {Math.floor(videoDuration % 60)}s</strong></span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-xs"
+                              disabled={isVideoProcessing}
+                              onClick={() => videoFileInputRef.current?.click()}
+                            >
+                              Replace Video
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-xs"
+                              disabled={isVideoProcessing}
+                              onClick={handleRemoveVideo}
+                              style={{ color: 'var(--danger)' }}
+                            >
+                              Remove Video
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                      onDragLeave={() => setIsDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragOver(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleVideoFileChange(e.dataTransfer.files[0]);
+                        }
+                      }}
+                      onClick={() => videoFileInputRef.current?.click()}
+                      style={{
+                        border: isDragOver
+                          ? '2px dashed var(--primary)'
+                          : '2px dashed var(--border-light)',
+                        background: isDragOver
+                          ? 'rgba(99, 102, 241, 0.08)'
+                          : 'var(--bg-input)',
+                        borderRadius: 'var(--radius-lg)',
+                        padding: '28px 20px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      <Video size={40} color="var(--primary)" style={{ margin: '0 auto 10px auto' }} />
+                      <div style={{ fontWeight: 600, fontSize: '0.98rem', marginBottom: '4px' }}>
+                        Drag & drop your lecture video here, or <span style={{ color: 'var(--primary)' }}>browse</span>
+                      </div>
+                      <div className="text-muted text-xs" style={{ marginBottom: '14px' }}>
+                        Supported formats: MP4 (.mp4), WebM (.webm), QuickTime (.mov) &bull; Maximum file size 500 MB
+                      </div>
+
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoadSampleVideo();
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
+                          background: 'rgba(99, 102, 241, 0.12)',
+                          color: 'var(--primary)',
+                          borderRadius: '20px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          border: '1px solid rgba(99, 102, 241, 0.3)'
+                        }}
+                      >
+                        <Play size={13} /> Quick Test: Load Sample Learning Video (Cloud Architecture)
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Language Configuration for Speech Transcription */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '12px',
+                      padding: '14px',
+                      background: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-md)',
+                      marginBottom: '14px'
+                    }}
+                  >
                     <div>
-                      <RefreshCw size={32} className="spin" color="var(--primary)" style={{ margin: '0 auto 12px auto' }} />
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>{uploadStageText}</div>
+                      <label className="form-label text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Languages size={14} color="var(--primary)" />
+                        Lecture Spoken Language
+                      </label>
+                      <select
+                        className="form-select text-xs"
+                        value={videoLanguage}
+                        onChange={(e) => setVideoLanguage(e.target.value as any)}
+                        disabled={isVideoProcessing}
+                      >
+                        <option value="auto">Auto-Detect Spoken Language (Default)</option>
+                        <option value="en">English (en)</option>
+                        <option value="te">Telugu (te)</option>
+                      </select>
+                      <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
+                        faster-whisper transcribes audio with precise sentence timestamps.
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="form-label text-xs">Audio Processing Pipeline</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span className="badge badge-active text-xs" style={{ width: 'fit-content' }}>
+                          FFmpeg 16kHz PCM WAV Extraction
+                        </span>
+                        <span className="badge badge-primary text-xs" style={{ width: 'fit-content' }}>
+                          faster-whisper Small Model
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Real-time Video Processing Pipeline Progress */}
+                  {isVideoProcessing && (
+                    <div
+                      style={{
+                        padding: '16px',
+                        background: 'rgba(99, 102, 241, 0.08)',
+                        border: '1px solid rgba(99, 102, 241, 0.3)',
+                        borderRadius: 'var(--radius-md)',
+                        marginBottom: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <RefreshCw size={16} className="spin" color="var(--primary)" />
+                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)' }}>
+                            {videoStageText || 'Processing video pipeline...'}
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--primary)' }}>
+                          {videoProgress}%
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
                       <div
                         style={{
-                          width: '260px',
+                          width: '100%',
                           height: '8px',
                           background: 'var(--border-subtle)',
                           borderRadius: '4px',
-                          margin: '8px auto',
-                          overflow: 'hidden'
+                          overflow: 'hidden',
+                          marginBottom: '12px'
                         }}
                       >
                         <div
                           style={{
-                            width: `${uploadProgress}%`,
+                            width: `${videoProgress}%`,
                             height: '100%',
-                            background: 'var(--primary)',
-                            transition: 'width 0.3s ease'
+                            background: 'linear-gradient(90deg, var(--primary), var(--accent-cyan))',
+                            transition: 'width 0.4s ease'
                           }}
                         />
                       </div>
-                      <span className="text-muted text-xs">{uploadProgress}% complete</span>
-                    </div>
-                  ) : uploadedDoc ? (
-                    <div>
-                      <div
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          borderRadius: '50%',
-                          background: 'rgba(16, 185, 129, 0.15)',
-                          color: 'var(--success)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          margin: '0 auto 10px auto'
-                        }}
-                      >
-                        <FileCheck size={24} />
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
-                        {uploadedDoc.name}
-                      </div>
-                      <div className="text-muted text-xs" style={{ marginBottom: '12px' }}>
-                        {(uploadedDoc.size / 1024).toFixed(1)} KB &bull; {uploadedDoc.type} &bull; {(uploadedDoc.wordCount || 0).toLocaleString()} words &bull; {uploadedDoc.pageCount ? `${uploadedDoc.pageCount} pages` : 'Plain text stream'}
-                      </div>
-                      <button
-                        type="button"
-                        className="btn btn-secondary text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          aiFileInputRef.current?.click();
-                        }}
-                      >
-                        Change Document
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <Upload size={36} color="var(--text-muted)" style={{ margin: '0 auto 10px auto' }} />
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '4px' }}>
-                        Drag & drop curriculum document, or <span style={{ color: 'var(--primary)' }}>browse</span>
-                      </div>
-                      <div className="text-muted text-xs">
-                        Supports PDF (.pdf), Microsoft Word (.docx), and Plain Text (.txt) up to 25 MB
+
+                      {/* Visual 4-Step Architecture Steps */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', textAlign: 'center' }}>
+                        {[
+                          { num: 1, label: 'Video Upload', active: videoProgress >= 10 },
+                          { num: 2, label: 'Audio Extract', active: videoProgress >= 30 },
+                          { num: 3, label: 'Whisper STT', active: videoProgress >= 60 },
+                          { num: 4, label: 'Question Gen', active: videoProgress >= 85 }
+                        ].map((s) => (
+                          <div
+                            key={s.num}
+                            style={{
+                              padding: '6px 4px',
+                              borderRadius: 'var(--radius-sm)',
+                              background: s.active ? 'rgba(99, 102, 241, 0.18)' : 'var(--bg-input)',
+                              color: s.active ? 'var(--primary)' : 'var(--text-muted)',
+                              fontWeight: s.active ? 700 : 500,
+                              fontSize: '0.72rem'
+                            }}
+                          >
+                            {s.num}. {s.label}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
-                </div>
 
-                {uploadError && (
-                  <div
-                    style={{
-                      marginTop: '12px',
-                      padding: '10px 14px',
-                      background: 'var(--danger-bg)',
-                      border: '1px solid var(--danger-border)',
-                      borderRadius: 'var(--radius-md)',
-                      color: 'var(--danger)',
-                      fontSize: '0.85rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    <AlertTriangle size={16} />
-                    <span>{uploadError}</span>
-                  </div>
-                )}
-              </div>
+                  {videoError && (
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        background: 'var(--danger-bg)',
+                        border: '1px solid var(--danger-border)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--danger)',
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <AlertTriangle size={18} />
+                      <div style={{ flex: 1 }}>{videoError}</div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* AI Generation Settings Card */}
               <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', marginBottom: '20px' }}>
@@ -2357,23 +3491,43 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       View Current Questions ({questions.length})
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={!uploadedDoc || isUploading || isGenerating || remainingCapacity === 0}
-                    onClick={handleGenerateQuestions}
-                    style={{ minWidth: '190px' }}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <RefreshCw size={16} className="spin" /> Generating Questions...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={16} /> Generate Questions with AI
-                      </>
-                    )}
-                  </button>
+                  {aiSourceType === 'document' ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={!uploadedDoc || isUploading || isGenerating || remainingCapacity === 0}
+                      onClick={handleGenerateQuestions}
+                      style={{ minWidth: '190px' }}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <RefreshCw size={16} className="spin" /> Generating Questions...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} /> Generate Questions with AI
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={!videoFile || isVideoProcessing || remainingCapacity === 0}
+                      onClick={handleGenerateFromVideo}
+                      style={{ minWidth: '220px' }}
+                    >
+                      {isVideoProcessing ? (
+                        <>
+                          <RefreshCw size={16} className="spin" /> Transcribing & Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} /> Generate Questions from Video
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2696,14 +3850,25 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     <UploadCloud size={14} color="var(--accent-cyan)" /> Import More (Bulk)
                   </button>
 
-                  {uploadedDoc && (
+                  {(uploadedDoc || videoFile) && (
                     <button
                       type="button"
                       className="btn btn-secondary text-xs"
                       disabled={remainingCapacity === 0}
                       onClick={() => setStep('ai_config')}
                     >
-                      <Sparkles size={14} /> AI Settings & Regen
+                      <Sparkles size={14} /> AI Settings & Add More
+                    </button>
+                  )}
+
+                  {videoSegments.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-xs"
+                      onClick={() => setIsVideoTranscriptModalOpen(true)}
+                      style={{ gap: '6px' }}
+                    >
+                      <FileText size={14} color="var(--primary)" /> View Video Transcript ({videoSegments.length} Segments)
                     </button>
                   )}
                 </div>
@@ -2801,6 +3966,22 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           </span>
                           <span className="badge badge-draft text-xs">{q.points} Marks</span>
                           {q.topic && <span className="text-muted text-xs">&bull; {q.topic}</span>}
+                          {q.sourceSegment && (
+                            <span
+                              className="badge text-xs"
+                              style={{
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: 'var(--primary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                border: '1px solid rgba(99, 102, 241, 0.3)'
+                              }}
+                              title="Verified source timestamp in video lecture"
+                            >
+                              <Clock size={11} /> {q.sourceSegment}
+                            </span>
+                          )}
                           {hasMissingCorrect && (
                             <span className="badge badge-warning text-xs">
                               <AlertTriangle size={11} /> Missing Correct Answer
@@ -3012,17 +4193,32 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                             </div>
                           )}
 
-                          <div className="form-group" style={{ marginBottom: '8px' }}>
-                            <label className="form-label text-xs">Explanation / Rationale</label>
-                            <input
-                              type="text"
-                              className="form-input text-xs"
-                              value={q.explanation}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setQuestions(questions.map((item) => (item.id === q.id ? { ...item, explanation: val } : item)));
-                              }}
-                            />
+                          <div className="grid-2" style={{ gap: '10px', marginBottom: '8px' }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label text-xs">Explanation / Rationale</label>
+                              <input
+                                type="text"
+                                className="form-input text-xs"
+                                value={q.explanation}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setQuestions(questions.map((item) => (item.id === q.id ? { ...item, explanation: val } : item)));
+                                }}
+                              />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label className="form-label text-xs">Source Video Segment / Citation</label>
+                              <input
+                                type="text"
+                                className="form-input text-xs"
+                                placeholder="e.g. [00:15 - 00:30]"
+                                value={q.sourceSegment || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setQuestions(questions.map((item) => (item.id === q.id ? { ...item, sourceSegment: val } : item)));
+                                }}
+                              />
+                            </div>
                           </div>
 
                           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -3075,9 +4271,24 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                             </div>
                           )}
 
-                          {q.explanation && (
-                            <div className="text-muted text-xs" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' }}>
-                              <strong>Rationale:</strong> {q.explanation}
+                          {(q.explanation || q.sourceSegment) && (
+                            <div className="text-muted text-xs" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                              {q.explanation && <span><strong>Rationale:</strong> {q.explanation}</span>}
+                              {q.sourceSegment && (
+                                <span
+                                  className="badge text-xs"
+                                  style={{
+                                    background: 'rgba(99, 102, 241, 0.12)',
+                                    color: 'var(--primary)',
+                                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Clock size={11} /> Video Segment: {q.sourceSegment}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -3413,6 +4624,126 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   onClick={() => setIsPreviewOpen(false)}
                 >
                   Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Full Video Transcript & Timestamps Review */}
+        {isVideoTranscriptModalOpen && (
+          <div
+            className="modal-overlay"
+            style={{ zIndex: 1500 }}
+            onClick={() => setIsVideoTranscriptModalOpen(false)}
+          >
+            <div
+              className="modal-card"
+              style={{ maxWidth: '800px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileText size={20} color="var(--primary)" />
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>
+                      Video Lecture Transcript & Timestamps
+                    </h3>
+                    <div className="text-muted text-xs">
+                      {videoFile?.name || 'Uploaded Video'} &bull; Transcribed via faster-whisper &bull; {videoSegments.length} segments
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsVideoTranscriptModalOpen(false)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Search
+                      size={15}
+                      style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
+                    />
+                    <input
+                      type="text"
+                      className="form-input text-xs"
+                      style={{ paddingLeft: '32px' }}
+                      placeholder="Search lecture words or concepts in transcript..."
+                      value={transcriptSearch}
+                      onChange={(e) => setTranscriptSearch(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-xs"
+                    onClick={() => {
+                      if (videoTranscript) {
+                        navigator.clipboard.writeText(videoTranscript);
+                        alert('Full transcript copied to clipboard!');
+                      }
+                    }}
+                  >
+                    Copy Transcript
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {videoSegments
+                    .filter((seg) => !transcriptSearch.trim() || seg.text.toLowerCase().includes(transcriptSearch.toLowerCase()))
+                    .map((seg) => (
+                      <div
+                        key={seg.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                          padding: '10px 12px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <span
+                          className="badge text-xs"
+                          style={{
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            color: 'var(--primary)',
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {seg.timestampBadge}
+                        </span>
+                        <div style={{ flex: 1, lineHeight: '1.5' }}>
+                          {seg.text}
+                        </div>
+                      </div>
+                    ))}
+                  {videoSegments.length === 0 && (
+                    <div className="text-muted text-xs" style={{ textAlign: 'center', padding: '30px' }}>
+                      No segment data available.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="text-muted text-xs">
+                  Generated questions are strictly grounded in these transcript segments.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setIsVideoTranscriptModalOpen(false)}
+                >
+                  Close Transcript
                 </button>
               </div>
             </div>

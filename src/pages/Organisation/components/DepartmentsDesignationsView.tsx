@@ -345,31 +345,33 @@ export const DepartmentsDesignationsView: React.FC = () => {
       >
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-card)',
             borderRadius: '14px',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--border-subtle)',
             padding: '1.25rem',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <span
             style={{
               fontSize: '0.75rem',
-              fontWeight: 600,
-              color: '#64748b',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
               display: 'block',
               marginBottom: '0.25rem',
+              letterSpacing: '0.04em',
             }}
           >
             DEPARTMENT HIERARCHY
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
             {departments.length}{' '}
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>Units</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>Units</span>
           </div>
           <div
             style={{
               fontSize: '0.75rem',
-              color: '#059669',
+              color: 'var(--brand-blue)',
               fontWeight: 600,
               display: 'flex',
               gap: '0.5rem',
@@ -384,65 +386,70 @@ export const DepartmentsDesignationsView: React.FC = () => {
 
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-card)',
             borderRadius: '14px',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--border-subtle)',
             padding: '1.25rem',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <span
             style={{
               fontSize: '0.75rem',
-              fontWeight: 600,
-              color: '#64748b',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
               display: 'block',
               marginBottom: '0.25rem',
+              letterSpacing: '0.04em',
             }}
           >
             MAIN DIVISIONS
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
             {totalMainCount}{' '}
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#64748b' }}>Departments</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>Departments</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Primary operational organizational branches
           </span>
         </div>
 
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--bg-card)',
             borderRadius: '14px',
-            border: '1px solid #e2e8f0',
+            border: '1px solid var(--border-subtle)',
             padding: '1.25rem',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <span
             style={{
               fontSize: '0.75rem',
-              fontWeight: 600,
-              color: '#64748b',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
               display: 'block',
               marginBottom: '0.25rem',
+              letterSpacing: '0.04em',
             }}
           >
             ORGANIZATION HEADCOUNT
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#059669' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-indigo)' }}>
             {companyEmployees.length} Staff
           </div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Active workforce allocation</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Active workforce allocation</span>
         </div>
       </div>
 
       {/* Main Card */}
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-subtle)',
           padding: '1.5rem',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         {/* Header and Actions */}
@@ -451,7 +458,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #e2e8f0',
+            borderBottom: '1px solid var(--border-subtle)',
             paddingBottom: '1rem',
             marginBottom: '1.25rem',
             flexWrap: 'wrap',
@@ -464,18 +471,18 @@ export const DepartmentsDesignationsView: React.FC = () => {
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                background: '#ecfdf5',
-                border: '1px solid #d1fae5',
+                background: 'rgba(37, 99, 235, 0.08)',
+                border: '1px solid rgba(37, 99, 235, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <FolderTree size={20} color="#059669" />
+              <FolderTree size={20} color="var(--brand-blue)" />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
                   Departments & Hierarchy
                 </h3>
                 <span
@@ -484,15 +491,15 @@ export const DepartmentsDesignationsView: React.FC = () => {
                     fontWeight: 700,
                     padding: '0.15rem 0.5rem',
                     borderRadius: '999px',
-                    background: '#f1f5f9',
-                    color: '#475569',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   {departments.length} Units
                 </span>
               </div>
-              <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+              <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Manage main divisions, nested sub-departments, and reporting lines
               </p>
             </div>
@@ -501,42 +508,17 @@ export const DepartmentsDesignationsView: React.FC = () => {
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
               onClick={() => openAddDeptModal(undefined, 'sub')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.5rem 0.9rem',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#334155',
-                fontSize: '0.825rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
               title="Add a nested sub-department under a parent"
             >
-              <GitFork size={14} color="#059669" /> + Sub-Department
+              <GitFork size={14} color="var(--brand-indigo)" /> + Sub-Department
             </button>
 
             <button
               type="button"
+              className="btn btn-primary btn-sm"
               onClick={() => openAddDeptModal(undefined, 'main')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.5rem 1rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: '#059669',
-                color: '#fff',
-                fontSize: '0.825rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(5, 150, 105, 0.2)',
-              }}
             >
               <PlusCircle size={15} /> Create Department
             </button>
@@ -720,9 +702,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                     marginTop: '2px',
                                     padding: '0.2rem',
                                     borderRadius: '5px',
-                                    border: '1px solid #cbd5e1',
-                                    background: isExpanded ? '#ecfdf5' : '#ffffff',
-                                    color: isExpanded ? '#059669' : '#64748b',
+                                    border: '1px solid var(--border-subtle)',
+                                    background: isExpanded ? 'rgba(37, 99, 235, 0.08)' : 'var(--bg-card)',
+                                    color: isExpanded ? 'var(--brand-blue)' : 'var(--text-muted)',
                                     cursor: 'pointer',
                                     display: 'inline-flex',
                                     alignItems: 'center',
@@ -754,7 +736,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
 
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                  <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.875rem' }}>
+                                  <span style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.875rem' }}>
                                     {mainDept.name}
                                   </span>
                                   <span
@@ -763,9 +745,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                       fontWeight: 700,
                                       padding: '0.1rem 0.4rem',
                                       borderRadius: '4px',
-                                      background: '#ecfdf5',
-                                      color: '#059669',
-                                      border: '1px solid #a7f3d0',
+                                      background: 'rgba(37, 99, 235, 0.08)',
+                                      color: 'var(--brand-blue)',
+                                      border: '1px solid rgba(37, 99, 235, 0.2)',
                                     }}
                                   >
                                     {mainDept.code}
@@ -776,7 +758,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                   <div
                                     style={{
                                       fontSize: '0.72rem',
-                                      color: '#64748b',
+                                      color: 'var(--text-muted)',
                                       marginTop: '0.2rem',
                                       maxWidth: '420px',
                                     }}
@@ -789,7 +771,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                   <div
                                     style={{
                                       fontSize: '0.7rem',
-                                      color: '#059669',
+                                      color: 'var(--brand-indigo)',
                                       fontWeight: 600,
                                       marginTop: '0.3rem',
                                       display: 'inline-flex',
@@ -815,12 +797,12 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                 fontWeight: 700,
                                 padding: '0.2rem 0.5rem',
                                 borderRadius: '6px',
-                                background: '#f1f5f9',
-                                color: '#334155',
-                                border: '1px solid #e2e8f0',
+                                background: 'rgba(37, 99, 235, 0.06)',
+                                color: 'var(--brand-blue)',
+                                border: '1px solid rgba(37, 99, 235, 0.18)',
                               }}
                             >
-                              <Layers size={12} color="#059669" /> Main Dept
+                              <Layers size={12} color="var(--brand-blue)" /> Main Dept
                             </span>
                           </td>
 
@@ -838,16 +820,16 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                   }}
                                 />
                                 <div>
-                                  <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
                                     {headEmp.firstName} {headEmp.lastName}
                                   </div>
-                                  <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                                     {headEmp.email}
                                   </span>
                                 </div>
                               </div>
                             ) : (
-                              <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>Unassigned</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Unassigned</span>
                             )}
                           </td>
 
@@ -859,13 +841,13 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                   alignItems: 'center',
                                   gap: '0.35rem',
                                   fontWeight: 700,
-                                  color: '#0f172a',
+                                  color: 'var(--text-main)',
                                 }}
                               >
-                                <Users size={14} color="#64748b" /> {direct} Direct
+                                <Users size={14} color="var(--text-muted)" /> {direct} Direct
                               </span>
                               {subCount > 0 && (
-                                <span style={{ fontSize: '0.68rem', color: '#059669', fontWeight: 600 }}>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--brand-indigo)', fontWeight: 600 }}>
                                   ({total} across division)
                                 </span>
                               )}
@@ -882,8 +864,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                 fontWeight: 700,
                                 padding: '0.15rem 0.45rem',
                                 borderRadius: '999px',
-                                background: '#ecfdf5',
-                                color: '#059669',
+                                background: 'var(--success-bg)',
+                                color: 'var(--success)',
+                                border: '1px solid var(--success-border)',
                               }}
                             >
                               <span
@@ -891,7 +874,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                   width: '5px',
                                   height: '5px',
                                   borderRadius: '50%',
-                                  background: '#059669',
+                                  background: 'var(--success)',
                                 }}
                               />
                               Active
@@ -914,9 +897,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                 style={{
                                   padding: '0.35rem 0.6rem',
                                   borderRadius: '6px',
-                                  border: '1px solid #d1fae5',
-                                  background: '#ecfdf5',
-                                  color: '#059669',
+                                  border: '1px solid rgba(37, 99, 235, 0.22)',
+                                  background: 'rgba(37, 99, 235, 0.08)',
+                                  color: 'var(--brand-blue)',
                                   fontSize: '0.73rem',
                                   fontWeight: 700,
                                   cursor: 'pointer',
@@ -934,9 +917,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                 style={{
                                   padding: '0.35rem 0.75rem',
                                   borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
-                                  background: '#fff',
-                                  color: '#475569',
+                                  border: '1px solid var(--border-subtle)',
+                                  background: 'var(--bg-card)',
+                                  color: 'var(--text-main)',
                                   fontSize: '0.75rem',
                                   fontWeight: 600,
                                   cursor: 'pointer',
@@ -962,8 +945,8 @@ export const DepartmentsDesignationsView: React.FC = () => {
                               <tr
                                 key={subDept.id}
                                 style={{
-                                  borderBottom: '1px solid #f1f5f9',
-                                  background: '#f8fafc',
+                                  borderBottom: '1px solid var(--border-subtle)',
+                                  background: 'rgba(37, 99, 235, 0.02)',
                                 }}
                               >
                                 <td style={{ padding: '0.75rem 1rem 0.75rem 2.8rem' }}>
@@ -978,7 +961,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                     {/* Tree connector indicator */}
                                     <span
                                       style={{
-                                        color: '#059669',
+                                        color: 'var(--brand-indigo-soft)',
                                         fontSize: '0.9rem',
                                         lineHeight: 1,
                                         marginTop: '1px',
@@ -1061,9 +1044,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                       fontWeight: 700,
                                       padding: '0.15rem 0.45rem',
                                       borderRadius: '6px',
-                                      background: '#f0fdf4',
-                                      color: '#15803d',
-                                      border: '1px solid #bbf7d0',
+                                      background: 'rgba(84, 71, 255, 0.08)',
+                                      color: 'var(--brand-indigo, #5447FF)',
+                                      border: '1px solid rgba(84, 71, 255, 0.2)',
                                     }}
                                   >
                                     <GitFork size={11} /> Sub-Unit
@@ -1274,8 +1257,8 @@ export const DepartmentsDesignationsView: React.FC = () => {
                       style={{
                         padding: '0.85rem',
                         borderRadius: '10px',
-                        border: deptMode === 'main' ? '2px solid #059669' : '1px solid #cbd5e1',
-                        background: deptMode === 'main' ? '#ecfdf5' : '#ffffff',
+                        border: deptMode === 'main' ? '2px solid var(--brand-blue)' : '1px solid var(--border-subtle)',
+                        background: deptMode === 'main' ? 'rgba(37, 99, 235, 0.06)' : 'var(--bg-card)',
                         cursor: 'pointer',
                         textAlign: 'left',
                         position: 'relative',
@@ -1296,22 +1279,22 @@ export const DepartmentsDesignationsView: React.FC = () => {
                             alignItems: 'center',
                             gap: '0.4rem',
                             fontWeight: 700,
-                            color: deptMode === 'main' ? '#065f46' : '#1e293b',
+                            color: deptMode === 'main' ? 'var(--brand-blue)' : 'var(--text-main)',
                             fontSize: '0.85rem',
                           }}
                         >
-                          <Building size={16} color={deptMode === 'main' ? '#059669' : '#64748b'} />
+                          <Building size={16} color={deptMode === 'main' ? 'var(--brand-blue)' : 'var(--text-muted)'} />
                           Create Main Department
                         </div>
                         {deptMode === 'main' && (
-                          <CheckCircle2 size={16} color="#059669" />
+                          <CheckCircle2 size={16} color="var(--brand-blue)" />
                         )}
                       </div>
                       <p
                         style={{
                           margin: 0,
                           fontSize: '0.72rem',
-                          color: deptMode === 'main' ? '#047857' : '#64748b',
+                          color: deptMode === 'main' ? 'var(--brand-blue-deep)' : 'var(--text-muted)',
                           lineHeight: 1.3,
                         }}
                       >
@@ -1331,8 +1314,8 @@ export const DepartmentsDesignationsView: React.FC = () => {
                       style={{
                         padding: '0.85rem',
                         borderRadius: '10px',
-                        border: deptMode === 'sub' ? '2px solid #059669' : '1px solid #cbd5e1',
-                        background: deptMode === 'sub' ? '#ecfdf5' : '#ffffff',
+                        border: deptMode === 'sub' ? '2px solid var(--brand-indigo)' : '1px solid var(--border-subtle)',
+                        background: deptMode === 'sub' ? 'rgba(84, 71, 255, 0.06)' : 'var(--bg-card)',
                         cursor: 'pointer',
                         textAlign: 'left',
                         position: 'relative',
@@ -1353,22 +1336,22 @@ export const DepartmentsDesignationsView: React.FC = () => {
                             alignItems: 'center',
                             gap: '0.4rem',
                             fontWeight: 700,
-                            color: deptMode === 'sub' ? '#065f46' : '#1e293b',
+                            color: deptMode === 'sub' ? 'var(--brand-indigo)' : 'var(--text-main)',
                             fontSize: '0.85rem',
                           }}
                         >
-                          <GitFork size={16} color={deptMode === 'sub' ? '#059669' : '#64748b'} />
+                          <GitFork size={16} color={deptMode === 'sub' ? 'var(--brand-indigo)' : 'var(--text-muted)'} />
                           Create Sub-Department
                         </div>
                         {deptMode === 'sub' && (
-                          <CheckCircle2 size={16} color="#059669" />
+                          <CheckCircle2 size={16} color="var(--brand-indigo)" />
                         )}
                       </div>
                       <p
                         style={{
                           margin: 0,
                           fontSize: '0.72rem',
-                          color: deptMode === 'sub' ? '#047857' : '#64748b',
+                          color: deptMode === 'sub' ? 'var(--brand-indigo)' : 'var(--text-muted)',
                           lineHeight: 1.3,
                         }}
                       >
@@ -1381,8 +1364,8 @@ export const DepartmentsDesignationsView: React.FC = () => {
                 /* Editing Mode Notice */
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: '8px',
                     padding: '0.75rem 1rem',
                     marginBottom: '1.25rem',
@@ -1393,17 +1376,17 @@ export const DepartmentsDesignationsView: React.FC = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {deptMode === 'sub' ? (
-                      <GitFork size={16} color="#059669" />
+                      <GitFork size={16} color="var(--brand-indigo)" />
                     ) : (
-                      <Layers size={16} color="#059669" />
+                      <Layers size={16} color="var(--brand-blue)" />
                     )}
-                    <span style={{ fontSize: '0.825rem', fontWeight: 600, color: '#1e293b' }}>
+                    <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-main)' }}>
                       Current Classification:{' '}
                       <strong>{deptMode === 'sub' ? 'Sub-Department' : 'Main Department'}</strong>
                     </span>
                   </div>
                   {deptMode === 'sub' && (
-                    <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                       You can modify its parent below
                     </span>
                   )}
@@ -1414,8 +1397,8 @@ export const DepartmentsDesignationsView: React.FC = () => {
               {deptMode === 'sub' && (
                 <div
                   style={{
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: '12px',
                     padding: '1rem',
                     marginBottom: '1.25rem',
@@ -1437,13 +1420,13 @@ export const DepartmentsDesignationsView: React.FC = () => {
                       style={{
                         fontSize: '0.78rem',
                         fontWeight: 700,
-                        color: '#0f172a',
+                        color: 'var(--text-main)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.35rem',
                       }}
                     >
-                      <FolderTree size={14} color="#059669" /> Parent Department *
+                      <FolderTree size={14} color="var(--brand-blue)" /> Parent Department *
                     </label>
 
                     {/* Back option to return to main department mode */}
@@ -1457,7 +1440,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#059669',
+                          color: 'var(--brand-blue)',
                           fontSize: '0.75rem',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -1589,10 +1572,10 @@ export const DepartmentsDesignationsView: React.FC = () => {
                       {/* Hierarchy Breadcrumb Preview */}
                       <div
                         style={{
-                          background: '#ecfdf5',
+                          background: 'rgba(37, 99, 235, 0.05)',
                           borderRadius: '8px',
                           padding: '0.6rem 0.85rem',
-                          border: '1px solid #a7f3d0',
+                          border: '1px solid rgba(37, 99, 235, 0.2)',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '0.4rem',
@@ -1600,18 +1583,18 @@ export const DepartmentsDesignationsView: React.FC = () => {
                           flexWrap: 'wrap',
                         }}
                       >
-                        <span style={{ color: '#047857', fontWeight: 600 }}>
+                        <span style={{ color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>
                           Hierarchy Path:
                         </span>
                         <span
                           style={{
                             fontWeight: 700,
-                            color: selectedParentDept ? '#065f46' : '#94a3b8',
+                            color: selectedParentDept ? 'var(--brand-blue-deep, #1D4ED8)' : '#94a3b8',
                           }}
                         >
                           {selectedParentDept ? selectedParentDept.name : '[Select Parent]'}
                         </span>
-                        <span style={{ color: '#059669', fontWeight: 800 }}>→</span>
+                        <span style={{ color: 'var(--brand-indigo, #5447FF)', fontWeight: 800 }}>→</span>
                         <span
                           style={{
                             fontWeight: 700,
@@ -1841,7 +1824,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                     background:
                       deptMode === 'sub' && validParentCandidates.length === 0
                         ? '#94a3b8'
-                        : '#059669',
+                        : 'var(--brand-blue, #2563EB)',
                     color: '#fff',
                     fontSize: '0.85rem',
                     fontWeight: 700,
@@ -1849,7 +1832,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                       deptMode === 'sub' && validParentCandidates.length === 0
                         ? 'not-allowed'
                         : 'pointer',
-                    boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)',
+                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                   }}
                 >
                   {editingDept

@@ -1,16 +1,63 @@
 import React, { useState } from 'react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 import { mockProctoringIncidents } from '../../data/mockData';
 import { ProctoringIncident } from '../../types';
+import { JitsiProctorDashboard } from './components/JitsiProctorDashboard';
 import {
   Shield, Eye, AlertTriangle, CheckCircle2, Clock, X,
-  Filter, UserCheck, ShieldAlert, FileText, Camera, Video, Monitor
+  Filter, UserCheck, ShieldAlert, FileText, Camera, Video, Monitor, Lock
 } from 'lucide-react';
 
 export const ProctoringPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as 'live_monitor' | 'queue' | 'policy' | 'appeals' | null;
+  const assessmentIdParam = searchParams.get('assessmentId') || undefined;
+
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
+
   const [incidents, setIncidents] = useState<ProctoringIncident[]>(mockProctoringIncidents);
   const [selectedIncident, setSelectedIncident] = useState<ProctoringIncident | null>(null);
-  const [activeTab, setActiveTab] = useState<'queue' | 'policy' | 'appeals'>('queue');
+  const [activeTab, setActiveTab] = useState<'live_monitor' | 'queue' | 'policy' | 'appeals'>(
+    tabParam || 'live_monitor'
+  );
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+
+  // Security Check: Students are not permitted to access proctor dashboard or other students' monitoring details
+  if (isLearner) {
+    return (
+      <div style={{ maxWidth: '640px', margin: '60px auto', textAlign: 'center' }}>
+        <div className="card" style={{ padding: '36px' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'var(--danger-bg)',
+            color: 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px'
+          }}>
+            <Lock size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Authorized Personnel Only</h2>
+          <p className="text-secondary text-sm" style={{ marginBottom: '24px', lineHeight: 1.6 }}>
+            The Proctoring Center and Live Jitsi Monitoring Console are restricted to authorized exam creators, assigned proctors, and institution administrators. Student accounts cannot view peer session telemetry, moderation tools, or incident logs.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <Link to="/my-assessments" className="btn btn-primary">
+              Return to My Assessments
+            </Link>
+            <Link to="/dashboard" className="btn btn-secondary">
+              Go to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const filteredIncidents = incidents.filter((i) => {
     if (severityFilter === 'all') return true;
@@ -22,12 +69,21 @@ export const ProctoringPage: React.FC = () => {
     setSelectedIncident(null);
   };
 
+  const handleTabChange = (tab: 'live_monitor' | 'queue' | 'policy' | 'appeals') => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tab);
+      return next;
+    });
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Proctoring Center & Incident Review</h1>
-          <p className="text-secondary text-sm">Privacy-first signal verification, false-positive protection, and human evidence moderation</p>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Proctoring Center & Live Monitor</h1>
+          <p className="text-secondary text-sm">Real-time Jitsi video stream observation, telemetry indicators, false-alarm dismissal, and proctor interventions</p>
         </div>
 
         <div style={{
@@ -48,29 +104,41 @@ export const ProctoringPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="tabs-nav">
+      <div className="tabs-nav" style={{ marginBottom: '24px' }}>
+        <button
+          className={`tab-btn ${activeTab === 'live_monitor' ? 'active' : ''}`}
+          onClick={() => handleTabChange('live_monitor')}
+        >
+          <Video size={16} />
+          Live Proctoring & Jitsi Room Monitor
+        </button>
         <button
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
-          onClick={() => setActiveTab('queue')}
+          onClick={() => handleTabChange('queue')}
         >
           <ShieldAlert size={16} />
           Flagged Incident Review Queue ({incidents.filter((i) => i.status !== 'cleared').length})
         </button>
         <button
           className={`tab-btn ${activeTab === 'policy' ? 'active' : ''}`}
-          onClick={() => setActiveTab('policy')}
+          onClick={() => handleTabChange('policy')}
         >
           <Shield size={16} />
           Proctoring & Privacy Policies
         </button>
         <button
           className={`tab-btn ${activeTab === 'appeals' ? 'active' : ''}`}
-          onClick={() => setActiveTab('appeals')}
+          onClick={() => handleTabChange('appeals')}
         >
           <UserCheck size={16} />
           Learner Appeals (1)
         </button>
       </div>
+
+      {/* TAB 1: LIVE PROCTORING & JITSI MONITOR */}
+      {activeTab === 'live_monitor' && (
+        <JitsiProctorDashboard initialAssessmentId={assessmentIdParam} />
+      )}
 
       {activeTab === 'queue' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

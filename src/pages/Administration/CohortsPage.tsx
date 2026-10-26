@@ -251,7 +251,7 @@ export const CohortsPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              boxShadow: '0 4px 14px var(--primary-light)'
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)'
             }}
           >
             <Plus size={16} /> Create Class / Cohort

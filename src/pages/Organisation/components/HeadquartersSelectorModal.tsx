@@ -266,8 +266,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     style={{
                       padding: '0.85rem 1rem',
                       borderRadius: '10px',
-                      border: isSelected ? '2px solid #059669' : '1px solid #e2e8f0',
-                      background: isSelected ? '#f0fdf4' : isInactive ? '#f8fafc' : '#ffffff',
+                      border: isSelected ? '2px solid var(--brand-blue, #2563EB)' : '1px solid #e2e8f0',
+                      background: isSelected ? 'rgba(37, 99, 235, 0.05)' : isInactive ? '#f8fafc' : '#ffffff',
                       cursor: isInactive ? 'not-allowed' : 'pointer',
                       opacity: isInactive ? 0.6 : 1,
                       display: 'flex',
@@ -283,7 +283,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                         checked={isSelected}
                         disabled={isInactive}
                         onChange={() => setSelectedBranchId(branch.id)}
-                        style={{ marginTop: '0.2rem', accentColor: '#059669', cursor: 'pointer' }}
+                        style={{ marginTop: '0.2rem', accentColor: 'var(--brand-blue, #2563EB)', cursor: 'pointer' }}
                       />
                       <div>
                         <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
@@ -327,7 +327,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                       {isInactive ? (
                         <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700 }}>Inactive</span>
                       ) : isSelected ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#059669', fontWeight: 800, fontSize: '0.75rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--brand-blue, #2563EB)', fontWeight: 800, fontSize: '0.75rem' }}>
                           <Check size={14} /> Selected
                         </span>
                       ) : (
@@ -360,7 +360,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
               }}
             >
               <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <ShieldCheck size={14} color="#059669" /> Selected Candidate Office:
+                <ShieldCheck size={14} color="var(--brand-blue, #2563EB)" /> Selected Candidate Office:
               </div>
               <div style={{ color: '#334155' }}>
                 <strong>{selectedBranch.name}</strong> ({selectedBranch.code}) &bull;{' '}
@@ -401,12 +401,13 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     style={{
                       padding: '0.35rem 0.75rem',
                       borderRadius: '6px',
-                      background: '#059669',
+                      background: 'var(--brand-blue, #2563EB)',
                       color: '#fff',
                       border: 'none',
                       fontSize: '0.75rem',
                       fontWeight: 700,
                       cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                     }}
                   >
                     Yes, Confirm & Set as HQ
@@ -478,7 +479,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                   background:
                     !selectedBranchId || selectedBranchId === currentHq?.id || selectedBranch?.status === 'Inactive'
                       ? '#cbd5e1'
-                      : '#059669',
+                      : 'var(--brand-blue, #2563EB)',
                   color: '#ffffff',
                   fontSize: '0.8rem',
                   fontWeight: 700,
@@ -486,6 +487,10 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     !selectedBranchId || selectedBranchId === currentHq?.id || selectedBranch?.status === 'Inactive'
                       ? 'not-allowed'
                       : 'pointer',
+                  boxShadow:
+                    !selectedBranchId || selectedBranchId === currentHq?.id || selectedBranch?.status === 'Inactive'
+                      ? 'none'
+                      : '0 2px 4px rgba(37, 99, 235, 0.25)',
                 }}
               >
                 {selectedBranchId === currentHq?.id ? 'Already Current HQ' : 'Designate as Headquarters'}

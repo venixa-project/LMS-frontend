@@ -227,11 +227,11 @@ export const CompanyProfileView: React.FC = () => {
       {/* Header Banner Card */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+          background: 'var(--bg-card, #ffffff)',
           borderRadius: '16px',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-subtle, #e2e8f0)',
           padding: '1.75rem',
-          boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)',
+          boxShadow: 'var(--shadow-sm, 0 4px 16px rgba(15, 23, 42, 0.04))',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
@@ -241,15 +241,15 @@ export const CompanyProfileView: React.FC = () => {
                 width: '68px',
                 height: '68px',
                 borderRadius: '14px',
-                background: (isEditing ? logo : currentCompany.logo) ? '#ffffff' : '#ecfdf5',
-                border: '2px solid #059669',
+                background: (isEditing ? logo : currentCompany.logo) ? '#ffffff' : 'rgba(37, 99, 235, 0.06)',
+                border: '2px solid var(--brand-blue, #2563EB)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#059669',
+                color: 'var(--brand-blue, #2563EB)',
                 overflow: 'hidden',
                 padding: (isEditing ? logo : currentCompany.logo) ? '4px' : '0',
-                boxShadow: '0 2px 8px rgba(5, 150, 105, 0.12)',
+                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.15)',
                 flexShrink: 0,
               }}
               title={name || 'Company Logo'}
@@ -284,9 +284,9 @@ export const CompanyProfileView: React.FC = () => {
                     fontWeight: 700,
                     padding: '0.2rem 0.6rem',
                     borderRadius: '6px',
-                    background: '#ecfdf5',
-                    color: '#059669',
-                    border: '1px solid #a7f3d0',
+                    background: 'rgba(37, 99, 235, 0.08)',
+                    color: 'var(--brand-blue, #2563EB)',
+                    border: '1px solid rgba(37, 99, 235, 0.2)',
                   }}
                 >
                   {code}
@@ -319,8 +319,8 @@ export const CompanyProfileView: React.FC = () => {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.825rem', color: '#64748b' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <Globe size={14} color="#059669" />
-                  <a href={website} target="_blank" rel="noreferrer" style={{ color: '#059669', textDecoration: 'none', fontWeight: 600 }}>
+                  <Globe size={14} color="var(--brand-blue, #2563EB)" />
+                  <a href={website} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-blue, #2563EB)', textDecoration: 'none', fontWeight: 600 }}>
                     {website}
                   </a>
                 </span>
@@ -346,7 +346,7 @@ export const CompanyProfileView: React.FC = () => {
               <div style={{ width: '1px', height: '28px', background: '#e2e8f0' }} />
               <div style={{ textAlign: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>HEADCOUNT</span>
-                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#059669' }}>{companyEmployees.length}</span>
+                <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--brand-blue, #2563EB)' }}>{companyEmployees.length}</span>
               </div>
             </div>
 
@@ -362,11 +362,12 @@ export const CompanyProfileView: React.FC = () => {
                     padding: '0.55rem 1.15rem',
                     borderRadius: '8px',
                     border: 'none',
-                    background: '#059669',
+                    background: 'var(--brand-blue, #2563EB)',
                     color: '#fff',
                     fontSize: '0.85rem',
                     fontWeight: 700,
                     cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                   }}
                 >
                   <Save size={15} /> Save Changes
@@ -398,11 +399,12 @@ export const CompanyProfileView: React.FC = () => {
                   padding: '0.55rem 1.15rem',
                   borderRadius: '8px',
                   border: 'none',
-                  background: '#059669',
+                  background: 'var(--brand-blue, #2563EB)',
                   color: '#ffffff',
                   fontSize: '0.85rem',
                   fontWeight: 700,
                   cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                 }}
               >
                 <Edit size={15} /> Edit Profile
@@ -415,17 +417,17 @@ export const CompanyProfileView: React.FC = () => {
       {/* Grid of Profile Sections */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
         {/* Section 1: Corporate Identity */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Building size={16} color="#059669" /> Corporate Identity & Branding
+            <Building size={16} color="var(--brand-blue, #2563EB)" /> Corporate Identity & Branding
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {/* Dedicated Company Logo Section */}
             <div
               style={{
-                background: '#f8fafc',
+                background: 'var(--bg-card-subtle, #f8fafc)',
                 borderRadius: '12px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--border-subtle, #e2e8f0)',
                 padding: '1.15rem',
                 display: 'flex',
                 flexDirection: 'column',
@@ -435,7 +437,7 @@ export const CompanyProfileView: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <ImageIcon size={15} color="#059669" /> Company Logo
+                    <ImageIcon size={15} color="var(--brand-blue, #2563EB)" /> Company Logo
                   </h4>
                   <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
                     Official institution mark shown across the LMS header, profile summary card, and reports.
@@ -539,9 +541,9 @@ export const CompanyProfileView: React.FC = () => {
                                 gap: '0.35rem',
                                 padding: '0.45rem 0.85rem',
                                 borderRadius: '8px',
-                                border: '1px solid #059669',
-                                background: '#ecfdf5',
-                                color: '#059669',
+                                border: '1px solid var(--brand-blue, #2563EB)',
+                                background: 'rgba(37, 99, 235, 0.08)',
+                                color: 'var(--brand-blue, #2563EB)',
                                 fontSize: '0.8rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -587,11 +589,12 @@ export const CompanyProfileView: React.FC = () => {
                               padding: '0.45rem 0.85rem',
                               borderRadius: '8px',
                               border: 'none',
-                              background: '#059669',
+                              background: 'var(--brand-blue, #2563EB)',
                               color: '#ffffff',
                               fontSize: '0.8rem',
                               fontWeight: 700,
                               cursor: 'pointer',
+                              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                             }}
                           >
                             <Upload size={14} /> Upload Logo
@@ -737,7 +740,7 @@ export const CompanyProfileView: React.FC = () => {
                   readOnly={!isEditing}
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: '#059669' }}
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: 'var(--brand-blue, #2563EB)' }}
                 />
               </div>
             </div>
@@ -758,9 +761,9 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section 2: Legal & Tax Identifiers */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <ShieldCheck size={16} color="#059669" /> Legal & Tax Identifiers
+            <ShieldCheck size={16} color="var(--brand-blue, #2563EB)" /> Legal & Tax Identifiers
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -820,9 +823,9 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section 3: Registered Office Address */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <MapPin size={16} color="#059669" /> Registered Office Address
+            <MapPin size={16} color="var(--brand-blue, #2563EB)" /> Registered Office Address
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
@@ -900,7 +903,7 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section: Headquarters & Primary Office (References Branches & Locations) */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.2rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
@@ -1022,11 +1025,12 @@ export const CompanyProfileView: React.FC = () => {
                     padding: '0.4rem 0.85rem',
                     borderRadius: '6px',
                     border: 'none',
-                    background: '#059669',
+                    background: 'var(--brand-blue, #2563EB)',
                     color: '#fff',
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                   }}
                 >
                   Designate Headquarters
@@ -1037,9 +1041,9 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section 4: Fiscal & Operational Parameters */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Clock size={16} color="#059669" /> Fiscal & Operational Settings
+            <Clock size={16} color="var(--brand-blue, #2563EB)" /> Fiscal & Operational Settings
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -1052,7 +1056,7 @@ export const CompanyProfileView: React.FC = () => {
                   readOnly={!isEditing}
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: '#059669' }}
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: 'var(--brand-blue, #2563EB)' }}
                 />
               </div>
 
@@ -1099,9 +1103,9 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section 5: Official Contact Information */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem', gridColumn: 'span 2' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem', gridColumn: 'span 2' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Mail size={16} color="#059669" /> Corporate Communications & Helpdesks
+            <Mail size={16} color="var(--brand-blue, #2563EB)" /> Corporate Communications & Helpdesks
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
             <div>

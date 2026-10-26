@@ -164,25 +164,25 @@ export const TeamsHierarchyView: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* KPI Counters */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
             ACTIVE SQUADS & PODS
           </span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>{teams.length} Teams</div>
-          <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>Cross-functional agile units</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>Cross-functional agile units</span>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
             ASSIGNED STAFF
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#059669' }}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-blue, #2563EB)' }}>
             {new Set(teams.flatMap((t) => t.memberIds)).size} Specialists
           </div>
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Allocated across core projects</span>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
             ORGANIZATION SQUADS
           </span>
@@ -194,7 +194,7 @@ export const TeamsHierarchyView: React.FC = () => {
       </div>
 
       {/* Action and Filter Bar */}
-      <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '260px' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
@@ -230,11 +230,12 @@ export const TeamsHierarchyView: React.FC = () => {
               padding: '0.5rem 1rem',
               borderRadius: '8px',
               border: 'none',
-              background: '#059669',
+              background: 'var(--brand-blue, #2563EB)',
               color: '#fff',
               fontSize: '0.825rem',
               fontWeight: 700,
               cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
             }}
           >
             <PlusCircle size={15} /> Create Team / Pod
@@ -267,7 +268,7 @@ export const TeamsHierarchyView: React.FC = () => {
                       <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.2rem 0' }}>
                         {team.name}
                       </h4>
-                      <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600 }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>
                         {team.departmentId}
                       </span>
                     </div>
@@ -530,7 +531,7 @@ export const TeamsHierarchyView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', background: '#059669', color: '#fff', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+                  style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', border: 'none', background: 'var(--brand-blue, #2563EB)', color: '#fff', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)' }}
                 >
                   {editingTeam ? 'Save Pod Settings' : 'Create Squad Pod'}
                 </button>

@@ -24,6 +24,7 @@ export interface GeneratedQuestionSchema {
   points: number;
   difficulty: 'easy' | 'medium' | 'hard';
   topic?: string;
+  sourceSegment?: string;
 }
 
 export interface GenerationResult {
@@ -651,11 +652,18 @@ export function convertSchemaToQuestion(
     options,
     correctAnswer: schema.correctAnswer || (correctOpt ? correctOpt.text : undefined),
     correctAnswers: options?.filter((o) => o.isCorrect).map((o) => o.text),
-    explanation: schema.explanation,
+    explanation: schema.sourceSegment
+      ? (schema.explanation.includes(schema.sourceSegment) ? schema.explanation : `${schema.explanation} [Source: ${schema.sourceSegment}]`)
+      : schema.explanation,
     rubric: schema.rubric,
     topic: schema.topic,
     points: schema.points,
-    tags: [schema.difficulty, schema.topic || 'Curriculum', 'AI-Generated'],
+    tags: [
+      schema.difficulty,
+      schema.topic || 'Curriculum',
+      'AI-Generated',
+      ...(schema.sourceSegment ? ['Video-Transcript'] : [])
+    ],
     difficulty: schema.difficulty,
     version: 1,
     status: 'published',

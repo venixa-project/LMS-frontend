@@ -176,16 +176,16 @@ export const BranchesManagementView: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header and KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
             TOTAL BRANCHES
           </span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>{branches.length} Locations</div>
-          <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>Active Enterprise Footprint</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>Active Enterprise Footprint</span>
         </div>
 
         {/* HEADQUARTERS KPI CARD */}
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem', position: 'relative' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem', position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
               HEADQUARTERS
@@ -238,17 +238,17 @@ export const BranchesManagementView: React.FC = () => {
           )}
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
             SEATING CAPACITY
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#059669' }}>{totalCapacity.toLocaleString()} Desks</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-blue, #2563EB)' }}>{totalCapacity.toLocaleString()} Desks</div>
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Across all operating facilities</span>
         </div>
       </div>
 
       {/* Main Table Card */}
-      <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '260px' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
@@ -284,11 +284,12 @@ export const BranchesManagementView: React.FC = () => {
               padding: '0.5rem 1rem',
               borderRadius: '8px',
               border: 'none',
-              background: '#059669',
+              background: 'var(--brand-blue, #2563EB)',
               color: '#fff',
               fontSize: '0.825rem',
               fontWeight: 700,
               cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
             }}
           >
             <PlusCircle size={15} /> Add Office Branch
@@ -317,7 +318,7 @@ export const BranchesManagementView: React.FC = () => {
                   <tr key={branch.id} style={{ borderBottom: '1px solid #f1f5f9', background: isHq ? '#fffdf7' : 'transparent' }}>
                     <td style={{ padding: '0.85rem 1rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Building2 size={16} color={isHq ? '#d97706' : '#059669'} />
+                        <Building2 size={16} color={isHq ? '#d97706' : 'var(--brand-blue, #2563EB)'} />
                         <div>
                           <div style={{ fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                             <span>{branch.name}</span>
@@ -824,7 +825,7 @@ export const BranchesManagementView: React.FC = () => {
                     type="checkbox"
                     checked={formIsHQ}
                     onChange={(e) => setFormIsHQ(e.target.checked)}
-                    style={{ accentColor: '#059669', width: '16px', height: '16px' }}
+                    style={{ accentColor: 'var(--brand-blue, #2563EB)', width: '16px', height: '16px' }}
                   />
                   <span>Designate as Company Headquarters</span>
                 </label>
@@ -856,11 +857,12 @@ export const BranchesManagementView: React.FC = () => {
                     padding: '0.5rem 1.25rem',
                     borderRadius: '8px',
                     border: 'none',
-                    background: '#059669',
+                    background: 'var(--brand-blue, #2563EB)',
                     color: '#fff',
                     fontSize: '0.825rem',
                     fontWeight: 700,
                     cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
                   }}
                 >
                   {editingBranch ? 'Update Branch' : 'Add Branch'}

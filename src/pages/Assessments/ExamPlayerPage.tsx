@@ -3,13 +3,14 @@ import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { mockAssessments, mockQuestions } from '../../data/mockData';
 import { useAssessmentStore } from '../../lib/assessmentStore';
+import { StudentProctorWidget } from './components/StudentProctorWidget';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
-  ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X
+  ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X, Video, Mic
 } from 'lucide-react';
 
 export const ExamPlayerPage: React.FC = () => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -32,6 +33,7 @@ export const ExamPlayerPage: React.FC = () => {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState((assessment.durationMinutes || assessment.duration || 45) * 60);
   const [saveStatus, setSaveStatus] = useState<'Saved' | 'Saving...'>('Saved');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [forcedSubmissionReason, setForcedSubmissionReason] = useState<string | null>(null);
 
   // Proctoring checklist
   const [webcamPermitted, setWebcamPermitted] = useState(true);
@@ -41,6 +43,18 @@ export const ExamPlayerPage: React.FC = () => {
   // Results calculation
   const [finalScore, setFinalScore] = useState(85);
   const [passed, setPassed] = useState(true);
+
+  // Proctoring mode resolution
+  const isProctored = assessment.proctoringRequired || (assessment.proctoringMode && assessment.proctoringMode !== 'none');
+  const proctorMode = assessment.proctoringMode || (assessment.proctoringRequired ? 'combined' : 'none');
+  const proctorSettings = assessment.proctoringSettings || {
+    camera: true,
+    mic: true,
+    screenShare: false,
+    faceDetection: true,
+    noiseDetection: true,
+    tabSwitchDetection: true,
+  };
 
   // Live Timer Countdown
   useEffect(() => {
@@ -113,7 +127,9 @@ export const ExamPlayerPage: React.FC = () => {
             </div>
             <div>
               <h1 style={{ fontSize: '1.4rem', margin: 0 }}>{assessment.title}</h1>
-              <p className="text-muted text-xs">Pre-Examination Proctoring & System Verification</p>
+              <p className="text-muted text-xs">
+                {isProctored ? 'Pre-Examination Proctoring & System Verification' : 'Standard Examination Verification'}
+              </p>
             </div>
           </div>
 
@@ -130,7 +146,7 @@ export const ExamPlayerPage: React.FC = () => {
           }}>
             <div>
               <div className="text-muted text-xs font-semibold">Duration</div>
-              <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{assessment.durationMinutes} Mins</div>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{assessment.durationMinutes || assessment.duration || 45} Mins</div>
             </div>
             <div>
               <div className="text-muted text-xs font-semibold">Total Questions</div>
@@ -138,35 +154,65 @@ export const ExamPlayerPage: React.FC = () => {
             </div>
             <div>
               <div className="text-muted text-xs font-semibold">Pass Threshold</div>
-              <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--success)' }}>{assessment.passingMarks} Pts</div>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--success)' }}>{assessment.passingMarks || 70} Pts</div>
+            </div>
+            <div>
+              <div className="text-muted text-xs font-semibold">Proctoring Mode</div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', color: isProctored ? 'var(--primary)' : 'var(--text-muted)', textTransform: 'capitalize' }}>
+                {proctorMode === 'combined' ? 'Combined (AI+Jitsi)' : proctorMode}
+              </div>
             </div>
           </div>
 
           <h3 style={{ fontSize: '1rem', marginBottom: '12px' }}>System & Environment Readiness Checklist</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={18} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Webcam & Video Feed Connection</span>
-              </div>
-              <span className="badge badge-active">Active</span>
-            </div>
+            {isProctored ? (
+              <>
+                {proctorSettings.camera && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <CheckCircle2 size={18} color="var(--success)" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Webcam & Video Feed Connection</span>
+                    </div>
+                    <span className="badge badge-active">Active</span>
+                  </div>
+                )}
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={18} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Microphone & Audio Ambient Monitor</span>
-              </div>
-              <span className="badge badge-active">Active</span>
-            </div>
+                {proctorSettings.mic && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <CheckCircle2 size={18} color="var(--success)" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Microphone & Audio Ambient Noise Sensor</span>
+                    </div>
+                    <span className="badge badge-active">Active</span>
+                  </div>
+                )}
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CheckCircle2 size={18} color="var(--success)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Browser Lockdown & Tab Switching Watcher</span>
+                {proctorSettings.tabSwitchDetection && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <CheckCircle2 size={18} color="var(--success)" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Browser Lockdown & Tab Switching Watcher</span>
+                    </div>
+                    <span className="badge badge-active">Enabled</span>
+                  </div>
+                )}
+
+                {(proctorMode === 'manual' || proctorMode === 'combined') && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <CheckCircle2 size={18} color="var(--primary)" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Jitsi Meet Proctor Room Session</span>
+                    </div>
+                    <span className="badge badge-primary">Authorized Room Associated</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                Proctoring is disabled for this assessment per the institution's open examination policy. Standard honor code and academic integrity terms apply.
               </div>
-              <span className="badge badge-active">Enabled</span>
-            </div>
+            )}
           </div>
 
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer', marginBottom: '24px' }}>
@@ -177,7 +223,9 @@ export const ExamPlayerPage: React.FC = () => {
               style={{ accentColor: 'var(--primary)', marginTop: '2px' }}
             />
             <span>
-              I understand this examination session is proctored for academic integrity. I consent to webcam, screen focus, and audio signal telemetry review in accordance with organizational policy.
+              {isProctored
+                ? 'I understand this examination session is proctored for academic integrity. I consent to webcam, screen focus, and audio signal telemetry review in accordance with organizational policy.'
+                : 'I certify that all responses submitted during this timed examination will be my own authentic work in adherence to the institutional academic honor code.'}
             </span>
           </label>
 
@@ -461,6 +509,20 @@ export const ExamPlayerPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Student-Facing Proctoring Telemetry & Warning Widget */}
+        {isProctored && (
+          <StudentProctorWidget
+            assessmentId={assessment.id}
+            learnerId={user?.id || 'u-007'}
+            learnerName={user?.displayName || 'Alex Thompson'}
+            isExamActive={stage === 'in_exam'}
+            onForceSubmit={(reason) => {
+              setForcedSubmissionReason(reason);
+              handleSubmitExam();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -471,6 +533,29 @@ export const ExamPlayerPage: React.FC = () => {
   return (
     <div style={{ maxWidth: '720px', margin: '30px auto' }}>
       <div className="card" style={{ textAlign: 'center', padding: '36px' }}>
+        {forcedSubmissionReason && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px 18px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            color: 'var(--danger)',
+            textAlign: 'left'
+          }}>
+            <AlertTriangle size={22} style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Proctor Session Concluded</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+                {forcedSubmissionReason} All responses completed prior to session conclusion have been preserved and evaluated.
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{
           width: '72px',
           height: '72px',

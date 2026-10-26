@@ -466,6 +466,7 @@ export interface Question {
   tags?: string[];
   difficulty: 'easy' | 'medium' | 'hard';
   media?: string;
+  sourceSegment?: string;
   accessibilityNotes?: string;
   version?: number;
   status?: EntityStatus;
@@ -503,6 +504,9 @@ export interface Assessment {
   resultReleasePolicy?: 'immediate' | 'after_window' | 'manual';
   mode?: 'human' | 'ai_assisted' | 'automated';
   proctoringRequired: boolean;
+  proctoringMode?: ProctoringMode;
+  jitsiRoomId?: string;
+  proctoringSettings?: ProctoringSettings;
   aiGradingEnabled?: boolean;
   version?: number;
   status: EntityStatus;
@@ -589,21 +593,44 @@ export interface RubricLevel {
 }
 
 // --- Assessment Attempt ---
+export type StudentEvaluationStatus = 
+  | 'auto_graded' 
+  | 'ai_review_required' 
+  | 'awaiting_human_approval' 
+  | 'graded' 
+  | 'published';
+
 export interface AssessmentAttempt {
   id: string;
   assessmentId: string;
+  assessmentTitle?: string;
+  courseId?: string;
+  courseTitle?: string;
+  assessmentType?: 'quiz' | 'assignment' | 'exam' | 'capstone';
+  attemptNumber?: number;
   learnerId: string;
   learnerName: string;
+  learnerRollNo?: string;
+  learnerEmail?: string;
+  learnerAvatar?: string;
+  learnerDepartment?: string;
   status: AttemptStatus;
+  evaluationStatus?: StudentEvaluationStatus;
   startedAt?: string;
   submittedAt?: string;
   answers: AttemptAnswer[];
   score?: number;
   totalMarks: number;
+  percentage?: number;
   passed?: boolean;
   feedback?: string;
+  privateNotes?: string;
+  rubricScores?: Record<string, number>;
+  aiSuggestion?: AISuggestion;
   gradedBy?: string;
   gradedAt?: string;
+  evaluatedBy?: string;
+  evaluatedAt?: string;
   timeSpent?: number;
 }
 
@@ -612,7 +639,9 @@ export interface AttemptAnswer {
   answer: string;
   isCorrect?: boolean;
   points?: number;
+  maxPoints?: number;
   feedback?: string;
+  aiNotes?: string;
   flagged: boolean;
 }
 
@@ -623,11 +652,19 @@ export interface GradingTask {
   submissionId?: string;
   assessmentId: string;
   assessmentTitle: string;
+  courseId?: string;
+  courseTitle?: string;
+  assessmentType?: 'quiz' | 'assignment' | 'exam' | 'capstone';
+  attemptNumber?: number;
   learnerId: string;
   learnerName: string;
+  learnerRollNo?: string;
+  learnerEmail?: string;
+  learnerAvatar?: string;
   graderId?: string;
   graderName?: string;
   status: GradingStatus;
+  evaluationStatus?: StudentEvaluationStatus;
   dueDate?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   isDoubleMarking?: boolean;
@@ -661,6 +698,32 @@ export interface AISuggestion {
 }
 
 // --- Proctoring ---
+export type ProctoringMode = 'automated' | 'manual' | 'combined' | 'none';
+
+export interface ProctoringSettings {
+  camera: boolean;
+  mic: boolean;
+  screenShare: boolean;
+  faceDetection: boolean;
+  noiseDetection: boolean;
+  tabSwitchDetection: boolean;
+  jitsiDomain?: string;
+  jitsiRoomId?: string;
+}
+
+export interface ProctorWarning {
+  id: string;
+  assessmentId: string;
+  learnerId: string;
+  learnerName: string;
+  message: string;
+  reason?: string;
+  sentAt: string;
+  sentBy: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string;
+}
+
 export interface ProctoringIncident {
   id: string;
   attemptId: string;
@@ -677,6 +740,9 @@ export interface ProctoringIncident {
   reviewerNotes?: string;
   decision?: string;
   evidence?: string[];
+  confidence?: number;
+  dismissed?: boolean;
+  dismissedReason?: string;
 }
 
 // --- Certificate ---

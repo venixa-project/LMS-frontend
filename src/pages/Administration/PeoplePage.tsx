@@ -250,17 +250,17 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               alignItems: 'center',
               gap: '8px',
               padding: '8px 18px',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--radius-md, 8px)',
               fontSize: '0.875rem',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'var(--transition)',
               background: activeTab === 'students'
-                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                ? 'var(--brand-blue, #2563EB)'
                 : 'var(--bg-card)',
               color: activeTab === 'students' ? '#ffffff' : 'var(--text-secondary)',
-              border: activeTab === 'students' ? '1px solid transparent' : '1px solid var(--border-subtle)',
-              boxShadow: activeTab === 'students' ? '0 2px 8px var(--primary-glow)' : 'none'
+              border: activeTab === 'students' ? '1px solid var(--brand-blue, #2563EB)' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'students' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none'
             }}
           >
             <UserCheck size={16} />
@@ -275,17 +275,17 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               alignItems: 'center',
               gap: '8px',
               padding: '8px 18px',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--radius-md, 8px)',
               fontSize: '0.875rem',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'var(--transition)',
               background: activeTab === 'faculty'
-                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                ? 'var(--brand-blue, #2563EB)'
                 : 'var(--bg-card)',
               color: activeTab === 'faculty' ? '#ffffff' : 'var(--text-secondary)',
-              border: activeTab === 'faculty' ? '1px solid transparent' : '1px solid var(--border-subtle)',
-              boxShadow: activeTab === 'faculty' ? '0 2px 8px var(--primary-glow)' : 'none'
+              border: activeTab === 'faculty' ? '1px solid var(--brand-blue, #2563EB)' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'faculty' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none'
             }}
           >
             <GraduationCap size={16} />
@@ -300,17 +300,17 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               alignItems: 'center',
               gap: '8px',
               padding: '8px 18px',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--radius-md, 8px)',
               fontSize: '0.875rem',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'var(--transition)',
               background: activeTab === 'staff'
-                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                ? 'var(--brand-blue, #2563EB)'
                 : 'var(--bg-card)',
               color: activeTab === 'staff' ? '#ffffff' : 'var(--text-secondary)',
-              border: activeTab === 'staff' ? '1px solid transparent' : '1px solid var(--border-subtle)',
-              boxShadow: activeTab === 'staff' ? '0 2px 8px var(--primary-glow)' : 'none'
+              border: activeTab === 'staff' ? '1px solid var(--brand-blue, #2563EB)' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'staff' ? '0 2px 8px rgba(37, 99, 235, 0.25)' : 'none'
             }}
           >
             <Shield size={16} />

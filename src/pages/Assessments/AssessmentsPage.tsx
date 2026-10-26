@@ -8,7 +8,7 @@ import { CreateAssessmentModal } from './components/CreateAssessmentModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
-  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight
+  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video
 } from 'lucide-react';
 
 interface Props {
@@ -684,9 +684,16 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {a.proctoringRequired && (
+                          {(a.proctoringRequired || (a.proctoringMode && a.proctoringMode !== 'none')) && (
                             <span className="badge badge-error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <Shield size={12} /> Proctored
+                              <Shield size={12} />
+                              {a.proctoringMode === 'combined'
+                                ? 'AI + Jitsi Proctor'
+                                : a.proctoringMode === 'manual'
+                                ? 'Manual Jitsi Proctor'
+                                : a.proctoringMode === 'automated'
+                                ? 'AI Telemetry Proctor'
+                                : 'Proctored'}
                             </span>
                           )}
                           {a.aiGradingEnabled && (
@@ -744,7 +751,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {isLearner ? (
                         isCompletedByLearner ? (
                           <button
@@ -772,6 +779,16 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                           >
                             <Play size={13} /> Preview Exam
                           </Link>
+                          {(a.proctoringRequired || (a.proctoringMode && a.proctoringMode !== 'none')) && (
+                            <Link
+                              to={`/proctoring?tab=live_monitor&assessmentId=${a.id}`}
+                              className="btn btn-secondary btn-sm"
+                              style={{ gap: '6px', justifyContent: 'center' }}
+                              title="Monitor Live Jitsi Exam Session"
+                            >
+                              <Video size={13} color="var(--primary)" /> Monitor Live
+                            </Link>
+                          )}
                           <Link
                             to="/grading"
                             className="btn btn-primary btn-sm"
