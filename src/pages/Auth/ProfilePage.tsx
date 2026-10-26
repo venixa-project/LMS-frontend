@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../lib/store';
+import { useThemeStore, ThemePreference } from '../../lib/themeStore';
 import {
   User, Mail, Phone, Globe, Clock, Shield, Bell,
-  Sliders, Save, KeyRound, CheckCircle2, Lock
+  Sliders, Save, KeyRound, CheckCircle2, Lock,
+  Sun, Moon, Monitor, Check
 } from 'lucide-react';
 
 export const ProfilePage: React.FC = () => {
   const { user } = useAuthStore();
+  const { preference, resolvedTheme, setTheme } = useThemeStore();
   const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>('general');
 
   // Form states
@@ -239,7 +242,7 @@ export const ProfilePage: React.FC = () => {
             <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
               Update your account password or configure single sign-on synchronization.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label">Current Password</label>
                 <input type="password" placeholder="••••••••" className="form-input" />
@@ -280,6 +283,89 @@ export const ProfilePage: React.FC = () => {
 
       {activeTab === 'preferences' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Interface Theme Selection */}
+          <div className="card">
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>Interface Theme</h3>
+            <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
+              Choose your preferred appearance or sync with your operating system settings
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+              {[
+                {
+                  id: 'light' as ThemePreference,
+                  label: 'Light Theme',
+                  description: 'Clean, high-visibility daylight appearance',
+                  icon: Sun,
+                  color: 'var(--warning)'
+                },
+                {
+                  id: 'dark' as ThemePreference,
+                  label: 'Dark Theme',
+                  description: 'Eye-comfort dark palette for low-light environments',
+                  icon: Moon,
+                  color: 'var(--primary)'
+                },
+                {
+                  id: 'system' as ThemePreference,
+                  label: 'System (Device)',
+                  description: `Automatically follows OS scheme (currently ${resolvedTheme})`,
+                  icon: Monitor,
+                  color: 'var(--accent-cyan)'
+                }
+              ].map((opt) => {
+                const IconComp = opt.icon;
+                const isSelected = preference === opt.id;
+                return (
+                  <div
+                    key={opt.id}
+                    onClick={() => setTheme(opt.id)}
+                    style={{
+                      background: isSelected ? 'var(--primary-light)' : 'var(--bg-input)',
+                      border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border-subtle)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-card)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <IconComp size={20} color={opt.color} />
+                      </div>
+                      {isSelected && (
+                        <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.7rem' }}>
+                          <Check size={11} /> Active
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: isSelected ? 'var(--primary)' : 'var(--text-main)', marginBottom: '2px' }}>
+                        {opt.label}
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.35 }}>
+                        {opt.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="card">
             <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Accessibility Preferences</h3>
             <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>

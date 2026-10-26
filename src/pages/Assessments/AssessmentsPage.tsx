@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../lib/store';
-import { mockAssessments, mockCourses, mockCohorts } from '../../data/mockData';
+import { useAssessmentStore } from '../../lib/assessmentStore';
+import { mockCourses, mockCohorts } from '../../data/mockData';
 import { Assessment } from '../../types';
 import { Link, useNavigate } from 'react-router-dom';
+import { CreateAssessmentModal } from './components/CreateAssessmentModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
-  FileText, Upload, Calendar, PenTool, Check, Filter
+  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight
 } from 'lucide-react';
 
 interface Props {
@@ -40,8 +42,19 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'assessments' | 'assignments' | 'results'>(defaultTab);
-  const [assessments, setAssessments] = useState<Assessment[]>(mockAssessments);
-  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const {
+    assessments,
+    drafts,
+    addAssessment,
+    saveDraft,
+    deleteAssessment,
+    deleteDraft,
+    publishAssessment
+  } = useAssessmentStore();
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<Assessment | null>(null);
+  const [assessmentStatusFilter, setAssessmentStatusFilter] = useState<'published' | 'drafts'>('published');
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('all');
   const [notice, setNotice] = useState<string | null>(null);
@@ -144,16 +157,6 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     setHonorCodeAgreed(false);
   };
 
-  // Form states for Quiz/Exam
-  const [examTitle, setExamTitle] = useState('');
-  const [examCourseId, setExamCourseId] = useState(assignedCourses[0]?.id || 'crs-001');
-  const [durationMinutes, setDurationMinutes] = useState(45);
-  const [examTotalMarks, setExamTotalMarks] = useState(100);
-  const [passingMarks, setPassingMarks] = useState(70);
-  const [maxAttempts, setMaxAttempts] = useState(2);
-  const [proctoringRequired, setProctoringRequired] = useState(true);
-  const [aiScoringEnabled, setAiScoringEnabled] = useState(true);
-
   // Form states for Assignment
   const [asgTitle, setAsgTitle] = useState('');
   const [asgDesc, setAsgDesc] = useState('');
@@ -163,27 +166,18 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const [asgMarks, setAsgMarks] = useState(100);
   const [asgFormat, setAsgFormat] = useState<'file' | 'repo' | 'text'>('repo');
 
-  const handleCreateAssessment = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newAss: Assessment = {
-      id: `ass-${Date.now()}`,
-      title: examTitle,
-      courseId: examCourseId,
-      totalMarks: examTotalMarks,
-      passingMarks,
-      durationMinutes,
-      maxAttempts,
-      proctoringRequired,
-      aiGradingEnabled: aiScoringEnabled,
-      questionIds: ['q-101', 'q-102'],
-      status: 'published',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setAssessments([newAss, ...assessments]);
-    setIsAssessmentModalOpen(false);
-    showNotice(`Assessment "${examTitle}" published to course syllabus!`);
-    setExamTitle('');
+  const handleAssessmentSaved = (newAss: Assessment, status: 'published' | 'draft') => {
+    if (status === 'published') {
+      addAssessment(newAss, newAss.questionsData);
+      showNotice(`Assessment "${newAss.title}" published to course syllabus!`);
+      setAssessmentStatusFilter('published');
+    } else {
+      saveDraft(newAss, newAss.questionsData);
+      showNotice(`Draft "${newAss.title}" saved successfully!`);
+      setAssessmentStatusFilter('drafts');
+    }
+    setIsCreateModalOpen(false);
+    setEditingDraft(null);
   };
 
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -211,6 +205,12 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const filteredAssessments = assessments.filter((a) => {
     const matchesCourse = selectedCourseFilter === 'all' || a.courseId === selectedCourseFilter;
     const matchesFaculty = !isFaculty || assignedCourses.some((c) => c.id === a.courseId);
+    return matchesCourse && matchesFaculty;
+  });
+
+  const filteredDrafts = drafts.filter((d) => {
+    const matchesCourse = selectedCourseFilter === 'all' || d.courseId === selectedCourseFilter;
+    const matchesFaculty = !isFaculty || assignedCourses.some((c) => c.id === d.courseId);
     return matchesCourse && matchesFaculty;
   });
 
@@ -261,7 +261,13 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                 <Plus size={16} /> Create Assignment
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={() => setIsAssessmentModalOpen(true)}>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setEditingDraft(null);
+                  setIsCreateModalOpen(true);
+                }}
+              >
                 <Plus size={16} /> Create Quiz / Exam
               </button>
             )}
@@ -478,121 +484,298 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
       {/* TAB 2: QUIZZES & EXAMS */}
       {activeTab === 'assessments' && (
-        <div className="grid-3">
-          {filteredAssessments.map((a) => {
-            const course = mockCourses.find((c) => c.id === a.courseId);
-            const isCompletedByLearner = a.id === 'a-001';
+        <div>
+          {/* Sub-status Switcher for Faculty & Admin (Published vs Drafts) */}
+          {!isLearner && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${assessmentStatusFilter === 'published' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setAssessmentStatusFilter('published')}
+              >
+                <CheckCircle2 size={14} /> Published Assessments ({filteredAssessments.length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${assessmentStatusFilter === 'drafts' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setAssessmentStatusFilter('drafts')}
+              >
+                <FileText size={14} /> In-Progress Drafts ({filteredDrafts.length})
+              </button>
+            </div>
+          )}
 
-            return (
+          {/* DRAFTS LIST */}
+          {!isLearner && assessmentStatusFilter === 'drafts' ? (
+            filteredDrafts.length === 0 ? (
               <div
-                key={a.id}
                 className="card"
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  borderTop: a.proctoringRequired ? '3px solid var(--danger)' : '3px solid var(--primary)'
+                  textAlign: 'center',
+                  padding: '48px 24px',
+                  background: 'var(--bg-card)'
                 }}
               >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      {a.proctoringRequired && (
-                        <span className="badge badge-error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Shield size={12} /> Proctored
-                        </span>
-                      )}
-                      {a.aiGradingEnabled && (
-                        <span className="badge badge-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Sparkles size={12} /> AI Assisted
-                        </span>
-                      )}
-                    </div>
+                <FileText size={44} color="var(--text-muted)" style={{ margin: '0 auto 12px auto' }} />
+                <h3 style={{ fontSize: '1.1rem', margin: '0 0 6px 0' }}>No In-Progress Assessment Drafts</h3>
+                <p className="text-muted text-sm" style={{ maxWidth: '420px', margin: '0 auto 16px auto' }}>
+                  When you save an incomplete quiz or AI question generation session, it will persist here securely until you are ready to publish.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setEditingDraft(null);
+                    setIsCreateModalOpen(true);
+                  }}
+                >
+                  <Plus size={16} /> Create New Quiz / Exam
+                </button>
+              </div>
+            ) : (
+              <div className="grid-3">
+                {filteredDrafts.map((d) => {
+                  const course = mockCourses.find((c) => c.id === d.courseId);
+                  const qCount = d.questionIds?.length || d.questionsData?.length || d.questions?.length || 0;
 
-                    {isLearner && isCompletedByLearner ? (
-                      <span className="badge badge-success">PASSED &bull; 25/25 PTS</span>
-                    ) : (
-                      <span className="badge badge-active">{a.status}</span>
-                    )}
-                  </div>
+                  return (
+                    <div
+                      key={d.id}
+                      className="card"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        borderTop: '3px solid var(--warning)'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <span className="badge badge-warning">DRAFT &bull; UNPUBLISHED</span>
+                          <span className="text-muted text-xs">
+                            {d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : 'Recent'}
+                          </span>
+                        </div>
 
-                  <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{a.title}</h3>
-                  <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-                    Course: <strong>{course?.title || 'Advanced Web Development'}</strong>
-                  </p>
+                        <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{d.title}</h3>
+                        <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
+                          Course: <strong>{course?.title || 'Advanced Web Development'}</strong>
+                        </p>
 
-                  <div style={{
-                    background: 'var(--bg-input)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '12px',
-                    marginBottom: '20px',
-                    fontSize: '0.85rem'
-                  }}>
-                    <div>
-                      <span className="text-muted text-xs">Duration:</span>
-                      <div style={{ fontWeight: 600 }}>{a.durationMinutes} Minutes</div>
-                    </div>
-                    <div>
-                      <span className="text-muted text-xs">Total Marks:</span>
-                      <div style={{ fontWeight: 600 }}>{a.totalMarks} Points</div>
-                    </div>
-                    <div>
-                      <span className="text-muted text-xs">Passing Score:</span>
-                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>
-                        {a.passingMarks || 70} pts
+                        <div
+                          style={{
+                            background: 'var(--bg-input)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '12px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, 1fr)',
+                            gap: '12px',
+                            marginBottom: '20px',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <div>
+                            <span className="text-muted text-xs">Questions:</span>
+                            <div style={{ fontWeight: 600 }}>{qCount} Items</div>
+                          </div>
+                          <div>
+                            <span className="text-muted text-xs">Total Marks:</span>
+                            <div style={{ fontWeight: 600 }}>{d.totalMarks} Points</div>
+                          </div>
+                          <div>
+                            <span className="text-muted text-xs">Duration:</span>
+                            <div style={{ fontWeight: 600 }}>{d.durationMinutes || d.duration || 45}m</div>
+                          </div>
+                          <div>
+                            <span className="text-muted text-xs">Mode:</span>
+                            <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                              {d.creationMode === 'ai_generated' ? 'AI Generated' : 'Manual'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                          onClick={() => {
+                            setEditingDraft(d);
+                            setIsCreateModalOpen(true);
+                          }}
+                        >
+                          <Edit3 size={13} /> Resume Editing
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ gap: '6px', justifyContent: 'center' }}
+                          onClick={() => {
+                            publishAssessment(d.id);
+                            showNotice(`Draft "${d.title}" published to syllabus!`);
+                            setAssessmentStatusFilter('published');
+                          }}
+                        >
+                          <CheckCircle2 size={13} color="var(--success)" /> Publish
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            if (window.confirm(`Delete draft "${d.title}"?`)) {
+                              deleteDraft(d.id);
+                              showNotice('Draft removed.');
+                            }
+                          }}
+                          title="Delete draft"
+                        >
+                          <Trash2 size={13} color="var(--danger)" />
+                        </button>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            /* PUBLISHED ASSESSMENTS GRID */
+            <div className="grid-3">
+              {filteredAssessments.map((a) => {
+                const course = mockCourses.find((c) => c.id === a.courseId);
+                const isCompletedByLearner = a.id === 'a-001';
+                const qCount = a.questionIds?.length || a.questionsData?.length || a.questions?.length || 5;
+
+                return (
+                  <div
+                    key={a.id}
+                    className="card"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      borderTop: a.proctoringRequired ? '3px solid var(--danger)' : '3px solid var(--primary)'
+                    }}
+                  >
                     <div>
-                      <span className="text-muted text-xs">Allowed Attempts:</span>
-                      <div style={{ fontWeight: 600 }}>{a.maxAttempts}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {a.proctoringRequired && (
+                            <span className="badge badge-error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Shield size={12} /> Proctored
+                            </span>
+                          )}
+                          {a.aiGradingEnabled && (
+                            <span className="badge badge-primary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Sparkles size={12} /> AI Assisted
+                            </span>
+                          )}
+                          {a.creationMode === 'ai_generated' && (
+                            <span className="badge badge-draft" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Sparkles size={12} color="var(--primary)" /> AI Generated
+                            </span>
+                          )}
+                        </div>
+
+                        {isLearner && isCompletedByLearner ? (
+                          <span className="badge badge-success">PASSED &bull; 25/25 PTS</span>
+                        ) : (
+                          <span className="badge badge-active">{a.status}</span>
+                        )}
+                      </div>
+
+                      <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{a.title}</h3>
+                      <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
+                        Course: <strong>{course?.title || 'Advanced Web Development'}</strong>
+                      </p>
+
+                      <div style={{
+                        background: 'var(--bg-input)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '12px',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '12px',
+                        marginBottom: '20px',
+                        fontSize: '0.85rem'
+                      }}>
+                        <div>
+                          <span className="text-muted text-xs">Questions:</span>
+                          <div style={{ fontWeight: 600 }}>{qCount} Items</div>
+                        </div>
+                        <div>
+                          <span className="text-muted text-xs">Duration:</span>
+                          <div style={{ fontWeight: 600 }}>{a.durationMinutes || a.duration || 45} Minutes</div>
+                        </div>
+                        <div>
+                          <span className="text-muted text-xs">Total Marks:</span>
+                          <div style={{ fontWeight: 600 }}>{a.totalMarks} Points</div>
+                        </div>
+                        <div>
+                          <span className="text-muted text-xs">Passing Score:</span>
+                          <div style={{ fontWeight: 600, color: 'var(--success)' }}>
+                            {a.passingMarks || a.passmark || 70} pts
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {isLearner ? (
+                        isCompletedByLearner ? (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                            onClick={() => setActiveTab('results')}
+                          >
+                            <Award size={13} /> View Result (100%)
+                          </button>
+                        ) : (
+                          <Link
+                            to={`/exam/${a.id}`}
+                            className="btn btn-primary btn-sm"
+                            style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                          >
+                            <Play size={13} /> Start Assessment
+                          </Link>
+                        )
+                      ) : (
+                        <>
+                          <Link
+                            to={`/exam/${a.id}`}
+                            className="btn btn-secondary btn-sm"
+                            style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                          >
+                            <Play size={13} /> Preview Exam
+                          </Link>
+                          <Link
+                            to="/grading"
+                            className="btn btn-primary btn-sm"
+                            style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                          >
+                            <PenTool size={13} /> View Grades
+                          </Link>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              if (window.confirm(`Delete assessment "${a.title}"?`)) {
+                                deleteAssessment(a.id);
+                                showNotice(`Assessment "${a.title}" deleted.`);
+                              }
+                            }}
+                            title="Delete assessment"
+                          >
+                            <Trash2 size={13} color="var(--danger)" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {isLearner ? (
-                    isCompletedByLearner ? (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                        onClick={() => setActiveTab('results')}
-                      >
-                        <Award size={13} /> View Result (100%)
-                      </button>
-                    ) : (
-                      <Link
-                        to={`/exam/${a.id}`}
-                        className="btn btn-primary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                      >
-                        <Play size={13} /> Start Assessment
-                      </Link>
-                    )
-                  ) : (
-                    <>
-                      <Link
-                        to={`/exam/${a.id}`}
-                        className="btn btn-secondary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                      >
-                        <Play size={13} /> Preview Exam
-                      </Link>
-                      <Link
-                        to="/grading"
-                        className="btn btn-primary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                      >
-                        <PenTool size={13} /> View Grades
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -696,122 +879,17 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         </div>
       )}
 
-      {/* Create Assessment Modal (Quiz / Exam) */}
-      {isAssessmentModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsAssessmentModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Configure New Quiz / Examination</h3>
-              <button onClick={() => setIsAssessmentModalOpen(false)} style={{ color: 'var(--text-muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateAssessment}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Assessment Title <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Distributed Systems Midterm Examination"
-                    className="form-input"
-                    value={examTitle}
-                    onChange={(e) => setExamTitle(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Linked Course</label>
-                  <select className="form-select" value={examCourseId} onChange={(e) => setExamCourseId(e.target.value)}>
-                    {assignedCourses.map((c) => (
-                      <option key={c.id} value={c.id}>{c.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Duration (Mins)</label>
-                    <input
-                      type="number"
-                      min="5"
-                      className="form-input"
-                      value={durationMinutes}
-                      onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 30)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Total Marks</label>
-                    <input
-                      type="number"
-                      min="10"
-                      className="form-input"
-                      value={examTotalMarks}
-                      onChange={(e) => setExamTotalMarks(parseInt(e.target.value) || 100)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Pass Marks</label>
-                    <input
-                      type="number"
-                      min="1"
-                      className="form-input"
-                      value={passingMarks}
-                      onChange={(e) => setPassingMarks(parseInt(e.target.value) || 70)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '14px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px'
-                }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={proctoringRequired}
-                      onChange={(e) => setProctoringRequired(e.target.checked)}
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>Enable Automated Proctoring Protocol</div>
-                      <div className="text-muted text-xs">Enforces webcam permissions, tab focus monitoring, and incident timeline logging</div>
-                    </div>
-                  </label>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={aiScoringEnabled}
-                      onChange={(e) => setAiScoringEnabled(e.target.checked)}
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>Enable BOT / AI Evaluation Assistance</div>
-                      <div className="text-muted text-xs">Generates preliminary rubric score recommendations for human reviewer sign-off</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAssessmentModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Publish Assessment
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Create Assessment Modal (Quiz & Exam Builder: AI or Manual) */}
+      <CreateAssessmentModal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingDraft(null);
+        }}
+        onAssessmentSaved={handleAssessmentSaved}
+        initialDraft={editingDraft}
+        defaultCourseId={assignedCourses[0]?.id}
+      />
 
       {/* Create Assignment Modal */}
       {isAssignmentModalOpen && (

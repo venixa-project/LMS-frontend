@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { mockUsers } from '../../data/mockUsers';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { mockDepartments, mockCohorts, mockCourses } from '../../data/mockData';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
@@ -11,30 +12,61 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  initialMode?: 'all' | 'students' | 'faculty';
+  initialMode?: 'all' | 'students' | 'faculty' | 'staff';
 }
 
 export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const { user } = useAuthStore();
   const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
-  const [activeTab, setActiveTab] = useState<'all' | 'students' | 'faculty' | 'staff'>(
-    isFacultyViewer || initialMode === 'students' ? 'students' : initialMode === 'faculty' ? 'faculty' : 'all'
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const { users, toggleUserStatus } = usePeopleStore();
+
+  // Determine active tab from search params, location, or initial mode (defaults to students)
+  const resolveTab = (): 'students' | 'faculty' | 'staff' => {
+    if (isFacultyViewer) return 'students';
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'students' || tabParam === 'faculty' || tabParam === 'staff') {
+      return tabParam;
+    }
+    if (location.pathname === '/students' || initialMode === 'students') return 'students';
+    if (location.pathname === '/faculty' || initialMode === 'faculty') return 'faculty';
+    if (initialMode === 'staff') return 'staff';
+    return 'students';
+  };
+
+  const [activeTab, setActiveTabState] = useState<'students' | 'faculty' | 'staff'>(resolveTab);
+
+  useEffect(() => {
+    if (isFacultyViewer) {
+      setActiveTabState('students');
+      return;
+    }
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'students' || tabParam === 'faculty' || tabParam === 'staff') {
+      setActiveTabState(tabParam);
+    } else if (location.pathname === '/students') {
+      setActiveTabState('students');
+    } else if (location.pathname === '/faculty') {
+      setActiveTabState('faculty');
+    }
+  }, [searchParams, location.pathname, isFacultyViewer]);
+
+  const handleTabChange = (newTab: 'students' | 'faculty' | 'staff') => {
+    setActiveTabState(newTab);
+    setSearchParams({ tab: newTab });
+  };
+
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [cohortFilter, setCohortFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Modals & Drawers
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
-  const [isAddFacultyModalOpen, setIsAddFacultyModalOpen] = useState(false);
+  // Lightweight Modals & Drawers
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [statusChangeUser, setStatusChangeUser] = useState<User | null>(null);
   const [facultyAssignUser, setFacultyAssignUser] = useState<User | null>(null);
   const [selectedCourseToAssign, setSelectedCourseToAssign] = useState(mockCourses[0]?.id || 'c-001');
@@ -42,47 +74,47 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   // Feedback notifications
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
-  // General Invite state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteFirstName, setInviteFirstName] = useState('');
-  const [inviteLastName, setInviteLastName] = useState('');
-  const [inviteRole, setInviteRole] = useState<RoleName>('student');
-  const [inviteDept, setInviteDept] = useState('dep-001');
-
-  // Student Form state
-  const [studentFirstName, setStudentFirstName] = useState('');
-  const [studentLastName, setStudentLastName] = useState('');
-  const [studentEmail, setStudentEmail] = useState('');
-  const [studentRollNo, setStudentRollNo] = useState('');
-  const [studentDept, setStudentDept] = useState('dep-001');
-  const [studentCohort, setStudentCohort] = useState('Spring 2026 Engineering');
-
-  // Faculty Form state
-  const [facultyFirstName, setFacultyFirstName] = useState('');
-  const [facultyLastName, setFacultyLastName] = useState('');
-  const [facultyEmail, setFacultyEmail] = useState('');
-  const [facultyEmpId, setFacultyEmpId] = useState('');
-  const [facultyDept, setFacultyDept] = useState('dep-001');
-  const [facultySpecialization, setFacultySpecialization] = useState('Software Systems & Cloud');
-
   // CSV Import state
   const [csvStep, setCsvStep] = useState<'upload' | 'preview' | 'complete'>('upload');
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
     setActionNotice(msg);
-    setTimeout(() => setActionNotice(null), 4000);
+    setTimeout(() => setActionNotice(null), 5000);
   };
+
+  // Check URL params for banner messages from full pages
+  useEffect(() => {
+    const created = searchParams.get('created');
+    const updated = searchParams.get('updated');
+    const name = searchParams.get('name');
+
+    if (created === 'true') {
+      const decodedName = name ? decodeURIComponent(name) : 'New member';
+      showNotice(`"${decodedName}" has been successfully added to the institution directory.`);
+    } else if (updated === 'true') {
+      const decodedName = name ? decodeURIComponent(name) : 'Member';
+      showNotice(`Profile details updated successfully for "${decodedName}".`);
+    }
+  }, [searchParams]);
+
+  const studentCount = users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner').length;
+  const facultyCount = users.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor').length;
+  const staffCount = users.filter((u) => u.activeRole !== 'student' && u.activeRole !== 'learner' && u.activeRole !== 'trainer' && u.activeRole !== 'instructor').length;
 
   // Filter users based on active tab & filters
   const filteredUsers = users.filter((u) => {
     // Faculty only views students
     if (isFacultyViewer && u.activeRole !== 'student' && u.activeRole !== 'learner') return false;
 
-    // Tab filter
+    // Tab filter: Students, Faculty & Trainers, All Staff
     if (activeTab === 'students' && u.activeRole !== 'student' && u.activeRole !== 'learner') return false;
     if (activeTab === 'faculty' && u.activeRole !== 'trainer' && u.activeRole !== 'instructor') return false;
-    if (activeTab === 'staff' && u.activeRole !== 'platform_admin') return false;
+    if (activeTab === 'staff') {
+      const isStudent = u.activeRole === 'student' || u.activeRole === 'learner';
+      const isFaculty = u.activeRole === 'trainer' || u.activeRole === 'instructor';
+      if (isStudent || isFaculty) return false;
+    }
 
     // Search query
     const matchesSearch =
@@ -101,81 +133,16 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
     return matchesSearch && matchesRole && matchesDept && matchesStatus;
   });
 
-  // Handle Add Student
-  const handleCreateStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newStudent: User = {
-      id: `u-${Date.now()}`,
-      email: studentEmail,
-      firstName: studentFirstName,
-      lastName: studentLastName,
-      displayName: `${studentFirstName} ${studentLastName}`,
-      activeRole: 'learner',
-      roles: [],
-      organizationId: 'org-001',
-      departmentId: studentDept,
-      status: 'active',
-      mfaEnabled: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setUsers([newStudent, ...users]);
-    setIsAddStudentModalOpen(false);
-    showNotice(`Student ${newStudent.displayName} successfully enrolled in ${studentCohort}!`);
-    setStudentFirstName('');
-    setStudentLastName('');
-    setStudentEmail('');
-    setStudentRollNo('');
-  };
-
-  // Handle Add Faculty
-  const handleCreateFaculty = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newFaculty: User = {
-      id: `u-${Date.now()}`,
-      email: facultyEmail,
-      firstName: facultyFirstName,
-      lastName: facultyLastName,
-      displayName: `${facultyFirstName} ${facultyLastName}`,
-      activeRole: 'trainer',
-      roles: [],
-      organizationId: 'org-001',
-      departmentId: facultyDept,
-      status: 'active',
-      mfaEnabled: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setUsers([newFaculty, ...users]);
-    setIsAddFacultyModalOpen(false);
-    showNotice(`Faculty member ${newFaculty.displayName} appointed and assigned to department!`);
-    setFacultyFirstName('');
-    setFacultyLastName('');
-    setFacultyEmail('');
-    setFacultyEmpId('');
-  };
-
-  // Handle Edit User Save
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    setUsers(users.map((u) => u.id === editingUser.id ? { ...editingUser, updatedAt: new Date().toISOString() } : u));
-    if (selectedUserDetail?.id === editingUser.id) {
-      setSelectedUserDetail(editingUser);
-    }
-    setEditingUser(null);
-    showNotice(`Profile details updated for ${editingUser.displayName}.`);
-  };
-
-  // Handle Status Toggle (Activate / Deactivate)
+  // Handle Status Toggle (Activate / Deactivate) via Store
   const handleConfirmStatusChange = () => {
     if (!statusChangeUser) return;
-    const newStatus: UserAccountStatus = statusChangeUser.status === 'active' ? 'suspended' : 'active';
-    setUsers(users.map((u) => u.id === statusChangeUser.id ? { ...u, status: newStatus } : u));
-    if (selectedUserDetail?.id === statusChangeUser.id) {
-      setSelectedUserDetail({ ...selectedUserDetail, status: newStatus });
+    const res = toggleUserStatus(statusChangeUser.id);
+    if (res.success) {
+      showNotice(res.message);
+      if (selectedUserDetail?.id === statusChangeUser.id) {
+        setSelectedUserDetail({ ...selectedUserDetail, status: res.newStatus || 'active' });
+      }
     }
-    showNotice(`Account for ${statusChangeUser.displayName} marked as ${newStatus}.`);
     setStatusChangeUser(null);
   };
 
@@ -190,15 +157,15 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const getPageTitle = () => {
     if (isFacultyViewer) return 'My Assigned Students & Learning Progress';
     if (activeTab === 'students') return 'Student Directory & Academic Progress';
-    if (activeTab === 'faculty') return 'Faculty Directory & Workload Management';
-    return 'People Directory & Access Management';
+    if (activeTab === 'faculty') return 'Faculty & Trainers Directory';
+    return 'Staff Directory & Administrative Access';
   };
 
   const getPageSubtitle = () => {
     if (isFacultyViewer) return 'Monitor syllabus completion, attendance rates, and assessment scores for students in your assigned courses';
     if (activeTab === 'students') return 'Oversee enrolled student profiles, academic progress, cohort allocations, and status';
     if (activeTab === 'faculty') return 'Manage faculty profiles, department appointments, teaching workloads, and course allocations';
-    return 'Manage enterprise users, student enrollments, faculty assignments, and role access';
+    return 'Oversee campus administrators, operational coordinators, support staff, and administrative privileges';
   };
 
   return (
@@ -207,7 +174,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary">{isFacultyViewer ? 'Faculty Scope' : 'People'}</span>
+            <span className="badge badge-primary">{isFacultyViewer ? 'Faculty Scope' : 'People & Faculty'}</span>
             <span className="text-muted text-xs">Acme Learning Corp &bull; org-001</span>
             {isFacultyViewer && <span className="badge badge-draft">Dr. James Wilson</span>}
           </div>
@@ -226,22 +193,17 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 <Upload size={16} /> Bulk CSV Import
               </button>
               {activeTab === 'students' ? (
-                <button className="btn btn-primary" onClick={() => setIsAddStudentModalOpen(true)}>
+                <Link to="/people/new?role=student" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                   <UserPlus size={16} /> Add Student
-                </button>
+                </Link>
               ) : activeTab === 'faculty' ? (
-                <button className="btn btn-primary" onClick={() => setIsAddFacultyModalOpen(true)}>
-                  <GraduationCap size={16} /> Add Faculty
-                </button>
+                <Link to="/people/new?role=faculty" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <GraduationCap size={16} /> Add Faculty / Trainer
+                </Link>
               ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-secondary" onClick={() => setIsAddStudentModalOpen(true)}>
-                    <UserPlus size={15} /> Add Student
-                  </button>
-                  <button className="btn btn-primary" onClick={() => setIsAddFacultyModalOpen(true)}>
-                    <GraduationCap size={15} /> Add Faculty
-                  </button>
-                </div>
+                <Link to="/people/new?role=staff" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <UserPlus size={16} /> Add Staff Member
+                </Link>
               )}
             </>
           )}
@@ -266,36 +228,92 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </div>
       )}
 
-      {/* Directory Category Tabs (Admin Only) */}
+      {/* Unified People & Faculty 3 Tabs (Admin Only) */}
       {!isFacultyViewer && (
-        <div className="tabs-nav" style={{ marginBottom: '20px' }}>
-          <button
-            className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            <Users size={16} />
-            All People ({users.length})
-          </button>
+        <div
+          className="tabs-nav"
+          style={{
+            marginBottom: '20px',
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
+            borderBottom: '1px solid var(--border-subtle)',
+            paddingBottom: '12px'
+          }}
+        >
           <button
             className={`tab-btn ${activeTab === 'students' ? 'active' : ''}`}
-            onClick={() => setActiveTab('students')}
+            onClick={() => handleTabChange('students')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              background: activeTab === 'students'
+                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                : 'var(--bg-card)',
+              color: activeTab === 'students' ? '#ffffff' : 'var(--text-secondary)',
+              border: activeTab === 'students' ? '1px solid transparent' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'students' ? '0 2px 8px var(--primary-glow)' : 'none'
+            }}
           >
             <UserCheck size={16} />
-            Students ({users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner').length})
+            Students ({studentCount})
           </button>
+
           <button
             className={`tab-btn ${activeTab === 'faculty' ? 'active' : ''}`}
-            onClick={() => setActiveTab('faculty')}
+            onClick={() => handleTabChange('faculty')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              background: activeTab === 'faculty'
+                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                : 'var(--bg-card)',
+              color: activeTab === 'faculty' ? '#ffffff' : 'var(--text-secondary)',
+              border: activeTab === 'faculty' ? '1px solid transparent' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'faculty' ? '0 2px 8px var(--primary-glow)' : 'none'
+            }}
           >
             <GraduationCap size={16} />
-            Trainers ({users.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor').length})
+            Faculty & Trainers ({facultyCount})
           </button>
+
           <button
             className={`tab-btn ${activeTab === 'staff' ? 'active' : ''}`}
-            onClick={() => setActiveTab('staff')}
+            onClick={() => handleTabChange('staff')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 18px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'var(--transition)',
+              background: activeTab === 'staff'
+                ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
+                : 'var(--bg-card)',
+              color: activeTab === 'staff' ? '#ffffff' : 'var(--text-secondary)',
+              border: activeTab === 'staff' ? '1px solid transparent' : '1px solid var(--border-subtle)',
+              boxShadow: activeTab === 'staff' ? '0 2px 8px var(--primary-glow)' : 'none'
+            }}
           >
             <Shield size={16} />
-            Platform Admins ({users.filter((u) => u.activeRole === 'platform_admin').length})
+            All Staff ({staffCount})
           </button>
         </div>
       )}
@@ -307,7 +325,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder={`Search ${activeTab === 'students' ? 'students by name or roll number' : activeTab === 'faculty' ? 'faculty by name or specialization' : 'people by name or email'}...`}
+              placeholder={`Search ${activeTab === 'students' ? 'students by name or roll number' : activeTab === 'faculty' ? 'faculty by name or specialization' : 'staff members by name or email'}...`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="form-input"
@@ -428,13 +446,14 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
 
                       {!isFacultyViewer && (
                         <>
-                          <button
+                          <Link
+                            to={`/people/${u.id}/edit`}
                             className="btn btn-secondary btn-sm"
-                            onClick={() => setEditingUser(u)}
                             title="Edit profile"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           >
                             <Edit2 size={13} /> Edit
-                          </button>
+                          </Link>
 
                           {isFaculty && (
                             <button
@@ -466,303 +485,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </table>
       </div>
 
-      {/* Add Student Modal */}
-      {isAddStudentModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsAddStudentModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserPlus size={18} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Enroll New Student</h3>
-                  <p className="text-muted text-xs">Register student into institution cohort and provision credentials</p>
-                </div>
-              </div>
-              <button onClick={() => setIsAddStudentModalOpen(false)} style={{ color: 'var(--text-muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
 
-            <form onSubmit={handleCreateStudent}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">First Name <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Jordan"
-                      className="form-input"
-                      value={studentFirstName}
-                      onChange={(e) => setStudentFirstName(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Last Name <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Blake"
-                      className="form-input"
-                      value={studentLastName}
-                      onChange={(e) => setStudentLastName(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Student Email <span className="required">*</span></label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="student@acmelearning.edu"
-                      className="form-input"
-                      value={studentEmail}
-                      onChange={(e) => setStudentEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Roll / Reg Number</label>
-                    <input
-                      type="text"
-                      placeholder="STU-2026-108"
-                      className="form-input"
-                      value={studentRollNo}
-                      onChange={(e) => setStudentRollNo(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Academic Department</label>
-                    <select
-                      className="form-select"
-                      value={studentDept}
-                      onChange={(e) => setStudentDept(e.target.value)}
-                    >
-                      {mockDepartments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Assign Class / Batch</label>
-                    <select
-                      className="form-select"
-                      value={studentCohort}
-                      onChange={(e) => setStudentCohort(e.target.value)}
-                    >
-                      {mockCohorts.map((co) => (
-                        <option key={co.id} value={co.name}>{co.name} ({co.code})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddStudentModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Complete Student Enrollment</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Faculty Modal */}
-      {isAddFacultyModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsAddFacultyModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <GraduationCap size={18} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Appoint Faculty Member</h3>
-                  <p className="text-muted text-xs">Register instructor into department faculty and allocate teaching scopes</p>
-                </div>
-              </div>
-              <button onClick={() => setIsAddFacultyModalOpen(false)} style={{ color: 'var(--text-muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateFaculty}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">First Name <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Alan"
-                      className="form-input"
-                      value={facultyFirstName}
-                      onChange={(e) => setFacultyFirstName(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Last Name <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Turing"
-                      className="form-input"
-                      value={facultyLastName}
-                      onChange={(e) => setFacultyLastName(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Institution Email <span className="required">*</span></label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="faculty@acmelearning.edu"
-                      className="form-input"
-                      value={facultyEmail}
-                      onChange={(e) => setFacultyEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Faculty / Staff ID</label>
-                    <input
-                      type="text"
-                      placeholder="FAC-2026-033"
-                      className="form-input"
-                      value={facultyEmpId}
-                      onChange={(e) => setFacultyEmpId(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Appointed Department</label>
-                    <select
-                      className="form-select"
-                      value={facultyDept}
-                      onChange={(e) => setFacultyDept(e.target.value)}
-                    >
-                      {mockDepartments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Academic Specialization</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Distributed Systems"
-                      className="form-input"
-                      value={facultySpecialization}
-                      onChange={(e) => setFacultySpecialization(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsAddFacultyModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Appoint Faculty</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="modal-overlay" onClick={() => setEditingUser(null)}>
-          <div className="modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Edit Member Profile</h3>
-              <button onClick={() => setEditingUser(null)} style={{ color: 'var(--text-muted)' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEdit}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">First Name</label>
-                    <input
-                      type="text"
-                      required
-                      className="form-input"
-                      value={editingUser.firstName}
-                      onChange={(e) => setEditingUser({ ...editingUser, firstName: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Last Name</label>
-                    <input
-                      type="text"
-                      required
-                      className="form-input"
-                      value={editingUser.lastName}
-                      onChange={(e) => setEditingUser({ ...editingUser, lastName: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <input
-                    type="email"
-                    required
-                    className="form-input"
-                    value={editingUser.email}
-                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Department</label>
-                    <select
-                      className="form-select"
-                      value={editingUser.departmentId || 'dep-001'}
-                      onChange={(e) => setEditingUser({ ...editingUser, departmentId: e.target.value })}
-                    >
-                      {mockDepartments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Status</label>
-                    <select
-                      className="form-select"
-                      value={editingUser.status}
-                      onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value as UserAccountStatus })}
-                    >
-                      <option value="active">Active</option>
-                      <option value="invited">Invited / Pending</option>
-                      <option value="suspended">Suspended</option>
-                      <option value="deactivated">Deactivated</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingUser(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Confirmation Modal for Activation / Deactivation */}
       {statusChangeUser && (
@@ -918,7 +641,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                     <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                       Academic Summary
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
                       <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
                         <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>96.2%</div>
                         <div className="text-muted text-xs">Attendance Rate</div>
@@ -971,7 +694,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                     <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                       Faculty Teaching Workload
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
                       <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
                         <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>2 Courses</div>
                         <div className="text-muted text-xs">Assigned Teaching</div>
@@ -1024,14 +747,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
             </div>
 
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-              <button
+              <Link
+                to={`/people/${selectedUserDetail.id}/edit`}
                 className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setEditingUser(selectedUserDetail);
-                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
                 <Edit2 size={14} /> Edit Profile
-              </button>
+              </Link>
 
               <button
                 className="btn btn-secondary btn-sm"

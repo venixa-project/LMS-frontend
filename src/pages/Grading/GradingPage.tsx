@@ -334,7 +334,7 @@ export const GradingPage: React.FC = () => {
                     </div>
                     <p className="text-muted text-xs" style={{ marginBottom: '10px' }}>{c.description}</p>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
                       {c.levels.map((lvl) => (
                         <div
                           key={lvl.points}

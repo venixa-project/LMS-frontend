@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import {
   GraduationCap, Eye, EyeOff, Lock, Mail, AlertCircle,
@@ -14,27 +14,37 @@ export const LoginPage: React.FC = () => {
   const [mfaModal, setMfaModal] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const redirectUrl = searchParams.get('redirect') || '/dashboard';
   const navigate = useNavigate();
+  const { login, isLoading, error, clearError, isAuthenticated } = useAuthStore();
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      navigate(redirectUrl, { replace: true });
+    }
+  }, [isAuthenticated, navigate, redirectUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    sessionStorage.removeItem('venilearn_logged_out');
     clearError();
     await login(email, password);
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate('/dashboard');
+      navigate(redirectUrl);
     }
   };
 
   const handleQuickLogin = async (demoEmail: string) => {
+    sessionStorage.removeItem('venilearn_logged_out');
     clearError();
     setEmail(demoEmail);
     setPassword('demoPass123');
     await login(demoEmail, 'demoPass123');
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated) {
-      navigate('/dashboard');
+      navigate(redirectUrl);
     }
   };
 
@@ -108,6 +118,7 @@ export const LoginPage: React.FC = () => {
 
               {[
                 { name: 'Platform Admin', email: 'admin@lms.demo', persona: 'Sarah Chen', badge: 'Super Admin', color: '#ef4444' },
+                { name: 'Institution Admin', email: 'orgadmin@lms.demo', persona: 'Marcus Johnson', badge: 'Campus Admin', color: '#3b82f6' },
                 { name: 'Trainer / Faculty', email: 'trainer@lms.demo', persona: 'Dr. James Wilson', badge: 'Faculty Lead', color: '#06b6d4' },
                 { name: 'Student / Learner', email: 'student@lms.demo', persona: 'Alex Thompson', badge: 'Enrolled Scholar', color: '#8b5cf6' },
               ].map((role) => (

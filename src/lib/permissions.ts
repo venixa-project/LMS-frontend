@@ -1,10 +1,11 @@
 // ============================================================
 // LMS - Centralized RBAC & Permission Helpers
 // ============================================================
-import { Permission, PermissionAction, PermissionResource, PermissionScope, RoleName } from '../types';
+import { Permission, PermissionAction, PermissionResource, PermissionScope, RoleName, CanonicalRole } from '../types';
+import { platformAdminNav } from '../platform-admin/navigation/platformAdminNav';
+import { adminNav } from '../admin/navigation/adminNav';
 
-// Permission definitions by role - comprehensive matrix
-// Permission definitions by role - 3 Core Roles: platform_admin, trainer, student
+// Permission definitions by role - 4 Core Roles: platform_admin, org_admin, trainer, student
 const PLATFORM_ADMIN_PERMISSIONS: Permission[] = [
   { id: 'pa-1', resource: 'platform_settings', action: 'configure', scope: 'global', description: 'Configure platform settings' },
   { id: 'pa-2', resource: 'organizations', action: 'create', scope: 'global', description: 'Create organizations' },
@@ -34,6 +35,58 @@ const PLATFORM_ADMIN_PERMISSIONS: Permission[] = [
   { id: 'pa-26', resource: 'grading', action: 'view', scope: 'global', description: 'View grading', riskLevel: 'high' },
 ];
 
+// Regular Admin / Institution Admin (Organization Scope)
+const ORG_ADMIN_PERMISSIONS: Permission[] = [
+  // Academic Structure & Users (Organization Scope)
+  { id: 'oa-1', resource: 'departments', action: 'view', scope: 'organization', description: 'View departments' },
+  { id: 'oa-2', resource: 'departments', action: 'create', scope: 'organization', description: 'Create departments' },
+  { id: 'oa-3', resource: 'departments', action: 'edit', scope: 'organization', description: 'Edit departments' },
+  { id: 'oa-4', resource: 'cohorts', action: 'view', scope: 'organization', description: 'View cohorts and batches' },
+  { id: 'oa-5', resource: 'cohorts', action: 'create', scope: 'organization', description: 'Create cohorts and batches' },
+  { id: 'oa-6', resource: 'cohorts', action: 'edit', scope: 'organization', description: 'Edit cohorts and batches' },
+  { id: 'oa-7', resource: 'cohorts', action: 'assign', scope: 'organization', description: 'Assign learners to cohorts' },
+  { id: 'oa-8', resource: 'users', action: 'view', scope: 'organization', description: 'View institution users' },
+  { id: 'oa-9', resource: 'users', action: 'create', scope: 'organization', description: 'Create and invite learners and faculty' },
+  { id: 'oa-10', resource: 'users', action: 'edit', scope: 'organization', description: 'Edit institution users' },
+  { id: 'oa-11', resource: 'users', action: 'enroll', scope: 'organization', description: 'Enroll users into courses' },
+
+  // Curriculum & Teaching
+  { id: 'oa-12', resource: 'courses', action: 'view', scope: 'organization', description: 'View institution courses' },
+  { id: 'oa-13', resource: 'courses', action: 'create', scope: 'organization', description: 'Create courses' },
+  { id: 'oa-14', resource: 'courses', action: 'edit', scope: 'organization', description: 'Edit courses' },
+  { id: 'oa-15', resource: 'courses', action: 'publish', scope: 'organization', description: 'Publish courses' },
+  { id: 'oa-16', resource: 'lessons', action: 'view', scope: 'organization', description: 'View lessons' },
+  { id: 'oa-17', resource: 'lessons', action: 'create', scope: 'organization', description: 'Create lessons' },
+  { id: 'oa-18', resource: 'lessons', action: 'edit', scope: 'organization', description: 'Edit lessons' },
+  { id: 'oa-19', resource: 'paths', action: 'view', scope: 'organization', description: 'View learning paths' },
+  { id: 'oa-20', resource: 'paths', action: 'create', scope: 'organization', description: 'Create learning paths' },
+  { id: 'oa-21', resource: 'paths', action: 'edit', scope: 'organization', description: 'Edit learning paths' },
+  { id: 'oa-22', resource: 'live_sessions', action: 'view', scope: 'organization', description: 'View live classes' },
+  { id: 'oa-23', resource: 'live_sessions', action: 'create', scope: 'organization', description: 'Schedule live sessions' },
+  { id: 'oa-24', resource: 'live_sessions', action: 'edit', scope: 'organization', description: 'Manage attendance rosters' },
+
+  // Assessments, Evaluations & Grading
+  { id: 'oa-25', resource: 'assessments', action: 'view', scope: 'organization', description: 'View assessments' },
+  { id: 'oa-26', resource: 'assessments', action: 'create', scope: 'organization', description: 'Create assessments' },
+  { id: 'oa-27', resource: 'assessments', action: 'edit', scope: 'organization', description: 'Edit assessments' },
+  { id: 'oa-28', resource: 'assessments', action: 'publish', scope: 'organization', description: 'Publish assessments' },
+  { id: 'oa-29', resource: 'question_banks', action: 'view', scope: 'organization', description: 'View question banks' },
+  { id: 'oa-30', resource: 'question_banks', action: 'create', scope: 'organization', description: 'Create question banks' },
+  { id: 'oa-31', resource: 'grading', action: 'view', scope: 'organization', description: 'View grading queue' },
+  { id: 'oa-32', resource: 'grading', action: 'grade', scope: 'organization', description: 'Grade submissions' },
+  { id: 'oa-33', resource: 'grading', action: 'release_results', scope: 'organization', description: 'Release results' },
+  { id: 'oa-34', resource: 'proctoring', action: 'view', scope: 'organization', description: 'View proctoring alerts' },
+  { id: 'oa-35', resource: 'proctoring', action: 'review', scope: 'organization', description: 'Review proctoring incidents' },
+
+  // Certificates, Reports & Notifications
+  { id: 'oa-36', resource: 'certificates', action: 'view', scope: 'organization', description: 'View certificates' },
+  { id: 'oa-37', resource: 'certificates', action: 'configure', scope: 'organization', description: 'Configure institution certificate templates' },
+  { id: 'oa-38', resource: 'reports', action: 'view', scope: 'organization', description: 'View institution reports' },
+  { id: 'oa-39', resource: 'reports', action: 'export', scope: 'organization', description: 'Export institution reports' },
+  { id: 'oa-40', resource: 'notifications', action: 'view', scope: 'organization', description: 'View notifications' },
+  { id: 'oa-41', resource: 'notifications', action: 'configure', scope: 'organization', description: 'Post institution announcements' },
+];
+
 const TRAINER_PERMISSIONS: Permission[] = [
   { id: 'tr-1', resource: 'courses', action: 'view', scope: 'assigned', description: 'View assigned courses' },
   { id: 'tr-2', resource: 'courses', action: 'create', scope: 'assigned', description: 'Create and author courses' },
@@ -59,6 +112,9 @@ const TRAINER_PERMISSIONS: Permission[] = [
   { id: 'tr-22', resource: 'lessons', action: 'edit', scope: 'assigned', description: 'Edit learning materials' },
   { id: 'tr-23', resource: 'proctoring', action: 'review', scope: 'assigned', description: 'Review proctoring incidents' },
   { id: 'tr-24', resource: 'notifications', action: 'view', scope: 'assigned', description: 'View and post notifications' },
+  { id: 'tr-25', resource: 'paths', action: 'view', scope: 'assigned', description: 'View learning paths' },
+  { id: 'tr-26', resource: 'paths', action: 'create', scope: 'assigned', description: 'Create and author learning paths' },
+  { id: 'tr-27', resource: 'paths', action: 'edit', scope: 'assigned', description: 'Edit own learning paths' },
 ];
 
 const STUDENT_PERMISSIONS: Permission[] = [
@@ -73,14 +129,15 @@ const STUDENT_PERMISSIONS: Permission[] = [
 ];
 
 const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {
-  // 3 Core Canonical Roles
+  // 4 Core Canonical Roles
   platform_admin: PLATFORM_ADMIN_PERMISSIONS,
+  org_admin: ORG_ADMIN_PERMISSIONS,
+  lms_admin: ORG_ADMIN_PERMISSIONS,
+  industrial_admin: ORG_ADMIN_PERMISSIONS,
   trainer: TRAINER_PERMISSIONS,
   student: STUDENT_PERMISSIONS,
 
-  // Legacy mappings for backward compatibility
-  org_admin: PLATFORM_ADMIN_PERMISSIONS,
-  lms_admin: PLATFORM_ADMIN_PERMISSIONS,
+  // Role mappings for compatibility
   instructor: TRAINER_PERMISSIONS,
   assessment_author: TRAINER_PERMISSIONS,
   grader: TRAINER_PERMISSIONS,
@@ -143,53 +200,22 @@ export interface NavItem {
 }
 
 export function getNavigationForRole(role: RoleName): NavItem[] {
-  // 1. PLATFORM ADMIN NAVIGATION
-  const platformAdminNav: NavItem[] = [
-    { id: 'dashboard', label: 'Admin Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
-    
-    // Academic Structure & Organizations
-    { id: 'organizations', label: 'Organizations & Tenants', icon: 'Building2', path: '/organizations', group: 'Structure & Tenants' },
-    { id: 'departments', label: 'Departments Hierarchy', icon: 'Network', path: '/departments', group: 'Structure & Tenants' },
-    { id: 'cohorts', label: 'Cohorts & Batches', icon: 'UsersRound', path: '/cohorts', group: 'Structure & Tenants' },
-
-    // Identity & Access Control
-    { id: 'people', label: 'People & Directory', icon: 'Users', path: '/people', group: 'Identity & Access' },
-    { id: 'roles', label: 'Roles & RBAC Matrix', icon: 'Shield', path: '/roles', group: 'Identity & Access' },
-
-    // Academic Curriculum & Credentials
-    { id: 'courses', label: 'Courses Oversight', icon: 'BookOpen', path: '/courses', group: 'Curriculum & Programs' },
-    { id: 'paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Curriculum & Programs' },
-    { id: 'certificates', label: 'Certificate Templates', icon: 'Award', path: '/certificates', group: 'Curriculum & Programs' },
-    { id: 'enrollments', label: 'Enrollments', icon: 'UserCheck', path: '/enrollments', group: 'Curriculum & Programs' },
-
-    // Assessment & Quality Control
-    { id: 'assessments', label: 'Assessments & Quizzes', icon: 'ClipboardCheck', path: '/assessments', group: 'Assessment & Moderation' },
-    { id: 'question-banks', label: 'Question Banks', icon: 'HelpCircle', path: '/question-banks', group: 'Assessment & Moderation' },
-    { id: 'live-sessions', label: 'Live Classes & Timetable', icon: 'Video', path: '/live-sessions', group: 'Assessment & Moderation' },
-    { id: 'grading', label: 'Grading Oversight', icon: 'PenTool', path: '/grading', group: 'Assessment & Moderation' },
-    { id: 'proctoring', label: 'Proctoring Security', icon: 'Eye', path: '/proctoring', group: 'Assessment & Moderation' },
-
-    // Platform Intelligence & Settings
-    { id: 'reports', label: 'Platform Reports', icon: 'BarChart3', path: '/reports', group: 'System & Insights' },
-    { id: 'integrations', label: 'Integrations & APIs', icon: 'Plug', path: '/integrations', group: 'System & Insights' },
-    { id: 'notifications', label: 'Announcements & Alerts', icon: 'Bell', path: '/notifications', group: 'System & Insights' },
-    { id: 'settings', label: 'Platform Settings', icon: 'Settings', path: '/settings', group: 'System & Insights' },
-    { id: 'profile', label: 'Admin Profile', icon: 'User', path: '/profile', group: 'Account' },
-  ];
-
-  // 2. TRAINER NAVIGATION (Teaching, Assessments, Live Sessions, Grading)
+  // 1. TRAINER NAVIGATION (Teaching, Assessments, Live Sessions, Grading)
   const trainerNav: NavItem[] = [
     { id: 'dashboard', label: 'Trainer Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
     // Teaching & Classes
     { id: 'my-courses', label: 'My Courses', icon: 'BookOpen', path: '/courses', group: 'Teaching & Curriculum' },
+    { id: 'learning-paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Teaching & Curriculum' },
     { id: 'course-builder', label: 'Course Studio', icon: 'PenTool', path: '/course-builder', group: 'Teaching & Curriculum' },
     { id: 'learning-materials', label: 'Learning Materials', icon: 'FileText', path: '/learning-materials', group: 'Teaching & Curriculum' },
     { id: 'cohorts', label: 'Classes & Batches', icon: 'UsersRound', path: '/cohorts', group: 'Teaching & Curriculum' },
 
-    // Live Classes & Attendance
-    { id: 'live-sessions', label: 'Live Classes & Webinars', icon: 'Video', path: '/live-sessions', group: 'Live Sessions' },
-    { id: 'attendance', label: 'Attendance Roster', icon: 'UserCheck', path: '/attendance', group: 'Live Sessions' },
+    // Schedule & Attendance
+    { id: 'calendar', label: 'Activity & Planner', icon: 'Calendar', path: '/calendar', group: 'Schedule & Attendance' },
+    { id: 'timetable', label: 'Classes & Timetable', icon: 'Clock', path: '/classes-timetable', group: 'Schedule & Attendance' },
+    { id: 'live-sessions', label: 'Live Sessions', icon: 'Video', path: '/live-sessions', group: 'Schedule & Attendance' },
+    { id: 'attendance', label: 'Attendance Ledger', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
 
     // Evaluations & Grading
     { id: 'assessments', label: 'Assessments & Quizzes', icon: 'ClipboardCheck', path: '/assessments', group: 'Evaluations & Grading' },
@@ -205,18 +231,23 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'profile', label: 'Trainer Profile', icon: 'User', path: '/profile', group: 'Account' },
   ];
 
-  // 3. STUDENT NAVIGATION (Learning, Assignments, Assessments, Attendance, Credentials)
+  // 2. STUDENT NAVIGATION (Learning, Assignments, Assessments, Attendance, Credentials)
   const studentNav: NavItem[] = [
     { id: 'dashboard', label: 'Student Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
     // Academics & Learning Player
     { id: 'my-learning', label: 'My Enrolled Courses', icon: 'BookOpen', path: '/my-learning', group: 'Academics & Learning' },
     { id: 'learning-materials', label: 'Course Player & Materials', icon: 'Play', path: '/learning-materials', group: 'Academics & Learning' },
-    { id: 'my-paths', label: 'Degree Curriculum & Progress', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
+    { id: 'my-paths', label: 'Learning Paths', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
+
+    // Explore Courses & Link Enrollment
+    { id: 'browse-courses', label: 'Browse Courses', icon: 'Compass', path: '/catalog', group: 'Explore Courses' },
+    { id: 'join-link', label: 'Join with Link', icon: 'Link2', path: '/join-course', group: 'Explore Courses' },
 
     // Schedule & Attendance
-    { id: 'timetable', label: 'Timetable & Live Sessions', icon: 'Calendar', path: '/my-sessions', group: 'Schedule & Attendance' },
-    { id: 'attendance', label: 'My Attendance Ledger', icon: 'UserCheck', path: '/attendance', group: 'Schedule & Attendance' },
+    { id: 'timetable', label: 'Classes & Timetable', icon: 'Clock', path: '/classes-timetable', group: 'Schedule & Attendance' },
+    { id: 'live-sessions', label: 'Live Sessions', icon: 'Video', path: '/live-sessions', group: 'Schedule & Attendance' },
+    { id: 'attendance', label: 'My Attendance Ledger', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
 
     // Evaluations & Results
     { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Tests' },
@@ -229,12 +260,137 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'profile', label: 'Student Profile', icon: 'User', path: '/profile', group: 'Credentials & Profile' },
   ];
 
-  // Dispatch strictly to the three canonical roles
+  // 3. Dispatch to the dedicated role configurations
+  if (role === 'platform_admin') {
+    return platformAdminNav;
+  }
+  if (role === 'org_admin' || role === 'lms_admin' || (role as string) === 'industrial_admin') {
+    return adminNav;
+  }
   if (role === 'trainer' || role === 'instructor' || role === 'assessment_author' || role === 'grader') {
     return trainerNav;
   }
   if (role === 'student' || role === 'learner' || role === 'guest') {
     return studentNav;
   }
-  return platformAdminNav;
+  return adminNav;
+}
+
+/**
+ * Normalizes any role variant into one of the 4 canonical roles:
+ * 'platform_admin' | 'org_admin' | 'trainer' | 'student'
+ */
+export function normalizeCanonicalRole(rawRole?: string): CanonicalRole {
+  if (!rawRole) return 'student';
+  if (rawRole === 'trainer' || rawRole === 'instructor' || rawRole === 'assessment_author' || rawRole === 'grader') {
+    return 'trainer';
+  }
+  if (rawRole === 'student' || rawRole === 'learner' || rawRole === 'guest') {
+    return 'student';
+  }
+  if (rawRole === 'org_admin' || rawRole === 'lms_admin' || rawRole === 'industrial_admin' || rawRole === 'admin') {
+    return 'org_admin';
+  }
+  if (rawRole === 'platform_admin' || rawRole === 'super_admin') {
+    return 'platform_admin';
+  }
+  return 'student';
+}
+
+/**
+ * Centralized Route Permission Validator
+ * Checks whether a given path is authorized for the given user role.
+ */
+export function isRouteAllowedForRole(pathname: string, rawRole?: string): boolean {
+  const role = normalizeCanonicalRole(rawRole);
+  const cleanPath = pathname.split('?')[0].replace(/\/$/, '') || '/';
+
+  // 1. Universal routes allowed for all authenticated roles
+  if (
+    cleanPath === '' ||
+    cleanPath === '/' ||
+    cleanPath === '/dashboard' ||
+    cleanPath === '/profile' ||
+    cleanPath === '/notifications' ||
+    cleanPath === '/timetable' ||
+    cleanPath === '/classes-timetable' ||
+    cleanPath === '/live-sessions' ||
+    cleanPath === '/my-sessions' ||
+    cleanPath === '/attendance' ||
+    cleanPath === '/attendance-ledger' ||
+    cleanPath === '/join-course' ||
+    cleanPath === '/catalog' ||
+    cleanPath === '/my-learning' ||
+    cleanPath === '/my-paths' ||
+    cleanPath === '/learning-paths' ||
+    cleanPath === '/my-assessments' ||
+    cleanPath === '/my-results' ||
+    cleanPath === '/my-certificates' ||
+    cleanPath === '/assignments' ||
+    cleanPath === '/certificates' ||
+    cleanPath.startsWith('/course-player') ||
+    cleanPath.startsWith('/learning-materials') ||
+    cleanPath.startsWith('/exam/')
+  ) {
+    return true;
+  }
+
+  // 2. Public / discoverable course details
+  if (cleanPath.startsWith('/course/') || cleanPath.startsWith('/courses/')) {
+    // Specifically restricted faculty/admin subpaths:
+    if (
+      cleanPath.includes('/share') ||
+      cleanPath.includes('/assign-students')
+    ) {
+      return role === 'platform_admin' || role === 'org_admin' || role === 'trainer';
+    }
+    return true;
+  }
+
+  // 3. Platform Admin Only routes
+  if (
+    cleanPath === '/organizations' ||
+    cleanPath === '/roles' ||
+    cleanPath === '/integrations' ||
+    cleanPath === '/settings'
+  ) {
+    return role === 'platform_admin';
+  }
+
+  // 4. Organisation Management & Admin Directory (Admin & Platform Admin only)
+  if (
+    cleanPath.startsWith('/organisation') ||
+    cleanPath === '/departments' ||
+    cleanPath.startsWith('/departments/') ||
+    cleanPath === '/people' ||
+    cleanPath.startsWith('/people/') ||
+    cleanPath === '/faculty' ||
+    cleanPath.startsWith('/faculty/') ||
+    cleanPath === '/students/new' ||
+    cleanPath === '/cohorts/new' ||
+    cleanPath === '/enrollments'
+  ) {
+    return role === 'platform_admin' || role === 'org_admin';
+  }
+
+  // 5. Teaching & Academic Operations (Platform Admin, Org Admin, and Trainer)
+  if (
+    cleanPath === '/cohorts' ||
+    cleanPath.startsWith('/cohorts/') ||
+    cleanPath === '/students' ||
+    cleanPath === '/courses' ||
+    cleanPath === '/course-builder' ||
+    cleanPath === '/learning-paths' ||
+    cleanPath === '/calendar' ||
+    cleanPath === '/planner' ||
+    cleanPath === '/assessments' ||
+    cleanPath === '/question-banks' ||
+    cleanPath === '/grading' ||
+    cleanPath === '/proctoring' ||
+    cleanPath === '/reports'
+  ) {
+    return role === 'platform_admin' || role === 'org_admin' || role === 'trainer';
+  }
+
+  return true;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { mockAssessments, mockQuestions } from '../../data/mockData';
+import { useAssessmentStore } from '../../lib/assessmentStore';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X
@@ -8,14 +9,17 @@ import {
 
 export const ExamPlayerPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const assessment = mockAssessments.find((a) => a.id === id) || mockAssessments[0];
+  const { getAssessmentById, getQuestionsForAssessment } = useAssessmentStore();
+  const storeAssessment = id ? getAssessmentById(id) : undefined;
+  const assessment = storeAssessment || mockAssessments.find((a) => a.id === id) || mockAssessments[0];
   const navigate = useNavigate();
 
   // Lifecycle stage: 'readiness' -> 'in_exam' -> 'review' -> 'results'
   const [stage, setStage] = useState<'readiness' | 'in_exam' | 'results'>('readiness');
 
-  // Exam state
-  const questions = mockQuestions.slice(0, 5); // 5 exam questions
+  // Exam questions
+  const loadedQuestions = id ? getQuestionsForAssessment(assessment.id) : [];
+  const questions = loadedQuestions.length > 0 ? loadedQuestions : mockQuestions.slice(0, 5);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [flaggedQIds, setFlaggedQIds] = useState<string[]>([]);
@@ -114,7 +118,7 @@ export const ExamPlayerPage: React.FC = () => {
             padding: '16px',
             marginBottom: '20px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
             gap: '12px',
             textAlign: 'center'
           }}>
@@ -252,7 +256,7 @@ export const ExamPlayerPage: React.FC = () => {
         </div>
 
         {/* Main Grid: Question Content on Left (75%), Navigator on Right (25%) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '20px' }}>
+        <div className="exam-layout-grid">
           {/* Question Box */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '440px' }}>
             <div>
@@ -332,7 +336,7 @@ export const ExamPlayerPage: React.FC = () => {
           <div className="card" style={{ padding: '16px', height: 'fit-content' }}>
             <h3 style={{ fontSize: '0.95rem', marginBottom: '12px' }}>Question Navigator</h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))', gap: '8px', marginBottom: '16px' }}>
               {questions.map((q, idx) => {
                 const isCurrent = idx === currentQIndex;
                 const isAnswered = selectedAnswers[q.id] !== undefined;
@@ -492,7 +496,7 @@ export const ExamPlayerPage: React.FC = () => {
           padding: '24px',
           marginBottom: '28px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
           gap: '16px'
         }}>
           <div>

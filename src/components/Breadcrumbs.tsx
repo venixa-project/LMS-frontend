@@ -4,14 +4,28 @@ import { ChevronRight, Home } from 'lucide-react';
 
 const routeNames: Record<string, string> = {
   dashboard: 'Dashboard',
-  organizations: 'Organizations',
-  departments: 'Departments & Hierarchy',
-  people: 'People & Directory',
-  cohorts: 'Cohorts',
+  organizations: 'Organizations & Tenants',
+  organisation: 'Organisation Management',
+  'company-profile': 'Company Profile',
+  'branches-locations': 'Branches & Locations',
+  'departments-designations': 'Departments & Designations',
+  departments: 'Departments & Designations',
+  people: 'People & Faculty',
+  students: 'Students',
+  faculty: 'Faculty & Trainers',
+  cohorts: 'Classes, Sections & Cohort Batches',
   roles: 'Roles & Permissions',
-  courses: 'Course Management',
+  courses: 'Courses & Catalog',
+  'course-builder': 'Course Studio',
   'learning-paths': 'Learning Paths',
-  'live-sessions': 'Live Classes',
+  enrollments: 'Enrollments Roster',
+  calendar: 'Activity & Planner',
+  timetable: 'Classes & Timetable',
+  'classes-timetable': 'Classes & Timetable',
+  'live-sessions': 'Live Sessions',
+  'my-sessions': 'Live Sessions',
+  attendance: 'Attendance Ledger',
+  'attendance-ledger': 'Attendance Ledger',
   'question-banks': 'Question Banks',
   assessments: 'Assessments & Quizzes',
   grading: 'Grading & Moderation',
@@ -24,9 +38,9 @@ const routeNames: Record<string, string> = {
   profile: 'My Profile',
   'my-learning': 'My Learning',
   'my-assessments': 'My Assessments',
-  'my-sessions': 'My Live Classes',
   'my-certificates': 'My Certificates',
-  'my-results': 'Assessment Results'
+  'my-results': 'Assessment Results',
+  new: 'Create'
 };
 
 export const Breadcrumbs: React.FC = () => {
@@ -54,7 +68,18 @@ export const Breadcrumbs: React.FC = () => {
       {pathnames.map((segment, index) => {
         const routeTo = `/${pathnames.slice(0, index + 1).join('/')}`;
         const isLast = index === pathnames.length - 1;
-        const displayName = routeNames[segment] || segment.replace(/-/g, ' ');
+        const parentSegment = index > 0 ? pathnames[index - 1] : '';
+
+        let displayName = routeNames[segment] || segment.replace(/-/g, ' ');
+        if (segment === 'new') {
+          if (parentSegment === 'cohorts') displayName = 'Create New Cohort';
+          else if (parentSegment === 'people' || parentSegment === 'students' || parentSegment === 'faculty') displayName = 'Add Person';
+          else displayName = 'Create';
+        } else if (segment === 'edit') {
+          displayName = 'Edit Profile';
+        } else if (segment.startsWith('u-')) {
+          displayName = 'Member Details';
+        }
 
         return (
           <React.Fragment key={routeTo}>
