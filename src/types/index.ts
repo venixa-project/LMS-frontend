@@ -13,9 +13,9 @@ export type ProctoringIncidentStatus = 'new' | 'in_review' | 'cleared' | 'escala
 export type SessionStatus = 'scheduled' | 'live' | 'ended' | 'cancelled' | 'failed' | 'rescheduled';
 export type NotificationDeliveryStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'retrying' | 'bounced';
 
-// --- Roles & Permissions (3 Core Platform Roles: platform_admin, trainer, student) ---
-export type CanonicalRole = 'platform_admin' | 'trainer' | 'student';
-export type RoleName = 'platform_admin' | 'trainer' | 'student' | 'org_admin' | 'lms_admin' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
+// --- Roles & Permissions (4 Canonical Roles: platform_admin, org_admin, trainer, student) ---
+export type CanonicalRole = 'platform_admin' | 'org_admin' | 'trainer' | 'student';
+export type RoleName = 'platform_admin' | 'org_admin' | 'lms_admin' | 'industrial_admin' | 'trainer' | 'student' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'archive' | 'publish' | 'assign' | 'enroll' | 'invite' | 'grade' | 'moderate' | 'release_results' | 'export' | 'configure' | 'review' | 'revoke' | 'delete';
 export type PermissionResource = 'users' | 'organizations' | 'cohorts' | 'courses' | 'lessons' | 'paths' | 'live_sessions' | 'question_banks' | 'assessments' | 'submissions' | 'grading' | 'proctoring' | 'reports' | 'notifications' | 'integrations' | 'platform_settings' | 'roles' | 'certificates' | 'departments';
 export type PermissionScope = 'global' | 'organization' | 'department' | 'cohort' | 'course' | 'assessment' | 'assigned' | 'own';
@@ -62,6 +62,9 @@ export interface User {
   status: UserAccountStatus;
   lastLogin?: string;
   mfaEnabled: boolean;
+  rollNo?: string;
+  specialization?: string;
+  eligibleCourseIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +109,8 @@ export interface Cohort {
   programId?: string;
   instructors?: string[];
   instructorIds?: string[];
+  departmentId?: string;
+  studentIds?: string[];
   startDate: string;
   endDate: string;
   learnerCount: number;
@@ -123,6 +128,7 @@ export interface Course {
   description: string;
   thumbnail?: string;
   category: string;
+  departmentId?: string;
   tags?: string[];
   language?: string;
   audience?: string;
@@ -138,9 +144,73 @@ export interface Course {
   enrolledLearners?: number;
   completionRate?: number;
   level?: string;
+  learningOutcomes?: string[];
+  prerequisites?: string[];
+  shareableLinkEnabled?: boolean;
+  enrollmentDeadline?: string;
+  enrollmentCapacity?: number;
+  enrollmentApprovalRequired?: boolean;
   createdBy?: string;
   createdAt: string;
+  finalAssessment?: QuizAssessmentConfig;
   updatedAt: string;
+}
+
+// --- Assessment & Quiz Configuration Types for Course Builder ---
+export interface QuizOption {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+export interface QuizQuestionItem {
+  id: string;
+  prompt: string;
+  type: 'single_choice' | 'multiple_choice' | 'true_false' | 'short_answer';
+  options: QuizOption[];
+  points: number;
+  explanation?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  topic?: string;
+  correctAnswerText?: string;
+  needsReview?: boolean;
+  source?: 'manual' | 'ai' | 'excel_csv' | 'pdf_word' | 'question_bank';
+}
+
+export interface UploadedDocumentInfo {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
+  url?: string;
+  text?: string;
+  wordCount?: number;
+  charCount?: number;
+  pageCount?: number;
+  isScannedOrImageOnly?: boolean;
+}
+
+export interface QuizAssessmentConfig {
+  id: string;
+  title: string;
+  description?: string;
+  scope: 'lesson_quiz' | 'module_assessment' | 'final_assessment';
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeLimitMinutes: number;
+  passingPercentage: number;
+  allowedAttempts: number; // 0 for unlimited, 1, 2, 3...
+  totalMarks: number;
+  questions: QuizQuestionItem[];
+  sourceDocumentNames?: string[];
+  creationMode?: 'ai' | 'manual' | 'excel_csv' | 'pdf_word' | 'question_bank';
+  status: 'draft' | 'ready';
+  negativeMarkingEnabled?: boolean;
+  negativeMarksPerQuestion?: number;
+  randomizeQuestions?: boolean;
+  randomQuestionCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CourseModule {
@@ -149,6 +219,7 @@ export interface CourseModule {
   description?: string;
   order: number;
   lessons: Lesson[];
+  assessment?: QuizAssessmentConfig;
 }
 
 export interface Lesson {
@@ -163,9 +234,14 @@ export interface Lesson {
   isRequired?: boolean;
   isCompleted?: boolean;
   contentUrl?: string;
+  quizConfig?: QuizAssessmentConfig;
+  uploadedDocument?: UploadedDocumentInfo;
 }
 
 // --- Learning Path ---
+export type LearningPathInstitutionType = 'school' | 'higher_ed' | 'corporate' | 'training_institute' | 'general';
+export type LearningPathDifficulty = 'Beginner' | 'Intermediate' | 'Advanced';
+
 export interface LearningPath {
   id: string;
   title: string;
@@ -187,6 +263,24 @@ export interface LearningPath {
   createdAt: string;
   updatedAt: string;
   organizationId?: string;
+
+  // Multi-Tenant Enterprise Enhancements
+  institutionType?: LearningPathInstitutionType;
+  category?: string;
+  difficulty?: LearningPathDifficulty;
+  departmentId?: string;
+  targetGroup?: string;
+  thumbnail?: string;
+  createdBy?: string;
+  creatorName?: string;
+  creatorRole?: string;
+  enforceSequence?: boolean;
+  requirePassingAssessments?: boolean;
+  certificateEligible?: boolean;
+  certificateTitle?: string;
+  assignedCohortIds?: string[];
+  assignedUserIds?: string[];
+  assignedDepartmentIds?: string[];
 }
 
 export interface LearningPathCourse {
@@ -198,6 +292,7 @@ export interface LearningPathCourse {
   title?: string;
   category?: string;
   durationHours?: number;
+  status?: EntityStatus;
 }
 
 // --- Enrollment ---
@@ -239,10 +334,23 @@ export interface LiveSession {
   recordingUrl?: string;
   agenda?: string;
   materials?: string[];
+  departmentId?: string;
+  description?: string;
+  targetAudienceType?: 'all_cohort' | 'selected_students' | 'faculty_only' | 'combined' | string;
+  targetStudentIds?: string[];
+  targetStaffIds?: string[];
+  audienceScope?: 'students' | 'faculty' | 'both';
+  isDraft?: boolean;
   status: SessionStatus;
   attendance: AttendanceRecord[];
   createdAt: string;
   updatedAt: string;
+  room?: string;
+  dayOfWeek?: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+  cohortName?: string;
+  courseTitle?: string;
+  createdBy?: string;
+  createdRole?: string;
 }
 
 export interface AttendanceRecord {
@@ -251,6 +359,76 @@ export interface AttendanceRecord {
   status: 'present' | 'absent' | 'late' | 'excused';
   joinedAt?: string;
   leftAt?: string;
+}
+
+// --- Employee Attendance (Faculty, Administrative Staff, Non-Teaching Staff) ---
+export interface EmployeeAttendanceRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeEmail: string;
+  role: 'faculty' | 'trainer' | 'admin_staff' | 'support_staff';
+  roleTitle: string;
+  department: string;
+  departmentId: string;
+  date: string;
+  status: 'present' | 'absent' | 'on_leave' | 'late' | 'remote';
+  checkInTime?: string;
+  checkOutTime?: string;
+  leaveType?: 'sick' | 'casual' | 'annual' | 'duty';
+  notes?: string;
+}
+
+export interface EmployeeAttendanceSummary {
+  reportingPeriod: string;
+  totalEmployees: number;
+  presentCount: number;
+  absentCount: number;
+  approvedLeaveCount: number;
+  remoteCount: number;
+  attendanceRate: number;
+}
+
+// --- Student Attendance (Enrolled Learners, Cohorts & Batches) ---
+export interface StudentSessionAttendanceRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  rollNo: string;
+  cohortId: string;
+  cohortName: string;
+  cohortCode: string;
+  courseTitle: string;
+  date: string;
+  timeSlot: string;
+  facultyName: string;
+  status: 'present' | 'absent' | 'late' | 'excused';
+  method?: string;
+  notes?: string;
+}
+
+export interface StudentAttendanceSummary {
+  reportingPeriod: string;
+  totalExpected: number;
+  presentCount: number;
+  lateCount: number;
+  absentCount: number;
+  approvedLeaveCount: number;
+  attendanceRate: number;
+}
+
+export interface CohortAttendanceSummary {
+  cohortId: string;
+  cohortName: string;
+  cohortCode: string;
+  courseTitle: string;
+  facultyName: string;
+  totalExpected: number;
+  presentCount: number;
+  absentCount: number;
+  approvedLeaveCount: number;
+  attendanceRate: number;
 }
 
 // --- Question Bank ---
@@ -272,16 +450,20 @@ export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 
 
 export interface Question {
   id: string;
-  bankId: string;
+  bankId?: string;
+  assessmentId?: string;
   type: QuestionType;
   prompt: string;
   instructions?: string;
   options?: QuestionOption[];
   correctAnswer?: string;
+  correctAnswers?: string[];
   answerKey?: string;
   explanation?: string;
+  rubric?: string;
+  topic?: string;
   points: number;
-  tags: string[];
+  tags?: string[];
   difficulty: 'easy' | 'medium' | 'hard';
   media?: string;
   accessibilityNotes?: string;
@@ -328,6 +510,42 @@ export interface Assessment {
   rubricId?: string;
   createdAt: string;
   updatedAt: string;
+  // Extended AI & Builder Properties
+  creationMode?: 'ai_generated' | 'manual';
+  sourceDocument?: {
+    name: string;
+    size: number;
+    type: string;
+    extractedWordCount: number;
+  };
+  difficultyDistribution?: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  questionTypeDistribution?: Record<string, number>;
+  questionsData?: Question[];
+}
+
+// --- AI Assessment Generation Types ---
+export type AssessmentDifficultySetting = 'easy' | 'medium' | 'hard' | 'mixed';
+
+export type AssessmentQuestionTypeSetting =
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'true_false'
+  | 'short_answer'
+  | 'essay';
+
+export interface AIGenerationConfig {
+  documentName: string;
+  documentText: string;
+  difficulty: AssessmentDifficultySetting;
+  questionCount: number;
+  questionTypes: AssessmentQuestionTypeSetting[];
+  defaultMarksPerType?: Record<AssessmentQuestionTypeSetting, number>;
+  courseId?: string;
+  title?: string;
 }
 
 export interface Accommodation {

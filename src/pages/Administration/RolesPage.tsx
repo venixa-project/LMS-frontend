@@ -239,7 +239,7 @@ export const RolesPage: React.FC = () => {
             <h4 style={{ fontSize: '0.95rem', marginBottom: '12px' }}>
               Accessible Navigation Menu ({simulatedNav.length} items visible)
             </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
               {simulatedNav.map((item) => (
                 <div
                   key={item.id}

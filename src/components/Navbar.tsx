@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
+import { useThemeStore, ThemePreference } from '../lib/themeStore';
 import { mockOrganizations } from '../data/mockData';
 import {
-  Search, Bell, Sun, Moon, Shield, ChevronDown, User, LogOut,
+  Search, Bell, Sun, Moon, Monitor, Check, Shield, ChevronDown, User, LogOut,
   Settings, Menu, Building, HelpCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -21,22 +22,56 @@ export const Navbar: React.FC<Props> = ({
   onOpenSearch
 }) => {
   const { user, logout, unreadNotifications } = useAuthStore();
+  const { preference, resolvedTheme, setTheme } = useThemeStore();
   const [selectedOrgId, setSelectedOrgId] = useState('org-001');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [isLightMode, setIsLightMode] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const toggleTheme = () => {
-    const nextTheme = !isLightMode;
-    setIsLightMode(nextTheme);
-    if (nextTheme) {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
+  // Company logo and branding state from storage
+  const [companyInfo, setCompanyInfo] = useState<{ name?: string; logo?: string } | null>(() => {
+    try {
+      const cached = localStorage.getItem('venilearn_company');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
     }
-  };
+  });
+
+  useEffect(() => {
+    const handleCompanyUpdate = () => {
+      try {
+        const cached = localStorage.getItem('venilearn_company');
+        setCompanyInfo(cached ? JSON.parse(cached) : null);
+      } catch {}
+    };
+
+    window.addEventListener('venilearn_company_updated', handleCompanyUpdate);
+    window.addEventListener('storage', handleCompanyUpdate);
+    return () => {
+      window.removeEventListener('venilearn_company_updated', handleCompanyUpdate);
+      window.removeEventListener('storage', handleCompanyUpdate);
+    };
+  }, []);
+
+  // Close theme menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) {
+        setShowThemeMenu(false);
+      }
+    };
+    if (showThemeMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showThemeMenu]);
 
   const handleLogout = () => {
+    sessionStorage.setItem('venilearn_logged_out', 'true');
     logout();
     navigate('/login');
   };
@@ -81,12 +116,12 @@ export const Navbar: React.FC<Props> = ({
 
         {/* Tenant/Org Switcher (Authorized admins) */}
         {isPlatformAdmin ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="nav-org-select-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building size={16} color="var(--primary)" />
             <select
               value={selectedOrgId}
               onChange={(e) => setSelectedOrgId(e.target.value)}
-              className="form-select"
+              className="form-select nav-org-select"
               style={{
                 padding: '4px 8px',
                 fontSize: '0.8rem',
@@ -103,34 +138,56 @@ export const Navbar: React.FC<Props> = ({
             </select>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            <Building size={14} color="var(--primary)" />
-            <span style={{ fontWeight: 600 }}>Acme Learning Corp</span>
+          <div className="nav-org-select-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            {companyInfo?.logo ? (
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '5px',
+                  background: '#ffffff',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '2px',
+                  flexShrink: 0,
+                }}
+                title={companyInfo.name || 'Company Logo'}
+              >
+                <img
+                  src={companyInfo.logo}
+                  alt={companyInfo.name || 'Company Logo'}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            ) : (
+              <Building size={14} color="var(--primary)" />
+            )}
+            <span style={{ fontWeight: 600 }}>{companyInfo?.name || 'Venixa Technologies'}</span>
           </div>
         )}
       </div>
 
       {/* Middle & Right Navigation actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="topbar-actions">
         {/* Search trigger */}
         <button
           onClick={onOpenSearch}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            padding: '6px 14px',
-            color: 'var(--text-muted)',
-            fontSize: '0.825rem',
-            cursor: 'pointer'
-          }}
+          className="nav-search-btn"
         >
           <Search size={14} />
-          <span>Search everything...</span>
-          <kbd style={{
+          <span className="nav-search-text">Search everything...</span>
+          <kbd className="nav-search-kbd" style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-subtle)',
             borderRadius: '4px',
@@ -156,27 +213,121 @@ export const Navbar: React.FC<Props> = ({
           title="Switch role perspective for testing"
         >
           <Shield size={14} />
-          <span style={{ textTransform: 'capitalize' }}>
+          <span className="nav-role-text" style={{ textTransform: 'capitalize' }}>
             Role: {
-              user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'assessment_author' || user?.activeRole === 'grader'
+              !user
+                ? 'Guest'
+                : user.activeRole === 'trainer' || user.activeRole === 'instructor' || user.activeRole === 'assessment_author' || user.activeRole === 'grader'
                 ? 'Trainer'
-                : user?.activeRole === 'student' || user?.activeRole === 'learner'
+                : user.activeRole === 'student' || user.activeRole === 'learner'
                 ? 'Student'
-                : 'Platform Admin'
+                : user.activeRole === 'org_admin' || user.activeRole === 'lms_admin'
+                ? 'Institution Admin'
+                : user.activeRole === 'platform_admin'
+                ? 'Platform Admin'
+                : 'User'
             }
           </span>
           <ChevronDown size={12} />
         </button>
 
-        {/* Theme toggle */}
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={toggleTheme}
-          style={{ padding: '7px' }}
-          title={isLightMode ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-        >
-          {isLightMode ? <Moon size={16} /> : <Sun size={16} />}
-        </button>
+        {/* Theme Selector (Light, Dark, System) */}
+        <div style={{ position: 'relative' }} ref={themeMenuRef}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowThemeMenu(!showThemeMenu)}
+            style={{
+              padding: '6px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+            title={`Theme: ${preference === 'system' ? `System (${resolvedTheme})` : preference === 'light' ? 'Light' : 'Dark'}`}
+            aria-label="Select color theme"
+            aria-haspopup="true"
+            aria-expanded={showThemeMenu}
+          >
+            {preference === 'light' ? (
+              <Sun size={15} color="var(--warning)" />
+            ) : preference === 'dark' ? (
+              <Moon size={15} color="var(--primary)" />
+            ) : (
+              <Monitor size={15} color="var(--accent-cyan)" />
+            )}
+            <ChevronDown size={11} className="text-muted" />
+          </button>
+
+          {showThemeMenu && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '6px',
+                width: '190px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-lg)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: '6px',
+                zIndex: 60,
+                animation: 'scaleUp 0.15s ease'
+              }}
+            >
+              <div style={{ padding: '6px 10px 4px', fontSize: '0.675rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Appearance Theme
+              </div>
+
+              {[
+                { id: 'light', label: 'Light', desc: 'Always light theme', icon: Sun, color: 'var(--warning)' },
+                { id: 'dark', label: 'Dark', desc: 'Always dark theme', icon: Moon, color: 'var(--primary)' },
+                { id: 'system', label: 'System (Device)', desc: `Follow OS (${resolvedTheme})`, icon: Monitor, color: 'var(--accent-cyan)' }
+              ].map((opt) => {
+                const IconComp = opt.icon;
+                const isSelected = preference === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setTheme(opt.id as ThemePreference);
+                      setShowThemeMenu(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '7px 10px',
+                      fontSize: '0.8rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: 'none',
+                      background: isSelected ? 'var(--primary-light)' : 'transparent',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      marginBottom: '2px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <IconComp size={15} color={opt.color} />
+                      <div>
+                        <div style={{ fontWeight: isSelected ? 700 : 500, lineHeight: 1.2 }}>
+                          {opt.label}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                          {opt.desc}
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && <Check size={14} color="var(--primary)" strokeWidth={2.5} />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Notifications Center button */}
         <button
@@ -209,45 +360,54 @@ export const Navbar: React.FC<Props> = ({
           )}
         </button>
 
-        {/* User profile dropdown */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '4px 8px',
-              borderRadius: 'var(--radius-md)',
-              background: 'transparent'
-            }}
+        {/* User profile dropdown or Log In button */}
+        {!user ? (
+          <Link
+            to={`/login?redirect=${encodeURIComponent(window.location.pathname)}`}
+            className="btn btn-primary btn-sm"
+            style={{ fontWeight: 600, padding: '6px 14px' }}
           >
-            <div
+            Log In
+          </Link>
+        ) : (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-                color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
-                fontSize: '0.85rem'
+                gap: '8px',
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-md)',
+                background: 'transparent'
               }}
             >
-              {user ? `${user.firstName[0]}${user.lastName[0]}` : 'U'}
-            </div>
-            <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
-                {user?.displayName || 'Demo User'}
-              </span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                {user?.email || 'user@lms.demo'}
-              </span>
-            </div>
-            <ChevronDown size={14} color="var(--text-muted)" />
-          </button>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.85rem'
+                }}
+              >
+                {`${user.firstName?.[0] || 'U'}${user.lastName?.[0] || ''}`}
+              </div>
+              <div className="nav-user-details" style={{ textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
+                  {user.displayName || 'Demo User'}
+                </span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {user.email || 'user@lms.demo'}
+                </span>
+              </div>
+              <ChevronDown size={14} color="var(--text-muted)" />
+            </button>
 
           {showProfileMenu && (
             <>
@@ -362,6 +522,7 @@ export const Navbar: React.FC<Props> = ({
           </>
         )}
         </div>
+      )}
       </div>
     </header>
   );

@@ -19,7 +19,7 @@ interface Announcement {
 }
 
 export const NotificationsCenterPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user, notifications, markNotificationRead } = useAuthStore();
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
@@ -257,7 +257,7 @@ export const NotificationsCenterPage: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             {announcements.map((ann) => {
               const canDelete = !isLearner && (isOrgAdmin || ann.author === user?.displayName || ann.author.includes('Wilson') || ann.author === 'Faculty Instructor');
               return (
@@ -314,7 +314,34 @@ export const NotificationsCenterPage: React.FC = () => {
       {/* TAB: ACADEMIC REMINDERS (STUDENT ONLY) */}
       {activeTab === 'alerts' && isLearner && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Received Course Invitations */}
+            {notifications.filter(n => n.category === 'course').map(inv => (
+              <div key={inv.id} className="card" style={{ borderLeft: '4px solid var(--primary)', background: inv.isRead ? undefined : 'var(--primary-light)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span className="badge badge-primary">Course Invitation</span>
+                  {!inv.isRead && <span className="badge badge-active" style={{ fontSize: '0.65rem' }}>NEW</span>}
+                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
+                    {new Date(inv.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <h4 style={{ fontSize: '1rem', marginBottom: '6px' }}>{inv.title}</h4>
+                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
+                  {inv.message}
+                </p>
+                {inv.link && (
+                  <a
+                    href={inv.link}
+                    onClick={() => markNotificationRead(inv.id)}
+                    className="btn btn-primary btn-sm"
+                    style={{ width: 'fit-content' }}
+                  >
+                    View Course Details & Join &rarr;
+                  </a>
+                )}
+              </div>
+            ))}
+
             <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                 <span className="badge badge-warning">Assignment Due Soon</span>
@@ -377,7 +404,7 @@ export const NotificationsCenterPage: React.FC = () => {
       {/* TAB: TEACHING ALERTS (FACULTY ONLY) */}
       {activeTab === 'alerts' && isFaculty && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                 <span className="badge badge-warning">Grading SLA</span>

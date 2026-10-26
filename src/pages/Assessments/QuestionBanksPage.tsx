@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { mockQuestionBanks, mockQuestions } from '../../data/mockData';
-import { QuestionBank, Question } from '../../types';
+import { QuestionBank, Question, QuizQuestionItem } from '../../types';
+import { exportQuestionsToCsv } from '../Courses/components/csvTemplateUtils';
 import {
   HelpCircle, Plus, Search, Edit2, CheckCircle2, Trash2,
   FileQuestion, Check, X, Eye, Tag, AlertCircle, Download, Upload
@@ -57,7 +58,24 @@ export const QuestionBanksPage: React.FC = () => {
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             className="btn btn-secondary"
-            onClick={() => alert("Simulated question export: question_bank_export.csv")}
+            onClick={() => {
+              const quizQuestions: QuizQuestionItem[] = currentQuestions.map((q) => ({
+                id: q.id,
+                prompt: q.prompt,
+                type: (q.type === 'multiple_choice' ? 'multiple_choice' : q.type === 'true_false' ? 'true_false' : q.type === 'short_text' ? 'short_answer' : 'single_choice') as any,
+                points: q.points || 5,
+                difficulty: q.difficulty || 'medium',
+                options: (q.options || []).map((opt) => ({
+                  id: opt.id,
+                  text: opt.text,
+                  isCorrect: !!opt.isCorrect
+                })),
+                correctAnswerText: q.correctAnswer,
+                explanation: q.explanation || '',
+                topic: selectedBank.subject
+              }));
+              exportQuestionsToCsv(quizQuestions, `${selectedBank.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_questions.csv`);
+            }}
           >
             <Download size={14} /> Export Bank (.csv)
           </button>

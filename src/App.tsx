@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
+import { RoleGuard } from './components/RoleGuard';
 
 // Auth Pages
 import { LoginPage } from './pages/Auth/LoginPage';
@@ -17,7 +18,12 @@ import { OrganizationsPage } from './pages/Administration/OrganizationsPage';
 import { DepartmentsPage } from './pages/Administration/DepartmentsPage';
 import { PeoplePage } from './pages/Administration/PeoplePage';
 import { CohortsPage } from './pages/Administration/CohortsPage';
+import { CohortCreatePage } from './pages/Administration/CohortCreatePage';
+import { PersonCreatePage } from './pages/Administration/PersonCreatePage';
+import { PersonEditPage } from './pages/Administration/PersonEditPage';
+import { AdminPlannerPage } from './pages/Administration/AdminPlannerPage';
 import { RolesPage } from './pages/Administration/RolesPage';
+import { OrganisationManagementPage } from './pages/Organisation/OrganisationManagementPage';
 
 // Courses & Learning
 import { CoursesPage } from './pages/Courses/CoursesPage';
@@ -25,11 +31,15 @@ import { CourseBuilderPage } from './pages/Courses/CourseBuilderPage';
 import { LearningPathsPage } from './pages/Courses/LearningPathsPage';
 import { LearnerCoursePlayerPage } from './pages/Courses/LearnerCoursePlayerPage';
 import { EnrollmentsPage } from './pages/Academics/EnrollmentsPage';
-import { LeaderboardPage } from './pages/Academics/LeaderboardPage';
-import { MomentumPage } from './pages/Academics/MomentumPage';
+import { PublicCourseDetailsPage } from './pages/Courses/PublicCourseDetailsPage';
+import { JoinCourseWithLinkPage } from './pages/Courses/JoinCourseWithLinkPage';
+import { ShareCoursePage } from './pages/Courses/ShareCoursePage';
+import { AssignStudentsPage } from './pages/Courses/AssignStudentsPage';
 
 // Live Classes & Attendance
 import { LiveSessionsPage } from './pages/LiveSessions/LiveSessionsPage';
+import { TimetablePage } from './pages/LiveSessions/TimetablePage';
+import { AttendanceLedgerPage } from './pages/LiveSessions/AttendanceLedgerPage';
 
 // Assessments
 import { QuestionBanksPage } from './pages/Assessments/QuestionBanksPage';
@@ -56,6 +66,7 @@ import { NotFoundPage } from './pages/ErrorPages/NotFoundPage';
 import { UnauthorizedPage } from './pages/ErrorPages/UnauthorizedPage';
 
 export const App: React.FC = () => {
+
   return (
     <BrowserRouter>
       <Routes>
@@ -72,54 +83,85 @@ export const App: React.FC = () => {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
 
-          {/* Administration & Directory */}
-          <Route path="organizations" element={<OrganizationsPage />} />
-          <Route path="departments" element={<DepartmentsPage />} />
-          <Route path="people" element={<PeoplePage key="people" initialMode="all" />} />
-          <Route path="students" element={<PeoplePage key="students" initialMode="students" />} />
-          <Route path="faculty" element={<PeoplePage key="faculty" initialMode="faculty" />} />
-          <Route path="cohorts" element={<CohortsPage />} />
-          <Route path="roles" element={<RolesPage />} />
+          {/* Platform Admin Only Protected Routes */}
+          <Route element={<RoleGuard allowedRoles={['platform_admin']} />}>
+            <Route path="organizations" element={<OrganizationsPage />} />
+            <Route path="roles" element={<RolesPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="settings" element={<PlatformSettingsPage />} />
+          </Route>
 
-          {/* Course Management & Learning */}
-          <Route path="courses" element={<CoursesPage key="courses" />} />
-          <Route path="my-learning" element={<CoursesPage key="my-learning" />} />
-          <Route path="catalog" element={<CoursesPage key="catalog" />} />
-          <Route path="course-builder" element={<CourseBuilderPage />} />
+          {/* Organisation Management & Admin Directory (Platform Admin & Institution Admin) */}
+          <Route element={<RoleGuard allowedRoles={['platform_admin', 'org_admin']} />}>
+            <Route path="organisation" element={<OrganisationManagementPage />} />
+            <Route path="organisation/company-profile" element={<OrganisationManagementPage subNav="ca-company-profile" />} />
+            <Route path="organisation/branches-locations" element={<OrganisationManagementPage subNav="ca-branches-locations" />} />
+            <Route path="organisation/departments-designations" element={<OrganisationManagementPage subNav="ca-departments-designations" />} />
+            <Route path="organisation/teams-hierarchy" element={<Navigate to="/organisation/departments-designations" replace />} />
+
+            <Route path="departments" element={<DepartmentsPage />} />
+            <Route path="people" element={<PeoplePage />} />
+            <Route path="people/new" element={<PersonCreatePage />} />
+            <Route path="people/student/new" element={<PersonCreatePage />} />
+            <Route path="people/faculty/new" element={<PersonCreatePage />} />
+            <Route path="people/staff/new" element={<PersonCreatePage />} />
+            <Route path="people/:id/edit" element={<PersonEditPage />} />
+            <Route path="students/new" element={<PersonCreatePage />} />
+            <Route path="faculty" element={<PeoplePage initialMode="faculty" />} />
+            <Route path="faculty/new" element={<PersonCreatePage />} />
+            <Route path="cohorts/new" element={<CohortCreatePage />} />
+            <Route path="enrollments" element={<EnrollmentsPage />} />
+          </Route>
+
+          {/* Academic Operations & Teaching (Platform Admin, Org Admin, Trainer) */}
+          <Route element={<RoleGuard allowedRoles={['platform_admin', 'org_admin', 'trainer']} />}>
+            <Route path="students" element={<PeoplePage initialMode="students" />} />
+            <Route path="cohorts" element={<CohortsPage />} />
+            <Route path="courses" element={<CoursesPage />} />
+            <Route path="courses/:id/share" element={<ShareCoursePage />} />
+            <Route path="course/:id/share" element={<ShareCoursePage />} />
+            <Route path="courses/share" element={<ShareCoursePage />} />
+            <Route path="courses/:id/assign-students" element={<AssignStudentsPage />} />
+            <Route path="course/:id/assign-students" element={<AssignStudentsPage />} />
+            <Route path="courses/assign-students" element={<AssignStudentsPage />} />
+            <Route path="course-builder" element={<CourseBuilderPage />} />
+            <Route path="learning-paths" element={<LearningPathsPage />} />
+            <Route path="calendar" element={<AdminPlannerPage />} />
+            <Route path="planner" element={<AdminPlannerPage />} />
+            <Route path="assessments" element={<AssessmentsPage />} />
+            <Route path="question-banks" element={<QuestionBanksPage />} />
+            <Route path="grading" element={<GradingPage />} />
+            <Route path="proctoring" element={<ProctoringPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+          </Route>
+
+          {/* Course Discovery, Learning Player & Link Enrollment */}
+          <Route path="course/:id" element={<PublicCourseDetailsPage />} />
+          <Route path="courses/:id" element={<PublicCourseDetailsPage />} />
+          <Route path="join-course" element={<JoinCourseWithLinkPage />} />
+          <Route path="my-learning" element={<CoursesPage />} />
+          <Route path="catalog" element={<CoursesPage />} />
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
           <Route path="learning-materials" element={<LearnerCoursePlayerPage />} />
-          <Route path="learning-paths" element={<LearningPathsPage key="learning-paths" />} />
-          <Route path="my-paths" element={<LearningPathsPage key="my-paths" />} />
-          <Route path="enrollments" element={<EnrollmentsPage />} />
-          <Route path="leaderboard" element={<LeaderboardPage />} />
+          <Route path="my-paths" element={<LearningPathsPage />} />
 
-          {/* Live Sessions, Timetable & Momentum */}
-          <Route path="live-sessions" element={<LiveSessionsPage key="live-sessions" />} />
-          <Route path="my-sessions" element={<LiveSessionsPage key="my-sessions" />} />
-          <Route path="momentum" element={<MomentumPage />} />
-          <Route path="login-history" element={<MomentumPage />} />
-          <Route path="attendance" element={<LiveSessionsPage key="attendance" defaultTab="attendance" />} />
+          {/* Live Sessions, Timetable & Attendance */}
+          <Route path="timetable" element={<TimetablePage />} />
+          <Route path="classes-timetable" element={<TimetablePage />} />
+          <Route path="live-sessions" element={<LiveSessionsPage />} />
+          <Route path="my-sessions" element={<LiveSessionsPage />} />
+          <Route path="attendance" element={<AttendanceLedgerPage />} />
+          <Route path="attendance-ledger" element={<AttendanceLedgerPage />} />
 
-          {/* Assessments & Assignments */}
-          <Route path="assignments" element={<AssessmentsPage key="assignments" defaultTab="assignments" />} />
-          <Route path="question-banks" element={<QuestionBanksPage />} />
-          <Route path="assessments" element={<AssessmentsPage key="assessments" defaultTab="assessments" />} />
-          <Route path="my-assessments" element={<AssessmentsPage key="my-assessments" defaultTab="assessments" />} />
-          <Route path="my-results" element={<AssessmentsPage key="my-results" defaultTab="results" />} />
+          {/* Student Assessments & Transcripts */}
+          <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
+          <Route path="my-assessments" element={<AssessmentsPage />} />
+          <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
 
-          {/* Grading & Proctoring */}
-          <Route path="grading" element={<GradingPage />} />
-          <Route path="proctoring" element={<ProctoringPage />} />
-
-          {/* Certificates & Analytics */}
-          <Route path="certificates" element={<CertificatesPage key="certificates" />} />
-          <Route path="my-certificates" element={<CertificatesPage key="my-certificates" />} />
-          <Route path="reports" element={<ReportsPage />} />
-
-          {/* System & Notifications */}
+          {/* Certificates, Notifications & Profile */}
+          <Route path="certificates" element={<CertificatesPage />} />
+          <Route path="my-certificates" element={<CertificatesPage />} />
           <Route path="notifications" element={<NotificationsCenterPage />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
-          <Route path="settings" element={<PlatformSettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
           {/* Error fallback routes */}

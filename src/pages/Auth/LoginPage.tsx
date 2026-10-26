@@ -29,6 +29,7 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    sessionStorage.removeItem('venilearn_logged_out');
     clearError();
     await login(email, password);
     const storeState = useAuthStore.getState();
@@ -38,6 +39,7 @@ export const LoginPage: React.FC = () => {
   };
 
   const handleQuickLogin = async (demoEmail: string) => {
+    sessionStorage.removeItem('venilearn_logged_out');
     clearError();
     setEmail(demoEmail);
     setPassword('demoPass123');
@@ -118,6 +120,7 @@ export const LoginPage: React.FC = () => {
 
               {[
                 { name: 'Platform Admin', email: 'admin@lms.demo', persona: 'Sarah Chen', badge: 'Super Admin', color: '#ef4444' },
+                { name: 'Institution Admin', email: 'orgadmin@lms.demo', persona: 'Marcus Johnson', badge: 'Campus Admin', color: '#3b82f6' },
                 { name: 'Trainer / Faculty', email: 'trainer@lms.demo', persona: 'Dr. James Wilson', badge: 'Faculty Lead', color: '#06b6d4' },
                 { name: 'Student / Learner', email: 'student@lms.demo', persona: 'Alex Thompson', badge: 'Enrolled Scholar', color: '#8b5cf6' },
               ].map((role) => (

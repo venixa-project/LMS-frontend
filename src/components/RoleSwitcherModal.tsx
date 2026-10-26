@@ -1,7 +1,9 @@
 import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
 import { RoleName } from '../types';
-import { Shield, Check, X, User, GraduationCap } from 'lucide-react';
+import { isRouteAllowedForRole } from '../lib/permissions';
+import { Shield, Check, X, User, GraduationCap, Building2 } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -21,6 +23,12 @@ const rolesList: {
     color: '#ef4444'
   },
   {
+    role: 'org_admin',
+    title: 'Institution Admin',
+    icon: Building2,
+    color: '#3b82f6'
+  },
+  {
     role: 'trainer',
     title: 'Trainer',
     icon: GraduationCap,
@@ -36,6 +44,7 @@ const rolesList: {
 
 export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { user, switchRole } = useAuthStore();
+  const navigate = useNavigate();
 
   if (!isOpen) return null;
 
@@ -44,6 +53,8 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
     ? 'trainer'
     : user?.activeRole === 'student' || user?.activeRole === 'learner'
     ? 'student'
+    : user?.activeRole === 'org_admin' || user?.activeRole === 'lms_admin'
+    ? 'org_admin'
     : 'platform_admin';
 
   return (
@@ -82,6 +93,10 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 onClick={() => {
                   switchRole(item.role);
                   onClose();
+                  // Validate current route for newly selected role; redirect to that role's default dashboard if unauthorized
+                  if (!isRouteAllowedForRole(window.location.pathname, item.role)) {
+                    navigate('/dashboard', { replace: true });
+                  }
                 }}
                 style={{
                   display: 'flex',

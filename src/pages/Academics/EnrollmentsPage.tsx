@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { mockCourses, mockCohorts, mockDepartments, mockEnrollments } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { Enrollment } from '../../types';
+import { BackToCoursesButton } from '../../components/BackToCoursesButton';
 import {
   Route, Plus, Search, Filter, CheckCircle2, Clock,
   BookOpen, Users, AlertCircle, X, ArrowRight, UserCheck
@@ -115,11 +119,56 @@ export const EnrollmentsPage: React.FC = () => {
     }
   ];
 
+  const { enrollments: storeEnrollments, courses: storeCourses } = useCourseStore();
+  const { getStudents } = usePeopleStore();
+
+  const [searchParams] = useSearchParams();
+  const initialCourse = searchParams.get('courseId') || searchParams.get('course') || 'all';
+
   const [enrollments, setEnrollments] = useState<ExtendedEnrollment[]>(initialEnrollments);
   const [search, setSearch] = useState('');
-  const [courseFilter, setCourseFilter] = useState('all');
+  const [courseFilter, setCourseFilter] = useState(initialCourse);
   const [statusFilter, setStatusFilter] = useState('all');
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+
+  useEffect(() => {
+    const cParam = searchParams.get('courseId') || searchParams.get('course');
+    if (cParam) {
+      setCourseFilter(cParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const allStudents = getStudents();
+    const existingIds = new Set(initialEnrollments.map((ie) => ie.id));
+
+    const extraEnrollments: ExtendedEnrollment[] = storeEnrollments
+      .filter((se) => !existingIds.has(se.id))
+      .map((se) => {
+        const student =
+          allStudents.find((s) => s.id === se.userId) ||
+          mockUsers.find((u) => u.id === se.userId);
+        const course = storeCourses.find((c) => c.id === se.courseId);
+        const cohort = mockCohorts.find((c) => c.id === se.cohortId);
+
+        return {
+          id: se.id,
+          userId: se.userId,
+          studentName:
+            student?.displayName || `${student?.firstName || 'Student'} ${student?.lastName || ''}`,
+          studentEmail: student?.email || 'student@lms.demo',
+          courseId: se.courseId,
+          courseTitle: course?.title || 'Enrolled Course',
+          cohortName: cohort?.name || 'Spring 2026 Engineering',
+          departmentName: 'Computer Science & Engineering',
+          status: se.status,
+          progressPercent: se.progress || 0,
+          enrolledAt: se.enrolledAt,
+        };
+      });
+
+    setEnrollments([...extraEnrollments, ...initialEnrollments]);
+  }, [storeEnrollments, storeCourses]);
 
   // Form states
   const [selectedStudent, setSelectedStudent] = useState('Alex Rivera (alex@lms.demo)');
@@ -132,7 +181,11 @@ export const EnrollmentsPage: React.FC = () => {
       (e.studentName || '').toLowerCase().includes(search.toLowerCase()) ||
       (e.studentEmail || '').toLowerCase().includes(search.toLowerCase()) ||
       (e.courseTitle || '').toLowerCase().includes(search.toLowerCase());
-    const matchesCourse = courseFilter === 'all' || e.courseId === courseFilter;
+    const matchesCourse =
+      courseFilter === 'all' ||
+      e.courseId === courseFilter ||
+      (courseFilter === 'crs-001' && e.courseId === 'c-001') ||
+      (courseFilter === 'c-001' && e.courseId === 'crs-001');
     const matchesStatus = statusFilter === 'all' || e.status === statusFilter;
     return matchesSearch && matchesCourse && matchesStatus;
   });
@@ -164,6 +217,10 @@ export const EnrollmentsPage: React.FC = () => {
 
   return (
     <div>
+      <div style={{ marginBottom: '16px' }}>
+        <BackToCoursesButton />
+      </div>
+
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>

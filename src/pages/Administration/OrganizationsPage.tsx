@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { mockOrganizations } from '../../data/mockData';
 import { Organization } from '../../types';
+import { StructureTenantsNav } from '../../components/StructureTenantsNav';
 import {
   Building2, Plus, Search, Edit2, Archive, Globe, Clock,
   Users, CheckCircle2, X, ExternalLink, Settings
@@ -79,6 +80,8 @@ export const OrganizationsPage: React.FC = () => {
 
   return (
     <div>
+      <StructureTenantsNav />
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>Multi-Tenant Organizations</h1>

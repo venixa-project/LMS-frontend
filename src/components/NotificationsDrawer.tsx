@@ -119,10 +119,19 @@ export const NotificationsDrawer: React.FC<Props> = ({ isOpen, onClose }) => {
                         {n.link && (
                           <Link
                             to={n.link}
-                            onClick={onClose}
-                            style={{ color: 'var(--primary)', fontWeight: 600 }}
+                            onClick={() => {
+                              markNotificationRead(n.id);
+                              onClose();
+                            }}
+                            className={n.category === 'course' ? 'btn btn-primary btn-sm' : ''}
+                            style={{
+                              color: n.category === 'course' ? '#fff' : 'var(--primary)',
+                              fontWeight: 600,
+                              fontSize: n.category === 'course' ? '0.7rem' : undefined,
+                              padding: n.category === 'course' ? '2px 8px' : undefined,
+                            }}
                           >
-                            View Details &rarr;
+                            {n.category === 'course' ? 'Join / View Course →' : 'View Details →'}
                           </Link>
                         )}
                       </div>
