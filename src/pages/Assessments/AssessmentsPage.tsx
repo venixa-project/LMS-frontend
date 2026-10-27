@@ -56,16 +56,6 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     setActiveTab(tabFromPath);
   }, [location.pathname, defaultTab]);
 
-  const handleTabChange = (tab: 'assessments' | 'assignments' | 'results') => {
-    setActiveTab(tab);
-    if (tab === 'assignments') {
-      navigate('/assignments');
-    } else if (tab === 'results') {
-      navigate('/my-results');
-    } else {
-      navigate(isLearner ? '/my-assessments' : '/assessments');
-    }
-  };
   const {
     assessments,
     drafts,
@@ -254,13 +244,12 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             <span className="badge badge-primary">
               {isFaculty ? 'Faculty Teaching Scope' : isLearner ? 'Student Academic Portal' : 'Academic Evaluations'}
             </span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
             {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
             {isLearner && <span className="badge badge-active">Alex Thompson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {activeTab === 'assignments'
-              ? isLearner ? 'My Course Assignments & Capstones (live classes)' : 'Course Assignments & Deliverables'
+              ? isLearner ? 'My Course Assignments & Capstone Projects' : 'Course Assignments & Deliverables'
               : activeTab === 'results'
                 ? 'My Academic Results & Grades'
                 : isLearner ? 'Quizzes & Scheduled Examinations' : 'Assessments & Timed Examinations'}
@@ -319,33 +308,6 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           <span>{notice}</span>
         </div>
       )}
-
-      {/* Tabs Nav */}
-      <div className="tabs-nav">
-        <button
-          className={`tab-btn ${activeTab === 'assignments' ? 'active' : ''}`}
-          onClick={() => handleTabChange('assignments')}
-        >
-          <ClipboardCheck size={16} />
-          {isLearner ? 'My Assignments' : 'Course Assignments'} ({assignments.length})
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'assessments' ? 'active' : ''}`}
-          onClick={() => handleTabChange('assessments')}
-        >
-          <Clock size={16} />
-          Quizzes & Exams ({filteredAssessments.length})
-        </button>
-        {isLearner && (
-          <button
-            className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
-            onClick={() => handleTabChange('results')}
-          >
-            <Award size={16} />
-            My Results & Grades (3)
-          </button>
-        )}
-      </div>
 
       {/* Filter Toolbar */}
       {activeTab !== 'results' && (
@@ -688,9 +650,9 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                             <span className="badge badge-error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <Shield size={12} />
                               {a.proctoringMode === 'combined'
-                                ? 'AI + Jitsi Proctor'
+                                ? 'AI + Google Meet Proctor'
                                 : a.proctoringMode === 'manual'
-                                ? 'Manual Jitsi Proctor'
+                                ? 'Manual Google Meet Proctor'
                                 : a.proctoringMode === 'automated'
                                 ? 'AI Telemetry Proctor'
                                 : 'Proctored'}
@@ -795,7 +757,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                               to={`/proctoring?tab=live_monitor&assessmentId=${a.id}`}
                               className="btn btn-secondary btn-sm"
                               style={{ gap: '6px', justifyContent: 'center' }}
-                              title="Monitor Live Jitsi Exam Session"
+                              title="Monitor Live Google Meet Exam Session"
                             >
                               <Video size={13} color="var(--primary)" /> Monitor Live
                             </Link>

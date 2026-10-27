@@ -442,9 +442,9 @@ export const ExamPlayerPage: React.FC = () => {
     logEvent(session.id, {
       category: 'jitsi_conference',
       severity: 'informational',
-      title: 'Jitsi Meet Conference Bridge Connected',
-      description: `Live video proctoring session joined in room: ${jitsiEndpoints.roomName}. Audio and video streams are transmitting.`,
-      technicalMetadata: { roomName: jitsiEndpoints.roomName, provider: 'meet.jit.si', role: 'Candidate' },
+      title: 'Google Meet Conference Bridge Connected',
+      description: `Live video proctoring session joined via Google Meet: ${jitsiEndpoints.webUrl}. Audio and video streams are transmitting.`,
+      technicalMetadata: { roomName: jitsiEndpoints.roomName, provider: 'meet.google.com', role: 'Candidate' },
     });
 
     logEvent(session.id, {

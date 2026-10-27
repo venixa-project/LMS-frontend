@@ -12,6 +12,8 @@ import {
   Layers, AlertTriangle, Shield, CheckCheck, Briefcase
 } from 'lucide-react';
 
+import { GoogleMeetLinkField } from '../../../components/GoogleMeet';
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -22,10 +24,10 @@ interface Props {
 type StepNumber = 1 | 2 | 3;
 
 const PROVIDERS = [
-  { id: 'VeniLearn Live Classroom (Built-in)', name: 'VeniLearn Live Classroom', desc: 'Interactive browser-based classroom with audio, video, chat & screen share' },
+  { id: 'Google Meet', name: 'Google Meet', desc: 'Secure high-definition video meetings hosted on Google Meet' },
   { id: 'Zoom Meeting', name: 'Zoom Meeting', desc: 'Synced with institutional Zoom Education account' },
   { id: 'Microsoft Teams', name: 'Microsoft Teams', desc: 'Synced with institutional Microsoft 365 tenant' },
-  { id: 'Google Meet', name: 'Google Meet', desc: 'Synced with Google Workspace for Education' },
+  { id: 'VeniLearn Live Classroom (Built-in)', name: 'VeniLearn Live Classroom', desc: 'Interactive browser-based classroom with audio, video, chat & screen share' },
 ];
 
 export const ScheduleLiveSessionModal: React.FC<Props> = ({
@@ -83,7 +85,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   });
 
   // Meeting Provider
-  const [provider, setProvider] = useState('VeniLearn Live Classroom (Built-in)');
+  const [provider, setProvider] = useState('Google Meet');
+  const [googleMeetUrl, setGoogleMeetUrl] = useState('');
 
   // Audience 1: Students
   const [includeStudents, setIncludeStudents] = useState<boolean>(true);
@@ -252,7 +255,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       if (sessionToEdit.dayOfWeek) {
         setDayOfWeek(sessionToEdit.dayOfWeek);
       }
-      setProvider(sessionToEdit.provider || 'VeniLearn Live Classroom (Built-in)');
+      setProvider(sessionToEdit.provider || 'Google Meet');
+      setGoogleMeetUrl(sessionToEdit.meetingUrl || sessionToEdit.joinLink || '');
       setDescription(sessionToEdit.description || '');
       setAgenda(sessionToEdit.agenda || '');
       setRecordingEnabled(sessionToEdit.recordingEnabled ?? true);
@@ -308,7 +312,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       setStartTime('10:00');
       setEndTime('11:30');
       setRoom('Hall 101');
-      setProvider('VeniLearn Live Classroom (Built-in)');
+      setProvider('Google Meet');
+      setGoogleMeetUrl('');
       setRecordingEnabled(true);
       setNotifyParticipants(true);
 
@@ -491,13 +496,13 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
     // Realistically provision room URL according to selected provider
     const finalMeetingUrl =
-      provider.includes('Zoom')
+      provider === 'Google Meet'
+        ? (googleMeetUrl.trim() || `https://meet.google.com/ven-${Date.now().toString().slice(-4)}`)
+        : provider.includes('Zoom')
         ? `https://zoom.us/j/venilearn-${Date.now().toString().slice(-6)}`
         : provider.includes('Teams')
         ? `https://teams.microsoft.com/l/meetup-join/venilearn-${Date.now().toString().slice(-6)}`
-        : provider.includes('Google')
-        ? `https://meet.google.com/ven-${Date.now().toString().slice(-4)}`
-        : `https://meet.venilearn.com/room/ls-${Date.now().toString().slice(-5)}`;
+        : `https://meet.google.com/ven-${Date.now().toString().slice(-4)}`;
 
     const payload = {
       title: title.trim(),
@@ -1229,16 +1234,33 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         color: 'var(--text-secondary)',
                       }}
                     >
-                      {provider.includes('VeniLearn') ? (
+                      {provider === 'Google Meet' ? (
                         <span>
-                          ✨ <strong>Automatic Room Provisioning:</strong> The built-in interactive classroom link will be generated automatically upon scheduling. No separate meeting link is required.
+                          📹 <strong>Google Meet Integration:</strong> Enter an existing Google Meet link below, or leave it blank to auto-generate a secure demo link upon scheduling.
+                        </span>
+                      ) : provider.includes('VeniLearn') ? (
+                        <span>
+                          ✨ <strong>Automatic Room Provisioning:</strong> The built-in interactive classroom link will be generated automatically upon scheduling.
                         </span>
                       ) : (
                         <span>
-                          🔗 <strong>Integration Link Sync:</strong> The meeting link and credentials will be generated and synchronized with your configured {provider} account upon scheduling.
+                          🔗 <strong>Integration Link Sync:</strong> The meeting link will be generated and synchronized with your configured {provider} account upon scheduling.
                         </span>
                       )}
                     </div>
+
+                    {provider === 'Google Meet' && (
+                      <div style={{ marginTop: '4px' }}>
+                        <GoogleMeetLinkField
+                          value={googleMeetUrl}
+                          onChange={(val) => {
+                            setIsDirty(true);
+                            setGoogleMeetUrl(val);
+                          }}
+                          required={false}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* SUBSECTION C: PARTICIPANT SCOPE & ACCESS RIGHTS */}

@@ -105,8 +105,8 @@ export const AddEventModal: React.FC<Props> = ({
     const dayOfWeek = (dateObj.getDay() + 6) % 7 + 1; // 1=Mon, ..., 7=Sun
 
     const isVirtual = formData.location.toLowerCase().includes('virtual') ||
-                      formData.location.toLowerCase().includes('zoom') ||
-                      formData.location.toLowerCase().includes('teams');
+                      formData.location.toLowerCase().includes('meet') ||
+                      formData.location.toLowerCase().includes('google');
 
     const newEvent: AcademicEvent = {
       id: `evt-${Date.now()}`,
@@ -122,7 +122,7 @@ export const AddEventModal: React.FC<Props> = ({
       cohort: 'Spring 2026 Engineering',
       location: formData.location.trim(),
       isVirtual,
-      meetingUrl: isVirtual ? 'https://zoom.us/j/demo-session' : undefined,
+      meetingUrl: isVirtual ? `https://meet.google.com/ven-${Date.now().toString().slice(-4)}` : undefined,
       description: formData.description.trim() || 'Custom academic schedule event added by student.',
       materials: ['Personal Study Notes'],
       recurringWeekday: dayOfWeek,

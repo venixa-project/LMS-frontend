@@ -37,7 +37,7 @@ const routeNames: Record<string, string> = {
   grading: 'Grading & Moderation',
   proctoring: 'Proctoring Center',
   certificates: 'Certificates & Credentials',
-  'my-certificates': 'Diplomas & Certificates',
+  'my-certificates': 'Certificates & Grades',
   reports: 'Reports & Analytics',
   notifications: 'Notification Center',
   integrations: 'Integrations & APIs',

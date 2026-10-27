@@ -7,6 +7,7 @@ import {
   Settings, Menu, Building, HelpCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AnimatedAvatar } from './AnimatedAvatar';
 
 interface Props {
   onToggleSidebar: () => void;
@@ -382,22 +383,12 @@ export const Navbar: React.FC<Props> = ({
                 background: 'transparent'
               }}
             >
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.85rem'
-                }}
-              >
-                {`${user.firstName?.[0] || 'U'}${user.lastName?.[0] || ''}`}
-              </div>
+              <AnimatedAvatar
+                size={34}
+                isCurrentUser={true}
+                name={user.displayName}
+                interactive={true}
+              />
               <div className="nav-user-details" style={{ textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.2 }}>
                   {user.displayName || 'Demo User'}

@@ -107,7 +107,7 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
-  doc.text('ACME LEARNING CORP  •  GLOBAL ACADEMIC CREDENTIALS REGISTRY', centerX, 37, { align: 'center' });
+  doc.text('VENILEARN  •  GLOBAL ACADEMIC CREDENTIALS REGISTRY', centerX, 37, { align: 'center' });
 
   // Gold decorative line with center jewel
   doc.setDrawColor(217, 119, 6);
@@ -509,7 +509,7 @@ export function printCertificateDiploma(cert: Certificate): void {
         <div class="brand-logo-container">
           <img src="/logo.png" alt="VeniLearn Logo" class="brand-logo-img" />
         </div>
-        <h4>Acme Learning Corp &bull; Global Academic Credentials Registry</h4>
+        <h4>VeniLearn &bull; Global Academic Credentials Registry</h4>
         <p>Department of Professional Curriculum & Continuous Education</p>
         <div class="gold-divider"></div>
         <h1 class="cert-title">Certificate of Achievement</h1>

@@ -12,8 +12,8 @@ import {
 // --- Organizations ---
 export const mockOrganizations: Organization[] = [
   {
-    id: 'org-001', name: 'Acme Learning Corp', slug: 'acme-learning', logo: '', locale: 'en-US',
-    timezone: 'America/New_York', contactEmail: 'admin@acmelearning.com', contactPhone: '+1-555-0100',
+    id: 'org-001', name: 'Venixa Technologies', slug: 'venixa-technologies', logo: '', locale: 'en-US',
+    timezone: 'America/New_York', contactEmail: 'admin@venilearn.demo', contactPhone: '+1-555-0100',
     status: 'active', settings: { gamification: true, proctoring: true, aiAssistant: true },
     userCount: 1250, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-10-15T00:00:00Z',
   },
@@ -218,7 +218,7 @@ export const mockLiveSessions: LiveSession[] = [
     id: 'ls-001', title: 'Advanced TypeScript Patterns Workshop', courseId: 'crs-004', cohortId: 'coh-002',
     instructorId: 'u-004', instructorName: 'Dr. James Wilson', date: '2026-10-17', startTime: '10:00',
     endTime: '11:30', duration: 90, timezone: 'America/New_York', capacity: 30, enrolledCount: 22,
-    provider: 'Zoom (Demo)', joinLink: '#demo-join', recordingPolicy: 'Allowed with consent',
+    provider: 'Google Meet', joinLink: 'https://meet.google.com/abc-demo-xyz', meetingUrl: 'https://meet.google.com/abc-demo-xyz', recordingPolicy: 'Allowed with consent',
     agenda: 'Advanced generics, conditional types, and template literal types', materials: ['TypeScript Handbook', 'Exercise Files'],
     status: 'scheduled', attendance: [], createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-15T00:00:00Z',
   },
@@ -226,7 +226,7 @@ export const mockLiveSessions: LiveSession[] = [
     id: 'ls-002', title: 'React Server Components Deep Dive', courseId: 'crs-002', cohortId: 'coh-002',
     instructorId: 'u-004', instructorName: 'Dr. James Wilson', date: '2026-10-18', startTime: '14:00',
     endTime: '15:30', duration: 90, timezone: 'America/New_York', capacity: 30, enrolledCount: 18,
-    provider: 'Zoom (Demo)', joinLink: '#demo-join', recordingPolicy: 'Not recorded',
+    provider: 'Google Meet', joinLink: 'https://meet.google.com/kqw-psdo-jkl', meetingUrl: 'https://meet.google.com/kqw-psdo-jkl', recordingPolicy: 'Not recorded',
     agenda: 'Server components, streaming, and data fetching patterns', materials: ['React 19 Docs'],
     status: 'scheduled', attendance: [], createdAt: '2026-10-10T00:00:00Z', updatedAt: '2026-10-14T00:00:00Z',
   },
@@ -234,7 +234,7 @@ export const mockLiveSessions: LiveSession[] = [
     id: 'ls-003', title: 'JavaScript Q&A Session', courseId: 'crs-001', cohortId: 'coh-001',
     instructorId: 'u-004', instructorName: 'Dr. James Wilson', date: '2026-10-15', startTime: '09:00',
     endTime: '10:00', duration: 60, timezone: 'America/New_York', capacity: 35, enrolledCount: 28,
-    provider: 'Zoom (Demo)', recordingLink: '#demo-recording', recordingPolicy: 'Available for 30 days',
+    provider: 'Google Meet', joinLink: 'https://meet.google.com/js-qa-clinic', meetingUrl: 'https://meet.google.com/js-qa-clinic', recordingLink: '#demo-recording', recordingPolicy: 'Available for 30 days',
     status: 'ended', attendance: [
       { userId: 'u-007', userName: 'Alex Thompson', status: 'present', joinedAt: '2026-10-15T09:02:00Z', leftAt: '2026-10-15T10:00:00Z' },
       { userId: 'u-009', userName: 'Maria Garcia', status: 'late', joinedAt: '2026-10-15T09:15:00Z', leftAt: '2026-10-15T10:00:00Z' },
@@ -245,7 +245,7 @@ export const mockLiveSessions: LiveSession[] = [
     id: 'ls-004', title: 'Python Data Visualization', courseId: 'crs-003',
     instructorId: 'u-004', instructorName: 'Dr. James Wilson', date: '2026-10-20', startTime: '11:00',
     endTime: '12:30', duration: 90, timezone: 'America/New_York', capacity: 40, enrolledCount: 12,
-    provider: 'Google Meet (Demo)', recordingPolicy: 'Allowed with consent',
+    provider: 'Google Meet', joinLink: 'https://meet.google.com/pyt-demo-vis', meetingUrl: 'https://meet.google.com/pyt-demo-vis', recordingPolicy: 'Allowed with consent',
     agenda: 'Matplotlib, Seaborn, and Plotly for data visualization', materials: ['Jupyter Notebooks', 'Sample Datasets'],
     status: 'scheduled', attendance: [], createdAt: '2026-10-12T00:00:00Z', updatedAt: '2026-10-14T00:00:00Z',
   },
@@ -330,7 +330,7 @@ export const mockIntegrations: Integration[] = [
 
 // --- Audit Entries ---
 export const mockAuditEntries: AuditEntry[] = [
-  { id: 'ae-001', actor: 'u-001', actorName: 'Sarah Chen', action: 'create', resource: 'organization', resourceId: 'org-001', timestamp: '2026-01-01T00:00:00Z', changeSummary: 'Created organization Acme Learning Corp', outcome: 'success' },
+  { id: 'ae-001', actor: 'u-001', actorName: 'Sarah Chen', action: 'create', resource: 'organization', resourceId: 'org-001', timestamp: '2026-01-01T00:00:00Z', changeSummary: 'Created organization Venixa Technologies', outcome: 'success' },
   { id: 'ae-002', actor: 'u-002', actorName: 'Marcus Johnson', action: 'invite', resource: 'user', resourceId: 'u-004', timestamp: '2026-04-01T00:00:00Z', changeSummary: 'Invited James Wilson as Instructor', outcome: 'success' },
   { id: 'ae-003', actor: 'u-004', actorName: 'Dr. James Wilson', action: 'publish', resource: 'course', resourceId: 'crs-001', timestamp: '2026-03-15T00:00:00Z', changeSummary: 'Published JavaScript Fundamentals v3', outcome: 'success' },
   { id: 'ae-004', actor: 'u-003', actorName: 'Priya Sharma', action: 'enroll', resource: 'user', resourceId: 'u-007', timestamp: '2026-09-01T00:00:00Z', changeSummary: 'Enrolled Alex Thompson in JavaScript Fundamentals', outcome: 'success' },

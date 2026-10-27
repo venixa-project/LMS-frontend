@@ -16,6 +16,7 @@ import {
   AlertCircle, Edit3, Video, FileVideo, Play, Languages, Film, Volume2,
   Users, Mic, Camera, Monitor, Radio, Lock
 } from 'lucide-react';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 import {
   Assessment,
   Question,
@@ -1758,11 +1759,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
                   <span className="badge badge-primary text-xs">
                     {proctoringMode === 'combined'
-                      ? 'Automated + Manual Jitsi'
+                      ? 'Automated + Manual Google Meet'
                       : proctoringMode === 'automated'
                       ? 'Automated Signals Only'
                       : proctoringMode === 'manual'
-                      ? 'Manual Jitsi Proctoring'
+                      ? 'Manual Google Meet Proctoring'
                       : 'No Proctoring'}
                   </span>
                 </div>
@@ -1791,7 +1792,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <span className="badge badge-completed text-xs" style={{ fontSize: '0.65rem' }}>Recommended</span>
                     </div>
                     <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      AI webcam presence, audio noise & tab focus checks combined with live Jitsi invigilator monitoring room.
+                      AI webcam presence, audio noise & tab focus checks combined with live Google Meet invigilator monitoring room.
                     </p>
                   </div>
 
@@ -1818,7 +1819,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     </p>
                   </div>
 
-                  {/* 3. Manual Proctoring (Jitsi Meet) */}
+                  {/* 3. Manual Proctoring (Google Meet) */}
                   <div
                     onClick={() => {
                       setProctoringMode('manual');
@@ -1834,10 +1835,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
-                      <Video size={14} color="var(--primary)" /> Manual (Jitsi Meet)
+                      <GoogleMeetIcon size={14} /> Manual (Google Meet)
                     </div>
                     <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      Live Jitsi video monitoring session where authorized proctors monitor participants and dispatch real-time warnings.
+                      Live Google Meet video monitoring session where authorized proctors monitor participants and dispatch real-time warnings.
                     </p>
                   </div>
 
@@ -1923,12 +1924,12 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
                 )}
 
-                {/* Jitsi Room Assignment (When Manual or Combined is selected) */}
+                {/* Google Meet Room Assignment (When Manual or Combined is selected) */}
                 {(proctoringMode === 'manual' || proctoringMode === 'combined') && (
                   <div
                     style={{
-                      background: 'rgba(6, 182, 212, 0.05)',
-                      border: '1px solid rgba(6, 182, 212, 0.25)',
+                      background: 'rgba(16, 185, 129, 0.05)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '10px 14px',
                       display: 'flex',
@@ -1940,11 +1941,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        Associated Jitsi Monitoring Room
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <GoogleMeetIcon size={14} /> Associated Google Meet Room / Link
                       </div>
                       <div className="text-muted text-xs">
-                        Unique session room: <code style={{ color: 'var(--primary)', fontWeight: 600 }}>{jitsiRoomId}</code> &bull; Authorized invigilators access via Proctoring Console.
+                        Google Meet link: <code style={{ color: 'var(--success)', fontWeight: 600 }}>https://meet.google.com/{jitsiRoomId.toLowerCase()}</code> &bull; Authorized invigilators access via Proctoring Console.
                       </div>
                     </div>
                     <button
@@ -1952,9 +1953,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       className="btn btn-secondary btn-sm"
                       style={{ fontSize: '0.75rem', padding: '3px 8px' }}
                       onClick={() => setJitsiRoomId(`vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`)}
-                      title="Generate new unique room identifier"
+                      title="Generate new unique Google Meet code"
                     >
-                      <RefreshCw size={12} /> Regenerate Room ID
+                      <RefreshCw size={12} /> Regenerate Code
                     </button>
                   </div>
                 )}

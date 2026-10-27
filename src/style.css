@@ -1651,3 +1651,86 @@ h6 {
   .drawer-panel {
     animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
+  /* ============================================================
+     Horizontal Course Slider & Card Styles
+     ============================================================ */
+  .horizontal-course-slider {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding: 8px 4px 18px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-light) transparent;
+  }
+
+  .horizontal-course-slider::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .horizontal-course-slider::-webkit-scrollbar-track {
+    background: var(--bg-input);
+    border-radius: var(--radius-full);
+  }
+
+  .horizontal-course-slider::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: var(--radius-full);
+  }
+
+  .horizontal-course-slider::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+
+  .course-carousel-card {
+    min-width: 310px;
+    max-width: 320px;
+    width: 310px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  }
+
+  .course-carousel-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+  }
+
+  .slider-nav-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input);
+    color: var(--text-main);
+    transition: var(--transition);
+    cursor: pointer;
+  }
+
+  .slider-nav-btn:hover:not(:disabled) {
+    background: var(--primary-light);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .slider-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }

@@ -5,6 +5,7 @@ import {
   Radio, HelpCircle, CheckCircle2, AlertCircle, X, LifeBuoy,
   Video
 } from 'lucide-react';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface Props {
   policy: ProctoringPolicy;
@@ -175,7 +176,7 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
             </span>
           </div>
 
-          {/* Jitsi Meet Bridge */}
+          {/* Google Meet Bridge */}
           {jitsiRoomName && (
             <div
               style={{
@@ -183,19 +184,19 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
                 alignItems: 'center',
                 gap: '5px',
                 fontSize: '0.75rem',
-                color: '#818CF8',
+                color: '#34D399',
                 fontWeight: 600,
                 cursor: onOpenJitsi ? 'pointer' : 'default',
                 padding: '2px 8px',
                 borderRadius: '6px',
-                background: 'rgba(84, 71, 255, 0.12)',
-                border: '1px solid rgba(84, 71, 255, 0.25)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
               }}
               onClick={onOpenJitsi}
-              title={`Connected to Jitsi Meet Room: ${jitsiRoomName}. Click to open.`}
+              title={`Connected to Google Meet session: ${jitsiRoomName}. Click to open in a new tab.`}
             >
-              <Video size={13} color="#EC4899" />
-              <span>Jitsi Meet:</span>
+              <GoogleMeetIcon size={13} />
+              <span>Google Meet:</span>
               <span style={{ fontWeight: 700, color: '#10B981' }}>Live</span>
             </div>
           )}

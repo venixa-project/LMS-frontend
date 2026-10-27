@@ -339,7 +339,6 @@ export const AdminPlannerPage: React.FC = () => {
             <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <CalendarIcon size={12} /> Institution Academic Planner
             </span>
-            <span className="text-muted text-xs">Acme Learning Academy &bull; Local Timezone: EDT / IST</span>
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800 }}>
             Academic Activity & Calendar Planner

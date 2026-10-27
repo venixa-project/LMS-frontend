@@ -74,8 +74,8 @@ export const AVAILABLE_LOCATIONS = [
   'Hall 201',
   'Lab A (Biometric)',
   'Lab B (Cloud Workstations)',
-  'Virtual Room A (Zoom)',
-  'Virtual Room B (Teams)',
+  'Virtual Room A (Google Meet)',
+  'Virtual Room B (Google Meet)',
   'Auditorium',
   'Faculty Lounge'
 ];
@@ -127,10 +127,10 @@ export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
     startTime: '11:00',
     endTime: '12:30',
     durationMinutes: 90,
-    location: 'Virtual Room A (Zoom)',
+    location: 'Virtual Room A (Google Meet)',
     category: 'live',
     isVirtual: true,
-    meetingUrl: 'https://zoom.us/j/demo-ml-pipeline',
+    meetingUrl: 'https://meet.google.com/demo-ml-pipeline',
     description: 'Feature engineering, automated categorical encoding, and dataset partitioning for training.',
     materials: ['Jupyter Notebook', 'Cleaned Kaggle Dataset'],
     recurringWeekday: 2

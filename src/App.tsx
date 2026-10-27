@@ -67,6 +67,13 @@ import { PlatformSettingsPage } from './pages/System/PlatformSettingsPage';
 // Errors
 import { NotFoundPage } from './pages/ErrorPages/NotFoundPage';
 import { UnauthorizedPage } from './pages/ErrorPages/UnauthorizedPage';
+import { useAuthStore } from './lib/store';
+
+const IndexRouteRedirect: React.FC = () => {
+  const { user } = useAuthStore();
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
+  return <Navigate to={isStudent ? '/leaderboard' : '/dashboard'} replace />;
+};
 
 export const App: React.FC = () => {
 
@@ -83,7 +90,7 @@ export const App: React.FC = () => {
 
         {/* Main Application Shell Protected Layout */}
         <Route path="/" element={<AppShell />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<IndexRouteRedirect />} />
           <Route path="dashboard" element={<DashboardPage />} />
 
           {/* Platform Admin Only Protected Routes */}
@@ -146,7 +153,8 @@ export const App: React.FC = () => {
           <Route path="my-learning" element={<CoursesPage />} />
           <Route path="catalog" element={<CoursesPage />} />
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
-          <Route path="learning-materials" element={<LearnerCoursePlayerPage />} />
+          <Route path="course-player" element={<Navigate to="/my-learning" replace />} />
+          <Route path="learning-materials" element={<Navigate to="/my-learning" replace />} />
           <Route path="my-paths" element={<LearningPathsPage />} />
           <Route path="momentum" element={<MomentumPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
@@ -164,7 +172,7 @@ export const App: React.FC = () => {
 
           {/* Student Assessments & Transcripts */}
           <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
-          <Route path="my-assessments" element={<AssessmentsPage />} />
+          <Route path="my-assessments" element={<AssessmentsPage defaultTab="assessments" />} />
           <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
           <Route path="my-proctoring-reports" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report" element={<MyProctoringReportPage />} />

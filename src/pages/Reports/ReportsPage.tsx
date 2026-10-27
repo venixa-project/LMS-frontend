@@ -128,7 +128,7 @@ export const ReportsPage: React.FC = () => {
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Live Class Attendance</span>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>84.6%</div>
-          <span className="text-muted text-xs">Across Zoom/Meet sessions</span>
+          <span className="text-muted text-xs">Across Google Meet sessions</span>
         </div>
 
         <div className="stat-card">
@@ -211,7 +211,7 @@ export const ReportsPage: React.FC = () => {
                 <label className="form-label">Recipient Distribution Emails</label>
                 <input
                   type="text"
-                  defaultValue="leadership@acmelearning.com, admin@lms.demo"
+                  defaultValue="leadership@venilearn.demo, admin@lms.demo"
                   className="form-input"
                 />
               </div>

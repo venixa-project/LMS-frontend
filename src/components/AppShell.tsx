@@ -62,7 +62,8 @@ export const AppShell: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && user && !isLoading) {
       if (!isRouteAllowedForRole(location.pathname, user.activeRole)) {
-        navigate('/dashboard', { replace: true });
+        const isStudent = user.activeRole === 'student' || user.activeRole === 'learner' || user.activeRole === 'guest';
+        navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
       }
     }
   }, [user?.activeRole, location.pathname, isAuthenticated, isLoading, navigate]);

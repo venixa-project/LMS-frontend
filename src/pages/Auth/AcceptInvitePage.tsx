@@ -92,7 +92,7 @@ export const AcceptInvitePage: React.FC = () => {
 
             <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Welcome to VeniLearn LMS!</h2>
             <p className="text-secondary text-sm" style={{ marginBottom: '24px', lineHeight: 1.5 }}>
-              Your account has been successfully configured. You are now enrolled in Acme Learning Corp as a <strong>Learner</strong>.
+              Your account has been successfully configured. You are now enrolled in VeniLearn as a <strong>Learner</strong>.
             </p>
 
             <button
@@ -120,7 +120,7 @@ export const AcceptInvitePage: React.FC = () => {
               </div>
               <div>
                 <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Accept Organization Invitation</h2>
-                <p className="text-muted text-xs">Acme Learning Corp &bull; Invited by Sarah Chen</p>
+                <p className="text-muted text-xs">VeniLearn &bull; Invited by Sarah Chen</p>
               </div>
             </div>
 

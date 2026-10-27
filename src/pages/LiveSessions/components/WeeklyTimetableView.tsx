@@ -8,6 +8,7 @@ import {
   Download, Filter, Plus, Building2, UserCheck, CheckCircle2,
   CalendarDays, Layers, Sparkles, BookOpen, ExternalLink, Printer
 } from 'lucide-react';
+import { GoogleMeetIcon, GoogleMeetJoinButton } from '../../../components/GoogleMeet';
 
 interface Props {
   sessions: LiveSession[];
@@ -758,7 +759,9 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                                 </span>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
                                   {slot.rawSession.meetingUrl ? (
-                                    <span style={{ color: 'var(--accent-pink)' }}>Virtual Room</span>
+                                    <span style={{ color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                      <GoogleMeetIcon size={11} /> Google Meet
+                                    </span>
                                   ) : (
                                     <span>{slot.room}</span>
                                   )}
@@ -886,26 +889,21 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                                 </span>
                                 <span>•</span>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  {s.meetingUrl ? <Video size={12} color="var(--accent-cyan)" /> : <Building2 size={12} />}
-                                  {s.room || (s.meetingUrl ? 'Virtual Link' : 'Campus Hall')}
+                                  {s.meetingUrl ? <GoogleMeetIcon size={12} /> : <Building2 size={12} />}
+                                  {s.room || (s.meetingUrl ? 'Google Meet' : 'Campus Hall')}
                                 </span>
                               </div>
                             </div>
                           </div>
 
                           {/* Action Button */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {isLive ? (
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onLaunchLiveRoom(s);
-                                }}
-                                style={{ background: '#ef4444', borderColor: '#ef4444', fontWeight: 700 }}
-                              >
-                                Join Live Class
-                              </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                            {s.meetingUrl ? (
+                              <GoogleMeetJoinButton
+                                meetingUrl={s.meetingUrl || s.joinLink}
+                                label={isLive ? 'Join with Google Meet' : 'Open Google Meet'}
+                                size="sm"
+                              />
                             ) : (
                               <button
                                 className="btn btn-secondary btn-sm"
@@ -985,7 +983,9 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                           </td>
                           <td style={{ padding: '14px 16px' }}>
                             {s.meetingUrl ? (
-                              <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>Virtual Classroom</span>
+                              <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                <GoogleMeetIcon size={13} /> Google Meet
+                              </span>
                             ) : (
                               <span>{s.room || 'Campus Hall'}</span>
                             )}
@@ -1001,18 +1001,13 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                               <span className="badge badge-published" style={{ fontSize: '0.7rem' }}>Scheduled</span>
                             )}
                           </td>
-                          <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                            {isLive ? (
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onLaunchLiveRoom(s);
-                                }}
-                                style={{ background: '#ef4444', borderColor: '#ef4444', padding: '4px 10px', fontSize: '0.75rem' }}
-                              >
-                                Join
-                              </button>
+                          <td style={{ padding: '14px 16px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                            {s.meetingUrl ? (
+                              <GoogleMeetJoinButton
+                                meetingUrl={s.meetingUrl || s.joinLink}
+                                label={isLive ? 'Join' : 'Meet'}
+                                size="sm"
+                              />
                             ) : (
                               <button
                                 className="btn btn-secondary btn-sm"

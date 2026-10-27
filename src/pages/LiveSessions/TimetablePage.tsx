@@ -14,6 +14,7 @@ import {
 
 import { ScheduleLiveSessionModal } from './components/ScheduleLiveSessionModal';
 import { LiveClassroomDemoModal } from './components/LiveClassroomDemoModal';
+import { GoogleMeetIcon, GoogleMeetJoinButton, MeetingProviderBadge } from '../../components/GoogleMeet';
 
 export const TimetablePage: React.FC = () => {
   const { user } = useAuthStore();
@@ -650,8 +651,8 @@ export const TimetablePage: React.FC = () => {
                                 >
                                   {slot.rawSession.meetingUrl ? (
                                     <>
-                                      <Video size={11} color="var(--accent-cyan)" />
-                                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Virtual Link</span>
+                                      <GoogleMeetIcon size={12} />
+                                      <span style={{ color: '#10b981', fontWeight: 600 }}>Google Meet</span>
                                     </>
                                   ) : (
                                     <>
@@ -810,8 +811,8 @@ export const TimetablePage: React.FC = () => {
                                   </span>
                                   <span>•</span>
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                    {s.meetingUrl ? <Video size={12} color="var(--accent-cyan)" /> : <Building2 size={12} />}
-                                    {roomDisplay}
+                                    {s.meetingUrl ? <GoogleMeetIcon size={12} /> : <Building2 size={12} />}
+                                    {s.meetingUrl ? 'Google Meet' : roomDisplay}
                                   </span>
                                 </div>
                               </div>
@@ -907,8 +908,8 @@ export const TimetablePage: React.FC = () => {
                             </td>
                             <td style={{ padding: '12px 14px', color: 'var(--text-muted)' }}>
                               {s.meetingUrl ? (
-                                <span style={{ color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                  <Video size={12} /> Virtual
+                                <span style={{ color: '#10b981', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                  <GoogleMeetIcon size={13} /> Google Meet
                                 </span>
                               ) : (
                                 <span>{s.room || 'Campus Hall'}</span>
@@ -1103,8 +1104,15 @@ export const TimetablePage: React.FC = () => {
                   Room / Location
                 </span>
                 <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                  {selectedDetailSession.room || (selectedDetailSession.meetingUrl ? 'Virtual Room' : 'Campus Hall')}
+                  {selectedDetailSession.room || (selectedDetailSession.meetingUrl ? 'Google Meet' : 'Campus Hall')}
                 </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Meeting Provider
+                </span>
+                <MeetingProviderBadge provider={selectedDetailSession.provider || 'Google Meet'} hasLink={Boolean(selectedDetailSession.meetingUrl || selectedDetailSession.joinLink)} />
               </div>
 
               <div>
@@ -1172,18 +1180,12 @@ export const TimetablePage: React.FC = () => {
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                {(selectedDetailSession.status === 'live' || selectedDetailSession.meetingUrl) && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      const toLaunch = selectedDetailSession;
-                      setSelectedDetailSession(null);
-                      setActiveLiveRoomSession(toLaunch);
-                    }}
-                    style={{ gap: '6px' }}
-                  >
-                    <Play size={13} /> Launch Room
-                  </button>
+                {(selectedDetailSession.status === 'live' || selectedDetailSession.status === 'scheduled') && (
+                  <GoogleMeetJoinButton
+                    meetingUrl={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
+                    role={isTrainer || isAdmin ? 'instructor' : 'student'}
+                    size="sm"
+                  />
                 )}
                 <button
                   className="btn btn-secondary btn-sm"

@@ -4,13 +4,17 @@ import { useThemeStore, ThemePreference } from '../../lib/themeStore';
 import {
   User, Mail, Phone, Globe, Clock, Shield, Bell,
   Sliders, Save, KeyRound, CheckCircle2, Lock,
-  Sun, Moon, Monitor, Check
+  Sun, Moon, Monitor, Check, Sparkles, CheckCheck
 } from 'lucide-react';
+import { AnimatedAvatar } from '../../components/AnimatedAvatar';
+import { useUserAvatar } from '../../lib/avatarStore';
 
 export const ProfilePage: React.FC = () => {
   const { user } = useAuthStore();
   const { preference, resolvedTheme, setTheme } = useThemeStore();
+  const { avatarId, setAvatar, avatarMeta, allArchetypes } = useUserAvatar();
   const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>('general');
+  const [avatarSuccess, setAvatarSuccess] = useState(false);
 
   // Form states
   const [firstName, setFirstName] = useState(user?.firstName || 'Sarah');
@@ -85,26 +89,38 @@ export const ProfilePage: React.FC = () => {
       </div>
 
       {activeTab === 'general' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
           {/* User identity card */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <div style={{
-              width: '96px',
-              height: '96px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-              color: '#fff',
-              fontSize: '2.5rem',
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '16px',
-              boxShadow: 'var(--shadow-glow)'
-            }}>
-              {firstName[0]}{lastName[0]}
+            <div style={{ marginBottom: '16px', position: 'relative' }}>
+              <AnimatedAvatar
+                size={96}
+                isCurrentUser={true}
+                interactive={true}
+                name={`${firstName} ${lastName}`}
+              />
             </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '2px' }}>{firstName} {lastName}</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '2px', color: '#fff' }}>
+              {firstName} {lastName}
+            </h3>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 12px',
+              borderRadius: '999px',
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: '#38bdf8',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              marginTop: '4px',
+              marginBottom: '10px'
+            }}>
+              <Sparkles size={12} color="#38bdf8" />
+              <span>{avatarMeta.name} &bull; {avatarMeta.title}</span>
+            </div>
             <p className="text-muted text-xs" style={{ marginBottom: '12px' }}>{user?.email}</p>
             <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
               {user?.activeRole.replace('_', ' ')}
@@ -233,6 +249,150 @@ export const ProfilePage: React.FC = () => {
             </form>
           </div>
         </div>
+
+        {/* Animated Avatar Selector Gallery */}
+        <div className="card" style={{ marginTop: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} color="var(--primary)" />
+                <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800 }}>
+                  Choose Your Animated Profile Avatar
+                </h3>
+                <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
+                  Live Persona
+                </span>
+              </div>
+              <p className="text-secondary text-xs" style={{ margin: '4px 0 0' }}>
+                Select an animated vector scholar archetype. Your selection immediately syncs to your personal profile, navigation header, sidebar, and the leaderboard podium.
+              </p>
+            </div>
+
+            {avatarSuccess && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#10b981',
+                  padding: '4px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                }}
+              >
+                <CheckCheck size={14} />
+                <span>Avatar Synced Everywhere!</span>
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
+              gap: '14px',
+            }}
+          >
+            {allArchetypes.map((arch) => {
+              const isSelected = arch.id === avatarId;
+              return (
+                <div
+                  key={arch.id}
+                  onClick={() => {
+                    setAvatar(arch.id);
+                    setAvatarSuccess(true);
+                    setTimeout(() => setAvatarSuccess(false), 2500);
+                  }}
+                  style={{
+                    background: isSelected
+                      ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                      : 'var(--bg-input)',
+                    border: isSelected
+                      ? '2px solid #38bdf8'
+                      : '1.5px solid var(--border-subtle)',
+                    borderRadius: '16px',
+                    padding: '16px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: isSelected
+                      ? '0 0 20px rgba(56, 189, 248, 0.3), 0 8px 20px rgba(0,0,0,0.4)'
+                      : '0 4px 12px rgba(0,0,0,0.15)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+                      e.currentTarget.style.transform = 'translateY(-3px)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }
+                  }}
+                >
+                  <AnimatedAvatar
+                    avatarId={arch.id}
+                    size={60}
+                    interactive={true}
+                    ringVariant={isSelected ? 'cyan' : 'auto'}
+                  />
+
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: isSelected ? '#38bdf8' : '#fff', marginTop: '12px' }}>
+                    {arch.name}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: isSelected ? '#93c5fd' : 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                    {arch.title}
+                  </div>
+                  <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '6px', minHeight: '32px' }}>
+                    {arch.flavor}
+                  </div>
+
+                  <div style={{ marginTop: '10px' }}>
+                    {isSelected ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '0.68rem',
+                          padding: '3px 10px',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        <Check size={12} strokeWidth={2.5} /> Active Avatar
+                      </span>
+                    ) : (
+                      <span
+                        className="btn btn-secondary btn-sm"
+                        style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 10px',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        Select
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </>
       )}
 
       {activeTab === 'security' && (

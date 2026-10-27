@@ -93,7 +93,6 @@ const OrganisationContent: React.FC<Props> = ({ subNav }) => {
             >
               Organisation Management
             </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Acme Learning Corp &bull; org-001</span>
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>
             {currentOption.label}

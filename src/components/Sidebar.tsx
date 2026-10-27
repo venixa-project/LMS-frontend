@@ -10,6 +10,7 @@ import {
   Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle
 } from 'lucide-react';
 import { getNavigationForRole, type NavItem } from '../lib/permissions';
+import { AnimatedAvatar } from './AnimatedAvatar';
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -69,6 +70,7 @@ const groupIconMap: Record<string, any> = {
   'Schedule & Attendance': Calendar,
   'Assessments & Grading': ClipboardCheck,
   'Evaluations & Grading': ClipboardCheck,
+  'Assessments & Quizzes': ClipboardCheck,
   'Assessments & Tests': ClipboardCheck,
   'Reports & Settings': BarChart3,
   'Learner Insights': BarChart3,
@@ -131,7 +133,12 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
       );
     }
     if (item.id === 'my-learning') {
-      return currentPath === '/my-learning' || currentPath.startsWith('/my-learning/') || currentPath === '/my-courses';
+      return (
+        currentPath === '/my-learning' ||
+        currentPath.startsWith('/my-learning/') ||
+        currentPath === '/my-courses' ||
+        currentPath.startsWith('/course-player')
+      );
     }
     if (item.id === 'course-builder') {
       return currentPath === '/course-builder' || currentPath.startsWith('/course-builder/');
@@ -202,7 +209,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         currentPath === '/attendance-ledger' || currentPath.startsWith('/attendance-ledger/')
       );
     }
+    if (item.id === 'assignments') {
+      return currentPath === '/assignments' || currentPath.startsWith('/assignments/');
+    }
+    if (item.id === 'my-results') {
+      return currentPath === '/my-results' || currentPath.startsWith('/my-results/');
+    }
     if (item.id === 'assessments') {
+      if (currentPath === '/assignments' || currentPath === '/my-results') return false;
       return currentPath === '/assessments' || currentPath === '/my-assessments' || currentPath.startsWith('/assessments/');
     }
     if (item.id === 'question-banks') {
@@ -214,7 +228,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'proctoring') {
       return currentPath === '/proctoring' || currentPath.startsWith('/proctoring/');
     }
-    if (item.id === 'certificates') {
+    if (item.id === 'certificates' || item.id === 'my-certificates') {
       return currentPath === '/certificates' || currentPath === '/my-certificates' || currentPath.startsWith('/certificates/');
     }
     if (item.id === 'reports') {
@@ -833,24 +847,12 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
             </Link>
           ) : (
             <>
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #2563EB, #EC4899)',
-                  boxShadow: '0 2px 8px rgba(236, 72, 153, 0.35)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.8rem',
-                  flexShrink: 0,
-                }}
-              >
-                {user?.firstName?.[0] || 'U'}
-              </div>
+              <AnimatedAvatar
+                size={34}
+                isCurrentUser={true}
+                name={user?.displayName}
+                interactive={true}
+              />
               <div style={{ overflow: 'hidden', flex: 1 }}>
                 <div
                   style={{

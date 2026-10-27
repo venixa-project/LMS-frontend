@@ -41,11 +41,10 @@ export const CertificatesPage: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">{isLearner ? 'Verified Credentials' : 'Certificates'}</span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; Verified Registry</span>
             {isLearner && <span className="badge badge-active">Alex Thompson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>
-            {isLearner ? 'My Verified Certificates & Awards' : 'Certificates & Verified Credentials'}
+            {isLearner ? 'My Certificates & Grades' : 'Certificates & Verified Credentials'}
           </h1>
           <p className="text-secondary text-sm">
             {isLearner
@@ -54,19 +53,13 @@ export const CertificatesPage: React.FC = () => {
           </p>
         </div>
 
-        {!isLearner ? (
+        {!isLearner && (
           <button
             className="btn btn-secondary"
             onClick={() => alert("Certificate Template Designer: Configure organizational logo, signature keys, and custom badge borders.")}
           >
             <Award size={16} /> Certificate Template Designer
           </button>
-        ) : (
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <Link to="/my-learning" className="btn btn-secondary">
-              <BookOpen size={16} /> My Enrolled Courses
-            </Link>
-          </div>
         )}
       </div>
 
@@ -287,7 +280,7 @@ export const CertificatesPage: React.FC = () => {
                 </div>
 
                 <div style={{ fontSize: '0.725rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                  VeniLearn Enterprise LMS &bull; Acme Learning Corp
+                  VeniLearn Enterprise LMS &bull; Verified Credentials Registry
                 </div>
                 <div style={{ fontSize: '0.65rem', letterSpacing: '0.06em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>
                   Department of Academic Affairs &bull; Official Credentials Registry

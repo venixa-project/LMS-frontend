@@ -14,18 +14,21 @@ export const LoginPage: React.FC = () => {
   const [mfaModal, setMfaModal] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
-  const { login, isLoading, error, clearError, isAuthenticated } = useAuthStore();
+  const { login, isLoading, error, clearError, isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-  const destination = from && from !== '/login' ? from : '/dashboard';
+  const searchParams = new URLSearchParams(location.search);
+  const redirectQuery = searchParams.get('redirect');
+  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || (redirectQuery ? decodeURIComponent(redirectQuery) : undefined);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      const currentUser = useAuthStore.getState().user || user;
+      const isStudent = currentUser?.activeRole === 'student' || currentUser?.activeRole === 'learner' || currentUser?.activeRole === 'guest';
+      navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +36,12 @@ export const LoginPage: React.FC = () => {
     clearError();
     await login(email, password);
     const storeState = useAuthStore.getState();
-    if (storeState.isAuthenticated) {
-      navigate(destination, { replace: true });
+    if (storeState.isAuthenticated && storeState.user) {
+      const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
+      const target = isStudent
+        ? (from && from !== '/login' && from !== '/dashboard' && from !== '/' ? from : '/leaderboard')
+        : (from && from !== '/login' ? from : '/dashboard');
+      navigate(target, { replace: true });
     }
   };
 
@@ -45,8 +52,10 @@ export const LoginPage: React.FC = () => {
     setPassword('demoPass123');
     await login(demoEmail, 'demoPass123');
     const storeState = useAuthStore.getState();
-    if (storeState.isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+    if (storeState.isAuthenticated && storeState.user) {
+      const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
+      const target = isStudent ? '/leaderboard' : '/dashboard';
+      navigate(target, { replace: true });
     }
   };
 

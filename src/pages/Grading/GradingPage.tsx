@@ -98,7 +98,6 @@ export const GradingPage: React.FC = () => {
             <span className="badge badge-primary">
               {isFaculty ? 'Faculty Evaluation Scope' : 'Academic Evaluation & Grading'}
             </span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
             {isFaculty && (
               <span className="badge badge-draft">
                 {user?.displayName || 'Dr. James Wilson'}

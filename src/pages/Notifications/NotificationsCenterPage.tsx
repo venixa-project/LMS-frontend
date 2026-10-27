@@ -119,7 +119,7 @@ export const NotificationsCenterPage: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary">Acme Learning Corp</span>
+            <span className="badge badge-primary">Campus Communications</span>
             {isOrgAdmin && <span className="badge badge-draft">Admin Operations</span>}
             {isFaculty && <span className="badge badge-success">Faculty Operations</span>}
             {isLearner && <span className="badge badge-active">Alex Thompson</span>}
@@ -252,7 +252,7 @@ export const NotificationsCenterPage: React.FC = () => {
               {isFaculty ? (
                 <span><strong>Faculty Notice Board:</strong> View campus announcements from administration and publish course bulletins to your assigned student rosters.</span>
               ) : (
-                <span><strong>Campus-Wide Communications:</strong> Announcements published here appear instantly on student & faculty dashboard notification feeds across Acme Learning Corp.</span>
+                <span><strong>Campus-Wide Communications:</strong> Announcements published here appear instantly on student & faculty dashboard notification feeds across the campus.</span>
               )}
             </div>
           </div>
@@ -363,10 +363,10 @@ export const NotificationsCenterPage: React.FC = () => {
               </div>
               <h4 style={{ fontSize: '1rem', marginBottom: '6px' }}>Docker Container Orchestration & Health Checks</h4>
               <p className="text-secondary text-sm" style={{ marginBottom: '12px' }}>
-                Live session led by Dr. James Wilson for Distributed Systems & Cloud Architecture. Room link verified on Zoom.
+                Live session led by Dr. James Wilson for Distributed Systems & Cloud Architecture. Google Meet link verified and ready.
               </p>
               <a href="/my-sessions" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                Open Timetable & Join Room &rarr;
+                Open Timetable & Join with Google Meet &rarr;
               </a>
             </div>
 
@@ -426,7 +426,7 @@ export const NotificationsCenterPage: React.FC = () => {
               </div>
               <h4 style={{ fontSize: '1rem', marginBottom: '6px' }}>Live Class: State Machines & Async Hooks</h4>
               <p className="text-secondary text-sm" style={{ marginBottom: '12px' }}>
-                Scheduled session for Spring 2026 Engineering cohort. Zoom room is verified and attendee roster contains 28 registered learners.
+                Scheduled session for Spring 2026 Engineering cohort. Google Meet room is verified and attendee roster contains 28 registered learners.
               </p>
               <a href="/live-sessions" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
                 View Timetable & Link &rarr;
