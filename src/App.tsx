@@ -57,6 +57,7 @@ import { ProctoringPage } from './pages/Proctoring/ProctoringPage';
 
 // Certificates & Reports
 import { CertificatesPage } from './pages/Certificates/CertificatesPage';
+import { VerifyCertificatePage } from './pages/Certificates/VerifyCertificatePage';
 import { ReportsPage } from './pages/Reports/ReportsPage';
 
 // System & Notifications
@@ -170,9 +171,11 @@ export const App: React.FC = () => {
           <Route path="my-proctoring-report" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report/:sessionId" element={<MyProctoringReportPage />} />
 
-          {/* Certificates, Notifications & Profile */}
+          {/* Certificates, Verification, Notifications & Profile */}
           <Route path="certificates" element={<CertificatesPage />} />
           <Route path="my-certificates" element={<CertificatesPage />} />
+          <Route path="verify-certificate" element={<VerifyCertificatePage />} />
+          <Route path="verify-certificate/:certId" element={<VerifyCertificatePage />} />
           <Route path="notifications" element={<NotificationsCenterPage />} />
           <Route path="profile" element={<ProfilePage />} />
 

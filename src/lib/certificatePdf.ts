@@ -104,10 +104,11 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
   }
 
   // 7. Academic Institution Sub-Header
+  const issuingOrg = (cert.issuingOrganization || 'Acme Learning Corp').toUpperCase();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
-  doc.text('ACME LEARNING CORP  •  GLOBAL ACADEMIC CREDENTIALS REGISTRY', centerX, 37, { align: 'center' });
+  doc.text(`${issuingOrg}  •  OFFICIAL CREDENTIALS REGISTRY`, centerX, 37, { align: 'center' });
 
   // Gold decorative line with center jewel
   doc.setDrawColor(217, 119, 6);
@@ -198,29 +199,51 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
   doc.text('★ ★ ★ ★ ★', centerX, sealY + 0.5, { align: 'center' });
   doc.text('AUTHENTIC', centerX, sealY + 5, { align: 'center' });
 
-  // 13. Left Signature (Lead Faculty)
+  // 13. Left Signature (Authorized Signer)
+  const leftSigner = cert.authorizedSignerName || 'Dr. James Wilson';
+  const leftTitle = cert.authorizedSignerTitle || 'Lead Instructor & Curriculum Director';
   const sigLineY = 142;
   const sigLeftX = centerX - 65;
   doc.setDrawColor(148, 163, 184);
   doc.setLineWidth(0.5);
   doc.line(sigLeftX - 35, sigLineY, sigLeftX + 35, sigLineY);
 
-  doc.setFont('times', 'italic');
-  doc.setFontSize(14);
-  doc.setTextColor(30, 41, 59);
-  doc.text('Dr. James Wilson', sigLeftX, sigLineY - 3, { align: 'center' });
+  if (cert.authorizedSignatureImage && cert.authorizedSignatureImage.startsWith('data:image')) {
+    try {
+      if (cert.authorizedSignatureImage.includes('image/png') || cert.authorizedSignatureImage.includes('image/jpeg')) {
+        doc.addImage(cert.authorizedSignatureImage, 'PNG', sigLeftX - 25, sigLineY - 14, 50, 13);
+      } else {
+        doc.setFont('times', 'italic');
+        doc.setFontSize(14);
+        doc.setTextColor(30, 41, 59);
+        doc.text(leftSigner, sigLeftX, sigLineY - 3, { align: 'center' });
+      }
+    } catch {
+      doc.setFont('times', 'italic');
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59);
+      doc.text(leftSigner, sigLeftX, sigLineY - 3, { align: 'center' });
+    }
+  } else {
+    doc.setFont('times', 'italic');
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
+    doc.text(leftSigner, sigLeftX, sigLineY - 3, { align: 'center' });
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text('Dr. James Wilson, Ph.D.', sigLeftX, sigLineY + 5, { align: 'center' });
+  doc.text(leftSigner, sigLeftX, sigLineY + 5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('Lead Instructor & Curriculum Director', sigLeftX, sigLineY + 9, { align: 'center' });
+  doc.text(leftTitle, sigLeftX, sigLineY + 9, { align: 'center' });
 
-  // 14. Right Signature (Dean of Academic Affairs)
+  // 14. Right Signature (Dean / Authority)
+  const rightSigner = cert.secondarySignerName || 'Sarah Chen';
+  const rightTitle = cert.secondarySignerTitle || 'Dean of Academic Affairs';
   const sigRightX = centerX + 65;
   doc.setDrawColor(148, 163, 184);
   doc.setLineWidth(0.5);
@@ -229,17 +252,17 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
   doc.setFont('times', 'italic');
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
-  doc.text('Sarah Chen', sigRightX, sigLineY - 3, { align: 'center' });
+  doc.text(rightSigner, sigRightX, sigLineY - 3, { align: 'center' });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text('Sarah Chen, M.Sc.', sigRightX, sigLineY + 5, { align: 'center' });
+  doc.text(rightSigner, sigRightX, sigLineY + 5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('Dean of Academic Affairs & Accreditation', sigRightX, sigLineY + 9, { align: 'center' });
+  doc.text(rightTitle, sigRightX, sigLineY + 9, { align: 'center' });
 
   // 15. Security & Verification Bottom Bar
   const metaY = 175;
@@ -262,7 +285,8 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
   doc.text(`Online Verification:`, pageWidth - 24, metaY + 6, { align: 'right' });
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(37, 99, 235);
-  doc.text(`verify.acmelearning.com/${certId}`, pageWidth - 24, metaY + 12, { align: 'right' });
+  const verifyHost = typeof window !== 'undefined' ? `${window.location.host}/verify-certificate/${certId}` : `verify.venilearn.com/${certId}`;
+  doc.text(verifyHost, pageWidth - 24, metaY + 12, { align: 'right' });
 
   // 16. Trigger PDF Save
   const safeTitle = courseTitle.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
@@ -291,6 +315,13 @@ export function printCertificateDiploma(cert: Certificate): void {
     generateCertificatePdf(cert);
     return;
   }
+
+  const issuingOrg = cert.issuingOrganization || 'Acme Learning Corp';
+  const leftSigner = cert.authorizedSignerName || 'Dr. James Wilson';
+  const leftTitle = cert.authorizedSignerTitle || 'Lead Faculty & Curriculum Director';
+  const rightSigner = cert.secondarySignerName || 'Sarah Chen';
+  const rightTitle = cert.secondarySignerTitle || 'Dean of Academic Affairs';
+  const verifyHost = typeof window !== 'undefined' ? `${window.location.host}/verify-certificate/${certId}` : `verify.venilearn.com/${certId}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -509,7 +540,7 @@ export function printCertificateDiploma(cert: Certificate): void {
         <div class="brand-logo-container">
           <img src="/logo.png" alt="VeniLearn Logo" class="brand-logo-img" />
         </div>
-        <h4>Acme Learning Corp &bull; Global Academic Credentials Registry</h4>
+        <h4>${issuingOrg} &bull; Official Academic Credentials Registry</h4>
         <p>Department of Professional Curriculum & Continuous Education</p>
         <div class="gold-divider"></div>
         <h1 class="cert-title">Certificate of Achievement</h1>
@@ -529,9 +560,9 @@ export function printCertificateDiploma(cert: Certificate): void {
 
       <div class="signatures-row">
         <div class="sig-col">
-          <div class="sig-hand">Dr. James Wilson</div>
-          <div class="sig-line">Dr. James Wilson, Ph.D.</div>
-          <div class="sig-role">Lead Faculty & Curriculum Director</div>
+          ${cert.authorizedSignatureImage ? `<img src="${cert.authorizedSignatureImage}" alt="Signature" style="max-height: 48px; max-width: 170px; object-fit: contain; margin-bottom: 2px;" />` : `<div class="sig-hand">${leftSigner}</div>`}
+          <div class="sig-line">${leftSigner}</div>
+          <div class="sig-role">${leftTitle}</div>
         </div>
 
         <div class="seal-circle">
@@ -541,16 +572,16 @@ export function printCertificateDiploma(cert: Certificate): void {
         </div>
 
         <div class="sig-col">
-          <div class="sig-hand">Sarah Chen</div>
-          <div class="sig-line">Sarah Chen, M.Sc.</div>
-          <div class="sig-role">Dean of Academic Affairs</div>
+          ${cert.secondarySignatureImage ? `<img src="${cert.secondarySignatureImage}" alt="Signature" style="max-height: 48px; max-width: 170px; object-fit: contain; margin-bottom: 2px;" />` : `<div class="sig-hand">${rightSigner}</div>`}
+          <div class="sig-line">${rightSigner}</div>
+          <div class="sig-role">${rightTitle}</div>
         </div>
       </div>
 
       <div class="cert-footer">
         <div><strong>Issued:</strong> ${formattedDate} &bull; <strong>ID:</strong> ${certId}</div>
         <div><strong>Status:</strong> Verified &bull; <strong>Proof:</strong> SHA256-${hash.slice(0, 10)}...</div>
-        <div><strong>Verify:</strong> verify.acmelearning.com/${certId}</div>
+        <div><strong>Verify:</strong> ${verifyHost}</div>
       </div>
     </div>
   </div>

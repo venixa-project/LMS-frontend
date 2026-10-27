@@ -225,6 +225,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'assignments', label: 'Student Assignments', icon: 'Award', path: '/assignments', group: 'Evaluations & Grading' },
     { id: 'grading', label: 'Grading Queue & AI Review', icon: 'PenTool', path: '/grading', group: 'Evaluations & Grading', badge: 5 },
     { id: 'proctoring', label: 'Proctoring Incident Center', icon: 'Eye', path: '/proctoring', group: 'Evaluations & Grading' },
+    { id: 'certificates', label: 'Certificates', icon: 'Award', path: '/certificates', group: 'Evaluations & Grading' },
 
     // Learners & Insights
     { id: 'students', label: 'Student Progress & Directory', icon: 'Users', path: '/students', group: 'Learner Insights' },
@@ -257,7 +258,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'my-proctoring-reports', label: 'My Proctoring Reports', icon: 'Shield', path: '/my-proctoring-reports', group: 'Assessments & Tests' },
 
     // Credentials & Communication
-    { id: 'my-certificates', label: 'Diplomas & Certificates', icon: 'Award', path: '/my-certificates', group: 'Credentials & Profile' },
+    { id: 'my-certificates', label: 'Certificates', icon: 'Award', path: '/my-certificates', group: 'Credentials & Profile' },
     { id: 'announcements', label: 'Announcements & Alerts', icon: 'Bell', path: '/notifications', group: 'Credentials & Profile' },
     { id: 'profile', label: 'Student Profile', icon: 'User', path: '/profile', group: 'Credentials & Profile' },
   ];
@@ -339,6 +340,8 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '/my-certificates' ||
     cleanPath === '/assignments' ||
     cleanPath === '/certificates' ||
+    cleanPath === '/verify-certificate' ||
+    cleanPath.startsWith('/verify-certificate') ||
     cleanPath.startsWith('/course-player') ||
     cleanPath.startsWith('/learning-materials') ||
     cleanPath.startsWith('/exam/')

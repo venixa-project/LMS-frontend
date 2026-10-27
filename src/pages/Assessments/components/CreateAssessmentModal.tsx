@@ -14,7 +14,7 @@ import {
   Eye, Check, Shield, Award, Clock, HelpCircle, ChevronRight, Layers, FileCheck,
   FileSpreadsheet, UploadCloud, Download, CheckSquare, Square, Search, Filter,
   AlertCircle, Edit3, Video, FileVideo, Play, Languages, Film, Volume2,
-  Users, Mic, Camera, Monitor, Radio, Lock
+  Users, Mic, Camera, Monitor, Radio, Lock, Calendar
 } from 'lucide-react';
 import {
   Assessment,
@@ -59,6 +59,7 @@ import {
   normalizeQuestionText
 } from '../../../lib/bulkImportService';
 import { useAuthStore } from '../../../lib/store';
+import { useSignatureStore } from '../../../lib/signatureStore';
 
 interface Props {
   isOpen: boolean;
@@ -125,6 +126,43 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   }>({});
 
   const [instructions, setInstructions] = useState(initialDraft?.instructions || 'Read every question carefully. Ensure stable connectivity during the session.');
+
+  // Availability, Completion & Rewards Configuration
+  const { getDefaultSignatoryForUser, getApprovedSignatories, hasConfiguredSignature } = useSignatureStore();
+  const creatorDefaultSig = getDefaultSignatoryForUser(user);
+  const userHasSignature = hasConfiguredSignature(user);
+  const approvedSignatories = getApprovedSignatories();
+
+  const [availabilityStart, setAvailabilityStart] = useState<string>(
+    initialDraft?.availabilityStart ? initialDraft.availabilityStart.slice(0, 16) : ''
+  );
+  const [availabilityEnd, setAvailabilityEnd] = useState<string>(
+    initialDraft?.availabilityEnd ? initialDraft.availabilityEnd.slice(0, 16) : ''
+  );
+  const [completionPercentageRequired, setCompletionPercentageRequired] = useState<number>(
+    initialDraft?.completionPercentageRequired ?? (initialDraft?.certificateConfig?.requiredCompletionPercentage ?? 100)
+  );
+  const [certificateEnabled, setCertificateEnabled] = useState<boolean>(
+    initialDraft?.certificateConfig?.enabled ?? true
+  );
+  const [completionPoints, setCompletionPoints] = useState<number>(
+    initialDraft?.completionPoints ?? (initialDraft?.certificateConfig?.completionPoints ?? 50)
+  );
+  const [certTemplateId, setCertTemplateId] = useState<'standard' | 'executive' | 'distinction' | 'technical'>(
+    initialDraft?.certificateConfig?.templateId || 'distinction'
+  );
+  const [selectedSignatoryOption, setSelectedSignatoryOption] = useState<string>(
+    initialDraft?.certificateConfig?.authorizedSignerName ? 'custom' : 'creator'
+  );
+  const [certSignerName, setCertSignerName] = useState<string>(
+    initialDraft?.certificateConfig?.authorizedSignerName || creatorDefaultSig.name || 'Authorized Signatory'
+  );
+  const [certSignerTitle, setCertSignerTitle] = useState<string>(
+    initialDraft?.certificateConfig?.authorizedSignerTitle || creatorDefaultSig.designation || 'Lead Evaluator & Department Chair'
+  );
+  const [certSignerImage, setCertSignerImage] = useState<string>(
+    initialDraft?.certificateConfig?.authorizedSignatureImage || creatorDefaultSig.signatureImage || ''
+  );
   // Hybrid Proctoring Protocol Configuration
   const [proctoringMode, setProctoringMode] = useState<ProctoringMode>(
     initialDraft?.proctoringMode || (initialDraft?.proctoringRequired === false ? 'none' : 'combined')
@@ -978,6 +1016,36 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       return;
     }
 
+    // Validate availability start/end dates
+    if (availabilityStart && availabilityEnd) {
+      if (new Date(availabilityEnd) <= new Date(availabilityStart)) {
+        alert('Assessment End Date & Time must be later than Start Date & Time.');
+        return;
+      }
+    }
+
+    if (completionPercentageRequired < 1 || completionPercentageRequired > 100) {
+      alert('Required completion percentage must be between 1% and 100%.');
+      return;
+    }
+
+    if (isNaN(completionPoints) || completionPoints < 0) {
+      alert('Reward points must be a non-negative whole number (e.g. 0 or 50).');
+      return;
+    }
+
+    if (certificateEnabled && publish) {
+      if (!certSignerName.trim()) {
+        alert('Please specify an authorized signatory name for the certificate.');
+        return;
+      }
+      if (!certSignerImage && !userHasSignature && selectedSignatoryOption === 'creator') {
+        if (!confirm('Warning: You have not configured an authorized signature in your profile. Do you want to publish the assessment certificate with formal typographic signature, or configure your signature in Profile first? Click OK to publish or Cancel to configure.')) {
+          return;
+        }
+      }
+    }
+
     // Check for missing answers on objective questions when publishing
     if (publish) {
       const invalidObjective = questions.find((q) => {
@@ -1054,6 +1122,21 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         : undefined,
       difficultyDistribution: difficultyBreakdown,
       questionTypeDistribution: typeBreakdown,
+      availabilityStart: availabilityStart ? new Date(availabilityStart).toISOString() : undefined,
+      availabilityEnd: availabilityEnd ? new Date(availabilityEnd).toISOString() : undefined,
+      completionPercentageRequired,
+      completionPoints: Math.max(0, completionPoints),
+      certificateConfig: {
+        enabled: certificateEnabled,
+        title: `${title.trim()} Certificate of Achievement`,
+        templateId: certTemplateId,
+        minimumScore: passVal,
+        requiredCompletionPercentage: completionPercentageRequired,
+        completionPoints: Math.max(0, completionPoints),
+        authorizedSignerName: certSignerName.trim(),
+        authorizedSignerTitle: certSignerTitle.trim(),
+        authorizedSignatureImage: certSignerImage || undefined,
+      },
       status: publish ? 'published' : 'draft',
       createdAt: initialDraft?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -4497,6 +4580,323 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     <Eye size={14} /> Preview Full Assessment as Learner
                   </button>
                 </div>
+              </div>
+
+              {/* AVAILABILITY, COMPLETION & REWARDS SECTION */}
+              <div
+                className="card"
+                style={{
+                  padding: '24px',
+                  background: 'var(--bg-card)',
+                  marginBottom: '20px',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-lg)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: certificateEnabled ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: certificateEnabled ? 'var(--primary)' : 'var(--text-muted)'
+                    }}>
+                      <Award size={20} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 700 }}>
+                        Availability, Completion & Rewards
+                      </h3>
+                      <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                        Configure assessment availability window, passing & completion criteria, reward points, and authorized certificate signatory.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={certificateEnabled}
+                        onChange={(e) => setCertificateEnabled(e.target.checked)}
+                        style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                      />
+                      Issue Assessment Certificate: {certificateEnabled ? 'Yes' : 'No'}
+                    </label>
+                  </div>
+                </div>
+
+                {/* 1. Availability Window */}
+                <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '16px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={15} color="var(--primary)" /> Assessment Availability Window
+                    <span className="text-muted text-xs font-normal">
+                      (Institution Timezone: {user?.timezone || 'America/New_York'})
+                    </span>
+                  </div>
+                  <div className="grid-2" style={{ gap: '14px' }}>
+                    <div>
+                      <label className="form-label text-xs">Start Date & Time (Scheduled Opening)</label>
+                      <input
+                        type="datetime-local"
+                        className="form-control"
+                        value={availabilityStart}
+                        onChange={(e) => setAvailabilityStart(e.target.value)}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                        Before this time, students cannot begin and see a scheduled opening notice. Creators & admins retain preview access.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="form-label text-xs">End Date & Time (Strict Deadline)</label>
+                      <input
+                        type="datetime-local"
+                        className="form-control"
+                        value={availabilityEnd}
+                        onChange={(e) => setAvailabilityEnd(e.target.value)}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                        After this time, the assessment becomes strictly read-only. Submissions and new attempts are locked.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Completion Percentage, Passing Score & Reward Points */}
+                <div className="grid-3" style={{ gap: '14px', marginBottom: '16px' }}>
+                  <div>
+                    <label className="form-label text-xs">Required Completion Rate (%)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        className="form-control"
+                        value={completionPercentageRequired}
+                        onChange={(e) => setCompletionPercentageRequired(Math.min(100, Math.max(1, parseInt(e.target.value) || 100)))}
+                        style={{ fontSize: '0.9rem', fontWeight: 600 }}
+                      />
+                      <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>%</span>
+                    </div>
+                    <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                      Distinct from pass marks. Learner must answer at least this % of questions to qualify.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs">Minimum Passing Score</label>
+                    <div style={{
+                      padding: '10px 12px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      color: 'var(--success)'
+                    }}>
+                      {passingMarks} / {totalMarks} Marks ({Math.round((passingMarks / totalMarks) * 100)}%)
+                    </div>
+                    <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                      Configured in assessment parameters. Satisfies passing criteria.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-xs">Reward Points on Pass</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        className="form-control"
+                        value={completionPoints}
+                        onChange={(e) => setCompletionPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                        style={{ fontSize: '0.9rem', fontWeight: 600 }}
+                      />
+                      <span className="text-muted text-xs font-semibold">pts</span>
+                    </div>
+                    <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                      Awarded strictly once upon meeting passing & completion requirements.
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Certificate Signatory & Template (Shown when Certificate is Enabled) */}
+                {certificateEnabled && (
+                  <div style={{
+                    border: '1px solid rgba(37, 99, 235, 0.25)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '16px',
+                    background: 'rgba(37, 99, 235, 0.03)'
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <PenTool size={15} color="var(--primary)" /> Certificate Template & Authorized Signatory
+                    </div>
+
+                    <div className="grid-2" style={{ gap: '14px', marginBottom: '14px' }}>
+                      <div>
+                        <label className="form-label text-xs">Certificate Template</label>
+                        <select
+                          className="form-control"
+                          value={certTemplateId}
+                          onChange={(e) => setCertTemplateId(e.target.value as any)}
+                          style={{ fontSize: '0.85rem' }}
+                        >
+                          <option value="distinction">Distinction Honors (VeniLearn Blue & Gold)</option>
+                          <option value="technical">Technical Achievement (Modern Slate & Teal)</option>
+                          <option value="executive">Executive Minimal (Classic Navy)</option>
+                          <option value="standard">Standard Academic (Institutional)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="form-label text-xs">Authorized Signatory Authority</label>
+                        <select
+                          className="form-control"
+                          value={selectedSignatoryOption}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedSignatoryOption(val);
+                            if (val === 'creator') {
+                              setCertSignerName(creatorDefaultSig.name);
+                              setCertSignerTitle(creatorDefaultSig.designation);
+                              setCertSignerImage(creatorDefaultSig.signatureImage || '');
+                            } else if (val === 'custom') {
+                              // keep custom
+                            } else {
+                              const found = approvedSignatories.find((s) => s.id === val);
+                              if (found) {
+                                setCertSignerName(found.name);
+                                setCertSignerTitle(found.designation);
+                                setCertSignerImage(found.signatureImage || '');
+                              }
+                            }
+                          }}
+                          style={{ fontSize: '0.85rem' }}
+                        >
+                          <option value="creator">
+                            My Profile Signature ({creatorDefaultSig.name || user?.displayName || 'Creator'})
+                          </option>
+                          {approvedSignatories.map((sig) => (
+                            <option key={sig.id} value={sig.id}>
+                              {sig.name} &mdash; {sig.designation}
+                            </option>
+                          ))}
+                          <option value="custom">Custom Signatory Details...</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Signatory Name & Designation Inputs */}
+                    <div className="grid-2" style={{ gap: '14px', marginBottom: '14px' }}>
+                      <div>
+                        <label className="form-label text-xs">Signatory Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={certSignerName}
+                          onChange={(e) => setCertSignerName(e.target.value)}
+                          placeholder="e.g. Dr. James Wilson"
+                          style={{ fontSize: '0.85rem' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="form-label text-xs">Signatory Designation / Title</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={certSignerTitle}
+                          onChange={(e) => setCertSignerTitle(e.target.value)}
+                          placeholder="e.g. Principal Faculty & Evaluator"
+                          style={{ fontSize: '0.85rem' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Signature Status & Warning */}
+                    {!userHasSignature && selectedSignatoryOption === 'creator' && !certSignerImage && (
+                      <div style={{
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '10px 14px',
+                        marginBottom: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <AlertTriangle size={16} color="var(--warning)" />
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
+                            No digital signature image is saved in your profile. You can configure your authorized signature in your Profile tab.
+                          </span>
+                        </div>
+                        <a
+                          href="/profile"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary text-xs"
+                          style={{ whiteSpace: 'nowrap', padding: '4px 10px' }}
+                        >
+                          Configure Signature
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Live Certificate Signatory Snapshot Preview */}
+                    <div style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px dashed var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '16px'
+                    }}>
+                      <div>
+                        <div className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Certificate Signatory Snapshot Preview
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)', marginTop: '2px' }}>
+                          {certSignerName || 'Signatory Name'}
+                        </div>
+                        <div className="text-secondary text-xs">
+                          {certSignerTitle || 'Authorized Signatory Title'}
+                        </div>
+                      </div>
+
+                      <div style={{
+                        width: '150px',
+                        height: '50px',
+                        borderBottom: '1.5px solid var(--border-subtle)',
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'center',
+                        paddingBottom: '4px'
+                      }}>
+                        {certSignerImage ? (
+                          <img
+                            src={certSignerImage}
+                            alt="Signatory Signature"
+                            style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <span style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {certSignerName || 'Signature'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Publish Action Buttons */}

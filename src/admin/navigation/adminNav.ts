@@ -31,7 +31,7 @@ export const adminNav: NavItem[] = [
   { id: 'proctoring', label: 'Proctoring Security', icon: 'Eye', path: '/proctoring', group: 'Assessments & Grading' },
 
   // Credentials & Insights
-  { id: 'certificates', label: 'Certificates & Diplomas', icon: 'Award', path: '/certificates', group: 'Reports & Settings' },
+  { id: 'certificates', label: 'Certificates', icon: 'Award', path: '/certificates', group: 'Reports & Settings' },
   { id: 'reports', label: 'Institution Reports', icon: 'BarChart3', path: '/reports', group: 'Reports & Settings' },
   { id: 'notifications', label: 'Announcements', icon: 'Bell', path: '/notifications', group: 'Reports & Settings' },
   { id: 'profile', label: 'Admin Profile', icon: 'User', path: '/profile', group: 'Account' },

@@ -297,17 +297,17 @@ export const BranchesManagementView: React.FC = () => {
           </button>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.825rem' }}>
-            <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        <div className="dept-table-container">
+          <table className="dept-table">
+            <thead>
               <tr>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>BRANCH & CODE</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>LOCATION</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>ADDRESS</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>TIMEZONE</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>CAPACITY</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b' }}>STATUS</th>
-                <th style={{ padding: '0.75rem 1rem', color: '#64748b', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ padding: '0.75rem 1rem' }}>BRANCH & CODE</th>
+                <th style={{ padding: '0.75rem 1rem' }}>LOCATION</th>
+                <th style={{ padding: '0.75rem 1rem' }}>ADDRESS</th>
+                <th style={{ padding: '0.75rem 1rem' }}>TIMEZONE</th>
+                <th style={{ padding: '0.75rem 1rem' }}>CAPACITY</th>
+                <th style={{ padding: '0.75rem 1rem' }}>STATUS</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -316,12 +316,12 @@ export const BranchesManagementView: React.FC = () => {
                 const isInactive = branch.status === 'Inactive';
 
                 return (
-                  <tr key={branch.id} style={{ borderBottom: '1px solid #f1f5f9', background: isHq ? '#fffdf7' : 'transparent' }}>
+                  <tr key={branch.id} className="dept-row-main" style={{ background: isHq ? 'rgba(217, 119, 6, 0.08)' : undefined }}>
                     <td style={{ padding: '0.85rem 1rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <Building2 size={16} color={isHq ? '#d97706' : 'var(--brand-blue, #2563EB)'} />
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                             <span>{branch.name}</span>
                             {isHq && (
                               <span
@@ -330,9 +330,9 @@ export const BranchesManagementView: React.FC = () => {
                                   fontWeight: 800,
                                   padding: '0.15rem 0.45rem',
                                   borderRadius: '4px',
-                                  background: '#fef3c7',
-                                  color: '#b45309',
-                                  border: '1px solid #fde68a',
+                                  background: 'rgba(217, 119, 6, 0.15)',
+                                  color: '#f59e0b',
+                                  border: '1px solid rgba(217, 119, 6, 0.3)',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '2px',
@@ -342,28 +342,28 @@ export const BranchesManagementView: React.FC = () => {
                               </span>
                             )}
                           </div>
-                          <span style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace' }}>{branch.code}</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{branch.code}</span>
                         </div>
                       </div>
                     </td>
                     <td style={{ padding: '0.85rem 1rem' }}>
-                      <div style={{ fontWeight: 600, color: '#334155' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
                         {branch.city}, {branch.country}
                       </div>
-                      {branch.state && <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{branch.state}</div>}
+                      {branch.state && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{branch.state}</div>}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', maxWidth: '240px', color: '#475569' }}>
+                    <td style={{ padding: '0.85rem 1rem', maxWidth: '240px', color: 'var(--text-secondary)' }}>
                       {branch.address || '—'}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', color: '#475569' }}>
+                    <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                        <Clock size={13} color="#94a3b8" />
+                        <Clock size={13} color="var(--text-muted)" />
                         {branch.timezone?.split(' ')[0] || 'Asia/Kolkata'}
                       </span>
                     </td>
                     <td style={{ padding: '0.85rem 1rem' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600, color: '#0f172a' }}>
-                        <Users size={13} color="#64748b" />
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                        <Users size={13} color="var(--text-muted)" />
                         {branch.capacity || 100} Desks
                       </span>
                     </td>

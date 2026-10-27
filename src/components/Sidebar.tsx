@@ -214,7 +214,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'proctoring') {
       return currentPath === '/proctoring' || currentPath.startsWith('/proctoring/');
     }
-    if (item.id === 'certificates') {
+    if (item.id === 'certificates' || item.id === 'my-certificates') {
       return currentPath === '/certificates' || currentPath === '/my-certificates' || currentPath.startsWith('/certificates/');
     }
     if (item.id === 'reports') {

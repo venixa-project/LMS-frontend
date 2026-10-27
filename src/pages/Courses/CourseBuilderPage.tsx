@@ -19,8 +19,10 @@ import {
   Video, FileText, HelpCircle, Link as LinkIcon, MoveUp, MoveDown,
   Eye, Check, AlertCircle, Sparkles, Send, Users, UserCheck, Search,
   GraduationCap, Clock, Award, Shield, CheckSquare, Square, X,
-  Layers, ExternalLink, Share2, AlertTriangle, UserPlus, Info, Edit2, RefreshCw
+  Layers, ExternalLink, Share2, AlertTriangle, UserPlus, Info, Edit2, RefreshCw,
+  Calendar, PenTool
 } from 'lucide-react';
+import { useSignatureStore } from '../../lib/signatureStore';
 
 export const CourseBuilderPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,6 +33,7 @@ export const CourseBuilderPage: React.FC = () => {
   const { addCourse, assignStudentsToCourse, courses } = useCourseStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
+  const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const isOrgAdmin =
@@ -60,6 +63,43 @@ export const CourseBuilderPage: React.FC = () => {
     'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'
   );
   const [step1Error, setStep1Error] = useState<string | null>(null);
+
+  // Course Availability Window (Start Date & End Date)
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // -------------------------------------------------------------
+  // Completion, Certificate & Rewards State
+  // -------------------------------------------------------------
+  const [certificateEnabled, setCertificateEnabled] = useState(true);
+  const [certTitle, setCertTitle] = useState('Certificate of Course Completion');
+  const [certIssuingOrg, setCertIssuingOrg] = useState('Acme Learning Corp');
+  const [certRequireAllLessons, setCertRequireAllLessons] = useState(true);
+  const [certRequireAssessment, setCertRequireAssessment] = useState(true);
+  const [certMinScore, setCertMinScore] = useState(70);
+  const [certMinPercentage, setCertMinPercentage] = useState(100);
+  const [certPoints, setCertPoints] = useState<number>(100);
+  const [certTemplateId, setCertTemplateId] = useState<'standard' | 'executive' | 'distinction' | 'technical'>('standard');
+  const [certValidityMonths, setCertValidityMonths] = useState<number>(0);
+
+  // Authorized Signatory states
+  const approvedSignatories = useMemo(() => getApprovedSignatories(), [getApprovedSignatories]);
+  const creatorDefaultSig = useMemo(() => getDefaultSignatoryForUser(user), [getDefaultSignatoryForUser, user]);
+  const isCreatorSigConfigured = useMemo(() => hasConfiguredSignature(user), [hasConfiguredSignature, user]);
+
+  const [selectedSignatoryOption, setSelectedSignatoryOption] = useState<string>('creator_default');
+  const [certSignerName, setCertSignerName] = useState(creatorDefaultSig.name || 'Dr. James Wilson');
+  const [certSignerTitle, setCertSignerTitle] = useState(creatorDefaultSig.designation || 'Lead Instructor & Curriculum Director');
+  const [certSignerSignatureImage, setCertSignerSignatureImage] = useState<string | undefined>(creatorDefaultSig.signatureImage);
+  const [showCertPreviewModal, setShowCertPreviewModal] = useState(false);
+
+  useEffect(() => {
+    if (selectedSignatoryOption === 'creator_default') {
+      setCertSignerName(creatorDefaultSig.name);
+      setCertSignerTitle(creatorDefaultSig.designation);
+      setCertSignerSignatureImage(creatorDefaultSig.signatureImage);
+    }
+  }, [selectedSignatoryOption, creatorDefaultSig]);
 
   // -------------------------------------------------------------
   // STEP 2: Curriculum & Lessons (with Quizzes, Documents & Assessments)
@@ -352,6 +392,10 @@ export const CourseBuilderPage: React.FC = () => {
         setCourseCode(existing.id.toUpperCase().replace('CRS-', 'CRS-2026-'));
         setDescription(existing.description || '');
         if (existing.departmentId) setDepartmentId(existing.departmentId);
+        if (existing.startDate) setStartDate(existing.startDate);
+        if (existing.endDate) setEndDate(existing.endDate);
+        if (existing.completionPoints !== undefined) setCertPoints(existing.completionPoints);
+        if (existing.completionPercentageRequired !== undefined) setCertMinPercentage(existing.completionPercentageRequired);
         if (existing.category) setCategory(existing.category);
         if (existing.durationHours) setDurationHours(existing.durationHours);
         if (existing.thumbnail) setThumbnailUrl(existing.thumbnail);
@@ -361,6 +405,21 @@ export const CourseBuilderPage: React.FC = () => {
         }
         if (existing.finalAssessment) {
           setFinalAssessment(existing.finalAssessment);
+        }
+        if (existing.certificateConfig) {
+          setCertificateEnabled(existing.certificateConfig.enabled ?? true);
+          if (existing.certificateConfig.title) setCertTitle(existing.certificateConfig.title);
+          if (existing.certificateConfig.issuingOrganization) setCertIssuingOrg(existing.certificateConfig.issuingOrganization);
+          if (existing.certificateConfig.requireAllLessons !== undefined) setCertRequireAllLessons(existing.certificateConfig.requireAllLessons);
+          if (existing.certificateConfig.requirePassingAssessment !== undefined) setCertRequireAssessment(existing.certificateConfig.requirePassingAssessment);
+          if (existing.certificateConfig.minimumAssessmentScore !== undefined) setCertMinScore(existing.certificateConfig.minimumAssessmentScore);
+          if (existing.certificateConfig.requiredCompletionPercentage !== undefined) setCertMinPercentage(existing.certificateConfig.requiredCompletionPercentage);
+          if (existing.certificateConfig.completionPoints !== undefined) setCertPoints(existing.certificateConfig.completionPoints);
+          if (existing.certificateConfig.templateId) setCertTemplateId(existing.certificateConfig.templateId as any);
+          if (existing.certificateConfig.validityMonths !== undefined) setCertValidityMonths(existing.certificateConfig.validityMonths);
+          if (existing.certificateConfig.authorizedSignerName) setCertSignerName(existing.certificateConfig.authorizedSignerName);
+          if (existing.certificateConfig.authorizedSignerTitle) setCertSignerTitle(existing.certificateConfig.authorizedSignerTitle);
+          if (existing.certificateConfig.authorizedSignatureImage) setCertSignerSignatureImage(existing.certificateConfig.authorizedSignatureImage);
         }
       }
     }
@@ -531,6 +590,24 @@ export const CourseBuilderPage: React.FC = () => {
     if (!departmentId) {
       setStep1Error('Department selection is required.');
       return false;
+    }
+    if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
+      setStep1Error('Course End Date & Time must be later than Start Date & Time.');
+      return false;
+    }
+    if (certificateEnabled) {
+      if (certMinPercentage < 1 || certMinPercentage > 100) {
+        setStep1Error('Required course completion percentage must be between 1% and 100%.');
+        return false;
+      }
+      if (certPoints < 0 || isNaN(certPoints)) {
+        setStep1Error('Reward points on completion must be a non-negative whole number.');
+        return false;
+      }
+      if (!certSignerName.trim()) {
+        setStep1Error('An authorized signatory name is required when certificates are enabled.');
+        return false;
+      }
     }
     return true;
   };
@@ -826,10 +903,23 @@ export const CourseBuilderPage: React.FC = () => {
       }
     });
 
-    if (!finalAssessment) {
-      warnings.push('No Final Course Assessment is configured. You may publish without one, but learners will not have a capstone evaluation.');
-    } else if (!finalAssessment.questions || finalAssessment.questions.length === 0) {
-      warnings.push('Final Course Assessment has 0 questions configured.');
+    if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
+      errors.push('Course End Date & Time must be strictly later than Start Date & Time.');
+    }
+
+    if (certificateEnabled) {
+      if (certMinPercentage < 1 || certMinPercentage > 100) {
+        errors.push('Required course completion percentage must be between 1% and 100%.');
+      }
+      if (certPoints < 0 || isNaN(certPoints)) {
+        errors.push('Reward points must be a non-negative whole number (0 or more).');
+      }
+      if (!certSignerName.trim()) {
+        errors.push('An authorized certificate signatory is required when certificate issuance is enabled.');
+      }
+      if (!certSignerSignatureImage) {
+        warnings.push('The selected signatory has no digital signature image configured in profile. It is recommended to configure a signature before publishing.');
+      }
     }
 
     return {
@@ -932,6 +1022,27 @@ export const CourseBuilderPage: React.FC = () => {
         enrolledLearners: enrolledCount,
         completionRate: 0,
         shareableLinkEnabled,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        completionPercentageRequired: certMinPercentage,
+        completionPoints: certPoints,
+        certificateConfig: {
+          enabled: certificateEnabled,
+          title: certTitle.trim() || 'Certificate of Course Completion',
+          issuingOrganization: certIssuingOrg.trim() || 'Acme Learning Corp',
+          templateId: certTemplateId,
+          requireAllLessons: certRequireAllLessons,
+          requirePassingAssessment: certRequireAssessment,
+          minimumAssessmentScore: certMinScore,
+          requiredCompletionPercentage: certMinPercentage,
+          completionPoints: certPoints,
+          validityMonths: certValidityMonths,
+          authorizedSignerName: certSignerName.trim() || 'Dr. James Wilson',
+          authorizedSignerTitle: certSignerTitle.trim() || 'Lead Instructor & Curriculum Director',
+          authorizedSignatureImage: certSignerSignatureImage,
+          secondarySignerName: 'Sarah Chen',
+          secondarySignerTitle: 'Dean of Academic Affairs',
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1444,7 +1555,7 @@ export const CourseBuilderPage: React.FC = () => {
 
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontWeight: 600 }}>
-                Completion & Certification Policy
+                Completion Policy
               </label>
               <select
                 className="form-select"
@@ -1458,6 +1569,512 @@ export const CourseBuilderPage: React.FC = () => {
                 <option value="passing_assessment_only">Pass final assessment only</option>
               </select>
             </div>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* COURSE AVAILABILITY WINDOW                                     */}
+          {/* ------------------------------------------------------------- */}
+          <div
+            style={{
+              marginBottom: '24px',
+              padding: '22px',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--primary)'
+                }}>
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>Course Availability — Start & End Dates</h3>
+                  <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                    Configure the access schedule. Standard timezone: <strong>{user?.timezone || 'America/New_York'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {(startDate || endDate) && (
+                <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>
+                  Scheduled Window Configured
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '14px' }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  Start Date & Time (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    if (step1Error) setStep1Error(null);
+                  }}
+                  style={{ width: '100%' }}
+                />
+                <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                  Before start date, students cannot open or start the course.
+                </span>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                  End Date & Time (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    if (step1Error) setStep1Error(null);
+                  }}
+                  style={{ width: '100%' }}
+                />
+                <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
+                  After end date, course enters read-only mode for enrolled learners.
+                </span>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--bg-input)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)',
+              fontSize: '0.8rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.5
+            }}>
+              <strong>Access Lifecycle Rules:</strong>
+              <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                <li><strong>Before Start Date:</strong> Students see an informative opening notice. Instructors/Admins may preview or edit.</li>
+                <li><strong>Between Dates:</strong> Enrolled students access lessons, submit assignments, and take proctored quizzes.</li>
+                <li><strong>After End Date:</strong> Content remains available in read-only mode. Further lesson completions, submissions, and progress changes are disabled. Previously earned certificates remain downloadable.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* COMPLETION, CERTIFICATE & REWARDS SECTION                     */}
+          {/* ------------------------------------------------------------- */}
+          <div
+            style={{
+              marginBottom: '24px',
+              padding: '22px',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  background: certificateEnabled ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: certificateEnabled ? 'var(--primary)' : 'var(--text-muted)'
+                }}>
+                  <Award size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>Completion, Certificate & Rewards</h3>
+                  <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                    Configure certificate eligibility rules, completion percentage threshold, reward points, and authorized digital signature.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={certificateEnabled}
+                    onChange={(e) => setCertificateEnabled(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                  />
+                  Issue Certificate: {certificateEnabled ? 'Yes' : 'No'}
+                </label>
+                {certificateEnabled && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setShowCertPreviewModal(true)}
+                    style={{ gap: '6px', fontSize: '0.78rem' }}
+                  >
+                    <Eye size={14} /> Preview Certificate
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {certificateEnabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+                {/* Basic Certificate Attributes */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 600 }}>
+                      Certificate Title
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={certTitle}
+                      onChange={(e) => setCertTitle(e.target.value)}
+                      placeholder="Certificate of Course Completion"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 600 }}>
+                      Issuing Organization
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={certIssuingOrg}
+                      onChange={(e) => setCertIssuingOrg(e.target.value)}
+                      placeholder="Acme Learning Corp"
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 600 }}>
+                      Certificate Template
+                    </label>
+                    <select
+                      className="form-select"
+                      value={certTemplateId}
+                      onChange={(e) => setCertTemplateId(e.target.value as any)}
+                    >
+                      <option value="standard">Standard Executive Gold (Official Seal)</option>
+                      <option value="distinction">Academic Distinction (Crimson Ribbon)</option>
+                      <option value="technical">Technical Mastery (Cyber Navy & Cyan)</option>
+                      <option value="executive">Corporate Executive (Silver & Navy)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 600 }}>
+                      Validity Period
+                    </label>
+                    <select
+                      className="form-select"
+                      value={certValidityMonths}
+                      onChange={(e) => setCertValidityMonths(parseInt(e.target.value) || 0)}
+                    >
+                      <option value={0}>Lifetime Credential (No Expiry)</option>
+                      <option value={12}>1 Year (12 Months)</option>
+                      <option value={24}>2 Years (24 Months)</option>
+                      <option value={36}>3 Years (36 Months)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Completion Percentage & Reward Points Panel */}
+                <div style={{
+                  background: 'var(--bg-input)',
+                  padding: '16px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px'
+                }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Completion Percentage & Reward Points Rules
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                    {/* Completion Percentage */}
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Required Course Completion:
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={certMinPercentage}
+                          onChange={(e) => setCertMinPercentage(Math.max(1, Math.min(100, parseInt(e.target.value) || 100)))}
+                          style={{
+                            width: '100px',
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            background: 'var(--bg-card)',
+                            color: 'var(--text-main)',
+                            fontSize: '0.9rem',
+                            fontWeight: 700
+                          }}
+                        />
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>%</span>
+                        <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>Default: 100%</span>
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: '4px 0 0', lineHeight: 1.35 }}>
+                        Learner must achieve this percentage of curriculum progress to earn completion and the certificate. (Clearly distinguished from assessment passing scores).
+                      </p>
+                    </div>
+
+                    {/* Reward Points */}
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Points on Successful Completion:
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={certPoints}
+                          onChange={(e) => setCertPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                          style={{
+                            width: '120px',
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--border-subtle)',
+                            background: 'var(--bg-card)',
+                            color: 'var(--primary)',
+                            fontSize: '0.9rem',
+                            fontWeight: 700
+                          }}
+                        />
+                        <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Points</span>
+                        <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>Gamification</span>
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: '4px 0 0', lineHeight: 1.35 }}>
+                        These points are awarded once when the learner meets the course completion requirements. Deduplicated to prevent multiple rewards.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Assessment Pass Requirement Toggle */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '10px', borderTop: '1px dashed var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={certRequireAssessment}
+                          onChange={(e) => setCertRequireAssessment(e.target.checked)}
+                          style={{ accentColor: 'var(--primary)', width: '16px', height: '16px' }}
+                        />
+                        <span>Require passing course assessment / capstone examination</span>
+                      </label>
+
+                      {certRequireAssessment && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Minimum Assessment Pass Mark:</span>
+                          <input
+                            type="number"
+                            min="50"
+                            max="100"
+                            value={certMinScore}
+                            onChange={(e) => setCertMinScore(parseInt(e.target.value) || 70)}
+                            style={{
+                              width: '70px',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid var(--border-subtle)',
+                              background: 'var(--bg-card)',
+                              color: 'var(--text-main)',
+                              fontSize: '0.85rem',
+                              fontWeight: 700
+                            }}
+                          />
+                          <span style={{ fontSize: '0.8rem' }}>%</span>
+                        </div>
+                      )}
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={certRequireAllLessons}
+                        onChange={(e) => setCertRequireAllLessons(e.target.checked)}
+                        style={{ accentColor: 'var(--primary)' }}
+                      />
+                      <span>Enforce completion of all mandatory curriculum lesson units</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Authorized Signatory Section */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label className="form-label" style={{ fontWeight: 700, fontSize: '0.9rem', margin: 0 }}>
+                      Certificate Signatory & Digital Signature
+                    </label>
+                    <Link to="/profile" style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
+                      Manage Profile Signature &rarr;
+                    </Link>
+                  </div>
+
+                  {!isCreatorSigConfigured && selectedSignatoryOption === 'creator_default' && (
+                    <div style={{
+                      background: '#fffbeb',
+                      border: '1px solid #fde68a',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      color: '#92400e',
+                      fontSize: '0.825rem'
+                    }}>
+                      <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+                      <div>
+                        <strong>Signature Notice:</strong> You have not configured an authorized signature in your profile.
+                        Certificates published with your account will show your title and name with an unconfigured signature mark.
+                        {' '}<Link to="/profile" style={{ color: 'var(--primary)', fontWeight: 700 }}>Click here to configure your digital signature in Profile Settings</Link>.
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Select Signatory Authority
+                      </label>
+                      <select
+                        className="form-select"
+                        value={selectedSignatoryOption}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedSignatoryOption(val);
+                          if (val === 'creator_default') {
+                            setCertSignerName(creatorDefaultSig.name);
+                            setCertSignerTitle(creatorDefaultSig.designation);
+                            setCertSignerSignatureImage(creatorDefaultSig.signatureImage);
+                          } else if (val === 'custom') {
+                            // keep custom
+                          } else {
+                            const found = approvedSignatories.find((s) => s.id === val);
+                            if (found) {
+                              setCertSignerName(found.name);
+                              setCertSignerTitle(found.designation);
+                              setCertSignerSignatureImage(found.signatureImage);
+                            }
+                          }
+                        }}
+                      >
+                        <option value="creator_default">
+                          My Profile Signature ({creatorDefaultSig.name || 'Current Creator'}) [Default]
+                        </option>
+                        {approvedSignatories.map((sig) => (
+                          <option key={sig.id} value={sig.id}>
+                            {sig.name} &bull; {sig.designation} ({sig.department || 'Authority'})
+                          </option>
+                        ))}
+                        <option value="custom">Custom Signatory (Manual Entry)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Authorized Signer Name
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={certSignerName}
+                        onChange={(e) => {
+                          setCertSignerName(e.target.value);
+                          if (selectedSignatoryOption !== 'custom') setSelectedSignatoryOption('custom');
+                        }}
+                        placeholder="e.g. Dr. James Wilson"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        Signer Designation / Title
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={certSignerTitle}
+                        onChange={(e) => {
+                          setCertSignerTitle(e.target.value);
+                          if (selectedSignatoryOption !== 'custom') setSelectedSignatoryOption('custom');
+                        }}
+                        placeholder="e.g. Principal Faculty & Curriculum Director"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Signatory Snapshot Preview Box */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div style={{
+                        width: '120px',
+                        height: '48px',
+                        background: '#ffffff',
+                        border: '1px dashed var(--border-subtle)',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        padding: '2px 6px'
+                      }}>
+                        {certSignerSignatureImage ? (
+                          <img
+                            src={certSignerSignatureImage}
+                            alt="Signature Preview"
+                            style={{ maxHeight: '42px', maxWidth: '110px', objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <span style={{ fontFamily: 'Georgia, cursive', fontStyle: 'italic', fontSize: '0.9rem', color: '#1e293b' }}>
+                            {certSignerName || 'Signatory'}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{certSignerName || 'Unassigned Signatory'}</div>
+                        <div className="text-muted text-xs">{certSignerTitle || 'Official Title'}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={`badge ${certSignerSignatureImage ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.72rem' }}>
+                        {certSignerSignatureImage ? 'Digital Signature Affixed' : 'Signature Image Pending'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 1 Actions */}
@@ -3213,6 +3830,83 @@ export const CourseBuilderPage: React.FC = () => {
                     )}
                   </div>
 
+                  {/* Completion, Certificate & Rewards Review Card */}
+                  <div
+                    style={{
+                      borderRadius: 'var(--radius-md)',
+                      padding: '16px',
+                      border: certificateEnabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border-subtle)',
+                      background: certificateEnabled ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-input)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Award size={15} color={certificateEnabled ? 'var(--success)' : 'var(--text-muted)'} /> Completion, Certificate & Rewards
+                      </h4>
+                      <span className={`badge ${certificateEnabled ? 'badge-active' : 'badge-secondary'}`} style={{ fontSize: '0.75rem' }}>
+                        {certificateEnabled ? 'Certificate Enabled' : 'No Certificate'}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div>
+                        <strong>Availability Window:</strong>{' '}
+                        {startDate || endDate ? (
+                          <span>
+                            {startDate ? new Date(startDate).toLocaleString() : 'Immediate'} &rarr;{' '}
+                            {endDate ? new Date(endDate).toLocaleString() : 'Open (No End Date)'}{' '}
+                            <span className="text-muted text-xs">({user?.timezone || 'America/New_York'})</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted">Open access (No date restrictions)</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <strong>Completion Rule:</strong>{' '}
+                        <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{certMinPercentage}% Progress</span>
+                        {certRequireAllLessons ? ' &bull; All Lessons Mandatory' : ''}
+                      </div>
+
+                      <div>
+                        <strong>Assessment Requirement:</strong>{' '}
+                        {certRequireAssessment ? `Examination Passed (>=${certMinScore}%)` : 'None required'}
+                      </div>
+
+                      <div>
+                        <strong>Gamification Reward:</strong>{' '}
+                        <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{certPoints} Points</span>{' '}
+                        <span className="text-muted text-xs">(Awarded once upon completion)</span>
+                      </div>
+
+                      {certificateEnabled && (
+                        <>
+                          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '6px', marginTop: '2px' }}>
+                            <strong>Template:</strong> <span style={{ textTransform: 'capitalize' }}>{certTemplateId}</span> &bull; <strong>Issuing Org:</strong> {certIssuingOrg}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <strong>Signatory:</strong> {certSignerName} ({certSignerTitle})
+                            </div>
+                            <span className={`badge ${certSignerSignatureImage ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.68rem' }}>
+                              {certSignerSignatureImage ? 'Signature Attached' : 'Pending'}
+                            </span>
+                          </div>
+                          <div style={{ marginTop: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setShowCertPreviewModal(true)}
+                              style={{ gap: '6px', width: '100%', justifyContent: 'center', fontSize: '0.78rem' }}
+                            >
+                              <Eye size={14} /> Preview Certificate Diploma
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Governance & Publication Settings */}
                   <div
                     style={{
@@ -3513,6 +4207,123 @@ export const CourseBuilderPage: React.FC = () => {
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         isDestructive={true}
       />
-    </div >
+
+      {/* ========================================================= */}
+      {/* CERTIFICATE PREVIEW MODAL                                 */}
+      {/* ========================================================= */}
+      {showCertPreviewModal && (
+        <div className="modal-overlay" onClick={() => setShowCertPreviewModal(false)}>
+          <div className="modal-card" style={{ maxWidth: '780px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Award size={20} color="var(--primary)" />
+                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Certificate Preview — {certTitle}</h3>
+              </div>
+              <button onClick={() => setShowCertPreviewModal(false)} style={{ color: 'var(--text-muted)' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '24px', textAlign: 'center' }}>
+              <div style={{
+                border: '3px double #d97706',
+                borderRadius: 'var(--radius-lg)',
+                padding: '30px 24px',
+                background: 'radial-gradient(ellipse at center, rgba(254, 243, 199, 0.15) 0%, transparent 80%), var(--bg-card)',
+                boxShadow: 'inset 0 0 24px rgba(0, 0, 0, 0.2)',
+                position: 'relative'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                  <img
+                    src="/logo.png"
+                    alt="VeniLearn"
+                    style={{ height: '38px', objectFit: 'contain' }}
+                  />
+                </div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                  {certIssuingOrg} &bull; Official Credentials Registry
+                </div>
+                <div style={{ width: '80px', height: '2px', background: 'linear-gradient(90deg, transparent, #d97706, transparent)', margin: '8px auto 14px' }} />
+
+                <div style={{ fontSize: '1.35rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-main)' }}>
+                  {certTitle}
+                </div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#d97706', marginBottom: '14px' }}>
+                  Template: {certTemplateId.toUpperCase()} &bull; Verified Academic Credential
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  This credential is officially conferred upon
+                </div>
+                <div style={{ fontSize: '1.9rem', fontWeight: 800, color: 'var(--primary)', fontFamily: 'Georgia, serif', margin: '6px 0 10px' }}>
+                  Alex Thompson (Learner Name Preview)
+                </div>
+
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '540px', margin: '0 auto 12px', lineHeight: 1.5 }}>
+                  for successfully satisfying all completion requirements, proctored examinations, and applied competencies in
+                </div>
+
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent-cyan)', marginBottom: '4px' }}>
+                  {title || 'Course Title Preview'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '22px' }}>
+                  Demonstrating advanced engineering rigor, technical competency, and verified professional excellence.
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', paddingLeft: '20px', paddingRight: '20px' }}>
+                  <div style={{ textAlign: 'center', width: '160px' }}>
+                    {certSignerSignatureImage ? (
+                      <div style={{ height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2px' }}>
+                        <img src={certSignerSignatureImage} alt="Signature" style={{ maxHeight: '34px', maxWidth: '140px', objectFit: 'contain' }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontFamily: 'Georgia, cursive', fontStyle: 'italic', fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '2px' }}>
+                        {certSignerName}
+                      </div>
+                    )}
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px', fontWeight: 700, fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                      {certSignerName}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{certSignerTitle}</div>
+                  </div>
+
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    border: '3px solid #d97706',
+                    background: 'rgba(217, 119, 6, 0.15)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 10px'
+                  }}>
+                    <Award size={18} color="#d97706" />
+                    <span style={{ fontSize: '0.5rem', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>OFFICIAL</span>
+                  </div>
+
+                  <div style={{ textAlign: 'center', width: '160px' }}>
+                    <div style={{ fontFamily: 'Georgia, cursive', fontStyle: 'italic', fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '2px' }}>
+                      Sarah Chen
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '4px', fontWeight: 700, fontSize: '0.75rem', color: 'var(--text-main)' }}>
+                      Sarah Chen, M.Sc.
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Dean of Academic Affairs</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setShowCertPreviewModal(false)}>
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

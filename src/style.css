@@ -59,10 +59,19 @@
   --border-focus: #2563EB;
 
   --text-main: #111827;
-  --text-secondary: #374151;
+  --text-secondary: #475569;
   --text-muted: #64748B;
   --text-placeholder: #94A3B8;
   --text-inverse: #ffffff;
+
+  /* Table Theme Variables (Default / Light) */
+  --table-header-bg: #f8fafc;
+  --table-row-bg: #ffffff;
+  --table-row-hover: #f1f5f9;
+  --table-row-expanded: #f8faff;
+  --table-row-nested: #f8fafc;
+  --table-row-nested-hover: #edf2f9;
+  --table-border: #E2E8F0;
 
   /* Primary Accent & Semantics */
   --primary: #2563EB;
@@ -126,7 +135,7 @@
   --border-focus: #2563EB;
 
   --text-main: #111827;
-  --text-secondary: #374151;
+  --text-secondary: #475569;
   --text-muted: #64748B;
   --text-placeholder: #94A3B8;
   --text-inverse: #ffffff;
@@ -134,6 +143,15 @@
   --primary: #2563EB;
   --primary-hover: #1D4ED8;
   --primary-light: rgba(37, 99, 235, 0.08);
+
+  /* Table Theme Variables (Light) */
+  --table-header-bg: #f8fafc;
+  --table-row-bg: #ffffff;
+  --table-row-hover: #f1f5f9;
+  --table-row-expanded: #f8faff;
+  --table-row-nested: #f8fafc;
+  --table-row-nested-hover: #edf2f9;
+  --table-border: #E2E8F0;
 
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
@@ -165,6 +183,15 @@
   --primary: #2563EB;
   --primary-hover: #1D4ED8;
   --primary-light: rgba(37, 99, 235, 0.18);
+
+  /* Table Theme Variables (Dark - Official Brand Spec) */
+  --table-header-bg: #0B0B2A;
+  --table-row-bg: #151329;
+  --table-row-hover: #1c1936;
+  --table-row-expanded: #1a1736;
+  --table-row-nested: #0B0B2A;
+  --table-row-nested-hover: #121133;
+  --table-border: #30304A;
 
   --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px -1px rgba(0, 0, 0, 0.5), 0 2px 6px -2px rgba(84, 71, 255, 0.15);
@@ -857,47 +884,79 @@ h6 {
     gap: 4px;
   }
 
-  /* Tables */
-  .table-container {
+  /* Tables & Hierarchy Tables */
+  .table-container,
+  .dept-table-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     width: 100%;
     max-width: 100%;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg, 12px);
+    border: 1px solid var(--table-border, var(--border-subtle));
     background: var(--bg-card);
     position: relative;
   }
 
-  .table {
+  .table,
+  .dept-table {
     width: 100%;
     min-width: 540px;
     border-collapse: collapse;
     text-align: left;
-    font-size: 0.875rem;
+    font-size: 0.825rem;
   }
 
-  .table th {
-    padding: 12px 16px;
-    background: var(--bg-surface);
+  .table th,
+  .dept-table th {
+    padding: 0.85rem 1.25rem;
+    background: var(--table-header-bg, var(--bg-surface));
     color: var(--text-secondary);
-    font-weight: 600;
-    border-bottom: 1px solid var(--border-subtle);
+    font-weight: 700;
+    font-size: 0.725rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--table-border, var(--border-subtle));
     white-space: nowrap;
   }
 
-  .table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border-subtle);
+  .table td,
+  .dept-table td {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--table-border, var(--border-subtle));
     color: var(--text-main);
   }
 
-  .table tbody tr:last-child td {
+  .table tbody tr:last-child td,
+  .dept-table tbody tr:last-child td {
     border-bottom: none;
   }
 
-  .table tbody tr:hover {
-    background: var(--bg-card-hover);
+  .table tbody tr:hover,
+  .dept-table tbody tr.dept-row-main:hover {
+    background: var(--table-row-hover, var(--bg-card-hover));
+  }
+
+  /* Hierarchy Table Specific Row Classes */
+  .dept-row-main {
+    background: var(--table-row-bg);
+    border-bottom: 1px solid var(--table-border, var(--border-subtle));
+    color: var(--text-main);
+    transition: background 0.15s ease;
+  }
+
+  .dept-row-main.is-expanded {
+    background: var(--table-row-expanded);
+  }
+
+  .dept-row-nested {
+    background: var(--table-row-nested);
+    border-bottom: 1px solid var(--table-border, var(--border-subtle));
+    color: var(--text-main);
+    transition: background 0.15s ease;
+  }
+
+  .dept-row-nested:hover {
+    background: var(--table-row-nested-hover);
   }
 
   /* Tabs */
@@ -1004,6 +1063,19 @@ h6 {
   }
 
   /* Animations */
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;
