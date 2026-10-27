@@ -17,7 +17,7 @@ export const getSystemTheme = (): ResolvedTheme => {
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
-  return 'dark'; // Default fallback
+  return 'light'; // Default fallback
 };
 
 // Helper to resolve the effective theme given a preference
@@ -35,9 +35,9 @@ export const applyThemeToDOM = (theme: ResolvedTheme): void => {
   root.setAttribute('data-theme', theme);
 };
 
-// Get stored preference or default to 'system'
+// Get stored preference or default to 'light'
 export const getStoredThemePreference = (): ThemePreference => {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'light';
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
@@ -46,7 +46,7 @@ export const getStoredThemePreference = (): ThemePreference => {
   } catch (err) {
     console.warn('Failed to read theme preference from localStorage:', err);
   }
-  return 'system';
+  return 'light';
 };
 
 interface ThemeState {

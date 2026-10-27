@@ -754,13 +754,24 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {isLearner ? (
                         isCompletedByLearner ? (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                            onClick={() => setActiveTab('results')}
-                          >
-                            <Award size={13} /> View Result (100%)
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                              onClick={() => setActiveTab('results')}
+                            >
+                              <Award size={13} /> View Result (100%)
+                            </button>
+                            {a.proctoringRequired && (
+                              <Link
+                                to="/my-proctoring-reports"
+                                className="btn btn-secondary btn-sm"
+                                style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                              >
+                                <Shield size={13} color="#3B82F6" /> Proctoring Report
+                              </Link>
+                            )}
+                          </div>
                         ) : (
                           <Link
                             to={`/exam/${a.id}`}

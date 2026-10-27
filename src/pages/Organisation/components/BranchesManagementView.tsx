@@ -176,18 +176,18 @@ export const BranchesManagementView: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Header and KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: '14px', border: '1px solid var(--border-subtle)', padding: '1.25rem', boxShadow: 'var(--shadow-sm)' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
             TOTAL BRANCHES
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>{branches.length} Locations</div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>Active Enterprise Footprint</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>{branches.length} Locations</div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--brand-blue)', fontWeight: 600 }}>Active Enterprise Footprint</span>
         </div>
 
         {/* HEADQUARTERS KPI CARD */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem', position: 'relative' }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: '14px', border: '1px solid var(--border-subtle)', padding: '1.25rem', position: 'relative', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
               HEADQUARTERS
             </span>
             {hqBranch && (
@@ -197,9 +197,9 @@ export const BranchesManagementView: React.FC = () => {
                   fontWeight: 800,
                   padding: '0.1rem 0.4rem',
                   borderRadius: '4px',
-                  background: '#fef3c7',
-                  color: '#b45309',
-                  border: '1px solid #fde68a',
+                  background: 'rgba(217, 119, 6, 0.12)',
+                  color: '#d97706',
+                  border: '1px solid rgba(217, 119, 6, 0.25)',
                 }}
               >
                 HQ
@@ -207,10 +207,10 @@ export const BranchesManagementView: React.FC = () => {
             )}
           </div>
 
-          <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+          <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)' }}>
             {hqBranch ? hqBranch.city : 'Not Designated'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {hqBranch ? `${hqBranch.name} (${hqBranch.code})` : 'Designate a location below'}
           </div>
 
@@ -222,9 +222,9 @@ export const BranchesManagementView: React.FC = () => {
                 marginTop: '0.65rem',
                 padding: '0.3rem 0.65rem',
                 borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#0f172a',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card-subtle)',
+                color: 'var(--text-main)',
                 fontSize: '0.72rem',
                 fontWeight: 700,
                 cursor: 'pointer',
@@ -238,27 +238,28 @@ export const BranchesManagementView: React.FC = () => {
           )}
         </div>
 
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '14px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.25rem' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: '14px', border: '1px solid var(--border-subtle)', padding: '1.25rem', boxShadow: 'var(--shadow-sm)' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
             SEATING CAPACITY
           </span>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-blue, #2563EB)' }}>{totalCapacity.toLocaleString()} Desks</div>
-          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Across all operating facilities</span>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-blue)' }}>{totalCapacity.toLocaleString()} Desks</div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Across all operating facilities</span>
         </div>
       </div>
 
       {/* Main Table Card */}
-      <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '260px' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
-              <Search size={15} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
+              <Search size={15} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-placeholder)' }} />
               <input
                 type="text"
                 placeholder="Search branches by name, city, code, address..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.825rem' }}
+                className="lms-form-input"
+                style={{ paddingLeft: '2.25rem' }}
               />
             </div>
 

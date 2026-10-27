@@ -109,7 +109,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
     >
       <div
         style={{
-          background: '#ffffff',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
           width: '100%',
           maxWidth: '720px',
@@ -118,18 +118,18 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
           flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border-subtle)',
         }}
       >
         {/* Header */}
         <div
           style={{
             padding: '1.25rem 1.5rem',
-            borderBottom: '1px solid #e2e8f0',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: '#f8fafc',
+            background: 'var(--bg-card-subtle)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -138,8 +138,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                 width: '36px',
                 height: '36px',
                 borderRadius: '8px',
-                background: '#fef3c7',
-                color: '#b45309',
+                background: 'rgba(217, 119, 6, 0.12)',
+                color: '#d97706',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -148,10 +148,10 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
               <Building2 size={20} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
                 Change Company Headquarters
               </h3>
-              <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+              <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Designate the primary operating headquarters from verified active branch locations.
               </p>
             </div>
@@ -164,7 +164,7 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              color: '#64748b',
+              color: 'var(--text-muted)',
               padding: '4px',
               borderRadius: '6px',
             }}
@@ -180,8 +180,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
             style={{
               padding: '0.85rem 1rem',
               borderRadius: '10px',
-              background: '#f1f5f9',
-              border: '1px solid #cbd5e1',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -189,13 +189,13 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
             }}
           >
             <div>
-              <span style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
                 Currently Designated Headquarters:
               </span>
-              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.9rem' }}>
+              <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.9rem' }}>
                 {currentHq ? `${currentHq.name} (${currentHq.code})` : 'None Designated'}
               </div>
-              <div style={{ color: '#475569', fontSize: '0.75rem' }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
                 {currentHq ? `${currentHq.city}, ${currentHq.state ? `${currentHq.state}, ` : ''}${currentHq.country}` : 'No headquarters currently set.'}
               </div>
             </div>
@@ -207,9 +207,9 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                   fontWeight: 800,
                   padding: '0.2rem 0.6rem',
                   borderRadius: '9999px',
-                  background: '#fef3c7',
-                  color: '#b45309',
-                  border: '1px solid #fde68a',
+                  background: 'rgba(217, 119, 6, 0.12)',
+                  color: '#d97706',
+                  border: '1px solid rgba(217, 119, 6, 0.25)',
                 }}
               >
                 ACTIVE HQ
@@ -219,26 +219,22 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
 
           {/* Search Box */}
           <div style={{ position: 'relative' }}>
-            <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-placeholder)' }} />
             <input
               type="text"
               placeholder="Search locations by office name, branch code (e.g. HYD-HQ), city, or address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="lms-form-input"
               style={{
-                width: '100%',
-                padding: '0.65rem 0.75rem 0.65rem 2.25rem',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.825rem',
-                outline: 'none',
+                paddingLeft: '2.25rem',
               }}
             />
           </div>
 
           {/* Locations Selection List */}
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
               Select New Headquarters Location ({filteredBranches.length} Eligible Offices)
             </div>
 
@@ -266,8 +262,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     style={{
                       padding: '0.85rem 1rem',
                       borderRadius: '10px',
-                      border: isSelected ? '2px solid var(--brand-blue, #2563EB)' : '1px solid #e2e8f0',
-                      background: isSelected ? 'rgba(37, 99, 235, 0.05)' : isInactive ? '#f8fafc' : '#ffffff',
+                      border: isSelected ? '2px solid var(--brand-blue)' : '1px solid var(--border-subtle)',
+                      background: isSelected ? 'rgba(37, 99, 235, 0.08)' : isInactive ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
                       cursor: isInactive ? 'not-allowed' : 'pointer',
                       opacity: isInactive ? 0.6 : 1,
                       display: 'flex',
@@ -283,12 +279,12 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                         checked={isSelected}
                         disabled={isInactive}
                         onChange={() => setSelectedBranchId(branch.id)}
-                        style={{ marginTop: '0.2rem', accentColor: 'var(--brand-blue, #2563EB)', cursor: 'pointer' }}
+                        style={{ marginTop: '0.2rem', accentColor: 'var(--brand-blue)', cursor: 'pointer' }}
                       />
                       <div>
-                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                           <span>{branch.name}</span>
-                          <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace', fontWeight: 600 }}>
                             ({branch.code})
                           </span>
                           {isCurrent && (
@@ -298,9 +294,9 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                                 fontWeight: 700,
                                 padding: '0.1rem 0.4rem',
                                 borderRadius: '4px',
-                                background: '#fef3c7',
-                                color: '#b45309',
-                                border: '1px solid #fde68a',
+                                background: 'rgba(217, 119, 6, 0.12)',
+                                color: '#d97706',
+                                border: '1px solid rgba(217, 119, 6, 0.25)',
                               }}
                             >
                               CURRENT HQ
@@ -308,14 +304,14 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                           )}
                         </div>
 
-                        <div style={{ color: '#475569', fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.2rem' }}>
                           <MapPin size={12} style={{ display: 'inline', marginRight: '3px', verticalAlign: '-1px' }} />
                           {branch.address ? `${branch.address}, ` : ''}
                           <strong>{branch.city}</strong>, {branch.state ? `${branch.state}, ` : ''}{branch.country}
                           {branch.postalCode ? ` - ${branch.postalCode}` : ''}
                         </div>
 
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: '#64748b', marginTop: '0.3rem' }}>
+                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                           <span>Capacity: <strong>{branch.capacity || 100} desks</strong></span>
                           <span>Timezone: {branch.timezone?.split(' ')[0] || 'IST'}</span>
                           <span>Status: <strong>{branch.status || 'Operational'}</strong></span>
@@ -325,13 +321,13 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
 
                     <div>
                       {isInactive ? (
-                        <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700 }}>Inactive</span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 700 }}>Inactive</span>
                       ) : isSelected ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--brand-blue, #2563EB)', fontWeight: 800, fontSize: '0.75rem' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--brand-blue)', fontWeight: 800, fontSize: '0.75rem' }}>
                           <Check size={14} /> Selected
                         </span>
                       ) : (
-                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Select</span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Select</span>
                       )}
                     </div>
                   </div>
@@ -339,30 +335,29 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
               })}
 
               {filteredBranches.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)' }}>
                   <Building size={28} style={{ margin: '0 auto 0.5rem', opacity: 0.4 }} />
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>No matching office branches found</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-main)' }}>No matching office branches found</div>
                   <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>Try searching by city, name, or branch code.</div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Selected Branch Details Card Preview */}
           {selectedBranch && (
             <div
               style={{
-                background: '#f8fafc',
-                border: '1px solid #cbd5e1',
+                background: 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '10px',
                 padding: '0.85rem 1rem',
                 fontSize: '0.78rem',
               }}
             >
-              <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <ShieldCheck size={14} color="var(--brand-blue, #2563EB)" /> Selected Candidate Office:
+              <div style={{ fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <ShieldCheck size={14} color="var(--brand-blue)" /> Selected Candidate Office:
               </div>
-              <div style={{ color: '#334155' }}>
+              <div style={{ color: 'var(--text-secondary)' }}>
                 <strong>{selectedBranch.name}</strong> ({selectedBranch.code}) &bull;{' '}
                 {selectedBranch.address || 'Standard Facility'}, {selectedBranch.city}, {selectedBranch.state ? `${selectedBranch.state}, ` : ''}{selectedBranch.country}
               </div>
@@ -373,8 +368,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
           {showConfirmDialog && selectedBranch && (
             <div
               style={{
-                background: '#fffbeb',
-                border: '1px solid #fde68a',
+                background: 'rgba(217, 119, 6, 0.08)',
+                border: '1px solid rgba(217, 119, 6, 0.25)',
                 borderRadius: '10px',
                 padding: '1rem',
                 display: 'flex',
@@ -384,10 +379,10 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
             >
               <AlertTriangle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
-                <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.85rem' }}>
                   Confirm Headquarters Designation
                 </div>
-                <p style={{ margin: '0.25rem 0 0.5rem', fontSize: '0.75rem', color: '#78350f', lineHeight: 1.4 }}>
+                <p style={{ margin: '0.25rem 0 0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                   Are you sure you want to transfer the company's official Headquarters designation to{' '}
                   <strong>{selectedBranch.name} ({selectedBranch.city})</strong>?
                   {currentHq && currentHq.id !== selectedBranch.id && (
@@ -401,8 +396,8 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     style={{
                       padding: '0.35rem 0.75rem',
                       borderRadius: '6px',
-                      background: 'var(--brand-blue, #2563EB)',
-                      color: '#fff',
+                      background: 'var(--brand-blue)',
+                      color: '#ffffff',
                       border: 'none',
                       fontSize: '0.75rem',
                       fontWeight: 700,
@@ -418,9 +413,9 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                     style={{
                       padding: '0.35rem 0.75rem',
                       borderRadius: '6px',
-                      background: '#ffffff',
-                      color: '#475569',
-                      border: '1px solid #cbd5e1',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-subtle)',
                       fontSize: '0.75rem',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -438,14 +433,14 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
         <div
           style={{
             padding: '1rem 1.5rem',
-            borderTop: '1px solid #e2e8f0',
-            background: '#f8fafc',
+            borderTop: '1px solid var(--border-subtle)',
+            background: 'var(--bg-card-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
             * Note: Headquarters change will not affect the official Registered Office legal address.
           </div>
 
@@ -456,9 +451,9 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
               style={{
                 padding: '0.5rem 1rem',
                 borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                background: '#ffffff',
-                color: '#475569',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card)',
+                color: 'var(--text-secondary)',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -478,9 +473,12 @@ export const HeadquartersSelectorModal: React.FC<HeadquartersSelectorModalProps>
                   border: 'none',
                   background:
                     !selectedBranchId || selectedBranchId === currentHq?.id || selectedBranch?.status === 'Inactive'
-                      ? '#cbd5e1'
-                      : 'var(--brand-blue, #2563EB)',
-                  color: '#ffffff',
+                      ? 'var(--border-subtle)'
+                      : 'var(--brand-blue)',
+                  color:
+                    !selectedBranchId || selectedBranchId === currentHq?.id || selectedBranch?.status === 'Inactive'
+                      ? 'var(--text-muted)'
+                      : '#ffffff',
                   fontSize: '0.8rem',
                   fontWeight: 700,
                   cursor:

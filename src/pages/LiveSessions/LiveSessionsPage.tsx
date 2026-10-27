@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams, useLocation } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
@@ -18,6 +18,8 @@ import { ScheduleLiveSessionModal } from './components/ScheduleLiveSessionModal'
 import { LiveClassroomDemoModal } from './components/LiveClassroomDemoModal';
 import { LiveRecordingPlayerModal } from './components/LiveRecordingPlayerModal';
 import { SessionRosterModal } from './components/SessionRosterModal';
+import { WeeklyTimetableView } from './components/WeeklyTimetableView';
+import { RecordedClassesView } from './components/RecordedClassesView';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -26,28 +28,57 @@ import { AttendanceLedgerPage } from './AttendanceLedgerPage';
 export { TimetablePage, AttendanceLedgerPage };
 
 interface Props {
-  defaultTab?: 'live_sessions' | 'timetable' | 'attendance' | 'upcoming' | 'past';
+  defaultTab?: 'live_sessions' | 'timetable' | 'recordings' | 'attendance' | 'upcoming' | 'past';
 }
 
 export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions' }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  // If the route or prop specifies Timetable, render TimetablePage
-  if (defaultTab === 'timetable' || currentPath === '/timetable' || currentPath === '/classes-timetable') {
-    return <TimetablePage />;
-  }
   // If the route or prop specifies Attendance, render AttendanceLedgerPage
   if (defaultTab === 'attendance' || currentPath === '/attendance' || currentPath === '/attendance-ledger') {
     return <AttendanceLedgerPage />;
   }
 
   const { user } = useAuthStore();
-  const [searchParams] = useSearchParams();
-
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isAdmin = user?.activeRole === 'org_admin' || user?.activeRole === 'platform_admin' || user?.activeRole === 'lms_admin';
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Determine initial active tab from props or URL
+  const determineInitialTab = (): 'live_sessions' | 'timetable' | 'recordings' => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'timetable' || tabParam === 'weekly-timetable') return 'timetable';
+    if (tabParam === 'recordings' || tabParam === 'recorded-classes') return 'recordings';
+    if (tabParam === 'live' || tabParam === 'live-sessions') return 'live_sessions';
+    if (defaultTab === 'timetable' || currentPath === '/timetable' || currentPath === '/weekly-timetable' || currentPath === '/classes-timetable') {
+      return 'timetable';
+    }
+    if (defaultTab === 'recordings' || currentPath === '/recorded-classes' || currentPath === '/recordings') {
+      return 'recordings';
+    }
+    return 'live_sessions';
+  };
+
+  const [activeTab, setActiveTab] = useState<'live_sessions' | 'timetable' | 'recordings'>(determineInitialTab);
+
+  useEffect(() => {
+    setActiveTab(determineInitialTab());
+  }, [currentPath, searchParams]);
+
+  const handleTabChange = (tab: 'live_sessions' | 'timetable' | 'recordings') => {
+    setActiveTab(tab);
+    if (tab === 'timetable') {
+      navigate('/weekly-timetable');
+    } else if (tab === 'recordings') {
+      navigate('/recorded-classes');
+    } else {
+      navigate(isStudent ? '/my-sessions' : '/live-sessions');
+    }
+  };
 
   // Live Sessions from centralized store
   const {
@@ -71,6 +102,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   // Modals State
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<LiveSession | null>(null);
+  const [selectedDetailSession, setSelectedDetailSession] = useState<LiveSession | null>(null);
   const [activeLiveRoomSession, setActiveLiveRoomSession] = useState<LiveSession | null>(null);
   const [recordingModalSession, setRecordingModalSession] = useState<LiveSession | null>(null);
   const [rosterModalSession, setRosterModalSession] = useState<LiveSession | null>(null);
@@ -272,10 +304,18 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '1.85rem', margin: '0 0 4px 0', fontWeight: 800 }}>
-            Live Sessions
+            {activeTab === 'timetable'
+              ? 'My Weekly Timetable'
+              : activeTab === 'recordings'
+              ? 'Recorded Classes & Lectures'
+              : 'Live Sessions & Broadcasts'}
           </h1>
           <p className="text-secondary text-sm" style={{ margin: 0 }}>
-            Schedule and manage live classes, broadcasts, and interactive webinars.
+            {activeTab === 'timetable'
+              ? 'Personalized weekly schedule, time slots, room locations, and class calendar.'
+              : activeTab === 'recordings'
+              ? 'On-demand video lecture library with AI transcripts, chapter bookmarks, and downloadable slide materials.'
+              : 'Schedule and manage live classes, broadcasts, and interactive webinars.'}
           </p>
         </div>
 
@@ -290,16 +330,151 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               }}
               style={{ gap: '8px', padding: '10px 20px', fontWeight: 700 }}
             >
-              <Plus size={18} /> Schedule Live Session
+              <Plus size={18} /> {activeTab === 'timetable' ? 'Create Schedule' : 'Schedule Live Session'}
             </button>
           )}
         </div>
       </div>
 
-      {/* LIVE SESSIONS HUB */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Simplified 4 Summary Metric Cards */}
-        <div className="grid-4" style={{ gap: '16px' }}>
+      {/* Top-Level Feature Navigation Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'var(--bg-surface)',
+          padding: '6px',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-subtle)',
+          overflowX: 'auto',
+        }}
+      >
+        {/* Tab 1: Live Sessions */}
+        <button
+          onClick={() => handleTabChange('live_sessions')}
+          className={`btn ${activeTab === 'live_sessions' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 'var(--radius-md)',
+            fontWeight: 700,
+            fontSize: '0.86rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeTab === 'live_sessions' ? '#ffffff' : 'var(--text-secondary)',
+          }}
+        >
+          <Video size={16} color={activeTab === 'live_sessions' ? '#ffffff' : 'var(--primary)'} />
+          <span>Live Sessions</span>
+          {stats.liveCount > 0 && (
+            <span
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                padding: '1px 6px',
+                borderRadius: '10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#fff' }} />
+              {stats.liveCount} LIVE
+            </span>
+          )}
+        </button>
+
+        {/* Tab 2: My Weekly Timetable */}
+        <button
+          onClick={() => handleTabChange('timetable')}
+          className={`btn ${activeTab === 'timetable' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 'var(--radius-md)',
+            fontWeight: 700,
+            fontSize: '0.86rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeTab === 'timetable' ? '#ffffff' : 'var(--text-secondary)',
+          }}
+        >
+          <Calendar size={16} color={activeTab === 'timetable' ? '#ffffff' : 'var(--primary)'} />
+          <span>My Weekly Timetable</span>
+          <span
+            className="badge badge-secondary"
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              background: activeTab === 'timetable' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(129, 140, 248, 0.16)',
+              color: activeTab === 'timetable' ? '#ffffff' : 'var(--text-secondary)',
+            }}
+          >
+            Weekly Schedule
+          </span>
+        </button>
+
+        {/* Tab 3: Recorded Classes */}
+        <button
+          onClick={() => handleTabChange('recordings')}
+          className={`btn ${activeTab === 'recordings' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 'var(--radius-md)',
+            fontWeight: 700,
+            fontSize: '0.86rem',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: activeTab === 'recordings' ? '#ffffff' : 'var(--text-secondary)',
+          }}
+        >
+          <Play size={16} color={activeTab === 'recordings' ? '#ffffff' : 'var(--primary)'} />
+          <span>Recorded Classes</span>
+          <span
+            className="badge badge-secondary"
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              background: activeTab === 'recordings' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(129, 140, 248, 0.16)',
+              color: activeTab === 'recordings' ? '#ffffff' : 'var(--text-secondary)',
+            }}
+          >
+            Replays
+          </span>
+        </button>
+      </div>
+
+      {/* 1. MY WEEKLY TIMETABLE TAB CONTENT */}
+      {activeTab === 'timetable' && (
+        <WeeklyTimetableView
+          sessions={sessions}
+          onSelectSession={(session) => setSelectedDetailSession(session)}
+          onLaunchLiveRoom={(session) => setActiveLiveRoomSession(session)}
+          onOpenScheduleModal={() => {
+            setSessionToEdit(null);
+            setIsScheduleModalOpen(true);
+          }}
+          showNotice={showNotice}
+        />
+      )}
+
+      {/* 2. RECORDED CLASSES TAB CONTENT */}
+      {activeTab === 'recordings' && (
+        <RecordedClassesView
+          sessions={roleFilteredSessions}
+          onPlayRecording={(session) => setRecordingModalSession(session)}
+          showNotice={showNotice}
+        />
+      )}
+
+      {/* 3. LIVE SESSIONS HUB */}
+      {activeTab === 'live_sessions' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Simplified 4 Summary Metric Cards */}
+          <div className="grid-4" style={{ gap: '16px' }}>
           <div className="stat-card" style={{ borderLeft: '4px solid #ef4444', padding: '16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span className="text-muted text-xs font-semibold">Live Now</span>
@@ -434,14 +609,22 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                 <button
                   className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
                   onClick={() => setViewMode('list')}
-                  style={{ padding: '6px 12px', gap: '6px' }}
+                  style={{
+                    padding: '6px 12px',
+                    gap: '6px',
+                    color: viewMode === 'list' ? '#ffffff' : 'var(--text-secondary)',
+                  }}
                 >
                   <List size={14} /> List
                 </button>
                 <button
                   className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-ghost'}`}
                   onClick={() => setViewMode('calendar')}
-                  style={{ padding: '6px 12px', gap: '6px' }}
+                  style={{
+                    padding: '6px 12px',
+                    gap: '6px',
+                    color: viewMode === 'calendar' ? '#ffffff' : 'var(--text-secondary)',
+                  }}
                 >
                   <Calendar size={14} /> Calendar
                 </button>
@@ -762,6 +945,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           </div>
         )}
       </div>
+      )}
 
       {/* MODAL 1: SCHEDULE / EDIT LIVE SESSION */}
       <ScheduleLiveSessionModal
@@ -850,6 +1034,198 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               <button className="btn btn-danger" onClick={handleConfirmCancel}>
                 Confirm Cancellation
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: TIMETABLE CLASS DETAILS */}
+      {selectedDetailSession && (
+        <div
+          className="modal-overlay"
+          onClick={() => setSelectedDetailSession(null)}
+          style={{
+            zIndex: 65,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              padding: '24px',
+              borderRadius: '14px',
+              boxShadow: 'var(--shadow-xl)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: '32px',
+                    height: '4px',
+                    borderRadius: '2px',
+                    background: '#6366f1',
+                    marginBottom: '8px',
+                  }}
+                />
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '1.25rem', fontWeight: 800 }}>
+                  {selectedDetailSession.title}
+                </h3>
+                <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                  {selectedDetailSession.courseTitle ||
+                    mockCourses.find((c) => c.id === selectedDetailSession.courseId)?.title ||
+                    'General Curriculum'}
+                </p>
+              </div>
+              <button
+                className="btn btn-icon btn-sm"
+                onClick={() => setSelectedDetailSession(null)}
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Details Grid */}
+            <div
+              style={{
+                background: 'var(--bg-card)',
+                padding: '16px',
+                borderRadius: '8px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '12px',
+                marginBottom: '16px',
+                fontSize: '0.82rem',
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Date & Day
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  {selectedDetailSession.dayOfWeek || 'Scheduled Day'}, {selectedDetailSession.date || 'Weekly'}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Time Slot
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                  {selectedDetailSession.startTime && selectedDetailSession.endTime
+                    ? `${selectedDetailSession.startTime} - ${selectedDetailSession.endTime}`
+                    : selectedDetailSession.startTime || 'TBA'}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Assigned Instructor
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  {selectedDetailSession.instructorName || 'Faculty Trainer'}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Cohort / Class
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  {selectedDetailSession.cohortName || 'Spring 2026 Engineering'}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Location / Room
+                </span>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  {selectedDetailSession.room || (selectedDetailSession.meetingUrl ? 'Virtual Room' : 'Campus Hall')}
+                </span>
+              </div>
+
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
+                  Status
+                </span>
+                <span>
+                  {selectedDetailSession.status === 'live' ? (
+                    <span className="badge badge-active" style={{ background: '#ef4444', color: '#fff', fontSize: '0.68rem' }}>
+                      ● LIVE NOW
+                    </span>
+                  ) : selectedDetailSession.status === 'ended' ? (
+                    <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>Completed</span>
+                  ) : (
+                    <span className="badge badge-published" style={{ fontSize: '0.68rem' }}>Scheduled</span>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            {selectedDetailSession.description && (
+              <div style={{ marginBottom: '16px' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '4px' }}>
+                  Objectives & Curriculum Agenda
+                </span>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  {selectedDetailSession.description}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div>
+                {selectedDetailSession.recordingUrl && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      const toPlay = selectedDetailSession;
+                      setSelectedDetailSession(null);
+                      setRecordingModalSession(toPlay);
+                    }}
+                    style={{ gap: '6px' }}
+                  >
+                    <Play size={13} /> Watch Replay
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {(selectedDetailSession.status === 'live' || selectedDetailSession.meetingUrl) && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      const toLaunch = selectedDetailSession;
+                      setSelectedDetailSession(null);
+                      setActiveLiveRoomSession(toLaunch);
+                    }}
+                    style={{ gap: '6px', fontWeight: 700 }}
+                  >
+                    <Play size={13} /> Join Virtual Room
+                  </button>
+                )}
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setSelectedDetailSession(null)}
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

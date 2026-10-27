@@ -23,7 +23,8 @@ import {
   AssessmentDifficultySetting,
   AssessmentQuestionTypeSetting,
   ProctoringMode,
-  ProctoringSettings
+  ProctoringSettings,
+  ProctoringPolicyLevel
 } from '../../../types';
 import { mockCourses } from '../../../data/mockData';
 import { extractDocumentContent } from '../../../lib/documentParser';
@@ -124,7 +125,6 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   }>({});
 
   const [instructions, setInstructions] = useState(initialDraft?.instructions || 'Read every question carefully. Ensure stable connectivity during the session.');
-
   // Hybrid Proctoring Protocol Configuration
   const [proctoringMode, setProctoringMode] = useState<ProctoringMode>(
     initialDraft?.proctoringMode || (initialDraft?.proctoringRequired === false ? 'none' : 'combined')
@@ -144,6 +144,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       noiseDetection: true,
       tabSwitchDetection: true,
     }
+  );
+  const [proctoringPolicyLevel, setProctoringPolicyLevel] = useState<ProctoringPolicyLevel>(
+    initialDraft?.proctoringPolicyLevel || 'monitored'
   );
   const [aiGradingEnabled, setAiGradingEnabled] = useState(initialDraft?.aiGradingEnabled ?? true);
 
@@ -252,6 +255,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setProctoringMode(initialDraft.proctoringMode || (initialDraft.proctoringRequired === false ? 'none' : 'combined'));
       setJitsiRoomId(initialDraft.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`);
       if (initialDraft.proctoringSettings) setProctoringSettings(initialDraft.proctoringSettings);
+      setProctoringPolicyLevel(initialDraft.proctoringPolicyLevel || 'monitored');
       setAiGradingEnabled(initialDraft.aiGradingEnabled ?? true);
       if (initialDraft.instructions) setInstructions(initialDraft.instructions);
 
@@ -1023,10 +1027,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       passingMarks: passVal,
       passmark: Math.round((passVal / totVal) * 100),
       maxAttempts: attVal,
-      proctoringRequired: proctoringMode !== 'none',
+      proctoringRequired: proctoringRequired || proctoringMode !== 'none',
       proctoringMode,
       jitsiRoomId: proctoringMode === 'manual' || proctoringMode === 'combined' ? jitsiRoomId : undefined,
       proctoringSettings,
+      proctoringPolicyLevel: proctoringRequired ? proctoringPolicyLevel : 'basic',
       aiGradingEnabled,
       questionIds: convertedQuestions.map((q) => q.id),
       questions: convertedQuestions.map((q) => q.id),

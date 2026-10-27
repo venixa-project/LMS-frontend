@@ -35,6 +35,8 @@ import { PublicCourseDetailsPage } from './pages/Courses/PublicCourseDetailsPage
 import { JoinCourseWithLinkPage } from './pages/Courses/JoinCourseWithLinkPage';
 import { ShareCoursePage } from './pages/Courses/ShareCoursePage';
 import { AssignStudentsPage } from './pages/Courses/AssignStudentsPage';
+import { MomentumPage } from './pages/Momentum/MomentumPage';
+import { LeaderboardPage } from './pages/Academics/LeaderboardPage';
 
 // Live Classes & Attendance
 import { LiveSessionsPage } from './pages/LiveSessions/LiveSessionsPage';
@@ -45,6 +47,7 @@ import { AttendanceLedgerPage } from './pages/LiveSessions/AttendanceLedgerPage'
 import { QuestionBanksPage } from './pages/Assessments/QuestionBanksPage';
 import { AssessmentsPage } from './pages/Assessments/AssessmentsPage';
 import { ExamPlayerPage } from './pages/Assessments/ExamPlayerPage';
+import { MyProctoringReportPage } from './pages/Assessments/MyProctoringReportPage';
 
 // Grading & Moderation
 import { GradingPage } from './pages/Grading/GradingPage';
@@ -117,7 +120,6 @@ export const App: React.FC = () => {
           <Route element={<RoleGuard allowedRoles={['platform_admin', 'org_admin', 'trainer']} />}>
             <Route path="students" element={<PeoplePage initialMode="students" />} />
             <Route path="cohorts" element={<CohortsPage />} />
-            <Route path="courses" element={<CoursesPage />} />
             <Route path="courses/:id/share" element={<ShareCoursePage />} />
             <Route path="course/:id/share" element={<ShareCoursePage />} />
             <Route path="courses/share" element={<ShareCoursePage />} />
@@ -136,6 +138,8 @@ export const App: React.FC = () => {
           </Route>
 
           {/* Course Discovery, Learning Player & Link Enrollment */}
+          <Route path="courses" element={<CoursesPage />} />
+          <Route path="my-courses" element={<CoursesPage />} />
           <Route path="course/:id" element={<PublicCourseDetailsPage />} />
           <Route path="courses/:id" element={<PublicCourseDetailsPage />} />
           <Route path="join-course" element={<JoinCourseWithLinkPage />} />
@@ -144,12 +148,17 @@ export const App: React.FC = () => {
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
           <Route path="learning-materials" element={<LearnerCoursePlayerPage />} />
           <Route path="my-paths" element={<LearningPathsPage />} />
+          <Route path="momentum" element={<MomentumPage />} />
+          <Route path="leaderboard" element={<LeaderboardPage />} />
 
           {/* Live Sessions, Timetable & Attendance */}
-          <Route path="timetable" element={<TimetablePage />} />
-          <Route path="classes-timetable" element={<TimetablePage />} />
-          <Route path="live-sessions" element={<LiveSessionsPage />} />
-          <Route path="my-sessions" element={<LiveSessionsPage />} />
+          <Route path="timetable" element={<LiveSessionsPage defaultTab="timetable" />} />
+          <Route path="weekly-timetable" element={<LiveSessionsPage defaultTab="timetable" />} />
+          <Route path="classes-timetable" element={<LiveSessionsPage defaultTab="timetable" />} />
+          <Route path="live-sessions" element={<LiveSessionsPage defaultTab="live_sessions" />} />
+          <Route path="my-sessions" element={<LiveSessionsPage defaultTab="live_sessions" />} />
+          <Route path="recorded-classes" element={<LiveSessionsPage defaultTab="recordings" />} />
+          <Route path="recordings" element={<LiveSessionsPage defaultTab="recordings" />} />
           <Route path="attendance" element={<AttendanceLedgerPage />} />
           <Route path="attendance-ledger" element={<AttendanceLedgerPage />} />
 
@@ -157,6 +166,9 @@ export const App: React.FC = () => {
           <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
           <Route path="my-assessments" element={<AssessmentsPage />} />
           <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
+          <Route path="my-proctoring-reports" element={<MyProctoringReportPage />} />
+          <Route path="my-proctoring-report" element={<MyProctoringReportPage />} />
+          <Route path="my-proctoring-report/:sessionId" element={<MyProctoringReportPage />} />
 
           {/* Certificates, Notifications & Profile */}
           <Route path="certificates" element={<CertificatesPage />} />

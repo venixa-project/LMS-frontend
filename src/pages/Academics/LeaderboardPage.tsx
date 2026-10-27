@@ -320,7 +320,7 @@ export const LeaderboardPage: React.FC = () => {
               onClick={() => setActiveLeaderboardType('most_completed')}
               className="btn btn-sm"
               style={{
-                background: activeLeaderboardType === 'most_completed' ? 'var(--primary)' : 'transparent',
+                background: activeLeaderboardType === 'most_completed' ? 'var(--gradient-royal-hot-pink)' : 'transparent',
                 color: activeLeaderboardType === 'most_completed' ? '#fff' : 'var(--text-secondary)',
                 border: 'none',
                 padding: '8px 16px',
@@ -330,7 +330,7 @@ export const LeaderboardPage: React.FC = () => {
                 alignItems: 'center',
                 gap: '8px',
                 borderRadius: 'var(--radius-sm)',
-                boxShadow: activeLeaderboardType === 'most_completed' ? 'var(--shadow-sm)' : 'none',
+                boxShadow: activeLeaderboardType === 'most_completed' ? '0 4px 14px rgba(37, 99, 235, 0.4)' : 'none',
                 cursor: 'pointer',
                 transition: 'var(--transition)'
               }}
@@ -350,7 +350,7 @@ export const LeaderboardPage: React.FC = () => {
               onClick={() => setActiveLeaderboardType('progress_volume')}
               className="btn btn-sm"
               style={{
-                background: activeLeaderboardType === 'progress_volume' ? 'var(--accent-purple)' : 'transparent',
+                background: activeLeaderboardType === 'progress_volume' ? 'var(--gradient-electric-neon-pink)' : 'transparent',
                 color: activeLeaderboardType === 'progress_volume' ? '#fff' : 'var(--text-secondary)',
                 border: 'none',
                 padding: '8px 16px',
@@ -360,7 +360,7 @@ export const LeaderboardPage: React.FC = () => {
                 alignItems: 'center',
                 gap: '8px',
                 borderRadius: 'var(--radius-sm)',
-                boxShadow: activeLeaderboardType === 'progress_volume' ? 'var(--shadow-sm)' : 'none',
+                boxShadow: activeLeaderboardType === 'progress_volume' ? '0 4px 14px rgba(242, 50, 169, 0.4)' : 'none',
                 cursor: 'pointer',
                 transition: 'var(--transition)'
               }}

@@ -121,11 +121,17 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'cohorts') {
       return currentPath === '/cohorts' || currentPath.startsWith('/cohorts/');
     }
+    const queryTab = new URLSearchParams(location.search).get('tab');
+
     if (item.id === 'courses' || item.id === 'my-courses') {
+      if (currentPath === '/my-learning') return false;
       return (
         ['/courses', '/catalog', '/join-course'].some((p) => currentPath === p || currentPath.startsWith(`${p}/`)) ||
         (currentPath.startsWith('/course/') && !currentPath.startsWith('/course-builder'))
       );
+    }
+    if (item.id === 'my-learning') {
+      return currentPath === '/my-learning' || currentPath.startsWith('/my-learning/') || currentPath === '/my-courses';
     }
     if (item.id === 'course-builder') {
       return currentPath === '/course-builder' || currentPath.startsWith('/course-builder/');
@@ -139,17 +145,56 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'calendar') {
       return currentPath === '/calendar' || currentPath === '/planner';
     }
+    if (item.id === 'weekly-timetable') {
+      return (
+        currentPath === '/weekly-timetable' ||
+        currentPath.startsWith('/weekly-timetable/') ||
+        ((currentPath === '/my-sessions' || currentPath === '/live-sessions' || currentPath === '/timetable' || currentPath === '/classes-timetable') &&
+          (queryTab === 'timetable' || queryTab === 'weekly-timetable'))
+      );
+    }
+    if (item.id === 'recorded-classes' || item.id === 'recordings') {
+      return (
+        currentPath === '/recorded-classes' ||
+        currentPath.startsWith('/recorded-classes/') ||
+        currentPath === '/recordings' ||
+        currentPath.startsWith('/recordings/') ||
+        ((currentPath === '/my-sessions' || currentPath === '/live-sessions' || currentPath === '/timetable' || currentPath === '/classes-timetable') &&
+          (queryTab === 'recordings' || queryTab === 'recorded-classes'))
+      );
+    }
     if (item.id === 'timetable' || item.id === 'classes-timetable') {
+      if (queryTab === 'timetable' || queryTab === 'weekly-timetable' || queryTab === 'recordings' || queryTab === 'recorded-classes') {
+        return false;
+      }
+      if (currentPath === '/weekly-timetable' || currentPath === '/recorded-classes' || currentPath === '/recordings') {
+        return false;
+      }
+      if (item.path === '/my-sessions') {
+        return currentPath === '/my-sessions' || currentPath.startsWith('/my-sessions/') || currentPath === '/live-sessions';
+      }
       return (
         currentPath === '/timetable' || currentPath.startsWith('/timetable/') ||
         currentPath === '/classes-timetable' || currentPath.startsWith('/classes-timetable/')
       );
     }
     if (item.id === 'live-sessions') {
+      if (queryTab === 'timetable' || queryTab === 'weekly-timetable' || queryTab === 'recordings' || queryTab === 'recorded-classes') {
+        return false;
+      }
+      if (currentPath === '/weekly-timetable' || currentPath === '/recorded-classes' || currentPath === '/recordings') {
+        return false;
+      }
       return (
         currentPath === '/live-sessions' || currentPath.startsWith('/live-sessions/') ||
         currentPath === '/my-sessions' || currentPath.startsWith('/my-sessions/')
       );
+    }
+    if (item.id === 'momentum') {
+      return currentPath === '/momentum' || currentPath.startsWith('/momentum/');
+    }
+    if (item.id === 'leaderboard') {
+      return currentPath === '/leaderboard' || currentPath.startsWith('/leaderboard/');
     }
     if (item.id === 'attendance' || item.id === 'attendance-ledger') {
       return (
@@ -462,10 +507,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                       fontWeight: active ? 700 : 600,
                       color: active ? '#fff' : 'var(--text-main)',
                       background: active
-                        ? 'linear-gradient(135deg, var(--primary), var(--primary-hover))'
+                        ? 'linear-gradient(135deg, #2563EB 0%, #818CF8 100%)'
                         : 'transparent',
-                      borderLeft: active ? '3px solid #818cf8' : '3px solid transparent',
-                      boxShadow: active ? '0 4px 12px var(--primary-glow)' : 'none',
+                      borderLeft: active ? '3px solid #F472B6' : '3px solid transparent',
+                      boxShadow: active ? '0 4px 14px rgba(37, 99, 235, 0.45)' : 'none',
                       transition: 'all 0.18s ease',
                       textDecoration: 'none',
                     }}
@@ -557,17 +602,17 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                     fontSize: '0.85rem',
                     fontWeight: hasActiveChild ? 700 : 600,
                     color: hasActiveChild
-                      ? 'var(--primary)'
+                      ? '#818CF8'
                       : isExpanded
                         ? 'var(--text-main)'
                         : 'var(--text-secondary)',
                     background: hasActiveChild
-                      ? 'var(--primary-light)'
+                      ? 'rgba(37, 99, 235, 0.18)'
                       : isExpanded
                         ? 'var(--bg-input)'
                         : 'transparent',
                     border: 'none',
-                    borderLeft: hasActiveChild ? '3px solid var(--primary)' : '3px solid transparent',
+                    borderLeft: hasActiveChild ? '3px solid #F472B6' : '3px solid transparent',
                     width: '100%',
                     cursor: 'pointer',
                     textAlign: 'left',
@@ -694,9 +739,9 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                             borderRadius: 'var(--radius-md)',
                             fontSize: '0.81rem',
                             fontWeight: isSubActive ? 700 : 500,
-                            color: isSubActive ? 'var(--primary)' : 'var(--text-secondary)',
-                            background: isSubActive ? 'var(--primary-light)' : 'transparent',
-                            borderLeft: isSubActive ? '2.5px solid var(--primary)' : '2.5px solid transparent',
+                            color: isSubActive ? '#fff' : 'var(--text-secondary)',
+                            background: isSubActive ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.4) 0%, rgba(244, 114, 182, 0.25) 100%)' : 'transparent',
+                            borderLeft: isSubActive ? '2.5px solid #F472B6' : '2.5px solid transparent',
                             textDecoration: 'none',
                             transition: 'all 0.15s ease',
                           }}
@@ -793,7 +838,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                   width: '32px',
                   height: '32px',
                   borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                  background: 'linear-gradient(135deg, #2563EB, #EC4899)',
+                  boxShadow: '0 2px 8px rgba(236, 72, 153, 0.35)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
@@ -820,9 +866,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
                 <div
                   style={{
-                    fontSize: '0.68rem',
-                    color: 'var(--text-muted)',
+                    fontSize: '0.72rem',
+                    color: 'var(--text-secondary)',
                     textTransform: 'capitalize',
+                    fontWeight: 500,
                   }}
                 >
                   {!user

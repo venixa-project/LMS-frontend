@@ -77,14 +77,28 @@ const OrganisationContent: React.FC<Props> = ({ subNav }) => {
       {/* Clean Page Header & Module Breadcrumb (Matching People & Faculty and Cohorts) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary">Organisation Management</span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; org-001</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 10px',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                background: 'rgba(129, 140, 248, 0.12)',
+                color: 'var(--brand-indigo, #5447FF)',
+                border: '1px solid rgba(129, 140, 248, 0.25)',
+              }}
+            >
+              Organisation Management
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Acme Learning Corp &bull; org-001</span>
           </div>
-          <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>
             {currentOption.label}
           </h1>
-          <p className="text-secondary text-sm" style={{ margin: '4px 0 0 0', maxWidth: '780px' }}>
+          <p style={{ margin: '4px 0 0 0', maxWidth: '780px', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
             {currentOption.description}
           </p>
         </div>

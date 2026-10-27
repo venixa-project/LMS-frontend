@@ -227,11 +227,11 @@ export const CompanyProfileView: React.FC = () => {
       {/* Header Banner Card */}
       <div
         style={{
-          background: 'var(--bg-card, #ffffff)',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
-          border: '1px solid var(--border-subtle, #e2e8f0)',
+          border: '1px solid var(--border-subtle)',
           padding: '1.75rem',
-          boxShadow: 'var(--shadow-sm, 0 4px 16px rgba(15, 23, 42, 0.04))',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
@@ -241,12 +241,12 @@ export const CompanyProfileView: React.FC = () => {
                 width: '68px',
                 height: '68px',
                 borderRadius: '14px',
-                background: (isEditing ? logo : currentCompany.logo) ? '#ffffff' : 'rgba(37, 99, 235, 0.06)',
-                border: '2px solid var(--brand-blue, #2563EB)',
+                background: (isEditing ? logo : currentCompany.logo) ? 'var(--bg-input)' : 'rgba(37, 99, 235, 0.08)',
+                border: '2px solid var(--brand-blue)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--brand-blue, #2563EB)',
+                color: 'var(--brand-blue)',
                 overflow: 'hidden',
                 padding: (isEditing ? logo : currentCompany.logo) ? '4px' : '0',
                 boxShadow: '0 2px 8px rgba(37, 99, 235, 0.15)',
@@ -274,8 +274,8 @@ export const CompanyProfileView: React.FC = () => {
             </div>
 
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem' }}>
-                <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
                   {name}
                 </h1>
                 <span
@@ -285,7 +285,7 @@ export const CompanyProfileView: React.FC = () => {
                     padding: '0.2rem 0.6rem',
                     borderRadius: '6px',
                     background: 'rgba(37, 99, 235, 0.08)',
-                    color: 'var(--brand-blue, #2563EB)',
+                    color: 'var(--brand-blue)',
                     border: '1px solid rgba(37, 99, 235, 0.2)',
                   }}
                 >
@@ -297,8 +297,9 @@ export const CompanyProfileView: React.FC = () => {
                     fontWeight: 700,
                     padding: '0.2rem 0.55rem',
                     borderRadius: '9999px',
-                    background: '#dcfce7',
-                    color: '#15803d',
+                    background: 'var(--success-bg)',
+                    color: 'var(--success)',
+                    border: '1px solid var(--success-border)',
                   }}
                 >
                   Active Entity
@@ -309,44 +310,45 @@ export const CompanyProfileView: React.FC = () => {
                     fontWeight: 600,
                     padding: '0.2rem 0.55rem',
                     borderRadius: '6px',
-                    background: '#f1f5f9',
-                    color: '#475569',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   {currentCompany.plan || 'Enterprise'} Plan
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.825rem', color: '#64748b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.825rem', color: 'var(--text-muted)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <Globe size={14} color="var(--brand-blue, #2563EB)" />
-                  <a href={website} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-blue, #2563EB)', textDecoration: 'none', fontWeight: 600 }}>
+                  <Globe size={14} color="var(--brand-blue)" />
+                  <a href={website} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-blue)', textDecoration: 'none', fontWeight: 600 }}>
                     {website}
                   </a>
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <Mail size={14} /> {officialEmail}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)' }}>
+                  <Mail size={14} color="var(--text-muted)" /> {officialEmail}
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <MapPin size={14} /> {city}, {country}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)' }}>
+                  <MapPin size={14} color="var(--text-muted)" /> {city}, {country}
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <Calendar size={14} /> Est. {incorporationDate}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)' }}>
+                  <Calendar size={14} color="var(--text-muted)" /> Est. {incorporationDate}
                 </span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ display: 'flex', gap: '1rem', background: '#ffffff', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '1rem', background: 'var(--bg-input)', padding: '0.75rem 1.25rem', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
               <div style={{ textAlign: 'center' }}>
-                <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>LOCATIONS</span>
-                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{branches.length}</span>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>LOCATIONS</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>{branches.length}</span>
               </div>
-              <div style={{ width: '1px', height: '28px', background: '#e2e8f0' }} />
+              <div style={{ width: '1px', height: '28px', background: 'var(--border-subtle)' }} />
               <div style={{ textAlign: 'center' }}>
-                <span style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>HEADCOUNT</span>
-                <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--brand-blue, #2563EB)' }}>{companyEmployees.length}</span>
+                <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700 }}>HEADCOUNT</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-blue)' }}>{companyEmployees.length}</span>
               </div>
             </div>
 
@@ -362,8 +364,8 @@ export const CompanyProfileView: React.FC = () => {
                     padding: '0.55rem 1.15rem',
                     borderRadius: '8px',
                     border: 'none',
-                    background: 'var(--brand-blue, #2563EB)',
-                    color: '#fff',
+                    background: 'var(--brand-blue)',
+                    color: '#ffffff',
                     fontSize: '0.85rem',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -378,9 +380,9 @@ export const CompanyProfileView: React.FC = () => {
                   style={{
                     padding: '0.55rem 0.95rem',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#fff',
-                    color: '#64748b',
+                    border: '1px solid var(--border-light)',
+                    background: 'var(--bg-card)',
+                    color: 'var(--text-secondary)',
                     fontSize: '0.85rem',
                     cursor: 'pointer',
                   }}
@@ -399,7 +401,7 @@ export const CompanyProfileView: React.FC = () => {
                   padding: '0.55rem 1.15rem',
                   borderRadius: '8px',
                   border: 'none',
-                  background: 'var(--brand-blue, #2563EB)',
+                  background: 'var(--brand-blue)',
                   color: '#ffffff',
                   fontSize: '0.85rem',
                   fontWeight: 700,
@@ -417,17 +419,17 @@ export const CompanyProfileView: React.FC = () => {
       {/* Grid of Profile Sections */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
         {/* Section 1: Corporate Identity */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Building size={16} color="var(--brand-blue, #2563EB)" /> Corporate Identity & Branding
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Building size={16} color="var(--brand-blue)" /> Corporate Identity & Branding
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             {/* Dedicated Company Logo Section */}
             <div
               style={{
-                background: 'var(--bg-card-subtle, #f8fafc)',
+                background: 'var(--bg-card-subtle)',
                 borderRadius: '12px',
-                border: '1px solid var(--border-subtle, #e2e8f0)',
+                border: '1px solid var(--border-subtle)',
                 padding: '1.15rem',
                 display: 'flex',
                 flexDirection: 'column',
@@ -436,10 +438,10 @@ export const CompanyProfileView: React.FC = () => {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <ImageIcon size={15} color="var(--brand-blue, #2563EB)" /> Company Logo
+                  <h4 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <ImageIcon size={15} color="var(--brand-blue)" /> Company Logo
                   </h4>
-                  <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                  <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     Official institution mark shown across the LMS header, profile summary card, and reports.
                   </p>
                 </div>
@@ -450,9 +452,9 @@ export const CompanyProfileView: React.FC = () => {
                       fontWeight: 700,
                       padding: '0.2rem 0.55rem',
                       borderRadius: '9999px',
-                      background: '#fef3c7',
-                      color: '#b45309',
-                      border: '1px solid #fde68a',
+                      background: 'var(--warning-bg)',
+                      color: 'var(--warning)',
+                      border: '1px solid var(--warning-border)',
                     }}
                   >
                     Unsaved Preview
@@ -469,21 +471,21 @@ export const CompanyProfileView: React.FC = () => {
                   flexWrap: 'wrap',
                 }}
               >
-                {/* Logo Preview Container (Uncropped, Object-fit contain) */}
+                {/* Logo Preview Container */}
                 <div
                   style={{
                     width: '96px',
                     height: '96px',
                     borderRadius: '12px',
-                    background: '#ffffff',
-                    border: '2px dashed #cbd5e1',
+                    background: 'var(--bg-input)',
+                    border: '2px dashed var(--border-light)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: '6px',
                     overflow: 'hidden',
                     flexShrink: 0,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    boxShadow: 'var(--shadow-sm)',
                   }}
                   title="Company Logo Preview"
                 >
@@ -502,7 +504,7 @@ export const CompanyProfileView: React.FC = () => {
                       }}
                     />
                   ) : (
-                    <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+                    <div style={{ textAlign: 'center', color: 'var(--text-placeholder)' }}>
                       <Building2 size={32} style={{ margin: '0 auto', opacity: 0.6 }} />
                       <span style={{ display: 'block', fontSize: '0.65rem', marginTop: '0.2rem', fontWeight: 600 }}>
                         No Logo
@@ -541,9 +543,9 @@ export const CompanyProfileView: React.FC = () => {
                                 gap: '0.35rem',
                                 padding: '0.45rem 0.85rem',
                                 borderRadius: '8px',
-                                border: '1px solid var(--brand-blue, #2563EB)',
+                                border: '1px solid var(--brand-blue)',
                                 background: 'rgba(37, 99, 235, 0.08)',
-                                color: 'var(--brand-blue, #2563EB)',
+                                color: 'var(--brand-blue)',
                                 fontSize: '0.8rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -563,9 +565,9 @@ export const CompanyProfileView: React.FC = () => {
                                 gap: '0.35rem',
                                 padding: '0.45rem 0.85rem',
                                 borderRadius: '8px',
-                                border: '1px solid #fecaca',
-                                background: '#ffffff',
-                                color: '#dc2626',
+                                border: '1px solid var(--danger-border)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--danger)',
                                 fontSize: '0.8rem',
                                 fontWeight: 600,
                                 cursor: 'pointer',
@@ -589,7 +591,7 @@ export const CompanyProfileView: React.FC = () => {
                               padding: '0.45rem 0.85rem',
                               borderRadius: '8px',
                               border: 'none',
-                              background: 'var(--brand-blue, #2563EB)',
+                              background: 'var(--brand-blue)',
                               color: '#ffffff',
                               fontSize: '0.8rem',
                               fontWeight: 700,
@@ -606,8 +608,8 @@ export const CompanyProfileView: React.FC = () => {
                       {showRemoveConfirm && (
                         <div
                           style={{
-                            background: '#fef2f2',
-                            border: '1px solid #fecaca',
+                            background: 'var(--danger-bg)',
+                            border: '1px solid var(--danger-border)',
                             borderRadius: '8px',
                             padding: '0.65rem 0.85rem',
                             display: 'flex',
@@ -615,7 +617,7 @@ export const CompanyProfileView: React.FC = () => {
                             gap: '0.45rem',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#991b1b', fontSize: '0.75rem', fontWeight: 600 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600 }}>
                             <AlertCircle size={14} style={{ flexShrink: 0 }} />
                             Remove company logo? The default institutional icon will be displayed instead.
                           </div>
@@ -632,7 +634,7 @@ export const CompanyProfileView: React.FC = () => {
                                 padding: '0.3rem 0.7rem',
                                 borderRadius: '6px',
                                 border: 'none',
-                                background: '#dc2626',
+                                background: 'var(--danger)',
                                 color: '#ffffff',
                                 fontSize: '0.72rem',
                                 fontWeight: 700,
@@ -647,9 +649,9 @@ export const CompanyProfileView: React.FC = () => {
                               style={{
                                 padding: '0.3rem 0.7rem',
                                 borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#ffffff',
-                                color: '#475569',
+                                border: '1px solid var(--border-subtle)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-secondary)',
                                 fontSize: '0.72rem',
                                 cursor: 'pointer',
                               }}
@@ -661,19 +663,19 @@ export const CompanyProfileView: React.FC = () => {
                       )}
 
                       {/* Format and Size Guidance */}
-                      <div style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4 }}>
-                        <span>Supported formats: <strong>PNG, JPG, SVG</strong></span>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                        <span>Supported formats: <strong style={{ color: 'var(--text-secondary)' }}>PNG, JPG, SVG</strong></span>
                         <span style={{ margin: '0 0.35rem' }}>•</span>
-                        <span>Max file size: <strong>2 MB</strong></span>
+                        <span>Max file size: <strong style={{ color: 'var(--text-secondary)' }}>2 MB</strong></span>
                       </div>
 
                       {/* Error Banner */}
                       {logoError && (
                         <div
                           style={{
-                            color: '#b91c1c',
-                            background: '#fef2f2',
-                            border: '1px solid #fecaca',
+                            color: 'var(--danger)',
+                            background: 'var(--danger-bg)',
+                            border: '1px solid var(--danger-border)',
                             borderRadius: '6px',
                             padding: '0.4rem 0.65rem',
                             fontSize: '0.75rem',
@@ -688,14 +690,14 @@ export const CompanyProfileView: React.FC = () => {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                       {currentCompany.logo ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: '#059669', fontWeight: 600 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--success)', fontWeight: 600 }}>
                           <CheckCircle2 size={14} /> Custom logo active. Click "Edit Profile" above to change or remove.
                         </span>
                       ) : (
                         <span>
-                          No custom logo uploaded. Default institutional icon is active. Click <strong>Edit Profile</strong> to upload an SVG, PNG, or JPG logo.
+                          No custom logo uploaded. Default institutional icon is active. Click <strong style={{ color: 'var(--text-main)' }}>Edit Profile</strong> to upload an SVG, PNG, or JPG logo.
                         </span>
                       )}
                     </div>
@@ -705,211 +707,222 @@ export const CompanyProfileView: React.FC = () => {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                Legal Entity Name *
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                Legal Entity Name <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 600 }}
+                style={{ fontWeight: 600 }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                   Trade / DBA Name
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={tradeName}
                   onChange={(e) => setTradeName(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                  Company Code *
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Company Code <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: 'var(--brand-blue, #2563EB)' }}
+                  style={{ fontWeight: 700, color: 'var(--brand-blue)' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Corporate Website URL
               </label>
               <input
                 type="url"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
           </div>
         </div>
 
         {/* Section 2: Legal & Tax Identifiers */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <ShieldCheck size={16} color="var(--brand-blue, #2563EB)" /> Legal & Tax Identifiers
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <ShieldCheck size={16} color="var(--brand-blue)" /> Legal & Tax Identifiers
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                Corporate Identification No. (CIN / Registration) *
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                Corporate Identification No. (CIN / Registration) <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={cinNumber}
                 onChange={(e) => setCinNumber(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 600 }}
+                style={{ fontWeight: 600 }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                  Permanent Account No. (PAN / Tax ID) *
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Permanent Account No. (PAN / Tax ID) <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={taxId}
                   onChange={(e) => setTaxId(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                   GSTIN / VAT ID
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Date of Incorporation
               </label>
               <input
                 type="date"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={incorporationDate}
                 onChange={(e) => setIncorporationDate(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
           </div>
         </div>
 
         {/* Section 3: Registered Office Address */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <MapPin size={16} color="var(--brand-blue, #2563EB)" /> Registered Office Address
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <MapPin size={16} color="var(--brand-blue)" /> Registered Office Address
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                Street Address *
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                Street Address <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={streetAddress}
                 onChange={(e) => setStreetAddress(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Suite / Floor / Unit
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={suite}
                 onChange={(e) => setSuite(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>City *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  City <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>State / Region *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  State / Region <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>Postal Code *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Postal Code <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={postalCode}
                   onChange={(e) => setPostalCode(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>Country *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Country <span style={{ color: 'var(--danger)' }}>*</span>
+                </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Section: Headquarters & Primary Office (References Branches & Locations) */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
+        {/* Section: Headquarters & Primary Office */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
             <div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.2rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 0.2rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                 <Building2 size={16} color="#d97706" /> Headquarters & Primary Office
               </h3>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 Designated operating headquarters referenced directly from Branches & Locations.
               </p>
             </div>
@@ -924,9 +937,9 @@ export const CompanyProfileView: React.FC = () => {
                   gap: '0.4rem',
                   padding: '0.45rem 0.9rem',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#f8fafc',
-                  color: '#0f172a',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-card-subtle)',
+                  color: 'var(--text-main)',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -941,8 +954,8 @@ export const CompanyProfileView: React.FC = () => {
           {hqBranch ? (
             <div
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '12px',
                 padding: '1.25rem',
                 display: 'grid',
@@ -951,10 +964,10 @@ export const CompanyProfileView: React.FC = () => {
               }}
             >
               <div>
-                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
                   Headquarters / Office Name
                 </span>
-                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>{hqBranch.name}</span>
                   <span
                     style={{
@@ -962,41 +975,41 @@ export const CompanyProfileView: React.FC = () => {
                       fontWeight: 800,
                       padding: '0.15rem 0.45rem',
                       borderRadius: '4px',
-                      background: '#fef3c7',
-                      color: '#b45309',
-                      border: '1px solid #fde68a',
+                      background: 'rgba(217, 119, 6, 0.12)',
+                      color: '#d97706',
+                      border: '1px solid rgba(217, 119, 6, 0.25)',
                     }}
                   >
                     HQ
                   </span>
                 </div>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-                  Branch Code: <strong>{hqBranch.code}</strong>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  Branch Code: <strong style={{ color: 'var(--text-main)' }}>{hqBranch.code}</strong>
                 </span>
               </div>
 
               <div>
-                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
                   Complete Address
                 </span>
-                <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600 }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                   {hqBranch.address || 'Central Office Facility'}
                 </div>
                 {hqBranch.postalCode && (
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     Postal Code: {hqBranch.postalCode}
                   </span>
                 )}
               </div>
 
               <div>
-                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: '0.2rem' }}>
                   City, State & Country
                 </span>
-                <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 700 }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 700 }}>
                   {hqBranch.city}, {hqBranch.state ? `${hqBranch.state}, ` : ''}{hqBranch.country}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                   Timezone: {hqBranch.timezone || 'Asia/Kolkata (IST)'} &bull; Capacity: {hqBranch.capacity || 100} desks
                 </div>
               </div>
@@ -1006,14 +1019,14 @@ export const CompanyProfileView: React.FC = () => {
               style={{
                 textAlign: 'center',
                 padding: '1.5rem',
-                border: '2px dashed #cbd5e1',
+                border: '2px dashed var(--border-subtle)',
                 borderRadius: '12px',
-                background: '#f8fafc',
-                color: '#64748b',
+                background: 'var(--bg-card-subtle)',
+                color: 'var(--text-muted)',
               }}
             >
               <Building2 size={24} style={{ margin: '0 auto 0.4rem', opacity: 0.5 }} />
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>No Headquarters Designated</div>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>No Headquarters Designated</div>
               <p style={{ margin: '0.2rem 0 0.8rem', fontSize: '0.75rem' }}>
                 Please designate one of the company's active branch locations as the official Headquarters.
               </p>
@@ -1025,8 +1038,8 @@ export const CompanyProfileView: React.FC = () => {
                     padding: '0.4rem 0.85rem',
                     borderRadius: '6px',
                     border: 'none',
-                    background: 'var(--brand-blue, #2563EB)',
-                    color: '#fff',
+                    background: 'var(--brand-blue)',
+                    color: '#ffffff',
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -1041,109 +1054,110 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section 4: Fiscal & Operational Parameters */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Clock size={16} color="var(--brand-blue, #2563EB)" /> Fiscal & Operational Settings
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Clock size={16} color="var(--brand-blue)" /> Fiscal & Operational Settings
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                  Base Currency *
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Base Currency <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc', fontWeight: 700, color: 'var(--brand-blue, #2563EB)' }}
+                  style={{ fontWeight: 700, color: 'var(--brand-blue)' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-                  Corporate Timezone *
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                  Corporate Timezone <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <input
                   type="text"
+                  className="lms-form-input"
                   readOnly={!isEditing}
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Fiscal Year Cycle
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={fiscalYear}
                 onChange={(e) => setFiscalYear(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Standard Operating Work Week
               </label>
               <input
                 type="text"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={workWeek}
                 onChange={(e) => setWorkWeek(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
           </div>
         </div>
 
         {/* Section 5: Official Contact Information */}
-        <div style={{ background: 'var(--bg-card, #ffffff)', borderRadius: '16px', border: '1px solid var(--border-subtle, #e2e8f0)', padding: '1.5rem', gridColumn: 'span 2' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <Mail size={16} color="var(--brand-blue, #2563EB)" /> Corporate Communications & Helpdesks
+        <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', padding: '1.5rem', boxShadow: 'var(--shadow-sm)', gridColumn: 'span 2' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Mail size={16} color="var(--brand-blue)" /> Corporate Communications & Helpdesks
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Official Corporate Email
               </label>
               <input
                 type="email"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={officialEmail}
                 onChange={(e) => setOfficialEmail(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 Primary Switchboard Phone
               </label>
               <input
                 type="tel"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
                 People & HR Grievance Desk Email
               </label>
               <input
                 type="email"
+                className="lms-form-input"
                 readOnly={!isEditing}
                 value={hrEmail}
                 onChange={(e) => setHrEmail(e.target.value)}
-                style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: isEditing ? '#fff' : '#f8fafc' }}
               />
             </div>
           </div>
