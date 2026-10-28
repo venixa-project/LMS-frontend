@@ -949,6 +949,26 @@ h6 {
     background: var(--table-row-hover, var(--bg-card-hover));
   }
 
+  /* Leaderboard Responsive Table Styles */
+  .leaderboard-table {
+    width: 100%;
+    min-width: 820px;
+    border-collapse: collapse;
+    table-layout: auto;
+  }
+
+  .leaderboard-table th {
+    padding: 10px 10px;
+    font-size: 0.725rem;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .leaderboard-table td {
+    padding: 10px 10px;
+  }
+
   /* Hierarchy Table Specific Row Classes */
   .dept-row-main {
     background: var(--table-row-bg);
