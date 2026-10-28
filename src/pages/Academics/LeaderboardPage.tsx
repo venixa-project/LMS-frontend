@@ -9,7 +9,8 @@ import {
   Trophy, Award, Crown, Sparkles, BookOpen,
   CheckCircle2, Flame, Search, Filter, TrendingUp, TrendingDown,
   Minus, BarChart3, Users, ChevronDown, ChevronUp, ArrowRight,
-  GraduationCap, Clock, Star, Zap, X, Mail
+  GraduationCap, Clock, Star, Zap, X, Mail, Eye, Building2,
+  ShieldCheck, Shield
 } from 'lucide-react';
 import {
   TimeframeFilter,
@@ -18,6 +19,8 @@ import {
   computeMemberBadges,
   ACHIEVEMENT_DEFINITIONS,
 } from './leaderboardData';
+import { mockUsers } from '../../data/mockUsers';
+import { mockDepartments, mockCohorts } from '../../data/mockData';
 import { Podium } from './components/Podium';
 import { PersonalRankCard } from './components/PersonalRankCard';
 import { VictoryCelebrationModal } from './components/VictoryCelebrationModal';
@@ -55,13 +58,135 @@ export const LeaderboardPage: React.FC = () => {
     all_time: 'All-Time Champions',
   };
 
-  // Role check: Only students/learners have personal performance cards & roadmaps
-  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  // Role checks: Trainer vs Admin vs Student
+  const userRole = user?.activeRole || 'student';
+  const isTrainer = userRole === 'trainer' || userRole === 'instructor' || userRole === 'assessment_author' || userRole === 'grader';
+  const isAdmin = userRole === 'platform_admin' || userRole === 'org_admin' || userRole === 'lms_admin' || (userRole as string) === 'admin' || (userRole as string) === 'industrial_admin';
+  const isStudent = userRole === 'student' || userRole === 'learner';
 
-  // Compute sorted member list based on active timeframe, cohort filter, search query, and demo boost
+  // Trainer Authorized Cohorts (Trainers can only view students in their assigned cohorts/classes)
+  const trainerAuthorizedCohorts = useMemo<string[] | null>(() => {
+    if (!isTrainer) return null; // Admin or student - not restricted
+    const currentUserId = user?.id || '';
+    const userEmail = user?.email || '';
+
+    const isWilson = currentUserId === 'u-004' || userEmail === 'trainer@lms.demo';
+    const isSharma = currentUserId === 'u-003' || userEmail === 'priya.sharma@lms.demo';
+    const isRodriguez = currentUserId === 'u-005' || userEmail === 'emily.rodriguez@lms.demo';
+    const isRostova = currentUserId === 'u-014' || userEmail === 'elena.rostova@lms.demo';
+    const isBell = currentUserId === 'u-012' || userEmail === 'marcus.bell@lms.demo';
+
+    const authorized = new Set<string>();
+
+    if (isWilson || isBell) {
+      authorized.add('Spring 2026 Engineering');
+    }
+    if (isSharma) {
+      authorized.add('Fall 2026 Data Science');
+    }
+    if (isRostova) {
+      authorized.add('Summer 2026 Cloud Architects');
+    }
+    if (isRodriguez) {
+      authorized.add('Spring 2026 Engineering');
+    }
+
+    // Dynamic mockCohorts inspection
+    mockCohorts.forEach((coh) => {
+      const teaches =
+        (coh.instructors && coh.instructors.includes(currentUserId)) ||
+        (coh.instructorIds && coh.instructorIds.includes(currentUserId));
+      if (teaches) {
+        if (coh.name.includes('Engineering') || coh.name.includes('React') || coh.code.includes('ENG')) {
+          authorized.add('Spring 2026 Engineering');
+        }
+        if (coh.name.includes('Data Science') || coh.name.includes('Python') || coh.code.includes('DS') || coh.code.includes('PY')) {
+          authorized.add('Fall 2026 Data Science');
+        }
+        if (coh.name.includes('Cloud') || coh.code.includes('CLOUD')) {
+          authorized.add('Summer 2026 Cloud Architects');
+        }
+      }
+    });
+
+    if (authorized.size === 0) {
+      const userRec = mockUsers.find((u) => u.id === currentUserId || u.email === userEmail);
+      if (userRec?.departmentId === 'dep-003') {
+        authorized.add('Fall 2026 Data Science');
+      } else if (userRec?.departmentId === 'dep-005') {
+        authorized.add('Summer 2026 Cloud Architects');
+      } else {
+        authorized.add('Spring 2026 Engineering');
+      }
+    }
+
+    return Array.from(authorized);
+  }, [isTrainer, user?.id, user?.email]);
+
+  // Available cohorts for filter dropdown
+  const availableCohorts = useMemo(() => {
+    if (isTrainer && trainerAuthorizedCohorts) {
+      return trainerAuthorizedCohorts;
+    }
+    return ['Spring 2026 Engineering', 'Summer 2026 Cloud Architects', 'Fall 2026 Data Science'];
+  }, [isTrainer, trainerAuthorizedCohorts]);
+
+  // Synchronize selectedCohort if switching to a role with restricted cohorts
+  useEffect(() => {
+    if (selectedCohort !== 'all' && !availableCohorts.includes(selectedCohort)) {
+      setSelectedCohort('all');
+    }
+  }, [availableCohorts, selectedCohort]);
+
+  // Helper: Look up student department from mockUsers & mockDepartments
+  const getStudentDepartment = (member: LeaderboardMember): string | undefined => {
+    const userRecord = mockUsers.find(
+      (u) => u.id === member.id || u.rollNo === member.rollNo || u.email === member.email
+    );
+    if (userRecord?.departmentId) {
+      const dept = mockDepartments.find((d) => d.id === userRecord.departmentId);
+      if (dept) return dept.name;
+    }
+    if (member.cohort.includes('Engineering')) return 'Engineering';
+    if (member.cohort.includes('Data Science')) return 'Data Science';
+    if (member.cohort.includes('Cloud')) return 'Cloud Architecture';
+    return undefined;
+  };
+
+  // Focus restoration & modal accessibility tracking
+  const lastTriggeredBtnRef = useRef<HTMLButtonElement | null>(null);
+  const viewButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const handleOpenMemberModal = (member: LeaderboardMember, btnEl?: HTMLButtonElement | null) => {
+    if (btnEl) {
+      lastTriggeredBtnRef.current = btnEl;
+    }
+    setSelectedMember(member);
+  };
+
+  const handleCloseMemberModal = () => {
+    setSelectedMember(null);
+    setTimeout(() => {
+      lastTriggeredBtnRef.current?.focus();
+    }, 50);
+  };
+
+  // Keyboard accessibility: Escape key to close modal
+  useEffect(() => {
+    if (!selectedMember) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseMemberModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedMember]);
+
+  // Compute sorted member list based on active timeframe, role scoping, cohort filter, search query
   const sortedMembers = useMemo(() => {
     // Clone base data for timeframe
-    const baseList = TIMEFRAME_DATA[timeframe].map((m) => {
+    let baseList = TIMEFRAME_DATA[timeframe].map((m) => {
       const isCurrent = isStudent && (user?.id ? m.id === user.id || (user.id === 'u-007' && m.id === 'u-007') : m.isCurrentUser);
       return {
         ...m,
@@ -69,6 +194,11 @@ export const LeaderboardPage: React.FC = () => {
         name: isCurrent ? m.name : m.name.replace(' (You)', ''),
       };
     });
+
+    // Trainer access restriction: ONLY students belonging to trainer's assigned cohorts
+    if (isTrainer && trainerAuthorizedCohorts) {
+      baseList = baseList.filter((m) => trainerAuthorizedCohorts.includes(m.cohort));
+    }
 
     // Cohort filtering
     let list = baseList;
@@ -95,7 +225,7 @@ export const LeaderboardPage: React.FC = () => {
     });
 
     return list;
-  }, [timeframe, selectedCohort, searchQuery, isStudent, user?.id]);
+  }, [timeframe, selectedCohort, searchQuery, isStudent, isTrainer, trainerAuthorizedCohorts, user?.id]);
 
   // Current logged in user (only applicable for student)
   const currentUserIndex = isStudent ? sortedMembers.findIndex((m) => m.isCurrentUser) : -1;
@@ -122,7 +252,7 @@ export const LeaderboardPage: React.FC = () => {
   }, [currentRank, isStudent]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {/* ------------------------------------------------------------- */}
       {/* 1. TOP PAGE HEADER & SUMMARY STATS PILL                       */}
       {/* ------------------------------------------------------------- */}
@@ -172,6 +302,53 @@ export const LeaderboardPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Role-Based Scope Notification Banner */}
+      {isTrainer && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '10px 16px',
+            background: 'rgba(37, 99, 235, 0.08)',
+            border: '1px solid rgba(37, 99, 235, 0.25)',
+            borderRadius: '12px',
+            fontSize: '0.825rem',
+            color: 'var(--text-main)',
+          }}
+        >
+          <ShieldCheck size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <strong>Trainer View:</strong> Leaderboard participants and academic dossiers are scoped strictly to your assigned cohorts and courses (
+            <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
+              {trainerAuthorizedCohorts?.join(', ')}
+            </span>
+            ). Unrelated students are protected and excluded per institutional access policies.
+          </div>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '10px 16px',
+            background: 'rgba(99, 102, 241, 0.06)',
+            border: '1px solid rgba(99, 102, 241, 0.2)',
+            borderRadius: '12px',
+            fontSize: '0.825rem',
+            color: 'var(--text-main)',
+          }}
+        >
+          <ShieldCheck size={18} color="var(--accent-purple)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <strong>Institution Admin View:</strong> You have full institution-wide oversight of all student leaderboard rankings, syllabus mastery velocity, and verified credentials across all departments and cohorts.
+          </div>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* 3. TIMEFRAME FILTERS & COHORT SELECTOR                        */}
@@ -274,10 +451,14 @@ export const LeaderboardPage: React.FC = () => {
                 onChange={(e) => setSelectedCohort(e.target.value)}
                 style={{ fontSize: '0.8rem', padding: '6px 10px', width: 'auto' }}
               >
-                <option value="all">All Cohorts & Batches</option>
-                <option value="Spring 2026 Engineering">Spring 2026 Engineering</option>
-                <option value="Summer 2026 Cloud Architects">Summer 2026 Cloud Architects</option>
-                <option value="Fall 2026 Data Science">Fall 2026 Data Science</option>
+                <option value="all">
+                  {isTrainer ? `All Assigned Cohorts (${availableCohorts.length})` : 'All Cohorts & Batches'}
+                </option>
+                {availableCohorts.map((coh) => (
+                  <option key={coh} value={coh}>
+                    {coh}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -315,7 +496,7 @@ export const LeaderboardPage: React.FC = () => {
           nextRankMember={nextRankMember}
           totalMembers={sortedMembers.length}
           timeframeLabel={timeframeLabels[timeframe]}
-          onInspect={() => currentUser && setSelectedMember(currentUser)}
+          onInspect={() => currentUser && handleOpenMemberModal(currentUser)}
         />
       )}
 
@@ -326,7 +507,7 @@ export const LeaderboardPage: React.FC = () => {
         firstPlace={firstPlace}
         secondPlace={secondPlace}
         thirdPlace={thirdPlace}
-        onSelectMember={(m) => setSelectedMember(m)}
+        onSelectMember={(m) => handleOpenMemberModal(m)}
         timeframeLabel={timeframeLabels[timeframe]}
       />
 
@@ -375,22 +556,12 @@ export const LeaderboardPage: React.FC = () => {
               return (
                 <div
                   key={m.id}
-                  onClick={() => setSelectedMember(m)}
-                  title={`Click to inspect ${m.name.replace(' (You)', '')}'s analytics`}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '4px',
-                    cursor: 'pointer',
                     padding: '4px 6px',
                     borderRadius: '8px',
-                    transition: 'background 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
@@ -491,7 +662,7 @@ export const LeaderboardPage: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       {/* 7. FULL LEADERBOARD TABLE WITH ANIMATED RANK MOVEMENTS        */}
       {/* ------------------------------------------------------------- */}
-      <div className="card" style={{ padding: '18px 20px' }}>
+      <div className="card" style={{ padding: '18px 20px', minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '14px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -527,18 +698,40 @@ export const LeaderboardPage: React.FC = () => {
 
         {/* Full Table */}
         {showAllMembers && (
-          <div className="table-container" style={{ marginTop: '10px', overflowX: 'hidden' }}>
-            <table className="table" style={{ width: '100%', minWidth: 'unset', tableLayout: 'auto' }}>
+          <div
+            className="table-container"
+            style={{
+              marginTop: '10px',
+              width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '12px',
+              background: 'var(--bg-card)',
+            }}
+          >
+            <table
+              className="table leaderboard-table"
+              style={{
+                width: '100%',
+                minWidth: '820px',
+                tableLayout: 'auto',
+                borderCollapse: 'collapse',
+              }}
+            >
               <thead>
                 <tr>
-                  <th style={{ width: '65px' }}>Rank</th>
-                  <th style={{ width: '90px' }}>Movement</th>
-                  <th>Scholar Name</th>
-                  <th style={{ width: '180px' }}>Cohort</th>
-                  <th style={{ width: '110px' }}>Badges</th>
-                  <th style={{ width: '85px', textAlign: 'center' }}>Courses</th>
-                  <th style={{ minWidth: '140px' }}>Syllabus Mastery</th>
-                  <th style={{ width: '75px' }}>Streak</th>
+                  <th style={{ width: '55px', minWidth: '55px', textAlign: 'center' }}>Rank</th>
+                  <th style={{ width: '75px', minWidth: '75px', textAlign: 'center' }}>Movement</th>
+                  <th style={{ minWidth: '180px' }}>Scholar Name</th>
+                  <th style={{ width: '150px', minWidth: '130px' }}>Cohort</th>
+                  <th style={{ width: '85px', minWidth: '80px' }}>Badges</th>
+                  <th style={{ width: '85px', minWidth: '80px', textAlign: 'center' }}>Courses</th>
+                  <th style={{ minWidth: '120px', maxWidth: '160px' }}>Syllabus Mastery</th>
+                  <th style={{ width: '70px', minWidth: '65px', textAlign: 'center' }}>Streak</th>
+                  <th style={{ width: '90px', minWidth: '90px', textAlign: 'center', whiteSpace: 'nowrap' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -552,10 +745,7 @@ export const LeaderboardPage: React.FC = () => {
                   return (
                     <tr
                       key={m.id}
-                      onClick={() => setSelectedMember(m)}
-                      title={`Click to inspect ${m.name.replace(' (You)', '')}'s scholar performance`}
                       style={{
-                        cursor: 'pointer',
                         background: isRowHighlighted
                           ? 'rgba(255, 215, 0, 0.15)'
                           : m.isCurrentUser
@@ -588,8 +778,8 @@ export const LeaderboardPage: React.FC = () => {
                       }}
                     >
                       {/* Rank Position */}
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <td style={{ width: '55px', minWidth: '55px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {rank === 1 ? (
                             <span style={{ fontSize: '1.25rem' }}>🥇</span>
                           ) : rank === 2 ? (
@@ -618,20 +808,22 @@ export const LeaderboardPage: React.FC = () => {
                       </td>
 
                       {/* Rank Movement (Animated Delta) */}
-                      <td>
+                      <td style={{ width: '75px', minWidth: '75px', textAlign: 'center' }}>
                         {rankDelta > 0 ? (
                           <span
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '3px',
                               background: 'rgba(16, 185, 129, 0.15)',
                               border: '1px solid rgba(16, 185, 129, 0.35)',
                               color: '#10b981',
-                              padding: '2px 8px',
+                              padding: '2px 7px',
                               borderRadius: '999px',
                               fontSize: '0.72rem',
                               fontWeight: 800,
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             <TrendingUp size={12} /> +{rankDelta}
@@ -641,14 +833,16 @@ export const LeaderboardPage: React.FC = () => {
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '3px',
                               background: 'rgba(244, 63, 94, 0.15)',
                               border: '1px solid rgba(244, 63, 94, 0.35)',
                               color: '#f43f5e',
-                              padding: '2px 8px',
+                              padding: '2px 7px',
                               borderRadius: '999px',
                               fontSize: '0.72rem',
                               fontWeight: 800,
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             <TrendingDown size={12} /> {rankDelta}
@@ -658,11 +852,11 @@ export const LeaderboardPage: React.FC = () => {
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '2px',
                               color: 'var(--text-muted)',
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              paddingLeft: '6px',
                             }}
                           >
                             <Minus size={12} /> —
@@ -671,29 +865,29 @@ export const LeaderboardPage: React.FC = () => {
                       </td>
 
                       {/* Scholar Info */}
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <td style={{ minWidth: '180px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                           <AnimatedAvatar
                             avatarId={m.avatarId}
                             name={m.name}
-                            size={38}
+                            size={34}
                             rank={rank}
                             isCurrentUser={m.isCurrentUser}
                             interactive={true}
                           />
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <strong style={{ fontSize: '0.88rem', color: m.isCurrentUser ? 'var(--primary)' : 'var(--text-main)' }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <strong style={{ fontSize: '0.85rem', color: m.isCurrentUser ? 'var(--primary)' : 'var(--text-main)', wordBreak: 'break-word' }}>
                                 {m.name.replace(' (You)', '')}
                               </strong>
                               {m.isCurrentUser && (
-                                <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>
+                                <span className="badge badge-primary" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>YOU</span>
                               )}
-                              <div style={{ display: 'inline-flex', alignItems: 'center', marginLeft: '6px' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center' }}>
                                 <RankBadge tier={getRankForPoints(m.points)} size="xs" />
                               </div>
                             </div>
-                            <div className="text-muted text-xs">
+                            <div className="text-muted text-xs" style={{ fontSize: '0.72rem' }}>
                               {m.rollNo}
                             </div>
                           </div>
@@ -701,25 +895,34 @@ export const LeaderboardPage: React.FC = () => {
                       </td>
 
                       {/* Cohort */}
-                      <td className="text-secondary text-xs">
-                        <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
+                      <td className="text-secondary text-xs" style={{ minWidth: '130px', maxWidth: '160px' }}>
+                        <span
+                          className="badge badge-secondary"
+                          style={{
+                            fontSize: '0.7rem',
+                            whiteSpace: 'normal',
+                            lineHeight: '1.25',
+                            wordBreak: 'break-word',
+                            display: 'inline-block',
+                          }}
+                        >
                           {m.cohort}
                         </span>
                       </td>
 
                       {/* Badges preview */}
-                      <td>
-                        <div style={{ display: 'flex', gap: '4px' }}>
+                      <td style={{ width: '85px', minWidth: '80px' }}>
+                        <div style={{ display: 'flex', gap: '3px', flexWrap: 'nowrap' }}>
                           {badges.map((b) => (
                             <span
                               key={b.id}
                               title={`${b.name}: ${b.description}`}
                               style={{
-                                fontSize: '0.9rem',
+                                fontSize: '0.85rem',
                                 cursor: 'help',
                                 background: 'rgba(255, 255, 255, 0.06)',
                                 borderRadius: '50%',
-                                padding: '2px 4px',
+                                padding: '2px 3px',
                               }}
                             >
                               {b.icon}
@@ -729,19 +932,19 @@ export const LeaderboardPage: React.FC = () => {
                       </td>
 
                       {/* Courses Completed */}
-                      <td style={{ textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <GraduationCap size={15} color={rank === 1 ? '#ffd700' : 'var(--primary)'} />
-                          <span style={{ fontWeight: 800, fontSize: '0.9rem' }}>
+                      <td style={{ textAlign: 'center', width: '85px', minWidth: '80px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                          <GraduationCap size={14} color={rank === 1 ? '#ffd700' : 'var(--primary)'} />
+                          <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>
                             {m.coursesCompleted} / {m.coursesEnrolled}
                           </span>
                         </div>
                       </td>
 
                       {/* Syllabus Mastery */}
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                      <td style={{ minWidth: '120px', maxWidth: '160px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
                             <span className="text-muted">Mastery:</span>
                             <strong style={{ color: m.overallCompletionRate >= 80 ? 'var(--success)' : 'var(--text-main)' }}>
                               {m.overallCompletionRate}%
@@ -763,11 +966,39 @@ export const LeaderboardPage: React.FC = () => {
                       </td>
 
                       {/* Streak */}
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#f97316', fontWeight: 700 }}>
+                      <td style={{ textAlign: 'center', width: '70px', minWidth: '65px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#f97316', fontWeight: 700 }}>
                           <Flame size={13} color="#f97316" />
                           <span>{m.streakDays}d</span>
                         </div>
+                      </td>
+
+                      {/* Action: Exactly One View Button per Row */}
+                      <td style={{ textAlign: 'center', width: '90px', minWidth: '90px', whiteSpace: 'nowrap', padding: '8px 6px' }}>
+                        <button
+                          ref={(el) => {
+                            viewButtonRefs.current[m.id] = el;
+                          }}
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleOpenMemberModal(m, viewButtonRefs.current[m.id])}
+                          aria-label={`View academic profile for ${m.name.replace(' (You)', '')}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            fontSize: '0.75rem',
+                            padding: '5px 12px',
+                            borderRadius: '8px',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            minWidth: '68px',
+                          }}
+                        >
+                          <Eye size={13} style={{ flexShrink: 0 }} />
+                          <span>View</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -796,51 +1027,67 @@ export const LeaderboardPage: React.FC = () => {
       {/* 9. COMPREHENSIVE SCHOLAR PROFILE & ANALYTICS DOSSIER MODAL   */}
       {/* ------------------------------------------------------------- */}
       {selectedMember && (() => {
+        const isAuthorizedForTrainer =
+          !isTrainer || !trainerAuthorizedCohorts || trainerAuthorizedCohorts.includes(selectedMember.cohort);
+
         const memberRankIndex = sortedMembers.findIndex((m) => m.id === selectedMember.id);
         const memberRank = memberRankIndex >= 0 ? memberRankIndex + 1 : 1;
         const memberTier = getRankForPoints(selectedMember.points);
         const memberBadges = computeMemberBadges(selectedMember, memberRank);
         const memberProfile = profiles[selectedMember.id];
         const memberBestStreak = memberProfile?.bestStreak || Math.max(selectedMember.streakDays, 14);
+        const department = getStudentDepartment(selectedMember);
 
         return (
-          <div className="modal-overlay" onClick={() => setSelectedMember(null)} style={{ backdropFilter: 'blur(6px)' }}>
+          <div
+            className="modal-overlay"
+            onClick={handleCloseMemberModal}
+            style={{ backdropFilter: 'blur(8px)', zIndex: 1100 }}
+          >
             <div
               className="modal-card"
               style={{
-                maxWidth: '620px',
+                maxWidth: '680px',
                 width: '95%',
                 borderRadius: '16px',
-                border: '1px solid rgba(129, 140, 248, 0.3)',
-                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 27, 75, 0.94) 100%)',
-                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
                 overflow: 'hidden',
-                animation: 'modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
               }}
               onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-modal-title"
             >
               {/* Modal Header */}
               <div
                 style={{
-                  padding: '14px 18px',
+                  padding: '16px 20px',
                   borderBottom: '1px solid var(--border-subtle)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  background: 'rgba(255, 255, 255, 0.02)'
+                  background: 'var(--bg-card-subtle)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <AnimatedAvatar
                     avatarId={selectedMember.avatarId}
                     name={selectedMember.name}
-                    size={46}
+                    size={48}
                     rank={memberRank}
                     isCurrentUser={selectedMember.isCurrentUser}
                   />
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <h3 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 800, color: '#ffffff' }}>
+                      <h3
+                        id="student-modal-title"
+                        style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800, color: 'var(--text-main)' }}
+                      >
                         {selectedMember.name.replace(' (You)', '')}
                       </h3>
                       {selectedMember.isCurrentUser && (
@@ -848,185 +1095,311 @@ export const LeaderboardPage: React.FC = () => {
                       )}
                       <RankBadge tier={memberTier} size="xs" showAura={true} />
                     </div>
-                    {/* Scholar Roll, Email, and Cohort */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', fontSize: '0.74rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600 }}>{selectedMember.rollNo}</span>
-                      <span>&bull;</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#38bdf8', fontWeight: 500 }}>
-                        <Mail size={12} />
-                        {selectedMember.email}
-                      </span>
-                      <span>&bull;</span>
-                      <span className="badge badge-secondary" style={{ fontSize: '0.66rem' }}>{selectedMember.cohort}</span>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Student ID: <strong style={{ color: 'var(--text-secondary)' }}>{selectedMember.rollNo}</strong>
                     </div>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setSelectedMember(null)}
+                  onClick={handleCloseMemberModal}
                   className="btn btn-secondary btn-sm"
                   aria-label="Close dialog"
-                  style={{ width: '30px', height: '30px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}
+                  style={{ width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
               </div>
 
               {/* Modal Body */}
               <div
                 style={{
-                  padding: '16px 18px',
+                  padding: '18px 20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px',
-                  maxHeight: '82vh',
-                  overflowY: 'auto'
+                  gap: '16px',
+                  overflowY: 'auto',
                 }}
               >
-                {/* 1. Academic Performance 6-Tile Grid (Compact 3x2) */}
-                <div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                    Academic Standing &amp; Velocity
+                {!isAuthorizedForTrainer ? (
+                  <div
+                    style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <Shield size={36} color="#ef4444" style={{ margin: '0 auto 12px' }} />
+                    <h4 style={{ margin: '0 0 6px', color: '#ef4444', fontWeight: 700 }}>
+                      Access Restricted
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      You are only authorized to view academic profiles of students enrolled in your assigned cohorts.
+                      This student belongs to <strong>{selectedMember.cohort}</strong>.
+                    </p>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                    {/* Rank Position */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Leaderboard Rank</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: memberRank <= 3 ? '#ffd700' : 'var(--text-main)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Trophy size={14} color={memberRank <= 3 ? '#ffd700' : 'var(--text-muted)'} />
-                        #{memberRank}
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>of {sortedMembers.length} scholars</span>
-                    </div>
-
-                    {/* Courses */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Curriculum Completed</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--primary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <GraduationCap size={14} />
-                        {selectedMember.coursesCompleted} / {selectedMember.coursesEnrolled}
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>courses cleared</span>
-                    </div>
-
-                    {/* Mastery */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Syllabus Mastery</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: selectedMember.overallCompletionRate >= 80 ? 'var(--success)' : 'var(--text-main)', marginTop: '2px' }}>
-                        {selectedMember.overallCompletionRate}%
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>syllabus coverage</span>
-                    </div>
-
-                    {/* Study Streak */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Verified Streak</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f97316', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Flame size={14} color="#f97316" />
-                        {selectedMember.streakDays}d
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>personal best: {memberBestStreak}d</span>
-                    </div>
-
-                    {/* Study Volume */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Weekly Velocity</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#38bdf8', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Clock size={14} />
-                        {selectedMember.weeklyStudyHours}h
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>study time this week</span>
-                    </div>
-
-                    {/* Verified Diplomas */}
-                    <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Diplomas Issued</span>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-purple, #c084fc)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Award size={14} />
-                        {selectedMember.certificates}
-                      </div>
-                      <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>verified certificates</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Detailed Syllabus Mastery Breakdown */}
-                <div style={{ background: 'var(--bg-input)', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#ffffff' }}>
-                      Academic Curriculum Progress
-                    </span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--primary)' }}>
-                      {selectedMember.overallCompletionRate}%
-                    </span>
-                  </div>
-                  <div className="progress-bar-bg" style={{ height: '7px', background: 'rgba(255, 255, 255, 0.08)' }}>
+                ) : (
+                  <>
+                    {/* SECTION 1: PERSONAL DETAILS */}
                     <div
-                      className="progress-bar-fill"
                       style={{
-                        width: `${selectedMember.overallCompletionRate}%`,
-                        background: 'linear-gradient(90deg, var(--primary), #38bdf8)',
+                        background: 'var(--bg-input)',
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        border: '1px solid var(--border-subtle)',
                       }}
-                    />
-                  </div>
-                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    <span>Latest Finished Track: <strong style={{ color: 'var(--text-main)' }}>{selectedMember.recentCourseFinished}</strong></span>
-                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>&bull; Passed Assessment</span>
-                  </div>
-                </div>
-
-                {/* 3. Achievements & Badges Earned */}
-                <div style={{ background: 'var(--bg-input)', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    Awarded Achievement Badges ({memberBadges.length})
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {memberBadges.map((b) => (
+                    >
                       <div
-                        key={b.id}
                         style={{
-                          display: 'inline-flex',
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          color: 'var(--text-muted)',
+                          marginBottom: '10px',
+                          display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          color: b.color,
-                          border: `1px solid ${b.color}40`,
                         }}
                       >
-                        <span style={{ fontSize: '0.9rem' }}>{b.icon}</span>
+                        <Users size={14} color="var(--primary)" />
+                        <span>Personal Details</span>
+                      </div>
+
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                          gap: '12px',
+                        }}
+                      >
+                        {/* Student Name */}
                         <div>
-                          <div>{b.name}</div>
-                          <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                            {b.description}
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>Student Name</span>
+                          <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                            {selectedMember.name.replace(' (You)', '')}
+                          </strong>
+                        </div>
+
+                        {/* Student ID */}
+                        <div>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>Student ID</span>
+                          <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{selectedMember.rollNo}</strong>
+                        </div>
+
+                        {/* Email Address (Hide if missing) */}
+                        {selectedMember.email && (
+                          <div>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>Email Address</span>
+                            <a
+                              href={`mailto:${selectedMember.email}`}
+                              style={{
+                                fontSize: '0.85rem',
+                                color: 'var(--primary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                textDecoration: 'none',
+                                fontWeight: 500,
+                              }}
+                            >
+                              <Mail size={12} />
+                              <span>{selectedMember.email}</span>
+                            </a>
                           </div>
+                        )}
+
+                        {/* Assigned Cohort / Batch */}
+                        <div>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>Assigned Cohort / Batch</span>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.72rem', marginTop: '2px' }}>
+                            {selectedMember.cohort}
+                          </span>
+                        </div>
+
+                        {/* Department (Hide if not available) */}
+                        {department && (
+                          <div>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block' }}>Department</span>
+                            <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Building2 size={12} color="var(--primary)" />
+                              {department}
+                            </strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: ACADEMIC DETAILS */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <GraduationCap size={14} color="var(--primary)" />
+                        <span>Academic Details &amp; Performance</span>
+                      </div>
+
+                      {/* 6-Card Metric Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '8px' }}>
+                        {/* Leaderboard Rank */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Leaderboard Rank</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: memberRank <= 3 ? '#ffd700' : 'var(--text-main)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Trophy size={14} color={memberRank <= 3 ? '#ffd700' : 'var(--text-muted)'} />
+                            #{memberRank}
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>of {sortedMembers.length} scholars</span>
+                        </div>
+
+                        {/* Courses Completed / Enrolled */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Courses Cleared</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--primary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <GraduationCap size={14} />
+                            {selectedMember.coursesCompleted} / {selectedMember.coursesEnrolled}
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>enrolled courses</span>
+                        </div>
+
+                        {/* Course Completion Rate / Syllabus Mastery */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Syllabus Mastery</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: selectedMember.overallCompletionRate >= 80 ? 'var(--success)' : 'var(--text-main)', marginTop: '2px' }}>
+                            {selectedMember.overallCompletionRate}%
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>curriculum coverage</span>
+                        </div>
+
+                        {/* Points / XP */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Total Learning XP</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Sparkles size={14} color="#f59e0b" />
+                            {selectedMember.points.toLocaleString()}
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>gamification points</span>
+                        </div>
+
+                        {/* Learning Streak */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Study Streak</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f97316', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Flame size={14} color="#f97316" />
+                            {selectedMember.streakDays}d
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>best: {memberBestStreak}d</span>
+                        </div>
+
+                        {/* Certificates Issued */}
+                        <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Certificates Issued</span>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-purple, #c084fc)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Award size={14} />
+                            {selectedMember.certificates}
+                          </div>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>verified credentials</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+
+                      {/* Detailed Syllabus Mastery Progress Bar & Assessment Result */}
+                      <div style={{ background: 'var(--bg-input)', padding: '14px 16px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                            Curriculum Completion Progress
+                          </span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)' }}>
+                            {selectedMember.overallCompletionRate}%
+                          </span>
+                        </div>
+                        <div className="progress-bar-bg" style={{ height: '8px', background: 'var(--border-subtle)' }}>
+                          <div
+                            className="progress-bar-fill"
+                            style={{
+                              width: `${selectedMember.overallCompletionRate}%`,
+                              background: 'linear-gradient(90deg, var(--primary), var(--accent-purple))',
+                            }}
+                          />
+                        </div>
+                        {selectedMember.recentCourseFinished && (
+                          <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px', fontSize: '0.75rem' }}>
+                            <span className="text-muted">
+                              Latest Completed Track: <strong style={{ color: 'var(--text-main)' }}>{selectedMember.recentCourseFinished}</strong>
+                            </span>
+                            <span style={{ color: 'var(--success)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle2 size={13} /> Passed Assessment
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Awarded Achievement Badges */}
+                      {memberBadges.length > 0 && (
+                        <div style={{ background: 'var(--bg-input)', padding: '14px 16px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                            Awarded Achievement Badges ({memberBadges.length})
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {memberBadges.map((b) => (
+                              <div
+                                key={b.id}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  background: 'var(--bg-card)',
+                                  padding: '6px 12px',
+                                  borderRadius: '8px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  color: b.color,
+                                  border: `1px solid ${b.color}40`,
+                                }}
+                              >
+                                <span style={{ fontSize: '1rem' }}>{b.icon}</span>
+                                <div>
+                                  <div>{b.name}</div>
+                                  <div style={{ fontSize: '0.64rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                    {b.description}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Modal Footer */}
               <div
                 style={{
-                  padding: '10px 18px',
+                  padding: '12px 20px',
                   borderTop: '1px solid var(--border-subtle)',
                   display: 'flex',
                   justifyContent: 'flex-end',
                   gap: '10px',
-                  background: 'rgba(255, 255, 255, 0.02)'
+                  background: 'var(--bg-card-subtle)',
                 }}
               >
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setSelectedMember(null)}
-                  style={{ fontSize: '0.78rem', padding: '5px 14px' }}
+                  onClick={handleCloseMemberModal}
+                  style={{ fontSize: '0.8rem', padding: '6px 16px' }}
                 >
                   Close
                 </button>
