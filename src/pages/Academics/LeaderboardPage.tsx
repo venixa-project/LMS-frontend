@@ -22,10 +22,16 @@ import { Podium } from './components/Podium';
 import { PersonalRankCard } from './components/PersonalRankCard';
 import { VictoryCelebrationModal } from './components/VictoryCelebrationModal';
 import { AnimatedAvatar } from '../../components/AnimatedAvatar';
+import { useGamificationStore } from '../../lib/gamificationStore';
+import { getRankForPoints } from '../../lib/gamificationConfig';
+import { RankRoadmap } from '../../components/Gamification/RankRoadmap';
+import { LoginStreakCard } from '../../components/Gamification/LoginStreakCard';
+import { RankBadge } from '../../components/Gamification/RankBadge';
 
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { profiles } = useGamificationStore();
 
   // Active filters
   const [timeframe, setTimeframe] = useState<TimeframeFilter>('all_time');
@@ -311,6 +317,30 @@ export const LeaderboardPage: React.FC = () => {
         timeframeLabel={timeframeLabels[timeframe]}
         onInspect={() => currentUser && setSelectedMember(currentUser)}
       />
+
+      {/* ------------------------------------------------------------- */}
+      {/* 5B. GAMIFICATION PROGRESSION: LOGIN STREAK & RANK ROADMAP     */}
+      {/* ------------------------------------------------------------- */}
+      {(() => {
+        const activeStudentId = user?.id || 'u-007';
+        const studentProfile = profiles[activeStudentId] || profiles['u-007'];
+        const studentPoints = studentProfile ? studentProfile.totalPoints : (currentUser?.points || 2150);
+        const studentStreak = studentProfile ? (studentProfile.streakData?.currentStreak ?? studentProfile.currentStreak) : (currentUser?.streakDays || 6);
+        const studentBestStreak = studentProfile ? (studentProfile.streakData?.bestStreak ?? studentProfile.bestStreak) : 14;
+        const studentLastLogin = studentProfile ? (studentProfile.streakData?.lastLoginDate ?? studentProfile.lastLoginDate) : null;
+        const todayRewarded = studentLastLogin === new Date().toISOString().split('T')[0];
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <LoginStreakCard
+              currentStreak={studentStreak}
+              bestStreak={studentBestStreak}
+              todayRewarded={todayRewarded}
+            />
+            <RankRoadmap points={studentPoints} />
+          </div>
+        );
+      })()}
 
       {/* ------------------------------------------------------------- */}
       {/* 6. COMPARISON GRAPHS & RADIAL DISTRIBUTION                    */}
@@ -656,6 +686,12 @@ export const LeaderboardPage: React.FC = () => {
                               {m.isCurrentUser && (
                                 <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>
                               )}
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '4px' }}>
+                                <RankBadge tier={getRankForPoints(m.points)} size="xs" />
+                                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: getRankForPoints(m.points).color }}>
+                                  {getRankForPoints(m.points).name}
+                                </span>
+                              </div>
                             </div>
                             <div className="text-muted text-xs">
                               {m.rollNo} &bull; {m.email}

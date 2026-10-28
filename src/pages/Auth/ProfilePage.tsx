@@ -6,7 +6,8 @@ import {
   User, Mail, Phone, Globe, Clock, Shield, Bell,
   Sliders, Save, KeyRound, CheckCircle2, Lock,
   Sun, Moon, Monitor, Check, Sparkles, CheckCheck,
-  PenTool, RotateCcw, Upload, AlertTriangle, CheckCircle
+  PenTool, RotateCcw, Upload, AlertTriangle, CheckCircle,
+  Trophy
 } from 'lucide-react';
 import { AnimatedAvatar } from '../../components/AnimatedAvatar';
 import { useUserAvatar } from '../../lib/avatarStore';
@@ -255,6 +256,62 @@ export const ProfilePage: React.FC = () => {
                   <span>Jan 2026</span>
                 </div>
               </div>
+
+              {/* Leaderboard Standing Card for Students */}
+              {(user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest') && (
+                <div
+                  style={{
+                    marginTop: '16px',
+                    width: '100%',
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+                    border: '1.5px solid rgba(255, 215, 0, 0.35)',
+                    borderRadius: '16px',
+                    padding: '18px 16px',
+                    textAlign: 'center',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+                  }}
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#ffd700', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                    <Trophy size={15} color="#ffd700" />
+                    <span>Academy Leaderboard Standing</span>
+                  </div>
+
+                  <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ffd700', lineHeight: 1.1, marginBottom: '4px' }}>
+                    Rank #4
+                  </div>
+
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>
+                    3,420 XP &bull; 12-Day Streak 🔥
+                  </div>
+
+                  <p className="text-muted text-xs" style={{ margin: '0 0 14px 0', lineHeight: 1.4 }}>
+                    Top 5% across Spring 2026 Cohort. Climbed 2 ranks this week!
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent('open-student-leaderboard-popup'))}
+                    className="btn btn-primary"
+                    style={{
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      fontWeight: 800,
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                    }}
+                  >
+                    <Trophy size={15} />
+                    <span>View Leaderboard Pop-Up</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Edit form */}

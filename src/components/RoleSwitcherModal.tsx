@@ -93,11 +93,12 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 onClick={() => {
                   switchRole(item.role);
                   onClose();
-                  // Validate current route for newly selected role; redirect to that role's entry view if unauthorized
-                  if (!isRouteAllowedForRole(window.location.pathname, item.role)) {
-                    const isStudent = item.role === 'student' || item.role === 'learner' || item.role === 'guest';
-                    navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
+                  const isStudent = item.role === 'student' || item.role === 'learner' || item.role === 'guest';
+                  if (isStudent) {
+                    sessionStorage.setItem('show_student_leaderboard_popup', 'true');
+                    window.dispatchEvent(new CustomEvent('open-student-leaderboard-popup'));
                   }
+                  navigate('/dashboard', { replace: true });
                 }}
                 style={{
                   display: 'flex',

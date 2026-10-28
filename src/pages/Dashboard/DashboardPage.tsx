@@ -14,7 +14,7 @@ import {
   AlertCircle, Sparkles, Flame, Plus, Shield, PenTool,
   GraduationCap, Calendar, Network, Bell, FileText, Activity,
   Layers, Check, UserCheck, UsersRound, Route, HelpCircle, Building2,
-  Star, Zap, ChevronLeft, ChevronRight
+  Star, Zap, ChevronLeft, ChevronRight, Trophy
 } from 'lucide-react';
 import { PlatformDashboardPage } from '../../platform-admin/pages/PlatformDashboardPage';
 import { InstitutionDashboardPage } from '../../admin/pages/InstitutionDashboardPage';
@@ -309,6 +309,30 @@ export const DashboardPage: React.FC = () => {
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
                 Total Points
+              </div>
+            </div>
+
+            <div
+              onClick={() => window.dispatchEvent(new CustomEvent('open-student-leaderboard-popup'))}
+              style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(15, 23, 42, 0.85) 100%)',
+                border: '1.5px solid rgba(255, 215, 0, 0.45)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '12px 18px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 14px rgba(245, 158, 11, 0.25)',
+              }}
+              title="Click to view your Leaderboard Standing & Pop-Up"
+              onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+            >
+              <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ffd700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                <Trophy size={17} color="#ffd700" /> #4
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#f59e0b', textTransform: 'uppercase', fontWeight: 700 }}>
+                Leaderboard Rank
               </div>
             </div>
 

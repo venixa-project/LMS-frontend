@@ -8,12 +8,17 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { RoleSwitcherModal } from './RoleSwitcherModal';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { GlobalSearchModal } from './GlobalSearchModal';
+import { StudentLeaderboardWelcomeModal } from './StudentLeaderboardWelcomeModal';
+import { useGamificationStore } from '../lib/gamificationStore';
+import { RankUpModal } from './Gamification/RankUpModal';
+import { LoginRewardToast, LoginRewardToastData } from './Gamification/LoginRewardToast';
 
 export const AppShell: React.FC = () => {
   // 1. Auth & Router Hooks (always called at top level)
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
+  const { recordDailyLogin } = useGamificationStore();
 
   // 2. UI Layout States
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -21,6 +26,10 @@ export const AppShell: React.FC = () => {
   const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [leaderboardModalOpen, setLeaderboardModalOpen] = useState(false);
+  const [loginRewardToast, setLoginRewardToast] = useState<LoginRewardToastData | null>(null);
+
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
 
   // 3. Responsive Resize Handler
   useEffect(() => {
@@ -62,11 +71,53 @@ export const AppShell: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && user && !isLoading) {
       if (!isRouteAllowedForRole(location.pathname, user.activeRole)) {
-        const isStudent = user.activeRole === 'student' || user.activeRole === 'learner' || user.activeRole === 'guest';
-        navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     }
   }, [user?.activeRole, location.pathname, isAuthenticated, isLoading, navigate]);
+
+  // 7. Student Leaderboard Welcome Pop-Up on Login
+  useEffect(() => {
+    if (!isAuthenticated || !user || isLoading) return;
+    if (!isStudent) return;
+
+    // Check if triggered explicitly upon login or first session load
+    const shouldShow = sessionStorage.getItem('show_student_leaderboard_popup');
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dismissedDay = localStorage.getItem('venilearn_dismiss_leaderboard_popup');
+
+    if (shouldShow === 'true' || (!dismissedDay || dismissedDay !== todayStr)) {
+      if (shouldShow === 'true' || !sessionStorage.getItem('venilearn_student_leaderboard_shown')) {
+        setLeaderboardModalOpen(true);
+        sessionStorage.setItem('venilearn_student_leaderboard_shown', 'true');
+        sessionStorage.removeItem('show_student_leaderboard_popup');
+      }
+    }
+
+    const handleTrigger = () => {
+      setLeaderboardModalOpen(true);
+    };
+    window.addEventListener('open-student-leaderboard-popup', handleTrigger);
+    return () => window.removeEventListener('open-student-leaderboard-popup', handleTrigger);
+  }, [isAuthenticated, user?.id, isStudent, isLoading]);
+
+  // 8. Automatic Daily Login Rewards & Streaks
+  useEffect(() => {
+    if (!isAuthenticated || !user || isLoading || !isStudent) return;
+    try {
+      const res = recordDailyLogin(user.id);
+      if (res.awarded) {
+        setLoginRewardToast({
+          dailyPoints: res.dailyPoints ?? res.pointsAwarded ?? 5,
+          streak: res.streak ?? res.newStreak ?? 1,
+          milestoneBonus: res.milestoneBonus,
+          milestoneDays: res.milestoneDays,
+        });
+      }
+    } catch (e) {
+      console.warn('Gamification daily login error:', e);
+    }
+  }, [isAuthenticated, user?.id, isStudent, isLoading, recordDailyLogin]);
 
   // Public Routes (allowed for unauthenticated preview)
   const isPublicRoute =
@@ -141,6 +192,27 @@ export const AppShell: React.FC = () => {
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
       />
+
+      {/* Student Leaderboard Welcome Pop-Up */}
+      {isStudent && (
+        <StudentLeaderboardWelcomeModal
+          isOpen={leaderboardModalOpen}
+          onClose={() => setLeaderboardModalOpen(false)}
+        />
+      )}
+
+      {/* Student Rank Up Celebration Modal */}
+      {isStudent && user && (
+        <RankUpModal studentId={user.id} />
+      )}
+
+      {/* Floating Login Reward Toast */}
+      {loginRewardToast && (
+        <LoginRewardToast
+          data={loginRewardToast}
+          onClose={() => setLoginRewardToast(null)}
+        />
+      )}
     </div>
   );
 };

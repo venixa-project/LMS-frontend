@@ -1,10 +1,13 @@
 import React from 'react';
 import {
   Trophy, TrendingUp, TrendingDown, Minus, Flame,
-  CheckCircle2, BookOpen, Zap, Award, ArrowUpRight
+  CheckCircle2, BookOpen, Zap, Award, ArrowUpRight, Crown
 } from 'lucide-react';
 import { LeaderboardMember } from '../leaderboardData';
 import { AnimatedAvatar } from '../../../components/AnimatedAvatar';
+import { useGamificationStore } from '../../../lib/gamificationStore';
+import { getRankForPoints, getNextRank, getRankProgress } from '../../../lib/gamificationConfig';
+import { RankBadge } from '../../../components/Gamification/RankBadge';
 
 interface PersonalRankCardProps {
   currentUser: LeaderboardMember | null;
@@ -25,24 +28,23 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
 }) => {
   if (!currentUser) return null;
 
+  const { profiles } = useGamificationStore();
+  const studentProfile = profiles[currentUser.id] || profiles['u-007'];
+
+  // Total points and competitive rank tier calculation
+  const totalPoints = studentProfile ? studentProfile.totalPoints : currentUser.points;
+  const rankTier = getRankForPoints(totalPoints);
+  const nextTier = getNextRank(rankTier.tier);
+  const rankProgress = getRankProgress(totalPoints);
+  const currentStreak = studentProfile
+    ? (studentProfile.streakData?.currentStreak ?? studentProfile.currentStreak)
+    : currentUser.streakDays;
+  const totalRewardsEarned = studentProfile
+    ? (studentProfile.events?.length ?? studentProfile.history?.length ?? 0)
+    : 12;
+
   const isFirstPlace = currentRank === 1;
   const rankDelta = currentUser.previousRank - currentRank; // positive = gained ranks
-
-  // Progress to next rank calculation
-  let progressPercent = 100;
-  let pointsNeeded = 0;
-
-  if (!isFirstPlace && nextRankMember) {
-    pointsNeeded = Math.max(0, nextRankMember.points - currentUser.points + 10);
-    // Calculate progress between a sensible baseline or direct ratio
-    const currentPts = currentUser.points;
-    const targetPts = nextRankMember.points;
-    if (targetPts > 0) {
-      progressPercent = Math.min(99, Math.max(10, Math.round((currentPts / targetPts) * 100)));
-    } else {
-      progressPercent = 50;
-    }
-  }
 
   return (
     <div
@@ -182,7 +184,16 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
             </div>
 
             {/* Micro Stats Row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <RankBadge tier={rankTier} size="xs" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: rankTier.color }}>
+                  {rankTier.name}
+                </span>
+              </div>
+
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>&bull;</span>
+
               <span
                 style={{
                   display: 'inline-flex',
@@ -194,7 +205,7 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
                 }}
               >
                 <Flame size={14} color="#f97316" />
-                {currentUser.streakDays}d Streak
+                {currentStreak}d Streak
               </span>
 
               <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>&bull;</span>
@@ -205,12 +216,12 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
                   alignItems: 'center',
                   gap: '4px',
                   fontSize: '0.78rem',
-                  color: '#38bdf8',
+                  color: '#10b981',
                   fontWeight: 600,
                 }}
               >
-                <BookOpen size={13} color="#38bdf8" />
-                {currentUser.coursesCompleted} of {currentUser.coursesEnrolled} Courses (84%)
+                <Award size={13} color="#10b981" />
+                {totalRewardsEarned} Rewards
               </span>
             </div>
           </div>
@@ -228,67 +239,79 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           {/* Top row: Points & Movement */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
             <div>
-              <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600 }}>Total Learning Points</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  MY LEARNING RANK &bull;
+                </span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 900, color: rankTier.color, textTransform: 'uppercase' }}>
+                  {rankTier.name}
+                </span>
+              </div>
               <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#ffd700', display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <Zap size={18} color="#ffd700" />
-                {currentUser.points.toLocaleString()} XP
+                {totalPoints.toLocaleString()} Learning Points
               </div>
             </div>
 
-            {/* Rank Movement Indicator */}
+            {/* Leaderboard Standing & Movement Indicator */}
             <div style={{ textAlign: 'right' }}>
-              <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600 }}>Rank Movement</span>
-              <div style={{ marginTop: '2px' }}>
+              <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600 }}>
+                Leaderboard Position
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginTop: '2px' }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#fff' }}>
+                  #{currentRank}
+                </span>
                 {rankDelta > 0 ? (
                   <span
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '2px',
                       background: 'rgba(16, 185, 129, 0.15)',
                       border: '1px solid rgba(16, 185, 129, 0.35)',
                       color: '#10b981',
-                      padding: '3px 10px',
+                      padding: '2px 6px',
                       borderRadius: '999px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.72rem',
                       fontWeight: 800,
                     }}
                   >
-                    <TrendingUp size={14} /> +{rankDelta} {rankDelta === 1 ? 'position' : 'positions'}
+                    <TrendingUp size={12} /> +{rankDelta}
                   </span>
                 ) : rankDelta < 0 ? (
                   <span
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '2px',
                       background: 'rgba(244, 63, 94, 0.15)',
                       border: '1px solid rgba(244, 63, 94, 0.35)',
                       color: '#f43f5e',
-                      padding: '3px 10px',
+                      padding: '2px 6px',
                       borderRadius: '999px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.72rem',
                       fontWeight: 800,
                     }}
                   >
-                    <TrendingDown size={14} /> {rankDelta} positions
+                    <TrendingDown size={12} /> {rankDelta}
                   </span>
                 ) : (
                   <span
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '2px',
                       background: 'rgba(148, 163, 184, 0.15)',
                       border: '1px solid rgba(148, 163, 184, 0.25)',
                       color: '#94a3b8',
-                      padding: '3px 10px',
+                      padding: '2px 6px',
                       borderRadius: '999px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.72rem',
                       fontWeight: 700,
                     }}
                   >
-                    <Minus size={14} /> Stable
+                    <Minus size={12} /> Stable
                   </span>
                 )}
               </div>
@@ -297,11 +320,11 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
 
           {/* Progress Bar toward Next Rank */}
           <div>
-            {isFirstPlace ? (
+            {rankTier.id === 'legend' ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffd700', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Trophy size={14} color="#ffd700" /> You're at the top! Outstanding Achievement
+                    <Crown size={15} color="#ffd700" /> MAX RANK REACHED (Legendary Scholar)
                   </span>
                   <span style={{ fontSize: '0.78rem', color: '#ffd700', fontWeight: 800 }}>100% Champion</span>
                 </div>
@@ -310,32 +333,32 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
                     style={{
                       width: '100%',
                       height: '100%',
-                      background: 'linear-gradient(90deg, #f59e0b, #ffd700)',
+                      background: 'linear-gradient(90deg, #f59e0b, #ffd700, #ec4899)',
                       borderRadius: '999px',
                       boxShadow: '0 0 12px rgba(255, 215, 0, 0.6)',
                     }}
                   />
                 </div>
               </div>
-            ) : nextRankMember ? (
+            ) : nextTier ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Next Rank: <strong style={{ color: '#fff' }}>#{currentRank - 1} {nextRankMember.name}</strong> ({nextRankMember.points.toLocaleString()} XP)
+                    Progress to <strong style={{ color: nextTier.color }}>{nextTier.name}</strong>: <strong>{rankProgress.progressPercent}%</strong>
                   </span>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 800 }}>
-                    {pointsNeeded.toLocaleString()} XP needed
+                  <span style={{ fontSize: '0.78rem', color: nextTier.color, fontWeight: 800 }}>
+                    {rankProgress.pointsToNextRank.toLocaleString()} Points Needed
                   </span>
                 </div>
                 <div style={{ height: '8px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '999px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      width: `${progressPercent}%`,
+                      width: `${rankProgress.progressPercent}%`,
                       height: '100%',
-                      background: 'linear-gradient(90deg, #2563eb, #818cf8)',
+                      background: `linear-gradient(90deg, ${rankTier.color}, ${nextTier.color})`,
                       borderRadius: '999px',
                       transition: 'width 0.8s ease',
-                      boxShadow: '0 0 10px rgba(99, 102, 241, 0.5)',
+                      boxShadow: `0 0 10px ${rankTier.color}60`,
                     }}
                   />
                 </div>
