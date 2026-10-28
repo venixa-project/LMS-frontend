@@ -10,7 +10,7 @@ import {
   BookOpen, Clock, Users, ShieldCheck, CheckCircle2, Lock,
   Play, ArrowLeft, AlertCircle, Calendar, GraduationCap,
   Award, Check, ExternalLink, Sparkles, Share2, Layers,
-  AlertTriangle, FileText, ChevronRight
+  AlertTriangle, FileText, ChevronRight, UserPlus
 } from 'lucide-react';
 
 export const PublicCourseDetailsPage: React.FC = () => {
@@ -77,10 +77,21 @@ export const PublicCourseDetailsPage: React.FC = () => {
 
   const isPublished = course.status === 'published';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
-  const isTrainerOrAdmin = user?.activeRole === 'platform_admin' ||
+  const isAdmin = user?.activeRole === 'platform_admin' ||
     user?.activeRole === 'org_admin' ||
-    user?.activeRole === 'trainer' ||
-    user?.activeRole === 'instructor';
+    user?.activeRole === 'lms_admin' ||
+    (user?.activeRole as string) === 'industrial_admin';
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isTrainerOrAdmin = isAdmin || isFaculty;
+
+  const isAuthorizedTrainer = Boolean(
+    isAdmin ||
+    course.createdBy === user?.id ||
+    course.instructors?.includes(user?.id || '') ||
+    (user?.id === 'u-004' && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(course.id)) ||
+    (user?.id === 'u-003' && ['crs-003'].includes(course.id)) ||
+    (user?.id === 'u-005' && ['crs-005'].includes(course.id))
+  );
 
   const alreadyEnrolled = isEnrolled(course.id);
   const pendingApproval = hasRequested(course.id);
@@ -422,7 +433,9 @@ export const PublicCourseDetailsPage: React.FC = () => {
               style={{
                 height: '160px',
                 borderRadius: 'var(--radius-md)',
-                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.45) 100%)',
+                background: course.thumbnail
+                  ? `url(${course.thumbnail}) center/cover no-repeat`
+                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.45) 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -431,7 +444,7 @@ export const PublicCourseDetailsPage: React.FC = () => {
                 overflow: 'hidden'
               }}
             >
-              <BookOpen size={54} color="#ffffff" style={{ opacity: 0.9 }} />
+              {!course.thumbnail && <BookOpen size={54} color="#ffffff" style={{ opacity: 0.9 }} />}
               <div style={{
                 position: 'absolute',
                 bottom: '10px',
@@ -603,23 +616,97 @@ export const PublicCourseDetailsPage: React.FC = () => {
                       : 'Enrollment Unavailable'}
                   </button>
                 )
-              ) : (
-                /* Admin or Trainer Options */
+              ) : isAdmin ? (
+                /* Institution Admin Options */
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <Link
-                    to={`/course-player/${course.id}`}
-                    className="btn btn-primary"
-                    style={{ justifyContent: 'center', gap: '6px' }}
-                  >
-                    <Play size={15} /> Continue Learning / Course Player
-                  </Link>
-                  <Link
                     to={`/course-builder?id=${course.id}`}
-                    className="btn btn-secondary"
-                    style={{ justifyContent: 'center', gap: '6px' }}
+                    className="btn btn-primary"
+                    style={{ justifyContent: 'center', gap: '6px', fontWeight: 600 }}
                   >
                     <FileText size={15} /> Edit in Course Builder
                   </Link>
+                  <Link
+                    to={`/course-player/${course.id}`}
+                    className="btn btn-secondary"
+                    style={{ justifyContent: 'center', gap: '6px' }}
+                  >
+                    <Play size={15} /> Preview Course as Student
+                  </Link>
+                  <Link
+                    to={`/courses/${course.id}/assign-students`}
+                    className="btn btn-secondary"
+                    style={{ justifyContent: 'center', gap: '6px' }}
+                  >
+                    <UserPlus size={15} /> Assign Students
+                  </Link>
+                </div>
+              ) : (
+                /* Trainer Options */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {isAuthorizedTrainer ? (
+                    <>
+                      <Link
+                        to={`/course-builder?id=${course.id}`}
+                        className="btn btn-primary"
+                        style={{ justifyContent: 'center', gap: '6px', fontWeight: 600 }}
+                      >
+                        <FileText size={15} /> Edit Course / Lessons
+                      </Link>
+                      <Link
+                        to={`/courses/${course.id}/assign-students`}
+                        className="btn btn-secondary"
+                        style={{ justifyContent: 'center', gap: '6px' }}
+                      >
+                        <UserPlus size={15} /> Assign Students
+                      </Link>
+                      <Link
+                        to={`/enrollments?courseId=${course.id}`}
+                        className="btn btn-secondary"
+                        style={{ justifyContent: 'center', gap: '6px' }}
+                      >
+                        <Users size={15} /> View Enrollments
+                      </Link>
+                      <Link
+                        to={`/course-player/${course.id}`}
+                        className="btn btn-secondary"
+                        style={{ justifyContent: 'center', gap: '6px' }}
+                      >
+                        <Play size={15} /> Preview Course as Student
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          background: 'var(--bg-input)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.78rem',
+                          color: 'var(--text-muted)',
+                          textAlign: 'center',
+                          border: '1px solid var(--border-subtle)',
+                          marginBottom: '4px'
+                        }}
+                      >
+                        Course created by {leadTrainer?.displayName || 'another faculty member'} (Read-Only)
+                      </div>
+                      <Link
+                        to={`/course-player/${course.id}`}
+                        className="btn btn-secondary"
+                        style={{ justifyContent: 'center', gap: '6px' }}
+                      >
+                        <Play size={15} /> Preview Course as Student
+                      </Link>
+                      <Link
+                        to="/courses"
+                        className="btn btn-secondary"
+                        style={{ justifyContent: 'center', gap: '6px' }}
+                      >
+                        <BookOpen size={15} /> Back to Course Catalog
+                      </Link>
+                    </>
+                  )}
                 </div>
               )}
             </div>
