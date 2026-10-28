@@ -20,6 +20,7 @@ import { LiveRecordingPlayerModal } from './components/LiveRecordingPlayerModal'
 import { SessionRosterModal } from './components/SessionRosterModal';
 import { WeeklyTimetableView } from './components/WeeklyTimetableView';
 import { RecordedClassesView } from './components/RecordedClassesView';
+import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -69,16 +70,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     setActiveTab(determineInitialTab());
   }, [currentPath, searchParams]);
 
-  const handleTabChange = (tab: 'live_sessions' | 'timetable' | 'recordings') => {
-    setActiveTab(tab);
-    if (tab === 'timetable') {
-      navigate('/weekly-timetable');
-    } else if (tab === 'recordings') {
-      navigate('/recorded-classes');
-    } else {
-      navigate(isStudent ? '/my-sessions' : '/live-sessions');
-    }
-  };
 
   // Live Sessions from centralized store
   const {
@@ -223,22 +214,31 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     return { liveCount, upcomingCount, endedCount, totalEnrolled };
   }, [roleFilteredSessions]);
 
-  // Copy Room Link
+  // Copy Meeting Link
   const handleCopyLink = (session: LiveSession) => {
-    const link = session.meetingUrl || session.joinLink || `https://meet.venilearn.com/room/${session.id}`;
+    const link = session.meetingUrl || session.joinLink;
+    if (!link) {
+      showNotice('This session does not have a Google Meet link configured yet.');
+      return;
+    }
     navigator.clipboard.writeText(link);
     setCopiedSessionId(session.id);
-    showNotice(`Meeting link copied: ${link}`);
+    showNotice(`Google Meet link copied: ${link}`);
     setTimeout(() => setCopiedSessionId(null), 3000);
   };
 
-  // Launch Broadcast
+  // Launch Broadcast / Open Google Meet
   const handleStartBroadcast = (sessionId: string) => {
     startBroadcast(sessionId);
     const updated = sessions.find((s) => s.id === sessionId);
     if (updated) {
-      setActiveLiveRoomSession(updated);
-      showNotice(`Session is now LIVE NOW! In-app notifications dispatched to scholars.`);
+      const meetUrl = updated.meetingUrl || updated.joinLink;
+      if (meetUrl) {
+        window.open(meetUrl, '_blank', 'noopener,noreferrer');
+        showNotice(`Session is now LIVE NOW on Google Meet! Meeting opened in a new tab.`);
+      } else {
+        showNotice('This session does not have a Google Meet link configured yet.');
+      }
     }
   };
 
@@ -336,116 +336,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         </div>
       </div>
 
-      {/* Top-Level Feature Navigation Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'var(--bg-surface)',
-          padding: '6px',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-subtle)',
-          overflowX: 'auto',
-        }}
-      >
-        {/* Tab 1: Live Sessions */}
-        <button
-          onClick={() => handleTabChange('live_sessions')}
-          className={`btn ${activeTab === 'live_sessions' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: 700,
-            fontSize: '0.86rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: activeTab === 'live_sessions' ? '#ffffff' : 'var(--text-secondary)',
-          }}
-        >
-          <Video size={16} color={activeTab === 'live_sessions' ? '#ffffff' : 'var(--primary)'} />
-          <span>Live Sessions</span>
-          {stats.liveCount > 0 && (
-            <span
-              style={{
-                background: '#ef4444',
-                color: '#ffffff',
-                fontSize: '0.68rem',
-                fontWeight: 800,
-                padding: '1px 6px',
-                borderRadius: '10px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#fff' }} />
-              {stats.liveCount} LIVE
-            </span>
-          )}
-        </button>
-
-        {/* Tab 2: My Weekly Timetable */}
-        <button
-          onClick={() => handleTabChange('timetable')}
-          className={`btn ${activeTab === 'timetable' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: 700,
-            fontSize: '0.86rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: activeTab === 'timetable' ? '#ffffff' : 'var(--text-secondary)',
-          }}
-        >
-          <Calendar size={16} color={activeTab === 'timetable' ? '#ffffff' : 'var(--primary)'} />
-          <span>My Weekly Timetable</span>
-          <span
-            className="badge badge-secondary"
-            style={{
-              fontSize: '0.7rem',
-              fontWeight: 800,
-              background: activeTab === 'timetable' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(129, 140, 248, 0.16)',
-              color: activeTab === 'timetable' ? '#ffffff' : 'var(--text-secondary)',
-            }}
-          >
-            Weekly Schedule
-          </span>
-        </button>
-
-        {/* Tab 3: Recorded Classes */}
-        <button
-          onClick={() => handleTabChange('recordings')}
-          className={`btn ${activeTab === 'recordings' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-md)',
-            fontWeight: 700,
-            fontSize: '0.86rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: activeTab === 'recordings' ? '#ffffff' : 'var(--text-secondary)',
-          }}
-        >
-          <Play size={16} color={activeTab === 'recordings' ? '#ffffff' : 'var(--primary)'} />
-          <span>Recorded Classes</span>
-          <span
-            className="badge badge-secondary"
-            style={{
-              fontSize: '0.7rem',
-              fontWeight: 800,
-              background: activeTab === 'recordings' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(129, 140, 248, 0.16)',
-              color: activeTab === 'recordings' ? '#ffffff' : 'var(--text-secondary)',
-            }}
-          >
-            Replays
-          </span>
-        </button>
-      </div>
 
       {/* 1. MY WEEKLY TIMETABLE TAB CONTENT */}
       {activeTab === 'timetable' && (
@@ -734,9 +624,12 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                         </span>
                       )}
 
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                        {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName || 'Enrolled Students'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <MeetingProviderBadge provider={s.provider || 'Google Meet'} hasLink={Boolean(s.meetingUrl || s.joinLink)} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName || 'Enrolled Students'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Session Title */}
@@ -817,13 +710,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                     {/* Primary Action Button */}
                     {isLive && (
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => setActiveLiveRoomSession(s)}
-                          style={{ flex: 1, justifyContent: 'center', background: '#ef4444', borderColor: '#ef4444', gap: '6px', fontWeight: 700 }}
-                        >
-                          <Radio size={16} /> Join Live Room
-                        </button>
+                        <GoogleMeetJoinButton
+                          meetingUrl={s.meetingUrl || s.joinLink}
+                          role={isCreatorOrAdmin ? 'instructor' : 'student'}
+                          label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join with Google Meet'}
+                          size="md"
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        />
                         {isCreatorOrAdmin && (
                           <button
                             className="btn btn-secondary"
@@ -848,21 +741,21 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                             onClick={() => handleStartBroadcast(s.id)}
                             style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
                           >
-                            <Play size={15} /> Start Broadcast
+                            <GoogleMeetIcon size={16} /> Open Google Meet
                           </button>
                         ) : (
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => setActiveLiveRoomSession(s)}
-                            style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
-                          >
-                            <Video size={15} /> Open Room
-                          </button>
+                          <GoogleMeetJoinButton
+                            meetingUrl={s.meetingUrl || s.joinLink}
+                            role="student"
+                            label="Join with Google Meet"
+                            size="md"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          />
                         )}
                         <button
                           className="btn btn-secondary"
                           onClick={() => handleCopyLink(s)}
-                          title="Copy meeting link"
+                          title="Copy Meeting Link"
                           style={{ padding: '8px 12px' }}
                         >
                           {copiedSessionId === s.id ? <Check size={15} color="var(--success)" /> : <Copy size={15} />}
@@ -1151,11 +1044,44 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
 
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '2px' }}>
-                  Location / Room
+                  Meeting Provider
                 </span>
-                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                  {selectedDetailSession.room || (selectedDetailSession.meetingUrl ? 'Virtual Room' : 'Campus Hall')}
+                <MeetingProviderBadge provider={selectedDetailSession.provider || 'Google Meet'} hasLink={Boolean(selectedDetailSession.meetingUrl || selectedDetailSession.joinLink)} />
+              </div>
+
+              <div style={{ gridColumn: '1 / -1' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.72rem', marginBottom: '4px' }}>
+                  Google Meet Link
                 </span>
+                {selectedDetailSession.meetingUrl || selectedDetailSession.joinLink ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <a
+                      href={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: '#38bdf8',
+                        fontSize: '0.8rem',
+                        fontFamily: 'monospace',
+                        textDecoration: 'underline',
+                        wordBreak: 'break-all'
+                      }}
+                    >
+                      {selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
+                    </a>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '3px 8px', fontSize: '0.72rem' }}
+                      onClick={() => handleCopyLink(selectedDetailSession)}
+                    >
+                      <Copy size={12} /> Copy
+                    </button>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontStyle: 'italic' }}>
+                    This session does not have a Google Meet link configured yet.
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1206,18 +1132,12 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                {(selectedDetailSession.status === 'live' || selectedDetailSession.meetingUrl) && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      const toLaunch = selectedDetailSession;
-                      setSelectedDetailSession(null);
-                      setActiveLiveRoomSession(toLaunch);
-                    }}
-                    style={{ gap: '6px', fontWeight: 700 }}
-                  >
-                    <Play size={13} /> Join Virtual Room
-                  </button>
+                {(selectedDetailSession.status === 'live' || selectedDetailSession.status === 'scheduled') && (
+                  <GoogleMeetJoinButton
+                    meetingUrl={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
+                    role={isTrainer || isAdmin ? 'instructor' : 'student'}
+                    size="sm"
+                  />
                 )}
                 <button
                   className="btn btn-secondary btn-sm"

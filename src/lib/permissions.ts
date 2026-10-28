@@ -238,10 +238,10 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'dashboard', label: 'Student Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
     // Academics & Learning
-    { id: 'my-learning', label: 'My Courses', icon: 'BookOpen', path: '/my-learning', group: 'Academics & Learning' },
-    { id: 'my-paths', label: 'Learning Paths', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
-    { id: 'courses', label: 'Course Catalogue', icon: 'Compass', path: '/courses', group: 'Academics & Learning' },
-    { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Academics & Learning' },
+    { id: 'courses', label: 'Courses', icon: 'Compass', path: '/courses', group: 'Academics & Learning' },
+    { id: 'my-learning', label: 'My Enrolled Courses', icon: 'BookOpen', path: '/my-learning', group: 'Academics & Learning' },
+    { id: 'my-paths', label: 'My Learning Paths & Progress', icon: 'Route', path: '/my-paths', group: 'Academics & Learning' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Academics & Learning' },
 
     // Schedule & Attendance
     { id: 'weekly-timetable', label: 'My Timetable', icon: 'Calendar', path: '/weekly-timetable', group: 'Schedule & Attendance' },
@@ -249,11 +249,11 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
     { id: 'momentum', label: 'Learning Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
 
-    // Assessments & Tests
-    { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Tests' },
-    { id: 'assessments', label: 'My Assessments & Quizzes', icon: 'HelpCircle', path: '/my-assessments', group: 'Assessments & Tests' },
-    { id: 'my-results', label: 'Assessment Results', icon: 'Trophy', path: '/my-results', group: 'Assessments & Tests' },
-    { id: 'my-proctoring-reports', label: 'My Proctoring Reports', icon: 'Shield', path: '/my-proctoring-reports', group: 'Assessments & Tests' },
+    // Evaluations & Results
+    { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Quizzes' },
+    { id: 'assessments', label: 'Quizzes & Timed Exams', icon: 'HelpCircle', path: '/my-assessments', group: 'Assessments & Quizzes' },
+    { id: 'my-results', label: 'Academic Results & Grades', icon: 'Trophy', path: '/my-results', group: 'Assessments & Quizzes' },
+    { id: 'my-proctoring-reports', label: 'My Proctoring Reports', icon: 'Shield', path: '/my-proctoring-reports', group: 'Assessments & Quizzes' },
 
     // Certificates & Profile
     { id: 'my-certificates', label: 'My Certificates', icon: 'Award', path: '/my-certificates', group: 'Certificates & Profile' },

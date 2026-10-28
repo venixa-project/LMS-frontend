@@ -105,7 +105,7 @@ export const PersonCreatePage: React.FC = () => {
     if (!email.trim()) {
       errs.email = 'Email address is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      errs.email = 'Please provide a valid email format (e.g., scholar@acmelearning.edu).';
+      errs.email = 'Please provide a valid email format (e.g., scholar@university.edu).';
     } else if (isEmailTaken(email.trim())) {
       errs.email = 'This email address is already in use by another person.';
     }
@@ -220,7 +220,6 @@ export const PersonCreatePage: React.FC = () => {
               <span className={`badge ${roleMeta.badgeClass}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <roleMeta.icon size={13} /> {roleMeta.badge}
               </span>
-              <span className="text-muted text-xs">Acme Learning Corp &bull; Academic Year 2026–2027</span>
             </div>
             <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 700 }}>{roleMeta.title}</h1>
             <p className="text-secondary text-sm" style={{ margin: '4px 0 0 0' }}>{roleMeta.subtitle}</p>
@@ -356,7 +355,7 @@ export const PersonCreatePage: React.FC = () => {
                 <input
                   type="email"
                   className={`form-input ${errors.email ? 'input-error' : ''}`}
-                  placeholder="m.angelou@acmelearning.edu"
+                  placeholder="m.angelou@university.edu"
                   style={{ paddingLeft: '36px' }}
                   value={email}
                   onChange={(e) => {

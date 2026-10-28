@@ -84,7 +84,7 @@ export const DepartmentsPage: React.FC = () => {
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Total Departments</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>{departments.length}</div>
-          <p className="text-muted text-xs">Across Acme Learning Corp</p>
+          <p className="text-muted text-xs">Across All Academic Units</p>
         </div>
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Total Assigned Staff</span>

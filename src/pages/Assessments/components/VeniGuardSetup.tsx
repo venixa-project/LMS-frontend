@@ -9,6 +9,7 @@ import {
   Video
 } from 'lucide-react';
 import { buildJitsiUrls, launchJitsiConference } from '../../../lib/jitsiProctoring';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 import {
   checkBrowserCapabilities,
   requestScreenCapture,
@@ -828,23 +829,24 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #5447FF 0%, #EC4899 100%)',
+                    background: 'rgba(255, 255, 255, 0.08)',
                     color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: '0 2px 10px rgba(84, 71, 255, 0.4)',
+                    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
                   }}
                 >
-                  <Video size={19} />
+                  <GoogleMeetIcon size={20} />
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Jitsi Meet Live Video Conference
+                    Google Meet Live Video Conference
                     <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Auto-Configured</span>
                   </div>
                   <div className="text-muted text-xs">
-                    Two-way invigilation room: <strong style={{ color: '#818CF8' }}>{jitsiEndpoints.roomName}</strong>
+                    Two-way invigilation link: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong>
                   </div>
                 </div>
               </div>
@@ -859,12 +861,12 @@ export const VeniGuardSetup: React.FC<Props> = ({
                   onClick={() => launchJitsiConference(jitsiEndpoints.webUrl)}
                   style={{ fontSize: '0.75rem', padding: '4px 10px', gap: '4px' }}
                 >
-                  <ExternalLink size={12} /> Preview Room
+                  <ExternalLink size={12} /> Open in Google Meet
                 </button>
               </div>
             </div>
 
-            {/* Info details forwarded to Jitsi Meet */}
+            {/* Info details forwarded to Google Meet */}
             <div
               style={{
                 background: 'rgba(5, 8, 22, 0.55)',
@@ -890,8 +892,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 <span style={{ color: '#10B981', fontWeight: 600 }}>Webcam & Audio Forwarded</span>
               </div>
               <div>
-                <span className="text-muted">Server:</span>{' '}
-                <span style={{ color: '#818CF8', fontWeight: 600 }}>meet.jit.si</span>
+                <span className="text-muted">Platform:</span>{' '}
+                <span style={{ color: '#10B981', fontWeight: 600 }}>Google Meet</span>
               </div>
             </div>
 
@@ -910,10 +912,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 type="checkbox"
                 checked={autoLaunchJitsi}
                 onChange={(e) => setAutoLaunchJitsi(e.target.checked)}
-                style={{ accentColor: '#5447FF', width: '15px', height: '15px' }}
+                style={{ accentColor: '#10B981', width: '15px', height: '15px' }}
               />
               <span>
-                Automatically launch Jitsi Meet live conference companion window when starting the assessment
+                Automatically launch Google Meet live conference in a new tab when starting assessment
               </span>
             </label>
           </div>
@@ -1011,7 +1013,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
               gap: '8px',
             }}
           >
-            <span>Start Assessment & Launch Jitsi Meet</span>
+            <span>Start Assessment & Open Google Meet</span>
             <ChevronRight size={18} />
           </button>
         </div>

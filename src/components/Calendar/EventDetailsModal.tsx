@@ -6,6 +6,7 @@ import {
   X, Calendar, Clock, MapPin, Video, User, BookOpen,
   Download, Trash2, CheckCircle2, ExternalLink
 } from 'lucide-react';
+import { GoogleMeetIcon, GoogleMeetJoinButton } from '../GoogleMeet';
 
 interface Props {
   event: AcademicEvent | null;
@@ -121,7 +122,7 @@ export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEve
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)', fontSize: '0.825rem' }}>
-              {event.isVirtual ? <Video size={16} color="var(--primary)" /> : <MapPin size={16} color="var(--primary)" />}
+              {event.isVirtual ? <GoogleMeetIcon size={16} /> : <MapPin size={16} color="var(--primary)" />}
               <span>{event.location}</span>
             </div>
           </div>
@@ -239,13 +240,11 @@ export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEve
           </button>
 
           {event.isVirtual ? (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleJoinClass}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Video size={14} /> Join Class Room
-            </button>
+            <GoogleMeetJoinButton
+              meetingUrl={event.meetingUrl}
+              label="Join with Google Meet"
+              size="sm"
+            />
           ) : (
             <button
               className="btn btn-primary btn-sm"

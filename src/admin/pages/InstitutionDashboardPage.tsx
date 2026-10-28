@@ -33,10 +33,7 @@ export const InstitutionDashboardPage: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
               <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Building2 size={12} /> Acme Learning Academy
-              </span>
-              <span className="badge badge-neutral" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} /> Academic Year 2026–2027
+                <Building2 size={12} /> Institution Analytics
               </span>
             </div>
 

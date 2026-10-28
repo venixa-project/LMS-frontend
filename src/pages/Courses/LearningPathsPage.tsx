@@ -774,8 +774,7 @@ export const LearningPathsPage: React.FC = () => {
               <Route size={14} /> Multi-Tenant Learning Paths
             </span>
             <span className="text-muted text-xs">
-              {user?.organizationId === 'org-001' ? 'Acme Learning Corp' : 'Enterprise LMS'} &bull; Role:{' '}
-              <strong style={{ color: 'var(--text-main)' }}>{activeRole.replace('_', ' ').toUpperCase()}</strong>
+              Role: <strong style={{ color: 'var(--text-main)' }}>{activeRole.replace('_', ' ').toUpperCase()}</strong>
             </span>
           </div>
           <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>

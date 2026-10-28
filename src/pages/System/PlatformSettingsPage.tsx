@@ -22,10 +22,10 @@ export const PlatformSettingsPage: React.FC = () => {
   const [enableProctoring, setEnableProctoring] = useState(true);
 
   // Institution settings state
-  const [institutionName, setInstitutionName] = useState('Acme Learning Corp');
+  const [institutionName, setInstitutionName] = useState('Venixa Technologies');
   const [institutionCode, setInstitutionCode] = useState('ORG-001');
-  const [institutionDomain, setInstitutionDomain] = useState('acmelearning.com');
-  const [contactEmail, setContactEmail] = useState('admin@acmelearning.com');
+  const [institutionDomain, setInstitutionDomain] = useState('venilearn.demo');
+  const [contactEmail, setContactEmail] = useState('admin@venilearn.demo');
   const [phone, setPhone] = useState('+1 (555) 019-2834');
   const [campusAddress, setCampusAddress] = useState('100 Innovation Way, Suite 400, Cambridge, MA 02142');
   const [timezone, setTimezone] = useState('America/New_York (EST)');
@@ -54,7 +54,7 @@ export const PlatformSettingsPage: React.FC = () => {
   };
 
   const handleReset = () => {
-    setInstitutionName('Acme Learning Corp');
+    setInstitutionName('Venixa Technologies');
     setAcademicYear('AY 2026-2027');
     setActiveTerm('Fall Semester 2026');
     setMinAttendancePercent(75);

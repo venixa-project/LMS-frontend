@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
@@ -9,7 +9,8 @@ import { Certificate } from '../../types';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
   ChevronRight, ChevronLeft, Bookmark, Share2, Sparkles, Award,
-  ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye
+  ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye,
+  Pause, Video
 } from 'lucide-react';
 
 export const LearnerCoursePlayerPage: React.FC = () => {
@@ -20,11 +21,27 @@ export const LearnerCoursePlayerPage: React.FC = () => {
 
   // Resolve course from store first, fallback to mockCourses
   const course = courses.find((c) => c.id === id) || mockCourses.find((c) => c.id === id) || mockCourses[0];
+  const allLessons = useMemo(() => course.modules?.flatMap((m) => m.lessons) || [], [course]);
 
-  const allLessons = course.modules.flatMap((m) => m.lessons);
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
-  const [completedLessonIds, setCompletedLessonIds] = useState<string[]>(['les-101', 'les-102']);
+
+  // Lesson completions state keyed by course
+  const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>({
+    'crs-001': ['mod-001-les-1', 'mod-001-les-2'],
+    'crs-002': ['mod-004-les-1'],
+    'crs-004': ['mod-009-les-1', 'mod-009-les-2', 'mod-009-les-3', 'mod-009-les-4']
+  });
+
+  const completedLessonIds = courseCompletionMap[course.id] || (allLessons[0] ? [allLessons[0].id] : []);
+
+  // Reset lesson index and playback state when course changes
+  useEffect(() => {
+    setCurrentLessonIndex(0);
+    setIsPlaying(false);
+  }, [course.id]);
+
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [unlockedCert, setUnlockedCert] = useState<Certificate | null>(null);
   const [showCertModal, setShowCertModal] = useState(false);
@@ -46,7 +63,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     setLessonNotes(updated);
     try {
       localStorage.setItem(`venilearn_notes_${course.id}`, JSON.stringify(updated));
-    } catch {}
+    } catch { }
   };
 
   // Check if learner already earned a certificate for this course
@@ -58,22 +75,36 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const isAfterEnd = Boolean(course.endDate && new Date(course.endDate) < now);
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isPrivileged = !isStudent; // Admins and Trainers
+  const exitLink = isStudent ? '/my-learning' : '/courses';
 
   const currentLesson = allLessons[currentLessonIndex] || allLessons[0];
-  const isCompleted = completedLessonIds.includes(currentLesson.id);
+  const isCompleted = currentLesson ? completedLessonIds.includes(currentLesson.id) : false;
 
-  const progressPercent = allLessons.length > 0 ? Math.round((completedLessonIds.length / allLessons.length) * 100) : 100;
+  // Find module containing current lesson
+  const currentModule = course.modules.find((m) => m.lessons.some((l) => l.id === currentLesson?.id)) || course.modules[0];
+  const currentModuleIndex = course.modules.findIndex((m) => m.id === currentModule?.id);
+
+  const progressPercent = allLessons.length > 0
+    ? Math.min(100, Math.round((completedLessonIds.length / allLessons.length) * 100))
+    : 0;
   const requiredPercentage = course.completionPercentageRequired ?? course.certificateConfig?.requiredCompletionPercentage ?? 100;
 
   const toggleComplete = () => {
     // End Date restriction: freeze progress modifications after course end date
-    if (isAfterEnd) return;
+    if (isAfterEnd || !currentLesson) return;
 
     if (isCompleted) {
-      setCompletedLessonIds(completedLessonIds.filter((id) => id !== currentLesson.id));
+      const nextList = completedLessonIds.filter((lid) => lid !== currentLesson.id);
+      setCourseCompletionMap((prev) => ({
+        ...prev,
+        [course.id]: nextList,
+      }));
     } else {
       const nextList = [...completedLessonIds, currentLesson.id];
-      setCompletedLessonIds(nextList);
+      setCourseCompletionMap((prev) => ({
+        ...prev,
+        [course.id]: nextList,
+      }));
       setShowCelebration(true);
       setTimeout(() => setShowCelebration(false), 2500);
 
@@ -104,19 +135,49 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     }
   };
 
+  // Toggle individual lesson completion from playlist
+  const toggleLessonCompletion = (lessonId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentCompleted = courseCompletionMap[course.id] || [];
+    let updated: string[];
+    if (currentCompleted.includes(lessonId)) {
+      updated = currentCompleted.filter((lid) => lid !== lessonId);
+    } else {
+      updated = [...currentCompleted, lessonId];
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2200);
+    }
+    setCourseCompletionMap({
+      ...courseCompletionMap,
+      [course.id]: updated
+    });
+  };
+
+  // Next Lesson automatically completes current lesson and advances
   const handleNext = () => {
+    const currentCompleted = courseCompletionMap[course.id] || [];
+    if (!currentCompleted.includes(currentLesson.id)) {
+      setCourseCompletionMap({
+        ...courseCompletionMap,
+        [course.id]: [...currentCompleted, currentLesson.id]
+      });
+    }
     if (currentLessonIndex < allLessons.length - 1) {
       setCurrentLessonIndex(currentLessonIndex + 1);
+      setIsPlaying(false);
+    } else {
+      setShowCelebration(true);
     }
   };
 
   const handlePrev = () => {
     if (currentLessonIndex > 0) {
       setCurrentLessonIndex(currentLessonIndex - 1);
+      setIsPlaying(false);
     }
   };
 
-  const exitLink = (user?.activeRole === 'student' || user?.activeRole === 'learner') ? '/my-learning' : '/courses';
+  const lessonDuration = currentLesson.duration || (currentLesson as any).durationMinutes || 15;
 
   // RULE 1: Before Start Date - Blocked Access for Students
   if (isBeforeStart && isStudent) {
@@ -212,6 +273,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
           <button
             className={`btn btn-secondary btn-sm ${isBookmarked ? 'btn-primary' : ''}`}
             onClick={() => setIsBookmarked(!isBookmarked)}
+            style={{ gap: '6px' }}
           >
             <Bookmark size={14} /> {isBookmarked ? 'Saved' : 'Bookmark'}
           </button>
@@ -274,7 +336,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
           }}>
             {currentLesson.type === 'video' ? (
               <div style={{
-                height: '420px',
+                height: '430px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -282,47 +344,68 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                 background: 'radial-gradient(circle at center, #1e1b4b 0%, #060913 70%)',
                 position: 'relative'
               }}>
-                <div style={{
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  boxShadow: 'var(--shadow-glow)'
-                }}>
-                  <Play size={28} fill="#fff" style={{ marginLeft: '4px' }} />
-                </div>
-                <div style={{ marginTop: '16px', fontWeight: 600, fontSize: '0.95rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-glow)',
+                    border: 'none',
+                    transition: 'transform 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
+                >
+                  {isPlaying ? (
+                    <Pause size={28} fill="#fff" />
+                  ) : (
+                    <Play size={28} fill="#fff" style={{ marginLeft: '4px' }} />
+                  )}
+                </button>
+                <div style={{ marginTop: '16px', fontWeight: 700, fontSize: '1rem', color: '#fff' }}>
                   {currentLesson.title}
                 </div>
-                <div className="text-muted text-xs">Simulated HD 1080p Stream &bull; Captions Available</div>
+                <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
+                  {isPlaying ? 'Now Playing • HD 1080p Stream' : 'Simulated HD 1080p Stream • Captions Available'}
+                </div>
 
-                {/* Video controls mock bar */}
+                {/* Video controls bottom bar */}
                 <div style={{
                   position: 'absolute',
                   bottom: 0,
                   left: 0,
                   right: 0,
                   padding: '12px 20px',
-                  background: 'rgba(0,0,0,0.85)',
+                  background: 'rgba(0,0,0,0.88)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   fontSize: '0.75rem',
-                  color: '#cbd5e1'
+                  color: '#cbd5e1',
+                  borderTop: '1px solid rgba(255,255,255,0.08)'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Play size={14} fill="#cbd5e1" />
-                    <span>04:12 / {currentLesson.durationMinutes}:00</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                    >
+                      {isPlaying ? <Pause size={14} fill="#cbd5e1" /> : <Play size={14} fill="#cbd5e1" />}
+                    </button>
+                    <span>{isPlaying ? '04:12' : '00:00'} / {lessonDuration}:00</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span>1.0x</span>
-                    <span>CC</span>
-                    <span>1080p</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ cursor: 'pointer' }}>1.0x</span>
+                    <span style={{ cursor: 'pointer' }}>CC</span>
+                    <span style={{ background: 'rgba(255,255,255,0.12)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>1080p</span>
                   </div>
                 </div>
               </div>
@@ -334,7 +417,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                 </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <p>
-                    In this lesson, we explore foundational principles of distributed state, bounded contexts, and the decoupled domain event loop. When designing large-scale enterprise microservices, state must remain isolated behind explicit transactional boundaries.
+                    In this lesson, we explore the core curriculum concepts of <strong>{course.title}</strong>. When building modern enterprise software, proper architecture and execution discipline are essential.
                   </p>
                   <div style={{
                     background: 'var(--bg-input)',
@@ -344,28 +427,30 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                     fontFamily: 'var(--font-mono)',
                     fontSize: '0.85rem'
                   }}>
-                    // Domain Event Example<br />
-                    interface OrderCreatedEvent &#123;<br />
-                    &nbsp;&nbsp;eventId: string;<br />
-                    &nbsp;&nbsp;timestamp: number;<br />
-                    &nbsp;&nbsp;aggregateId: string;<br />
-                    &nbsp;&nbsp;payload: OrderData;<br />
-                    &#125;
+                    // Course Context: {course.title}<br />
+                    const courseMeta = &#123;<br />
+                    &nbsp;&nbsp;courseId: &quot;{course.id}&quot;,<br />
+                    &nbsp;&nbsp;title: &quot;{course.title}&quot;,<br />
+                    &nbsp;&nbsp;category: &quot;{course.category}&quot;,<br />
+                    &nbsp;&nbsp;activeModule: &quot;{currentModule?.title}&quot;,<br />
+                    &nbsp;&nbsp;lesson: &quot;{currentLesson.title}&quot;<br />
+                    &#125;;
                   </div>
                   <p>
-                    Ensure you review the supplementary downloadable architectural pattern diagram below before proceeding to the quiz checkpoint.
+                    Review the downloadable code exercises and supplementary notes below before proceeding to the next lesson.
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Action Row & Navigation Controls */}
-          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Action Row & Navigation Controls (No manual Mark as Complete button) */}
+          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', flexWrap: 'wrap', gap: '12px' }}>
             <button
               className="btn btn-secondary"
               onClick={handlePrev}
               disabled={currentLessonIndex === 0}
+              style={{ gap: '6px' }}
             >
               <ChevronLeft size={16} /> Previous Lesson
             </button>
@@ -389,13 +474,32 @@ export const LearnerCoursePlayerPage: React.FC = () => {
               </button>
             )}
 
-            <button
-              className="btn btn-secondary"
-              onClick={handleNext}
-              disabled={currentLessonIndex === allLessons.length - 1}
-            >
-              Next Lesson <ChevronRight size={16} />
-            </button>
+            {currentLessonIndex < allLessons.length - 1 ? (
+              <button
+                className="btn btn-primary"
+                onClick={handleNext}
+                style={{ gap: '6px', fontWeight: 600 }}
+              >
+                Next Lesson <ChevronRight size={16} />
+              </button>
+            ) : (
+              <Link
+                to="/my-certificates"
+                className="btn btn-primary"
+                style={{ gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                onClick={() => {
+                  const currentCompleted = courseCompletionMap[course.id] || [];
+                  if (!currentCompleted.includes(currentLesson.id)) {
+                    setCourseCompletionMap({
+                      ...courseCompletionMap,
+                      [course.id]: [...currentCompleted, currentLesson.id]
+                    });
+                  }
+                }}
+              >
+                <Award size={16} /> Complete Course & View Certificate &rarr;
+              </Link>
+            )}
           </div>
 
           {/* Downloadable Resources & Lesson Notes */}
@@ -506,18 +610,24 @@ export const LearnerCoursePlayerPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Sidebar: Module Curriculum Checklist */}
+        {/* 4. RIGHT SIDEBAR: Module Curriculum Playlist for Selected Course */}
         <div className="card" style={{ padding: '20px', height: 'fit-content' }}>
-          <h3 style={{ fontSize: '1.05rem', marginBottom: '6px' }}>Curriculum Playlist</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <h3 style={{ fontSize: '1.05rem', margin: 0 }}>Curriculum Playlist</h3>
+            <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>
+              {course.modules.length} Modules
+            </span>
+          </div>
+
           <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-            {completedLessonIds.length} of {allLessons.length} items completed
+            {completedLessonIds.length} of {allLessons.length} items completed ({progressPercent}%)
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {course.modules.map((module) => (
+            {course.modules.map((module, mIdx) => (
               <div key={module.id}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                  {module.title}
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.04em' }}>
+                  Module {mIdx + 1}: {module.title}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -525,13 +635,17 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                     const lIndex = allLessons.findIndex((l) => l.id === lesson.id);
                     const isSelected = lIndex === currentLessonIndex;
                     const isDone = completedLessonIds.includes(lesson.id);
+                    const durationVal = lesson.duration || (lesson as any).durationMinutes || 15;
 
                     return (
                       <div
                         key={lesson.id}
-                        onClick={() => setCurrentLessonIndex(lIndex)}
+                        onClick={() => {
+                          setCurrentLessonIndex(lIndex);
+                          setIsPlaying(false);
+                        }}
                         style={{
-                          padding: '8px 10px',
+                          padding: '10px 12px',
                           borderRadius: 'var(--radius-sm)',
                           background: isSelected ? 'var(--primary-light)' : 'transparent',
                           border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
@@ -542,11 +656,18 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                           transition: 'var(--transition)'
                         }}
                       >
-                        {isDone ? (
-                          <CheckCircle2 size={16} color="var(--success)" style={{ flexShrink: 0 }} />
-                        ) : (
-                          <Circle size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleLessonCompletion(lesson.id, e)}
+                          title={isDone ? 'Marked complete' : 'Click to toggle completion'}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          {isDone ? (
+                            <CheckCircle2 size={16} color="var(--success)" style={{ flexShrink: 0 }} />
+                          ) : (
+                            <Circle size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                          )}
+                        </button>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
                             fontWeight: isSelected ? 700 : 500,
@@ -558,8 +679,13 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                           }}>
                             {lesson.title}
                           </div>
-                          <div className="text-muted text-xs">
-                            {lesson.durationMinutes} mins
+                          <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {lesson.type === 'video' ? (
+                              <Video size={11} color="var(--primary)" />
+                            ) : (
+                              <FileText size={11} color="var(--accent-cyan)" />
+                            )}
+                            <span>{durationVal} mins</span>
                           </div>
                         </div>
                       </div>
@@ -592,7 +718,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
           <Award size={24} />
           <div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>+10 XP Points Earned!</div>
-            <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>Lesson marked complete. Learning streak maintained.</div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>Lesson completed. Progress updated automatically.</div>
           </div>
         </div>
       )}

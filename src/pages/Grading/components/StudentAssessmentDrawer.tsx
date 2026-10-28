@@ -235,7 +235,7 @@ export const StudentAssessmentDrawer: React.FC<StudentAssessmentDrawerProps> = (
                 )}
               </div>
               <p className="text-secondary text-xs" style={{ margin: '4px 0 8px 0' }}>
-                {studentProfile.email} &bull; {studentProfile.department} &bull; Acme Learning Corp
+                {studentProfile.email} &bull; {studentProfile.department}
               </p>
 
               {/* Enrolled Courses Badges */}

@@ -235,15 +235,15 @@ export const CertificatesPage: React.FC = () => {
             {isAdmin
               ? 'Certificates & Credential Governance'
               : isTrainer
-              ? 'Course Certificates & Learner Eligibility'
-              : 'My Verified Certificates & Diplomas'}
+                ? 'Course Certificates & Learner Eligibility'
+                : 'My Verified Certificates & Diplomas'}
           </h1>
           <p className="text-secondary text-sm">
             {isAdmin
               ? 'Oversee institution-wide credentials, audit issuance, configure template security, and govern validity'
               : isTrainer
-              ? 'Monitor learner qualification standards, track completion requirements, and audit course certificates'
-              : 'Cryptographically verified graduation awards, course completion diplomas, and official digital credentials'}
+                ? 'Monitor learner qualification standards, track completion requirements, and audit course certificates'
+                : 'Cryptographically verified graduation awards, course completion diplomas, and official digital credentials'}
           </p>
         </div>
 

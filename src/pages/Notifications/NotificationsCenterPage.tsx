@@ -421,8 +421,8 @@ export const NotificationsCenterPage: React.FC = () => {
       targetStatus === 'draft'
         ? 'draft'
         : formTimingType === 'scheduled' && formScheduledDate
-        ? 'scheduled'
-        : 'published';
+          ? 'scheduled'
+          : 'published';
 
     const payload = {
       organizationId: user?.organizationId || 'org-001',
@@ -462,8 +462,8 @@ export const NotificationsCenterPage: React.FC = () => {
         finalStatus === 'published'
           ? 'Announcement published to target audience!'
           : finalStatus === 'scheduled'
-          ? 'Announcement scheduled for future publication.'
-          : 'Announcement saved as draft.'
+            ? 'Announcement scheduled for future publication.'
+            : 'Announcement saved as draft.'
       );
     }
 
@@ -493,7 +493,7 @@ export const NotificationsCenterPage: React.FC = () => {
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary">Acme Learning Corp</span>
+            <span className="badge badge-primary">Campus Communications</span>
             {isOrgAdmin && <span className="badge badge-draft">Admin Operations</span>}
             {isFaculty && <span className="badge badge-success">Faculty Operations</span>}
             {isLearner && <span className="badge badge-active">{user?.displayName || 'Student'}</span>}
@@ -516,15 +516,15 @@ export const NotificationsCenterPage: React.FC = () => {
             {isFaculty
               ? 'Course Announcements & Teaching Alerts'
               : isLearner
-              ? 'Campus Announcements & Reminders'
-              : 'Institution Announcements & Notifications'}
+                ? 'Campus Announcements & Reminders'
+                : 'Institution Announcements & Notifications'}
           </h1>
           <p className="text-secondary text-sm" style={{ margin: 0 }}>
             {isFaculty
               ? 'Publish course updates, assessment notices, and class reminders to your assigned learners.'
               : isLearner
-              ? 'Campus bulletins from administration, instructor announcements, and academic deadlines.'
-              : 'Institution-wide broadcast bulletins, department targeting, automated delivery logs, and templates.'}
+                ? 'Campus bulletins from administration, instructor announcements, and academic deadlines.'
+                : 'Institution-wide broadcast bulletins, department targeting, automated delivery logs, and templates.'}
           </p>
         </div>
 
@@ -1049,12 +1049,12 @@ export const NotificationsCenterPage: React.FC = () => {
                         ann.priority === 'urgent'
                           ? '4px solid var(--danger)'
                           : ann.status === 'scheduled'
-                          ? '4px solid var(--info)'
-                          : ann.status === 'draft'
-                          ? '4px solid var(--warning)'
-                          : isLearner && !isRead
-                          ? '4px solid var(--primary)'
-                          : '1px solid var(--border-subtle)',
+                            ? '4px solid var(--info)'
+                            : ann.status === 'draft'
+                              ? '4px solid var(--warning)'
+                              : isLearner && !isRead
+                                ? '4px solid var(--primary)'
+                                : '1px solid var(--border-subtle)',
                       position: 'relative',
                       boxShadow: 'var(--shadow-sm)',
                     }}
@@ -1065,9 +1065,8 @@ export const NotificationsCenterPage: React.FC = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           {/* Priority badge */}
                           <span
-                            className={`badge badge-${
-                              ann.priority === 'urgent' ? 'error' : ann.priority === 'important' ? 'warning' : 'primary'
-                            }`}
+                            className={`badge badge-${ann.priority === 'urgent' ? 'error' : ann.priority === 'important' ? 'warning' : 'primary'
+                              }`}
                           >
                             {ann.priority.toUpperCase()}
                           </span>
@@ -1080,15 +1079,14 @@ export const NotificationsCenterPage: React.FC = () => {
                           {/* Status badge for Admin / Trainer */}
                           {!isLearner && (
                             <span
-                              className={`badge badge-${
-                                ann.status === 'published'
+                              className={`badge badge-${ann.status === 'published'
                                   ? 'active'
                                   : ann.status === 'scheduled'
-                                  ? 'info'
-                                  : ann.status === 'draft'
-                                  ? 'draft'
-                                  : 'secondary'
-                              }`}
+                                    ? 'info'
+                                    : ann.status === 'draft'
+                                      ? 'draft'
+                                      : 'secondary'
+                                }`}
                               style={{ textTransform: 'capitalize', fontSize: '0.7rem' }}
                             >
                               {ann.status}
@@ -1583,8 +1581,8 @@ export const NotificationsCenterPage: React.FC = () => {
                         {ann.status === 'published'
                           ? `In-App: 100% delivered (${ann.readByUserIds.length} read) • Email: SendGrid Queued`
                           : ann.status === 'scheduled'
-                          ? `Awaiting trigger date: ${ann.scheduledAt ? new Date(ann.scheduledAt).toLocaleDateString() : 'N/A'}`
-                          : 'Draft not broadcast'}
+                            ? `Awaiting trigger date: ${ann.scheduledAt ? new Date(ann.scheduledAt).toLocaleDateString() : 'N/A'}`
+                            : 'Draft not broadcast'}
                       </td>
                     </tr>
                   ))}
@@ -1759,8 +1757,8 @@ export const NotificationsCenterPage: React.FC = () => {
                     {editingAnnouncementId
                       ? 'Edit Announcement'
                       : isFaculty
-                      ? 'Publish Course Announcement'
-                      : 'Broadcast Institution Announcement'}
+                        ? 'Publish Course Announcement'
+                        : 'Broadcast Institution Announcement'}
                   </h3>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     {isFaculty

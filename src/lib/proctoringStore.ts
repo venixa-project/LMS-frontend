@@ -1,6 +1,6 @@
 // ============================================================
-// VeniLearn Proctoring Store (Hybrid Jitsi Live + VeniGuard System)
-// Manages real-time Jitsi participants, telemetry, warnings,
+// VeniLearn Proctoring Store (Hybrid Google Meet Live + VeniGuard System)
+// Manages real-time Google Meet participants, telemetry, warnings,
 // audit logs, VeniGuard policies, sessions, incident reviews, and appeals.
 // ============================================================
 
@@ -263,7 +263,7 @@ const SEED_SESSIONS: ProctoringSession[] = [
     activeWebcam: true,
     isFullscreen: true,
     isOnline: true,
-    jitsiRoomName: 'venilearn-proctor-asm001-maria',
+    jitsiRoomName: 'ven-asm1-mar',
     events: [
       {
         id: 'pevt-001',
@@ -327,7 +327,7 @@ const SEED_SESSIONS: ProctoringSession[] = [
     activeWebcam: true,
     isFullscreen: true,
     isOnline: true,
-    jitsiRoomName: 'venilearn-proctor-asm002-david',
+    jitsiRoomName: 'ven-asm2-dav',
     events: [
       {
         id: 'pevt-003',

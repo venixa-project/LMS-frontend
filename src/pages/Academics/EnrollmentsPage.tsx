@@ -226,7 +226,6 @@ export const EnrollmentsPage: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">Academics</span>
-            <span className="text-muted text-xs">Acme Learning Academy &bull; Fall Semester 2026</span>
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>Student Course Enrollments</h1>
           <p className="text-secondary text-sm">Manage curriculum enrollments, track individual syllabus velocity, and assign students to classes</p>

@@ -8,6 +8,7 @@ import {
   Mic, MicOff, Volume2, Send, RefreshCw, AlertCircle, Check, Copy, ExternalLink,
   ChevronRight, Play, Lock, UserX
 } from 'lucide-react';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface JitsiProctorDashboardProps {
   initialAssessmentId?: string;
@@ -93,7 +94,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
   }, []);
 
   const handleCopyRoomId = () => {
-    navigator.clipboard?.writeText(jitsiRoomId);
+    const meetUrl = jitsiRoomId.startsWith('http') ? jitsiRoomId : `https://meet.google.com/${jitsiRoomId.toLowerCase()}`;
+    navigator.clipboard?.writeText(meetUrl);
     setCopyNotice(true);
     setTimeout(() => setCopyNotice(false), 2500);
   };
@@ -150,9 +152,10 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary text-xs">Jitsi Hybrid Proctoring Active</span>
+            <span className="badge badge-success text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <GoogleMeetIcon size={12} /> Google Meet Hybrid Proctoring Active
+            </span>
             <span className="badge badge-info text-xs">Live Audio/Video Telemetry</span>
-            <span className="text-muted text-xs">AY 2026–2027 &bull; Acme Learning Corp</span>
           </div>
 
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>
@@ -164,17 +167,17 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
               Course: <strong>JavaScript Mastery (crs-001)</strong>
             </span>
             <span>&bull;</span>
-            <span className="text-muted">
-              Jitsi Room:{' '}
+            <span className="text-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <GoogleMeetIcon size={12} /> Google Meet Room:{' '}
               <code style={{ color: 'var(--primary)', fontWeight: 600 }}>{jitsiRoomId}</code>
             </span>
             <button
               className="btn btn-secondary btn-sm"
               style={{ padding: '2px 8px', fontSize: '0.75rem' }}
               onClick={handleCopyRoomId}
-              title="Copy Jitsi Room ID"
+              title="Copy Google Meet Room Link"
             >
-              <Copy size={12} /> {copyNotice ? 'Copied!' : 'Copy ID'}
+              <Copy size={12} /> {copyNotice ? 'Copied Link!' : 'Copy Link'}
             </button>
           </div>
         </div>
@@ -469,22 +472,22 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             })}
           </div>
 
-          {/* Jitsi Meeting Deployment & Configuration Information Card */}
+          {/* Google Meet Deployment & Configuration Information Card */}
           <div
             style={{
-              background: 'rgba(99, 102, 241, 0.05)',
-              border: '1px solid rgba(99, 102, 241, 0.25)',
+              background: 'rgba(16, 185, 129, 0.05)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
               borderRadius: 'var(--radius-md)',
               padding: '14px 18px',
               fontSize: '0.825rem',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px' }}>
-              <Shield size={16} color="var(--primary)" />
-              <span>Jitsi Meet Deployment & Security Architecture</span>
+              <GoogleMeetIcon size={16} />
+              <span>Google Meet Deployment & Security Architecture</span>
             </div>
             <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Invigilator sessions connect securely via authenticated JWT room credentials. Participant camera tracks are monitored within the authorized tenant scope. Students have restricted access to proctor-only meeting controls.
+              Invigilator sessions connect securely via authenticated Google Meet meeting links. Participant camera tracks and screen sessions are managed within the institution tenant. Students access sessions directly without unauthorized meeting disruption.
             </p>
           </div>
         </div>

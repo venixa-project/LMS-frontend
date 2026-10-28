@@ -48,7 +48,7 @@ export const InstitutionStructureSnapshot: React.FC = () => {
           <Shield size={15} /> Institution Boundary Enforcement
         </div>
         <p style={{ margin: 0, lineHeight: 1.4 }}>
-          All student records, faculty rosters, course materials, and grade distributions shown here are strictly isolated to <strong>Acme Learning Academy (org-001)</strong>. Cross-tenant access is restricted by policy.
+          All student records, faculty rosters, course materials, and grade distributions shown here are strictly isolated to this institution tenant. Cross-tenant access is restricted by policy.
         </p>
       </div>
     </div>

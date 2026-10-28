@@ -226,7 +226,6 @@ export const CohortsPage: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">{isFaculty ? 'Faculty Teaching Scope' : 'Organisation Management'}</span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
             {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>

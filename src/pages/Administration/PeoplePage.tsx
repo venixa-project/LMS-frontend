@@ -176,7 +176,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">{isFacultyViewer ? 'Faculty Scope' : 'People & Faculty'}</span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; org-001</span>
             {isFacultyViewer && <span className="badge badge-draft">Dr. James Wilson</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>{getPageTitle()}</h1>
@@ -887,7 +886,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                   <CheckCircle2 size={48} color="var(--success)" style={{ margin: '0 auto 16px' }} />
                   <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>Import Completed!</h3>
                   <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-                    Successfully imported 3 users into Acme Learning Corp. 1 duplicate row was ignored.
+                    Successfully imported 3 users into the directory. 1 duplicate row was ignored.
                   </p>
                   <button
                     className="btn btn-secondary btn-sm"

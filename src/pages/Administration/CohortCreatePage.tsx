@@ -290,7 +290,6 @@ export const CohortCreatePage: React.FC = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="badge badge-primary">Organisation Management</span>
-          <span className="text-muted text-xs">Acme Learning Corp &bull; AY 2026–2027</span>
         </div>
       </div>
 

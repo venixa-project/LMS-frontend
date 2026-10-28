@@ -1346,7 +1346,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
                   </div>
                   <h3 style={{ margin: '6px 0 2px 0', fontSize: '1.25rem' }}>{name}</h3>
                   <p className="text-secondary text-xs" style={{ margin: 0 }}>
-                    Academic Batch &bull; Acme Learning Corp &bull; Section Registration Review
+                    Academic Batch &bull; Section Registration Review
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>

@@ -15,6 +15,7 @@ import {
   Search, Check, ExternalLink, Pause, Play, AlertCircle
 } from 'lucide-react';
 import { generateJitsiRoomName } from '../../lib/jitsiProctoring';
+import { GoogleMeetIcon } from '../../components/GoogleMeet';
 
 export const ProctoringPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -76,7 +77,7 @@ export const ProctoringPage: React.FC = () => {
           </div>
           <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Authorized Personnel Only</h2>
           <p className="text-secondary text-sm" style={{ marginBottom: '24px', lineHeight: 1.6 }}>
-            The Proctoring Center and Live Jitsi Monitoring Console are restricted to authorized exam creators, assigned proctors, and institution administrators. Student accounts cannot view peer session telemetry, moderation tools, or incident logs.
+            The Proctoring Center and Live Google Meet Monitoring Console are restricted to authorized exam creators, assigned proctors, and institution administrators. Student accounts cannot view peer session telemetry, moderation tools, or incident logs.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
             <Link to="/my-assessments" className="btn btn-primary">
@@ -311,7 +312,7 @@ export const ProctoringPage: React.FC = () => {
           onClick={() => handleTabChange('live_monitor')}
         >
           <Video size={16} />
-          Live Proctoring & Jitsi Room Monitor
+          Live Proctoring & Google Meet Monitor
         </button>
         <button
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
@@ -578,8 +579,8 @@ export const ProctoringPage: React.FC = () => {
                                   <Eye size={13} color="#3B82F6" />
                                   Inspect
                                 </button>
-                                <a
-                                  href={`https://meet.jit.si/${session.jitsiRoomName || generateJitsiRoomName(session.assessmentId, session.learnerName)}#userInfo.displayName=Faculty%20Proctor`}
+                                 <a
+                                  href={`https://meet.google.com/${(session.jitsiRoomName || generateJitsiRoomName(session.assessmentId, session.learnerName)).toLowerCase()}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="btn btn-primary btn-sm"
@@ -587,13 +588,13 @@ export const ProctoringPage: React.FC = () => {
                                     gap: '5px',
                                     fontSize: '0.75rem',
                                     padding: '4px 8px',
-                                    background: 'linear-gradient(135deg, #5447FF 0%, #EC4899 100%)',
+                                    background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
                                     border: 'none',
                                   }}
-                                  title="Join candidate's live Jitsi Meet video proctoring session"
+                                  title="Join candidate's live Google Meet video proctoring session"
                                 >
-                                  <Video size={13} />
-                                  <span>Jitsi</span>
+                                  <GoogleMeetIcon size={13} />
+                                  <span>Meet</span>
                                 </a>
                               </div>
                             </td>
@@ -850,25 +851,26 @@ export const ProctoringPage: React.FC = () => {
                       <Video size={16} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#FFFFFF' }}>
-                        Jitsi Meet Live Video Proctoring Bridge
+                      <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <GoogleMeetIcon size={15} />
+                        Google Meet Live Video Proctoring Bridge
                       </div>
                       <div style={{ fontSize: '0.74rem', color: '#818CF8' }}>
-                        Room:{' '}
-                        <strong style={{ color: '#F472B6', fontFamily: 'monospace' }}>
-                          {selectedSession.jitsiRoomName || generateJitsiRoomName(selectedSession.assessmentId, selectedSession.learnerName)}
+                        Google Meet Room:{' '}
+                        <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>
+                          {(selectedSession.jitsiRoomName || generateJitsiRoomName(selectedSession.assessmentId, selectedSession.learnerName)).toLowerCase()}
                         </strong>
                       </div>
                     </div>
                   </div>
 
                   <a
-                    href={`https://meet.jit.si/${selectedSession.jitsiRoomName || generateJitsiRoomName(selectedSession.assessmentId, selectedSession.learnerName)}#userInfo.displayName=Faculty%20Proctor`}
+                    href={`https://meet.google.com/${(selectedSession.jitsiRoomName || generateJitsiRoomName(selectedSession.assessmentId, selectedSession.learnerName)).toLowerCase()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-primary btn-sm"
                     style={{
-                      background: 'linear-gradient(135deg, #2563EB 0%, #5447FF 100%)',
+                      background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
                       border: 'none',
                       fontWeight: 700,
                       fontSize: '0.78rem',
@@ -877,7 +879,7 @@ export const ProctoringPage: React.FC = () => {
                     }}
                   >
                     <ExternalLink size={13} />
-                    <span>Join Candidate's Jitsi Room &rarr;</span>
+                    <span>Open Google Meet Session &rarr;</span>
                   </a>
                 </div>
 

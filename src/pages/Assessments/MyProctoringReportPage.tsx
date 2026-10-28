@@ -276,8 +276,8 @@ export const MyProctoringReportPage: React.FC = () => {
           </div>
           <div>
             <div className="text-muted text-xs font-semibold">Video Conference</div>
-            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#EC4899', marginTop: '4px' }}>
-              {displaySession.jitsiRoomName ? 'Jitsi Meet Connected' : 'meet.jit.si Bridge'}
+            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#10B981', marginTop: '4px' }}>
+              {displaySession.jitsiRoomName ? 'Google Meet Connected' : 'Google Meet Bridge'}
             </div>
           </div>
         </div>

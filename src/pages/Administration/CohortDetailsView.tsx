@@ -435,7 +435,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                 {cohort.status}
               </span>
               <span className="text-muted text-xs">
-                Acme Learning Corp &bull; Academic Section
+                Academic Section
               </span>
             </div>
             <h1 style={{ fontSize: '1.75rem', margin: '0 0 6px 0' }}>

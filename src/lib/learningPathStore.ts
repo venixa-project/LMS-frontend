@@ -464,7 +464,7 @@ export const initialLearningPaths: LearningPath[] = [
     id: 'lp-001',
     title: 'New Hire Engineering Onboarding & Cloud Readiness',
     objective: 'Equip newly joined engineers with core JavaScript, TypeScript, and cloud deployment foundations.',
-    description: 'Standard technical onboarding pathway for new engineering personnel at Acme Learning Corp.',
+    description: 'Standard technical onboarding pathway for new engineering personnel at the organization.',
     institutionType: 'corporate',
     category: 'Employee Onboarding',
     targetGroup: 'Engineering & Technology',

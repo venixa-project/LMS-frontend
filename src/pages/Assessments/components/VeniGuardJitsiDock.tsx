@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Video, ExternalLink, Copy, Check, ChevronDown, ChevronUp,
-  Mic, Camera, Monitor, Shield, Users, Radio
+  ExternalLink, Copy, Check, ChevronDown, ChevronUp,
+  Mic, Camera, Monitor, Shield
 } from 'lucide-react';
 import { JitsiProctoringEndpoints, launchJitsiConference, copyJitsiRoomLink } from '../../../lib/jitsiProctoring';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface Props {
   endpoints: JitsiProctoringEndpoints;
@@ -41,7 +42,7 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
     <div
       style={{
         background: 'linear-gradient(135deg, rgba(21, 19, 41, 0.95) 0%, rgba(11, 11, 42, 0.95) 100%)',
-        border: '1px solid rgba(129, 140, 248, 0.35)',
+        border: '1px solid rgba(16, 185, 129, 0.35)',
         borderRadius: 'var(--radius-md)',
         boxShadow: '0 8px 32px rgba(5, 8, 22, 0.65)',
         backdropFilter: 'blur(12px)',
@@ -60,28 +61,28 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
           gap: '12px',
         }}
       >
-        {/* Left: Jitsi Branding & Live Status */}
+        {/* Left: Google Meet Branding & Live Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
               width: '32px',
               height: '32px',
               borderRadius: '8px',
-              background: 'linear-gradient(135deg, #5447FF 0%, #EC4899 100%)',
+              background: 'rgba(255, 255, 255, 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#FFFFFF',
-              boxShadow: '0 2px 10px rgba(84, 71, 255, 0.4)',
+              boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
             }}
           >
-            <Video size={17} />
+            <GoogleMeetIcon size={18} />
           </div>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#FFFFFF', letterSpacing: '0.2px' }}>
-                Jitsi Meet Live Proctoring
+                Google Meet Live Proctoring
               </span>
               <span
                 style={{
@@ -110,7 +111,10 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
               </span>
             </div>
             <div style={{ fontSize: '0.74rem', color: '#818CF8', marginTop: '1px' }}>
-              Room: <span style={{ fontFamily: 'monospace', color: '#F472B6' }}>{endpoints.roomName}</span>
+              Google Meet Link:{' '}
+              <span style={{ fontFamily: 'monospace', color: '#34D399' }}>
+                {endpoints.webUrl}
+              </span>
             </div>
           </div>
         </div>
@@ -172,36 +176,37 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleOpenWindow}
-            title="Open in Jitsi Meet Web or Desktop App"
+            title="Open Google Meet in a secure browser tab"
             style={{
               fontSize: '0.75rem',
-              padding: '5px 11px',
+              padding: '5px 12px',
               fontWeight: 700,
-              gap: '5px',
-              background: 'linear-gradient(135deg, #2563EB 0%, #5447FF 100%)',
+              gap: '6px',
+              background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
               border: 'none',
-              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.35)',
+              boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
             }}
           >
             <ExternalLink size={13} />
-            <span>Open Jitsi Web/App</span>
+            <span>Open Google Meet</span>
           </button>
 
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={handleCopyLink}
-            title="Copy Jitsi Room link"
+            title="Copy Meeting Link"
             style={{
               fontSize: '0.75rem',
               padding: '5px 10px',
               background: 'rgba(255, 255, 255, 0.06)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               color: '#FFFFFF',
+              gap: '4px',
             }}
           >
             {copied ? <Check size={13} color="#10B981" /> : <Copy size={13} />}
-            <span>{copied ? 'Copied' : 'Link'}</span>
+            <span>{copied ? 'Copied' : 'Copy Link'}</span>
           </button>
 
           <button
@@ -211,25 +216,25 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
             style={{
               fontSize: '0.75rem',
               padding: '5px 10px',
-              background: isExpanded ? 'rgba(84, 71, 255, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+              background: isExpanded ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
               color: '#FFFFFF',
               gap: '4px',
             }}
           >
-            <span>{isExpanded ? 'Hide Video' : 'Embed Video'}</span>
+            <span>{isExpanded ? 'Hide Info' : 'Session Info'}</span>
             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
       </div>
 
-      {/* Expandable Embedded Jitsi Iframe */}
+      {/* Expandable Proctoring Telemetry Panel */}
       {isExpanded && (
         <div
           style={{
-            borderTop: '1px solid rgba(129, 140, 248, 0.2)',
+            borderTop: '1px solid rgba(16, 185, 129, 0.2)',
             background: '#050816',
-            padding: '12px 16px',
+            padding: '16px 20px',
           }}
         >
           <div
@@ -237,43 +242,66 @@ export const VeniGuardJitsiDock: React.FC<Props> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '8px',
-              fontSize: '0.75rem',
+              marginBottom: '12px',
+              fontSize: '0.78rem',
               color: 'var(--text-secondary)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Shield size={14} color="#818CF8" />
+              <Shield size={14} color="#10B981" />
               <span>
-                Embedded Jitsi Conference Feed &bull; Transmitting live camera and microphone to proctors.
+                Google Meet Live Proctoring Bridge &bull; Transmitting live camera, audio and screen stream telemetry to institutional invigilators.
               </span>
             </div>
-            <span style={{ fontSize: '0.72rem', color: '#EC4899', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>
               Candidate: {candidateName}
             </span>
           </div>
 
           <div
             style={{
-              width: '100%',
-              height: '340px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: '8px',
-              overflow: 'hidden',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              background: '#000000',
-              position: 'relative',
+              padding: '16px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '14px',
             }}
           >
-            <iframe
-              src={endpoints.embedUrl}
-              allow="camera; microphone; display-capture; autoplay; clipboard-write"
-              title="VeniGuard Jitsi Live Proctoring"
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-            />
+            <div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Assessment</div>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#FFFFFF', marginTop: '2px' }}>{assessmentTitle}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Meeting Provider</div>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#10B981', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <GoogleMeetIcon size={14} /> Google Meet
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Configured Link</div>
+              <div style={{ fontWeight: 600, fontSize: '0.82rem', fontFamily: 'monospace', color: '#34D399', marginTop: '2px' }}>
+                {endpoints.webUrl}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleOpenWindow}
+                style={{
+                  background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                  border: 'none',
+                  fontSize: '0.75rem',
+                  gap: '5px',
+                  fontWeight: 600,
+                }}
+              >
+                <ExternalLink size={12} />
+                Open in Google Meet
+              </button>
+            </div>
           </div>
         </div>
       )}

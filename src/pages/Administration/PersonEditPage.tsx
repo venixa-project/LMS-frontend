@@ -138,7 +138,7 @@ export const PersonEditPage: React.FC = () => {
         <AlertCircle size={44} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
         <h2 style={{ fontSize: '1.4rem', margin: '0 0 8px' }}>Member Record Not Found</h2>
         <p className="text-secondary text-sm" style={{ marginBottom: '20px' }}>
-          The requested member identifier <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px' }}>{id}</code> could not be located in Acme Learning Corp directory.
+          The requested member identifier <code style={{ background: 'var(--bg-input)', padding: '2px 6px', borderRadius: '4px' }}>{id}</code> could not be located in the directory.
         </p>
         <Link to="/people" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
           <ArrowLeft size={14} /> Return to People & Faculty Directory

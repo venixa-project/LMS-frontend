@@ -128,7 +128,7 @@ export const mockStudentAttendanceRecords: StudentSessionAttendanceRecord[] = [
     timeSlot: '09:00 - 10:30 AM',
     facultyName: 'Dr. James Wilson',
     status: 'present',
-    method: 'Zoom In-App Telemetry (88m)',
+    method: 'Google Meet In-App Telemetry (88m)',
     notes: 'Attended remote lab link'
   },
   {
@@ -164,7 +164,7 @@ export const mockStudentAttendanceRecords: StudentSessionAttendanceRecord[] = [
     timeSlot: '11:00 - 12:30 PM',
     facultyName: 'Dr. James Wilson',
     status: 'present',
-    method: 'Zoom In-App Telemetry (90m)',
+    method: 'Google Meet In-App Telemetry (90m)',
     notes: 'Virtual Studio Room A'
   },
   {
@@ -181,7 +181,7 @@ export const mockStudentAttendanceRecords: StudentSessionAttendanceRecord[] = [
     timeSlot: '11:00 - 12:30 PM',
     facultyName: 'Dr. James Wilson',
     status: 'present',
-    method: 'Zoom In-App Telemetry (89m)',
+    method: 'Google Meet In-App Telemetry (89m)',
     notes: 'Virtual Studio Room A'
   },
   {
