@@ -137,7 +137,7 @@ export const ShareCourseModal: React.FC<Props> = ({ course, isOpen, onClose }) =
               <div>
                 <strong>Course is currently in {course.status} state.</strong>
                 <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem' }}>
-                  Only published courses allow public student enrollment. You can preview the link below, but learners cannot join until you publish the course from Course Studio or the status dropdown.
+                  Only published courses allow public student enrollment. You can preview the link below, but learners cannot join until you publish the course from Course Builder or the status dropdown.
                 </p>
               </div>
             </div>

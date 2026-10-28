@@ -10,6 +10,7 @@ import {
   Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle
 } from 'lucide-react';
 import { getNavigationForRole, type NavItem } from '../lib/permissions';
+import { useOrganisationBranding } from '../lib/useOrganisationBranding';
 import { AnimatedAvatar } from './AnimatedAvatar';
 
 const iconMap: Record<string, any> = {
@@ -68,15 +69,20 @@ const groupIconMap: Record<string, any> = {
   'Academics & Learning': BookOpen,
   'Explore Courses': Compass,
   'Schedule & Attendance': Calendar,
+  'Assessments & Evaluation': ClipboardCheck,
   'Assessments & Grading': ClipboardCheck,
   'Evaluations & Grading': ClipboardCheck,
   'Assessments & Quizzes': ClipboardCheck,
   'Assessments & Tests': ClipboardCheck,
+  'Reports & Analytics': BarChart3,
   'Reports & Settings': BarChart3,
   'Learner Insights': BarChart3,
   'System & Insights': Settings,
-  'Communications': Megaphone,
+  'Certificates & Credentials': Award,
+  'Certificates & Profile': Award,
   'Credentials & Profile': Award,
+  'Communications': Megaphone,
+  'Announcements & Notifications': Bell,
   'Account': User,
 };
 
@@ -87,6 +93,14 @@ interface Props {
 
 export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
   const { navigation, user } = useAuthStore();
+  const isPlatformAdmin = user?.activeRole === 'platform_admin';
+  const { companyName, companyLogo } = useOrganisationBranding();
+  const [sidebarLogoSrc, setSidebarLogoSrc] = useState(companyLogo || '/logo.png');
+
+  useEffect(() => {
+    setSidebarLogoSrc(companyLogo || '/logo.png');
+  }, [companyLogo]);
+
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -104,7 +118,12 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
       return currentPath === '/' || currentPath === '/dashboard';
     }
     if (item.id === 'ca-company-profile') {
-      return currentPath === '/organisation' || currentPath === '/organisation/company-profile';
+      return (
+        currentPath === '/organisation' ||
+        currentPath.startsWith('/organisation/') ||
+        currentPath === '/departments' ||
+        currentPath.startsWith('/departments/')
+      );
     }
     if (item.id === 'ca-branches-locations') {
       return currentPath === '/organisation/branches-locations' || currentPath.startsWith('/organisation/branches-locations/');
@@ -219,6 +238,20 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
       if (currentPath === '/assignments' || currentPath === '/my-results') return false;
       return currentPath === '/assessments' || currentPath === '/my-assessments' || currentPath.startsWith('/assessments/');
     }
+    if (item.id === 'assignments') {
+      return currentPath === '/assignments' || currentPath.startsWith('/assignments/');
+    }
+    if (item.id === 'my-results') {
+      return currentPath === '/my-results' || currentPath.startsWith('/my-results/');
+    }
+    if (item.id === 'my-proctoring-reports') {
+      return (
+        currentPath === '/my-proctoring-reports' ||
+        currentPath.startsWith('/my-proctoring-reports/') ||
+        currentPath === '/my-proctoring-report' ||
+        currentPath.startsWith('/my-proctoring-report/')
+      );
+    }
     if (item.id === 'question-banks') {
       return currentPath === '/question-banks' || currentPath.startsWith('/question-banks/');
     }
@@ -234,7 +267,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'reports') {
       return currentPath === '/reports' || currentPath.startsWith('/reports/');
     }
-    if (item.id === 'notifications') {
+    if (item.id === 'notifications' || item.id === 'announcements') {
       return currentPath === '/notifications' || currentPath.startsWith('/notifications/');
     }
     if (item.id === 'profile') {
@@ -402,13 +435,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         <div
           style={{
             height: 'var(--navbar-height, 64px)',
-            padding: '0 20px',
+            padding: '0 16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             borderBottom: '1px solid var(--border-subtle)',
             background: 'var(--bg-sidebar)',
             flexShrink: 0,
+            gap: '8px',
           }}
         >
           <Link
@@ -419,22 +453,87 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
               alignItems: 'center',
               textDecoration: 'none',
               color: 'inherit',
-              maxWidth: '100%',
+              minWidth: 0,
+              maxWidth: 'calc(100% - 36px)',
             }}
           >
-            <div className="brand-logo-card">
-              <img
-                src="/logo.png"
-                alt="VeniLearn Logo"
-                className="brand-logo-img"
-                style={{
-                  height: '34px',
-                  width: 'auto',
-                  maxWidth: '165px',
-                  objectFit: 'contain',
-                }}
-              />
-            </div>
+            {isPlatformAdmin ? (
+              <div className="brand-logo-card">
+                <img
+                  src="/logo.png"
+                  alt="VeniLearn Platform"
+                  className="brand-logo-img"
+                  style={{
+                    height: '34px',
+                    width: 'auto',
+                    maxWidth: '165px',
+                    objectFit: 'contain',
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <div
+                  style={{
+                    height: '36px',
+                    width: '36px',
+                    minWidth: '36px',
+                    borderRadius: '8px',
+                    background: '#ffffff',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    padding: '2px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src={sidebarLogoSrc}
+                    alt={companyName}
+                    style={{
+                      maxHeight: '100%',
+                      maxWidth: '100%',
+                      width: 'auto',
+                      height: 'auto',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                    onError={() => setSidebarLogoSrc('/logo.png')}
+                  />
+                </div>
+                <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  <span
+                    style={{
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      color: 'var(--text-main)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      lineHeight: 1.25,
+                    }}
+                    title={companyName}
+                  >
+                    {companyName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      color: 'var(--brand-indigo, #5447FF)',
+                      letterSpacing: '0.02em',
+                      lineHeight: 1.2,
+                      marginTop: '1px',
+                    }}
+                  >
+                    LMS Workspace
+                  </span>
+                </div>
+              </div>
+            )}
           </Link>
 
           {/* Close button for mobile drawer */}

@@ -108,17 +108,18 @@ export const GradingPage: React.FC = () => {
             )}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800 }}>
-            {isFaculty ? 'Student Submissions & Evaluation Queue' : 'AI Score Suggestions & Evaluation Queue'}
+            AI Evaluation Queue & Score Suggestions
           </h1>
           <p className="text-secondary text-sm" style={{ margin: '4px 0 0 0' }}>
             {isFaculty
-              ? 'Evaluate student homework, inspect AI rubric recommendations, and verify assessment grades for your assigned courses'
-              : 'Institution-wide student assessment analytics, evaluation queue, and AI preliminary score suggestions'}
+              ? 'Review AI-generated preliminary scores, rubric feedback, and confidence indicators. Human approval is required to confirm final grades for assigned courses.'
+              : 'Institution-wide student assessment queue, AI preliminary score suggestions, and grade verification records.'}
           </p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="badge badge-primary">SLA Turnaround: 24h</span>
+          <span className="badge badge-primary">AI Evaluation Active</span>
+          <span className="badge badge-secondary">Human Approval Required</span>
         </div>
       </div>
 
@@ -140,14 +141,14 @@ export const GradingPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs Navigation (Evaluation Queue and AI Score Suggestions only) */}
+      {/* Tabs Navigation (AI Evaluation Queue and AI Score Suggestions) */}
       <div className="tabs-nav" style={{ marginBottom: '20px' }}>
         <button
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
           onClick={() => setActiveTab('queue')}
         >
           <PenTool size={16} />
-          Evaluation Queue ({scopedTasks.filter((t) => t.status !== 'completed').length})
+          AI Evaluation Queue ({scopedTasks.filter((t) => t.status !== 'completed').length})
         </button>
 
         <button
@@ -159,7 +160,7 @@ export const GradingPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tab 1: Evaluation Queue */}
+      {/* Tab 1: AI Evaluation Queue */}
       {activeTab === 'queue' && (
         <div className="card" style={{ margin: 0, padding: 0 }}>
           <div className="table-container">
@@ -169,7 +170,7 @@ export const GradingPage: React.FC = () => {
                   <th>Student Name</th>
                   <th>Assessment & Course</th>
                   <th>Submitted Date</th>
-                  <th>AI Preliminary Score</th>
+                  <th>AI Evaluation & Score</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Action</th>
                 </tr>
@@ -194,8 +195,14 @@ export const GradingPage: React.FC = () => {
                             ({Math.round((t.aiSuggestion?.confidence || 0.92) * 100)}% Conf.)
                           </span>
                         </span>
+                      ) : (t.evaluationStatus as string) === 'unsupported_type' || (t.assessmentType as string) === 'unsupported_type' ? (
+                        <span className="badge badge-secondary text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Unsupported response type
+                        </span>
                       ) : (
-                        <span className="text-muted text-xs">Human-led Only</span>
+                        <span className="badge badge-warning text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          AI review required
+                        </span>
                       )}
                     </td>
                     <td>
@@ -208,19 +215,20 @@ export const GradingPage: React.FC = () => {
                         {t.aiPreliminaryScore && t.status !== 'completed' && (
                           <button
                             className="btn btn-secondary btn-sm"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px' }}
                             onClick={() => handleQuickAcceptAi(t)}
-                            title="Quickly accept verified AI score"
+                            title="Quickly approve AI score recommendation"
                           >
-                            <Check size={12} /> Accept AI
+                            <Check size={12} /> Approve AI Score
                           </button>
                         )}
                         <button
                           className="btn btn-primary btn-sm"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                          style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px' }}
                           onClick={() => handleOpenAttemptModalFromTask(t)}
                         >
-                          {t.status === 'completed' ? 'Review Grade' : 'Grade Submission'}
+                          <Sparkles size={12} />
+                          {t.status === 'completed' ? 'Review & Edit Grade' : 'Review AI Evaluation'}
                         </button>
                       </div>
                     </td>

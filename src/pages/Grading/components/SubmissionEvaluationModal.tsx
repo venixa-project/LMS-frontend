@@ -30,9 +30,6 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
   const [privateNotes, setPrivateNotes] = useState<string>(
     attempt.privateNotes || 'Checked against course rubric guidelines. Verified code syntax and pattern consistency.'
   );
-  const [requestModeration, setRequestModeration] = useState(
-    attempt.evaluationStatus === 'awaiting_human_approval'
-  );
   const [notice, setNotice] = useState<string | null>(null);
 
   // Rubric score state
@@ -90,13 +87,9 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
       feedback,
       rubricScores,
       privateNotes,
-      requestModeration,
+      requestModeration: false,
     });
-    showNotification(
-      requestModeration
-        ? 'Submission flagged for Second Marking and Moderation review.'
-        : 'Final grade submitted and published to student portal!'
-    );
+    showNotification('Final grade confirmed, approved, and released to student portal!');
     setTimeout(() => {
       onClose();
     }, 1200);
@@ -244,7 +237,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
           </div>
 
           {/* AI Score Suggestion Card if available */}
-          {attempt.aiSuggestion && (
+          {attempt.aiSuggestion ? (
             <div
               style={{
                 background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05))',
@@ -284,7 +277,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                 <div className="text-muted text-xs">
-                  A preliminary score generated from grading rubrics. Requires human instructor approval before release to student portal.
+                  Preliminary score generated from configured rubrics. Final grade approval remains with the human trainer.
                 </div>
                 {!isPublished && (
                   <button
@@ -295,6 +288,28 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                     <Check size={14} /> Accept AI Score ({attempt.aiSuggestion.score} pts)
                   </button>
                 )}
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: 'rgba(234, 179, 8, 0.08)',
+                border: '1px solid rgba(234, 179, 8, 0.35)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <AlertTriangle size={22} color="var(--warning)" style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                  AI Review Required &bull; Unsupported Response Type
+                </div>
+                <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                  This assessment format cannot be evaluated by automated AI scoring. Please review student answers manually and confirm the final grade.
+                </div>
               </div>
             </div>
           )}
@@ -507,17 +522,9 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
               />
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={requestModeration}
-                onChange={(e) => setRequestModeration(e.target.checked)}
-                style={{ accentColor: 'var(--primary)' }}
-              />
-              <span style={{ fontWeight: 500 }}>
-                Request Double Marking / Second Evaluator Moderation Review
-              </span>
-            </label>
+            <div className="text-muted text-xs" style={{ marginTop: '8px' }}>
+              Final grade approval will publish marks and feedback to the student portal and unlock credential evaluations.
+            </div>
           </div>
         </div>
 
@@ -544,8 +551,12 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
             <button className="btn btn-secondary" onClick={handleSaveDraft}>
               Save Draft
             </button>
-            <button className="btn btn-primary" onClick={handleFinalSubmit}>
-              {requestModeration ? 'Submit for Moderation' : 'Submit & Release Final Grade'}
+            <button
+              className="btn btn-primary"
+              onClick={handleFinalSubmit}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <CheckCircle2 size={16} /> Confirm & Approve Final Grade
             </button>
           </div>
         </div>

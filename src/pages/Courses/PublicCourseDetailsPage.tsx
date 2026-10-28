@@ -611,14 +611,14 @@ export const PublicCourseDetailsPage: React.FC = () => {
                     className="btn btn-primary"
                     style={{ justifyContent: 'center', gap: '6px' }}
                   >
-                    <Play size={15} /> Preview Course Player
+                    <Play size={15} /> Continue Learning / Course Player
                   </Link>
                   <Link
                     to={`/course-builder?id=${course.id}`}
                     className="btn btn-secondary"
                     style={{ justifyContent: 'center', gap: '6px' }}
                   >
-                    <FileText size={15} /> Edit in Studio
+                    <FileText size={15} /> Edit in Course Builder
                   </Link>
                 </div>
               )}

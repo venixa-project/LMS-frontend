@@ -204,10 +204,10 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
   const trainerNav: NavItem[] = [
     { id: 'dashboard', label: 'Trainer Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
-    // Teaching & Classes
+    // Teaching & Curriculum
     { id: 'my-courses', label: 'My Courses', icon: 'BookOpen', path: '/courses', group: 'Teaching & Curriculum' },
     { id: 'learning-paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Teaching & Curriculum' },
-    { id: 'course-builder', label: 'Course Studio', icon: 'PenTool', path: '/course-builder', group: 'Teaching & Curriculum' },
+    { id: 'course-builder', label: 'Course Builder', icon: 'PenTool', path: '/course-builder', group: 'Teaching & Curriculum' },
     { id: 'cohorts', label: 'Classes & Batches', icon: 'UsersRound', path: '/cohorts', group: 'Teaching & Curriculum' },
     { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Teaching & Curriculum' },
 
@@ -216,24 +216,24 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'timetable', label: 'Classes & Timetable', icon: 'Clock', path: '/classes-timetable', group: 'Schedule & Attendance' },
     { id: 'live-sessions', label: 'Live Sessions', icon: 'Video', path: '/live-sessions', group: 'Schedule & Attendance' },
     { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
-    { id: 'attendance', label: 'Attendance Ledger', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
+    { id: 'attendance', label: 'Live Session Attendance', icon: 'UserCheck', path: '/attendance-ledger', group: 'Schedule & Attendance' },
 
-    // Evaluations & Grading
-    { id: 'assessments', label: 'Assessments & Quizzes', icon: 'ClipboardCheck', path: '/assessments', group: 'Evaluations & Grading' },
-    { id: 'question-banks', label: 'Question Banks Studio', icon: 'HelpCircle', path: '/question-banks', group: 'Evaluations & Grading' },
-    { id: 'assignments', label: 'Student Assignments', icon: 'Award', path: '/assignments', group: 'Evaluations & Grading' },
-    { id: 'grading', label: 'Grading Queue & AI Review', icon: 'PenTool', path: '/grading', group: 'Evaluations & Grading', badge: 5 },
-    { id: 'proctoring', label: 'Proctoring Incident Center', icon: 'Eye', path: '/proctoring', group: 'Evaluations & Grading' },
-    { id: 'certificates', label: 'Certificates', icon: 'Award', path: '/certificates', group: 'Evaluations & Grading' },
+    // Assessments & Evaluation
+    { id: 'assessments', label: 'Assessments & Quizzes', icon: 'ClipboardCheck', path: '/assessments', group: 'Assessments & Evaluation' },
+    { id: 'question-banks', label: 'Question Banks', icon: 'HelpCircle', path: '/question-banks', group: 'Assessments & Evaluation' },
+    { id: 'assignments', label: 'Student Assignments', icon: 'Award', path: '/assignments', group: 'Assessments & Evaluation' },
+    { id: 'grading', label: 'AI Evaluation Queue', icon: 'PenTool', path: '/grading', group: 'Assessments & Evaluation', badge: 5 },
+    { id: 'proctoring', label: 'Proctoring Incident Center', icon: 'Eye', path: '/proctoring', group: 'Assessments & Evaluation' },
+    { id: 'certificates', label: 'Certificates', icon: 'Award', path: '/certificates', group: 'Assessments & Evaluation' },
 
     // Learners & Insights
-    { id: 'students', label: 'Student Progress & Directory', icon: 'Users', path: '/students', group: 'Learner Insights' },
+    { id: 'students', label: 'Student Progress', icon: 'Users', path: '/students', group: 'Learner Insights' },
     { id: 'reports', label: 'Performance Reports', icon: 'BarChart3', path: '/reports', group: 'Learner Insights' },
-    { id: 'announcements', label: 'Announcements', icon: 'Megaphone', path: '/notifications', group: 'Communications' },
+    { id: 'announcements', label: 'Course Announcements', icon: 'Megaphone', path: '/notifications', group: 'Communications' },
     { id: 'profile', label: 'Trainer Profile', icon: 'User', path: '/profile', group: 'Account' },
   ];
 
-  // 2. STUDENT NAVIGATION (Learning, Assignments, Assessments, Attendance, Credentials)
+  // 2. STUDENT NAVIGATION (Learning, Quizzes, Schedule, Credentials)
   const studentNav: NavItem[] = [
     { id: 'dashboard', label: 'Student Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
 
@@ -244,10 +244,10 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'leaderboard', label: 'Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Academics & Learning' },
 
     // Schedule & Attendance
-    { id: 'timetable', label: 'Timetable & Live Lessons', icon: 'Video', path: '/my-sessions', group: 'Schedule & Attendance' },
-    { id: 'weekly-timetable', label: 'My Weekly Timetable', icon: 'Calendar', path: '/weekly-timetable', group: 'Schedule & Attendance' },
+    { id: 'weekly-timetable', label: 'My Timetable', icon: 'Calendar', path: '/weekly-timetable', group: 'Schedule & Attendance' },
+    { id: 'timetable', label: 'Live Sessions', icon: 'Video', path: '/my-sessions', group: 'Schedule & Attendance' },
     { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
-    { id: 'momentum', label: 'Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
+    { id: 'momentum', label: 'Learning Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
 
     // Evaluations & Results
     { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Quizzes' },
@@ -255,10 +255,14 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'my-results', label: 'Academic Results & Grades', icon: 'Trophy', path: '/my-results', group: 'Assessments & Quizzes' },
     { id: 'my-proctoring-reports', label: 'My Proctoring Reports', icon: 'Shield', path: '/my-proctoring-reports', group: 'Assessments & Quizzes' },
 
-    // Credentials & Communication
-    { id: 'my-certificates', label: 'Certificates', icon: 'Award', path: '/my-certificates', group: 'Credentials & Profile' },
-    { id: 'announcements', label: 'Announcements & Alerts', icon: 'Bell', path: '/notifications', group: 'Credentials & Profile' },
-    { id: 'profile', label: 'Student Profile', icon: 'User', path: '/profile', group: 'Credentials & Profile' },
+    // Certificates & Profile
+    { id: 'my-certificates', label: 'My Certificates', icon: 'Award', path: '/my-certificates', group: 'Certificates & Profile' },
+
+    // Announcements & Notifications
+    { id: 'announcements', label: 'Announcements & Alerts', icon: 'Bell', path: '/notifications', group: 'Announcements & Notifications' },
+
+    // Account
+    { id: 'profile', label: 'Student Profile', icon: 'User', path: '/profile', group: 'Account' },
   ];
 
   // 3. Dispatch to the dedicated role configurations

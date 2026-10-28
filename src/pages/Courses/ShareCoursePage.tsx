@@ -312,7 +312,7 @@ export const ShareCoursePage: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
           <Link to="/courses" className="btn btn-secondary">
-            ← Back to Course Studio
+            ← Back to Course Builder
           </Link>
           <Link to="/my-learning" className="btn btn-primary">
             View My Assigned Courses
@@ -361,7 +361,7 @@ export const ShareCoursePage: React.FC = () => {
             onClick={() => navigate('/courses')}
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <ArrowLeft size={14} /> Back to Course Studio
+            <ArrowLeft size={14} /> Back to Course Builder
           </button>
           <a
             href={`/course/${course.id}`}
@@ -1800,7 +1800,7 @@ export const ShareCoursePage: React.FC = () => {
                   Send More Invitations
                 </button>
                 <Link to="/courses" className="btn btn-primary btn-sm">
-                  Return to Course Studio
+                  Return to Course Builder
                 </Link>
               </div>
             </div>
