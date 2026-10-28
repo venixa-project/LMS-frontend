@@ -22,13 +22,13 @@ export const Podium: React.FC<PodiumProps> = ({
     <div
       className="card"
       style={{
-        padding: '36px 24px 28px',
+        padding: '20px 20px 16px',
         background: 'radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, rgba(13, 18, 31, 0.98) 75%)',
         border: '1.5px solid rgba(99, 102, 241, 0.35)',
-        borderRadius: '24px',
+        borderRadius: '20px',
         overflow: 'hidden',
         position: 'relative',
-        boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.7)',
+        boxShadow: '0 16px 36px -10px rgba(0, 0, 0, 0.7)',
       }}
     >
       <style>{`
@@ -97,29 +97,29 @@ export const Podium: React.FC<PodiumProps> = ({
       />
 
       {/* Podium Header Label */}
-      <div style={{ textAlign: 'center', marginBottom: '32px', position: 'relative', zIndex: 1 }}>
+      <div style={{ textAlign: 'center', marginBottom: '16px', position: 'relative', zIndex: 1 }}>
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             background: 'rgba(255, 215, 0, 0.12)',
             border: '1px solid rgba(255, 215, 0, 0.4)',
             color: '#fbbf24',
-            padding: '5px 16px',
+            padding: '3px 12px',
             borderRadius: '999px',
-            fontSize: '0.8rem',
+            fontSize: '0.74rem',
             fontWeight: 800,
-            marginBottom: '10px',
+            marginBottom: '6px',
           }}
         >
-          <Sparkles size={14} color="#ffd700" />
+          <Sparkles size={13} color="#ffd700" />
           <span>Top 3 Academic Podium &bull; {timeframeLabel}</span>
         </div>
-        <h2 style={{ fontSize: '1.65rem', fontWeight: 900, margin: 0, color: '#fff', letterSpacing: '-0.02em' }}>
+        <h2 style={{ fontSize: '1.35rem', fontWeight: 900, margin: 0, color: '#fff', letterSpacing: '-0.02em' }}>
           Hall of Fame: Top 3 Scholars
         </h2>
-        <p className="text-secondary text-xs" style={{ margin: '6px 0 0', color: '#94a3b8' }}>
+        <p className="text-secondary text-xs" style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '0.76rem' }}>
           Recognizing the top learners demonstrating exceptional course mastery, speed, and learning momentum
         </p>
       </div>
@@ -131,10 +131,10 @@ export const Podium: React.FC<PodiumProps> = ({
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           alignItems: 'flex-end',
-          gap: '24px',
-          maxWidth: '960px',
+          gap: '16px',
+          maxWidth: '860px',
           margin: '0 auto',
-          paddingBottom: '8px',
+          paddingBottom: '4px',
           position: 'relative',
           zIndex: 1,
         }}
@@ -157,11 +157,11 @@ export const Podium: React.FC<PodiumProps> = ({
             title="Click to inspect scholar details"
           >
             {/* Avatar & Silver Medal Indicator */}
-            <div style={{ position: 'relative', marginBottom: '14px' }}>
+            <div style={{ position: 'relative', marginBottom: '8px' }}>
               <AnimatedAvatar
                 avatarId={secondPlace.avatarId}
                 name={secondPlace.name}
-                size={78}
+                size={62}
                 rank={2}
                 isCurrentUser={secondPlace.isCurrentUser}
                 interactive={true}
@@ -171,17 +171,17 @@ export const Podium: React.FC<PodiumProps> = ({
               <div
                 style={{
                   position: 'absolute',
-                  bottom: '-6px',
-                  right: '-6px',
-                  width: '30px',
-                  height: '30px',
+                  bottom: '-4px',
+                  right: '-4px',
+                  width: '24px',
+                  height: '24px',
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #f1f5f9, #94a3b8)',
                   color: '#0f172a',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1rem',
+                  fontSize: '0.85rem',
                   fontWeight: 900,
                   border: '2px solid #0f172a',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
@@ -192,22 +192,22 @@ export const Podium: React.FC<PodiumProps> = ({
             </div>
 
             {/* Member Info */}
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#fff', marginBottom: '2px' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#fff', marginBottom: '2px' }}>
               {secondPlace.name.replace(' (You)', '')}
               {secondPlace.isCurrentUser && <span className="badge badge-primary" style={{ marginLeft: '6px', fontSize: '0.6rem' }}>YOU</span>}
             </div>
-            <div className="text-secondary text-xs" style={{ marginBottom: '12px', color: '#94a3b8' }}>
+            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.72rem' }}>
               {secondPlace.cohort}
             </div>
 
             {/* Badges preview */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
               {computeMemberBadges(secondPlace, 2).map((b) => (
                 <span
                   key={b.id}
                   title={`${b.name}: ${b.description}`}
                   style={{
-                    fontSize: '0.95rem',
+                    fontSize: '0.85rem',
                     background: 'rgba(255, 255, 255, 0.08)',
                     borderRadius: '50%',
                     padding: '2px 4px',
@@ -223,29 +223,29 @@ export const Podium: React.FC<PodiumProps> = ({
               className="podium-pedestal"
               style={{
                 width: '100%',
-                height: '160px',
+                height: '105px',
                 background: 'linear-gradient(180deg, rgba(203, 213, 225, 0.25) 0%, rgba(71, 85, 105, 0.35) 100%)',
                 border: '1.5px solid rgba(203, 213, 225, 0.45)',
                 borderBottom: 'none',
-                borderTopLeftRadius: '18px',
-                borderTopRightRadius: '18px',
-                padding: '18px 14px',
+                borderTopLeftRadius: '14px',
+                borderTopRightRadius: '14px',
+                padding: '12px 10px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.3)',
                 transition: 'all 0.2s ease',
               }}
             >
-              <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#e2e8f0', letterSpacing: '1px' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#e2e8f0', letterSpacing: '1px' }}>
                 2nd
               </div>
 
               <div>
-                <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#f1f5f9' }}>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#f1f5f9' }}>
                   {secondPlace.points.toLocaleString()} XP
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>
                   {secondPlace.coursesCompleted} Courses &bull; {secondPlace.certificates} Diplomas
                 </div>
               </div>
@@ -273,15 +273,15 @@ export const Podium: React.FC<PodiumProps> = ({
           >
             {/* Animated Crown above Champion */}
             <div className="champion-crown" style={{ animation: 'championCrownFloat 3.5s ease-in-out infinite', marginBottom: '-2px' }}>
-              <Crown size={36} color="#ffd700" strokeWidth={2.4} />
+              <Crown size={28} color="#ffd700" strokeWidth={2.4} />
             </div>
 
             {/* Champion Avatar with Radiant Gold Border & Pulsing Aura */}
-            <div style={{ position: 'relative', marginBottom: '14px' }}>
+            <div style={{ position: 'relative', marginBottom: '8px' }}>
               <AnimatedAvatar
                 avatarId={firstPlace.avatarId}
                 name={firstPlace.name}
-                size={94}
+                size={76}
                 rank={1}
                 isCurrentUser={firstPlace.isCurrentUser}
                 ringVariant="gold"
@@ -292,17 +292,17 @@ export const Podium: React.FC<PodiumProps> = ({
               <div
                 style={{
                   position: 'absolute',
-                  bottom: '-6px',
-                  right: '-6px',
-                  width: '34px',
-                  height: '34px',
+                  bottom: '-4px',
+                  right: '-4px',
+                  width: '28px',
+                  height: '28px',
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #ffd700, #f59e0b)',
                   color: '#78350f',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1.2rem',
+                  fontSize: '1rem',
                   fontWeight: 900,
                   border: '2px solid #0f172a',
                   boxShadow: '0 4px 12px rgba(245, 158, 11, 0.6)',
@@ -314,7 +314,7 @@ export const Podium: React.FC<PodiumProps> = ({
 
             {/* Champion Name & Badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.15rem', color: '#fff' }}>{firstPlace.name.replace(' (You)', '')}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#fff' }}>{firstPlace.name.replace(' (You)', '')}</span>
               {firstPlace.isCurrentUser && <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>}
             </div>
 
@@ -326,23 +326,23 @@ export const Podium: React.FC<PodiumProps> = ({
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 color: '#0f172a',
                 fontWeight: 900,
-                fontSize: '0.68rem',
-                padding: '2px 10px',
+                fontSize: '0.64rem',
+                padding: '2px 8px',
                 borderRadius: '999px',
-                marginBottom: '10px',
+                marginBottom: '8px',
               }}
             >
-              <Trophy size={11} /> CHAMPION
+              <Trophy size={10} /> CHAMPION
             </div>
 
             {/* Badges preview */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
               {computeMemberBadges(firstPlace, 1).map((b) => (
                 <span
                   key={b.id}
                   title={`${b.name}: ${b.description}`}
                   style={{
-                    fontSize: '1rem',
+                    fontSize: '0.9rem',
                     background: 'rgba(255, 215, 0, 0.15)',
                     border: '1px solid rgba(255, 215, 0, 0.3)',
                     borderRadius: '50%',
@@ -354,26 +354,26 @@ export const Podium: React.FC<PodiumProps> = ({
               ))}
             </div>
 
-            {/* Gold Pedestal Block (Tallest 200px) */}
+            {/* Gold Pedestal Block (140px) */}
             <div
               className="podium-pedestal"
               style={{
                 width: '100%',
-                height: '205px',
+                height: '140px',
                 background: 'linear-gradient(180deg, rgba(255, 215, 0, 0.35) 0%, rgba(180, 83, 9, 0.45) 100%)',
                 border: '2px solid rgba(255, 215, 0, 0.75)',
                 borderBottom: 'none',
-                borderTopLeftRadius: '20px',
-                borderTopRightRadius: '20px',
-                padding: '22px 16px',
+                borderTopLeftRadius: '16px',
+                borderTopRightRadius: '16px',
+                padding: '14px 12px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                boxShadow: '0 14px 35px rgba(245, 158, 11, 0.35)',
+                boxShadow: '0 10px 28px rgba(245, 158, 11, 0.35)',
                 transition: 'all 0.2s ease',
               }}
             >
-              <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#ffd700', letterSpacing: '1px' }}>
+              <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ffd700', letterSpacing: '1px' }}>
                 1st
               </div>
 
@@ -408,11 +408,11 @@ export const Podium: React.FC<PodiumProps> = ({
             title="Click to inspect scholar details"
           >
             {/* Avatar & Bronze Medal Indicator */}
-            <div style={{ position: 'relative', marginBottom: '14px' }}>
+            <div style={{ position: 'relative', marginBottom: '8px' }}>
               <AnimatedAvatar
                 avatarId={thirdPlace.avatarId}
                 name={thirdPlace.name}
-                size={74}
+                size={58}
                 rank={3}
                 isCurrentUser={thirdPlace.isCurrentUser}
                 ringVariant="bronze"
@@ -423,17 +423,17 @@ export const Podium: React.FC<PodiumProps> = ({
               <div
                 style={{
                   position: 'absolute',
-                  bottom: '-6px',
-                  right: '-6px',
-                  width: '30px',
-                  height: '30px',
+                  bottom: '-4px',
+                  right: '-4px',
+                  width: '24px',
+                  height: '24px',
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #d97706, #92400e)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '1rem',
+                  fontSize: '0.85rem',
                   fontWeight: 900,
                   border: '2px solid #0f172a',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
@@ -444,22 +444,22 @@ export const Podium: React.FC<PodiumProps> = ({
             </div>
 
             {/* Member Info */}
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#fff', marginBottom: '2px' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#fff', marginBottom: '2px' }}>
               {thirdPlace.name.replace(' (You)', '')}
               {thirdPlace.isCurrentUser && <span className="badge badge-primary" style={{ marginLeft: '6px', fontSize: '0.6rem' }}>YOU</span>}
             </div>
-            <div className="text-secondary text-xs" style={{ marginBottom: '12px', color: '#94a3b8' }}>
+            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.72rem' }}>
               {thirdPlace.cohort}
             </div>
 
             {/* Badges preview */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
               {computeMemberBadges(thirdPlace, 3).map((b) => (
                 <span
                   key={b.id}
                   title={`${b.name}: ${b.description}`}
                   style={{
-                    fontSize: '0.95rem',
+                    fontSize: '0.85rem',
                     background: 'rgba(255, 255, 255, 0.08)',
                     borderRadius: '50%',
                     padding: '2px 4px',
@@ -475,29 +475,29 @@ export const Podium: React.FC<PodiumProps> = ({
               className="podium-pedestal"
               style={{
                 width: '100%',
-                height: '130px',
+                height: '85px',
                 background: 'linear-gradient(180deg, rgba(217, 119, 6, 0.25) 0%, rgba(120, 53, 15, 0.4) 100%)',
                 border: '1.5px solid rgba(217, 119, 6, 0.45)',
                 borderBottom: 'none',
-                borderTopLeftRadius: '18px',
-                borderTopRightRadius: '18px',
-                padding: '16px 12px',
+                borderTopLeftRadius: '14px',
+                borderTopRightRadius: '14px',
+                padding: '10px 10px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.3)',
                 transition: 'all 0.2s ease',
               }}
             >
-              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: '#f59e0b', letterSpacing: '1px' }}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 900, color: '#f59e0b', letterSpacing: '1px' }}>
                 3rd
               </div>
 
               <div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fed7aa' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fed7aa' }}>
                   {thirdPlace.points.toLocaleString()} XP
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#fdba74', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.68rem', color: '#fdba74', marginTop: '2px' }}>
                   {thirdPlace.coursesCompleted} Courses &bull; {thirdPlace.certificates} Diplomas
                 </div>
               </div>

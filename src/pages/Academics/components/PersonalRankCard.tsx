@@ -50,19 +50,19 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
     <div
       className="card"
       style={{
-        padding: '24px',
+        padding: '16px 20px',
         background: isFirstPlace
           ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.85) 65%)'
           : 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(15, 23, 42, 0.85) 65%)',
         border: isFirstPlace
           ? '1.5px solid rgba(255, 215, 0, 0.5)'
           : '1.5px solid rgba(129, 140, 248, 0.35)',
-        borderRadius: '20px',
+        borderRadius: '16px',
         position: 'relative',
         overflow: 'hidden',
         boxShadow: isFirstPlace
-          ? '0 10px 30px -5px rgba(245, 158, 11, 0.2)'
-          : '0 10px 30px -5px rgba(99, 102, 241, 0.15)',
+          ? '0 8px 24px -4px rgba(245, 158, 11, 0.2)'
+          : '0 8px 24px -4px rgba(99, 102, 241, 0.15)',
         transition: 'all 0.4s ease',
       }}
     >
@@ -72,8 +72,8 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           position: 'absolute',
           top: '-40px',
           right: '-40px',
-          width: '240px',
-          height: '240px',
+          width: '200px',
+          height: '200px',
           borderRadius: '50%',
           background: isFirstPlace
             ? 'radial-gradient(circle, rgba(255, 215, 0, 0.18) 0%, transparent 70%)'
@@ -84,18 +84,18 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
       />
 
       {/* Top Header Label */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span
             style={{
-              fontSize: '0.72rem',
+              fontSize: '0.7rem',
               fontWeight: 800,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               color: isFirstPlace ? '#ffd700' : 'var(--primary-light, #818cf8)',
               background: isFirstPlace ? 'rgba(255, 215, 0, 0.12)' : 'rgba(99, 102, 241, 0.14)',
               border: isFirstPlace ? '1px solid rgba(255, 215, 0, 0.35)' : '1px solid rgba(129, 140, 248, 0.25)',
-              padding: '3px 10px',
+              padding: '2px 8px',
               borderRadius: '999px',
             }}
           >
@@ -104,11 +104,11 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           {isFirstPlace && (
             <span
               style={{
-                fontSize: '0.72rem',
+                fontSize: '0.7rem',
                 fontWeight: 800,
                 color: '#0f172a',
                 background: '#ffd700',
-                padding: '3px 10px',
+                padding: '2px 8px',
                 borderRadius: '999px',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -120,7 +120,7 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           )}
         </div>
 
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
           Ranked against <strong>{totalMembers} Active Scholars</strong>
         </div>
       </div>
@@ -130,7 +130,7 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(250px, 1.2fr) minmax(280px, 1.8fr)',
-          gap: '24px',
+          gap: '16px',
           alignItems: 'center',
         }}
       >
@@ -140,10 +140,10 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '14px',
             cursor: onInspect ? 'pointer' : 'default',
-            padding: '6px 10px',
-            borderRadius: '16px',
+            padding: '4px 8px',
+            borderRadius: '14px',
             transition: 'all 0.2s ease',
           }}
           onMouseEnter={(e) => {
@@ -163,7 +163,7 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
             <AnimatedAvatar
               avatarId={currentUser.avatarId}
               name={currentUser.name.replace(' (You)', '')}
-              size={68}
+              size={54}
               rank={currentRank}
               showRankBadge={true}
               isCurrentUser={true}
@@ -174,53 +174,53 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           {/* User Details & Quick Stats */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#fff' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#fff' }}>
                 {currentUser.name.replace(' (You)', '')}
               </h3>
               <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>
             </div>
-            <div className="text-secondary text-xs" style={{ marginBottom: '8px' }}>
+            <div className="text-secondary text-xs" style={{ marginBottom: '6px' }}>
               {currentUser.cohort} &bull; {currentUser.rollNo}
             </div>
 
             {/* Micro Stats Row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                 <RankBadge tier={rankTier} size="xs" />
-                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: rankTier.color }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: rankTier.color }}>
                   {rankTier.name}
                 </span>
               </div>
 
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>&bull;</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>&bull;</span>
 
               <span
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.76rem',
                   color: '#f97316',
                   fontWeight: 700,
                 }}
               >
-                <Flame size={14} color="#f97316" />
+                <Flame size={13} color="#f97316" />
                 {currentStreak}d Streak
               </span>
 
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>&bull;</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>&bull;</span>
 
               <span
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.76rem',
                   color: '#10b981',
                   fontWeight: 600,
                 }}
               >
-                <Award size={13} color="#10b981" />
+                <Award size={12} color="#10b981" />
                 {totalRewardsEarned} Rewards
               </span>
             </div>
@@ -232,8 +232,8 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           style={{
             background: 'rgba(15, 23, 42, 0.6)',
             border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-            borderRadius: '16px',
-            padding: '16px 20px',
+            borderRadius: '14px',
+            padding: '12px 16px',
           }}
         >
           {/* Top row: Points & Movement */}

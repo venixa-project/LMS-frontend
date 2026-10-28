@@ -20,7 +20,7 @@ import {
   mockGradingTasks
 } from '../data/mockData';
 
-const STORAGE_KEY = 'venilearn_admin_planner_activities_v2';
+const STORAGE_KEY = 'venilearn_admin_planner_activities_v3';
 
 // Helper to format Date to YYYY-MM-DD in local time
 export const formatLocalDate = (d: Date = new Date()): string => {
@@ -186,6 +186,62 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       relatedLmsUrl: '/notifications',
       createdAt: '2026-10-18T16:00:00Z',
       updatedAt: '2026-10-18T16:00:00Z'
+    },
+    {
+      id: 'act-adm-009',
+      title: 'Curriculum Evaluation & Accreditation Audit',
+      description: 'Review curriculum syllabus compliance with Faculty Council and Department Heads.',
+      type: 'meeting',
+      date: '2026-10-26',
+      startTime: '10:00',
+      endTime: '11:30',
+      priority: 'high',
+      status: 'pending',
+      reminder: '30_min',
+      recurrence: 'none',
+      source: 'manual',
+      relatedLmsType: 'department',
+      relatedLmsTitle: 'Academic Departments',
+      relatedLmsUrl: '/departments',
+      createdAt: '2026-10-20T10:00:00Z',
+      updatedAt: '2026-10-20T10:00:00Z'
+    },
+    {
+      id: 'act-adm-010',
+      title: 'React & Node.js Capstone Submission Deadline',
+      description: 'Final repository review, commit audit, and student submission portal closing.',
+      type: 'deadline',
+      date: '2026-10-26',
+      startTime: '16:00',
+      priority: 'high',
+      status: 'pending',
+      reminder: '1_hour',
+      recurrence: 'none',
+      source: 'manual',
+      relatedLmsType: 'assessment',
+      relatedLmsTitle: 'React Capstone Project',
+      relatedLmsUrl: '/assessments',
+      createdAt: '2026-10-20T11:00:00Z',
+      updatedAt: '2026-10-20T11:00:00Z'
+    },
+    {
+      id: 'act-adm-011',
+      title: 'Review Batch ENG-Q4 Attendance Exceptions',
+      description: 'Audit medical certificates and verify student excused absence applications.',
+      type: 'task',
+      date: '2026-10-26',
+      startTime: '14:00',
+      endTime: '15:00',
+      priority: 'medium',
+      status: 'pending',
+      reminder: '30_min',
+      recurrence: 'none',
+      source: 'manual',
+      relatedLmsType: 'attendance',
+      relatedLmsTitle: 'Student Attendance Ledger',
+      relatedLmsUrl: '/attendance',
+      createdAt: '2026-10-21T09:00:00Z',
+      updatedAt: '2026-10-21T09:00:00Z'
     }
   ];
 };

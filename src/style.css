@@ -1315,6 +1315,20 @@ h6 {
   }
 
   /* Planner Main Layout & Responsive Week/Month Grids */
+  .planner-calendar-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 290px;
+    gap: 16px;
+    align-items: start;
+    width: 100%;
+  }
+
+  @media (max-width: 1080px) {
+    .planner-calendar-layout {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
   .planner-main-grid {
     display: grid;
     gap: 20px;
@@ -1805,4 +1819,37 @@ h6 {
   .slider-nav-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
+  }
+
+  /* Rank Progress Roadmap Scrollbar & Accessibility */
+  .rank-roadmap-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(129, 140, 248, 0.35) transparent;
+  }
+
+  .rank-roadmap-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .rank-roadmap-scroll::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 999px;
+  }
+
+  .rank-roadmap-scroll::-webkit-scrollbar-thumb {
+    background: rgba(129, 140, 248, 0.35);
+    border-radius: 999px;
+  }
+
+  .rank-roadmap-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(129, 140, 248, 0.6);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rank-roadmap-card,
+    .rank-roadmap-progress-fill,
+    .rank-roadmap-scroll * {
+      animation: none !important;
+      transition: none !important;
+    }
   }
