@@ -47,7 +47,7 @@ export const InstitutionKPIGrid: React.FC<Props> = ({
           <Users size={22} color="var(--primary)" />
         </div>
         <p className="text-muted text-xs" style={{ margin: 0 }}>
-          Unique student accounts
+          Student accounts
         </p>
       </Link>
 

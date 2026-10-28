@@ -112,7 +112,7 @@ export const LearningPathsPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // State: Modals & Drawers
-  const [selectedPath, setSelectedPath] = useState<LearningPath | null>(paths[0] || null);
+  const [selectedPath, setSelectedPath] = useState<LearningPath | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingPathId, setEditingPathId] = useState<string | null>(null);
@@ -769,14 +769,6 @@ export const LearningPathsPage: React.FC = () => {
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Route size={14} /> Multi-Tenant Learning Paths
-            </span>
-            <span className="text-muted text-xs">
-              Role: <strong style={{ color: 'var(--text-main)' }}>{activeRole.replace('_', ' ').toUpperCase()}</strong>
-            </span>
-          </div>
           <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
             Learning Paths
           </h1>
@@ -1083,10 +1075,8 @@ export const LearningPathsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Main Content Area: Cards/List + Detail Panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedPath ? '1fr 420px' : '1fr', gap: '24px', alignItems: 'start' }}>
-        {/* Left Column: Learning Paths Collection */}
-        <div>
+      {/* Main Content Area: Cards/List */}
+      <div style={{ marginBottom: '32px' }}>
           {filteredPaths.length === 0 ? (
             <div
               className="card"
@@ -1122,7 +1112,10 @@ export const LearningPathsPage: React.FC = () => {
                   <div
                     key={p.id}
                     className="card"
-                    onClick={() => setSelectedPath(p)}
+                    onClick={() => {
+                      setSelectedPath(p);
+                      setIsDetailDrawerOpen(true);
+                    }}
                     style={{
                       padding: '18px',
                       display: 'flex',
@@ -1368,7 +1361,10 @@ export const LearningPathsPage: React.FC = () => {
                       return (
                         <tr
                           key={p.id}
-                          onClick={() => setSelectedPath(p)}
+                          onClick={() => {
+                            setSelectedPath(p);
+                            setIsDetailDrawerOpen(true);
+                          }}
                           style={{
                             borderBottom: '1px solid var(--border-subtle)',
                             background: isSelected ? 'var(--bg-card-hover)' : 'transparent',
@@ -1443,23 +1439,56 @@ export const LearningPathsPage: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+      </div>
 
-        {/* Right Column: Selected Path Detailed Inspector */}
-        {selectedPath && (
+      {/* Slide-Over Drawer: Selected Path Detailed Inspector */}
+      {isDetailDrawerOpen && selectedPath && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setIsDetailDrawerOpen(false);
+            setSelectedPath(null);
+          }}
+          style={{
+            zIndex: 1050,
+            justifyContent: 'flex-end',
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(3px)',
+            position: 'fixed',
+            inset: 0,
+            display: 'flex',
+          }}
+        >
           <div
-            className="card"
+            className="drawer-panel"
+            onClick={(e) => e.stopPropagation()}
             style={{
-              padding: '20px',
-              position: 'sticky',
-              top: '80px',
-              borderRadius: 'var(--radius-lg)',
+              width: '540px',
+              maxWidth: '92vw',
+              height: '100vh',
+              background: 'var(--bg-card)',
+              boxShadow: '-8px 0 30px rgba(0, 0, 0, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'slideInRight 0.25s ease-out',
+              overflow: 'hidden',
+              borderLeft: '1px solid var(--border-subtle)',
             }}
           >
-            {/* Detail Header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '14px', gap: '10px' }}>
+            {/* Drawer Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: '12px',
+                background: 'var(--bg-card)',
+              }}
+            >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   {renderInstitutionBadge(selectedPath.institutionType)}
                   {renderStatusBadge(selectedPath.status)}
                 </div>
@@ -1469,241 +1498,268 @@ export const LearningPathsPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedPath(null)}
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setIsDetailDrawerOpen(false);
+                  setSelectedPath(null);
+                }}
                 style={{
-                  background: 'none',
-                  border: 'none',
                   color: 'var(--text-muted)',
                   cursor: 'pointer',
-                  padding: '4px',
+                  padding: '6px',
+                  borderRadius: 'var(--radius-md)',
                 }}
                 title="Close Inspector"
+                aria-label="Close Inspector"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Description & Objective */}
-            <p className="text-secondary text-xs" style={{ lineHeight: 1.5, marginBottom: '16px' }}>
-              {selectedPath.description || selectedPath.objective || 'No description provided.'}
-            </p>
-
-            {/* Path Key Specifications */}
+            {/* Scrollable Drawer Body */}
             <div
               style={{
-                background: 'var(--bg-input)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px',
-                marginBottom: '16px',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '10px',
-                fontSize: '0.8rem',
-                border: '1px solid var(--border-subtle)',
+                padding: '20px 24px',
+                overflowY: 'auto',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
               }}
             >
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Target Audience</span>
-                <strong style={{ color: 'var(--text-main)' }}>{selectedPath.targetGroup || selectedPath.audience || 'All Eligible'}</strong>
-              </div>
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Difficulty Level</span>
-                <strong style={{ color: 'var(--text-main)' }}>{selectedPath.difficulty || 'All Levels'}</strong>
-              </div>
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Course Sequence</span>
-                <strong style={{ color: 'var(--text-main)' }}>
-                  {selectedPath.enforceSequence !== false ? 'Strict Sequence' : 'Flexible Order'}
-                </strong>
-              </div>
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Passing Requirement</span>
-                <strong style={{ color: 'var(--text-main)' }}>
-                  {selectedPath.completionThreshold || 80}% Completion
-                </strong>
-              </div>
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Creator / Author</span>
-                <strong style={{ color: 'var(--text-main)' }}>{selectedPath.creatorName || 'Faculty Lead'}</strong>
-              </div>
-              <div>
-                <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Assigned Learners</span>
-                <strong style={{ color: 'var(--text-main)' }}>
-                  {selectedPath.learnerCount !== undefined && selectedPath.learnerCount > 0
-                    ? `${selectedPath.learnerCount} Learners`
-                    : 'Open / Unassigned'}
-                </strong>
-              </div>
-            </div>
+              {/* Description & Objective */}
+              <p className="text-secondary text-xs" style={{ lineHeight: 1.5, margin: 0 }}>
+                {selectedPath.description || selectedPath.objective || 'No description provided.'}
+              </p>
 
-            {/* Course Sequence Timeline */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Layers size={14} color="var(--primary)" />
-                  Ordered Curriculum Sequence ({selectedPath.courses.length})
-                </h4>
-                {selectedPath.enforceSequence !== false ? (
-                  <span className="badge badge-primary" style={{ fontSize: '0.65rem' }}>Sequential</span>
-                ) : (
-                  <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>Flexible</span>
-                )}
+              {/* Path Key Specifications */}
+              <div
+                style={{
+                  background: 'var(--bg-input)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '12px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '10px',
+                  fontSize: '0.8rem',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Target Audience</span>
+                  <strong style={{ color: 'var(--text-main)' }}>{selectedPath.targetGroup || selectedPath.audience || 'All Eligible'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Difficulty Level</span>
+                  <strong style={{ color: 'var(--text-main)' }}>{selectedPath.difficulty || 'All Levels'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Course Sequence</span>
+                  <strong style={{ color: 'var(--text-main)' }}>
+                    {selectedPath.enforceSequence !== false ? 'Strict Sequence' : 'Flexible Order'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Passing Requirement</span>
+                  <strong style={{ color: 'var(--text-main)' }}>
+                    {selectedPath.completionThreshold || 80}% Completion
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Creator / Author</span>
+                  <strong style={{ color: 'var(--text-main)' }}>{selectedPath.creatorName || 'Faculty Lead'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem', display: 'block' }}>Assigned Learners</span>
+                  <strong style={{ color: 'var(--text-main)' }}>
+                    {selectedPath.learnerCount !== undefined && selectedPath.learnerCount > 0
+                      ? `${selectedPath.learnerCount} Learners`
+                      : 'Open / Unassigned'}
+                  </strong>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {selectedPath.courses.map((ci, idx) => {
-                  const crs = courses.find((c) => c.id === ci.courseId);
-                  const title = crs?.title || ci.title || `Course Module ${idx + 1}`;
-                  const category = crs?.category || 'Curriculum';
-                  const hrs = crs?.durationHours || (crs?.estimatedDuration ? Math.round(crs.estimatedDuration / 60) : null);
-                  const isDraft = crs?.status === 'draft';
-                  const isArchived = crs?.status === 'archived';
+              {/* Course Sequence Timeline */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={14} color="var(--primary)" />
+                    Ordered Curriculum Sequence ({selectedPath.courses.length})
+                  </h4>
+                  {selectedPath.enforceSequence !== false ? (
+                    <span className="badge badge-primary" style={{ fontSize: '0.65rem' }}>Sequential</span>
+                  ) : (
+                    <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>Flexible</span>
+                  )}
+                </div>
 
-                  // Student Progress simulation
-                  const isStudentCompleted = isLearner && (idx === 0 || ci.courseId === 'crs-004');
-                  const isStudentInProgress = isLearner && idx === 1 && !isStudentCompleted;
-                  const isStudentLocked = isLearner && idx > 1 && selectedPath.enforceSequence !== false;
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {selectedPath.courses.map((ci, idx) => {
+                    const crs = courses.find((c) => c.id === ci.courseId);
+                    const title = crs?.title || ci.title || `Course Module ${idx + 1}`;
+                    const category = crs?.category || 'Curriculum';
+                    const hrs = crs?.durationHours || (crs?.estimatedDuration ? Math.round(crs.estimatedDuration / 60) : null);
+                    const isDraft = crs?.status === 'draft';
+                    const isArchived = crs?.status === 'archived';
 
-                  return (
-                    <div
-                      key={ci.courseId || idx}
-                      style={{
-                        padding: '12px',
-                        background: 'var(--bg-input)',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--border-subtle)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '10px',
-                      }}
-                    >
+                    // Student Progress simulation
+                    const isStudentCompleted = isLearner && (idx === 0 || ci.courseId === 'crs-004');
+                    const isStudentInProgress = isLearner && idx === 1 && !isStudentCompleted;
+                    const isStudentLocked = isLearner && idx > 1 && selectedPath.enforceSequence !== false;
+
+                    return (
                       <div
+                        key={ci.courseId || idx}
                         style={{
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '50%',
-                          background: isStudentCompleted
-                            ? 'var(--success)'
-                            : isStudentLocked
-                            ? 'var(--border-light)'
-                            : 'var(--primary)',
-                          color: '#fff',
+                          padding: '12px',
+                          background: 'var(--bg-input)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--border-subtle)',
                           display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          flexShrink: 0,
-                          marginTop: '2px',
+                          alignItems: 'flex-start',
+                          gap: '10px',
                         }}
                       >
-                        {isStudentCompleted ? <Check size={14} /> : isStudentLocked ? <Lock size={12} /> : idx + 1}
-                      </div>
-
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              fontSize: '0.85rem',
-                              color: isStudentLocked ? 'var(--text-muted)' : 'var(--text-main)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {title}
-                          </span>
-                          {hrs && (
-                            <span className="text-muted text-xs" style={{ fontSize: '0.7rem', flexShrink: 0 }}>
-                              {hrs} hrs
-                            </span>
-                          )}
+                        <div
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: '50%',
+                            background: isStudentCompleted
+                              ? 'var(--success)'
+                              : isStudentLocked
+                              ? 'var(--border-light)'
+                              : 'var(--primary)',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            flexShrink: 0,
+                            marginTop: '2px',
+                          }}
+                        >
+                          {isStudentCompleted ? <Check size={14} /> : isStudentLocked ? <Lock size={12} /> : idx + 1}
                         </div>
 
-                        <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
-                          <span>{category}</span>
-                          {ci.prerequisiteCourseIds && ci.prerequisiteCourseIds.length > 0 && (
-                            <span style={{ color: 'var(--accent-purple)' }}>
-                              &bull; Prerequisite: Step {idx}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '0.85rem',
+                                color: isStudentLocked ? 'var(--text-muted)' : 'var(--text-main)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {title}
                             </span>
-                          )}
-                        </div>
-
-                        {/* Warnings if course is unavailable */}
-                        {isDraft && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--warning)', fontSize: '0.7rem', marginTop: '4px' }}>
-                            <AlertTriangle size={11} /> Course is in Draft (unpublished)
-                          </div>
-                        )}
-                        {isArchived && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--danger)', fontSize: '0.7rem', marginTop: '4px' }}>
-                            <AlertTriangle size={11} /> Course is Archived
-                          </div>
-                        )}
-
-                        {/* Learner Interaction Controls */}
-                        {isLearner && (
-                          <div style={{ marginTop: '6px' }}>
-                            {isStudentCompleted ? (
-                              <span className="badge badge-success" style={{ fontSize: '0.7rem', gap: '4px' }}>
-                                <CheckCircle size={10} /> Completed
-                              </span>
-                            ) : isStudentInProgress ? (
-                              <Link
-                                to={`/course-player/${ci.courseId}`}
-                                className="btn btn-primary btn-xs"
-                                style={{ gap: '4px', fontSize: '0.7rem' }}
-                              >
-                                <Play size={10} /> Continue Learning (65%)
-                              </Link>
-                            ) : (
-                              <span className="badge badge-draft" style={{ fontSize: '0.7rem', gap: '4px' }}>
-                                <Lock size={10} /> Complete Previous Step to Unlock
+                            {hrs && (
+                              <span className="text-muted text-xs" style={{ fontSize: '0.7rem', flexShrink: 0 }}>
+                                {hrs} hrs
                               </span>
                             )}
                           </div>
-                        )}
+
+                          <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                            <span>{category}</span>
+                            {ci.prerequisiteCourseIds && ci.prerequisiteCourseIds.length > 0 && (
+                              <span style={{ color: 'var(--accent-purple)' }}>
+                                &bull; Prerequisite: Step {idx}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Warnings if course is unavailable */}
+                          {isDraft && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--warning)', fontSize: '0.7rem', marginTop: '4px' }}>
+                              <AlertTriangle size={11} /> Course is in Draft (unpublished)
+                            </div>
+                          )}
+                          {isArchived && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--danger)', fontSize: '0.7rem', marginTop: '4px' }}>
+                              <AlertTriangle size={11} /> Course is Archived
+                            </div>
+                          )}
+
+                          {/* Learner Interaction Controls */}
+                          {isLearner && (
+                            <div style={{ marginTop: '6px' }}>
+                              {isStudentCompleted ? (
+                                <span className="badge badge-success" style={{ fontSize: '0.7rem', gap: '4px' }}>
+                                  <CheckCircle size={10} /> Completed
+                                </span>
+                              ) : isStudentInProgress ? (
+                                <Link
+                                  to={`/course-player/${ci.courseId}`}
+                                  className="btn btn-primary btn-xs"
+                                  style={{ gap: '4px', fontSize: '0.7rem' }}
+                                >
+                                  <Play size={10} /> Continue Learning (65%)
+                                </Link>
+                              ) : (
+                                <span className="badge badge-draft" style={{ fontSize: '0.7rem', gap: '4px' }}>
+                                  <Lock size={10} /> Complete Previous Step to Unlock
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Certificate Indicator */}
+              {selectedPath.certificateEligible !== false && (
+                <div
+                  style={{
+                    padding: '12px',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid var(--success-border)',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <Award size={20} color="var(--success)" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--success)' }}>
+                      Verifiable Milestone Credential
+                    </div>
+                    <div className="text-muted text-xs" style={{ fontSize: '0.7rem' }}>
+                      {selectedPath.certificateTitle || 'Certificate awarded automatically upon successful path completion.'}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Certificate Indicator */}
-            {selectedPath.certificateEligible !== false && (
+            {/* Drawer Footer Actions */}
+            {canManagePath(selectedPath) && (
               <div
                 style={{
-                  padding: '12px',
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  border: '1px solid var(--success-border)',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '16px',
+                  padding: '16px 24px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-card)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
+                  flexWrap: 'wrap',
                 }}
               >
-                <Award size={20} color="var(--success)" style={{ flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--success)' }}>
-                    Verifiable Milestone Credential
-                  </div>
-                  <div className="text-muted text-xs" style={{ fontSize: '0.7rem' }}>
-                    {selectedPath.certificateTitle || 'Certificate awarded automatically upon successful path completion.'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Admin / Creator Action Controls */}
-            {canManagePath(selectedPath) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
-                  onClick={() => handleOpenEditBuilder(selectedPath)}
+                  onClick={() => {
+                    handleOpenEditBuilder(selectedPath);
+                    setIsDetailDrawerOpen(false);
+                  }}
                   style={{ gap: '6px', flex: 1 }}
                 >
                   <Edit3 size={14} /> Edit Path
@@ -1741,8 +1797,8 @@ export const LearningPathsPage: React.FC = () => {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* LEARNING PATH BUILDER MODAL (Create / Edit 5-Step Flow) */}

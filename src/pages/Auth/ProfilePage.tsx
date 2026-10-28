@@ -20,6 +20,9 @@ export const ProfilePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences' | 'signature'>('general');
   const [avatarSuccess, setAvatarSuccess] = useState(false);
 
+  // Role check: Only students/learners have animated scholar personas & avatar gallery
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+
   // Form states
   const [firstName, setFirstName] = useState(user?.firstName || 'Sarah');
   const [lastName, setLastName] = useState(user?.lastName || 'Chen');
@@ -202,7 +205,7 @@ export const ProfilePage: React.FC = () => {
               <div style={{ marginBottom: '16px', position: 'relative' }}>
                 <AnimatedAvatar
                   size={96}
-                  isCurrentUser={true}
+                  isCurrentUser={isStudent}
                   interactive={true}
                   name={`${firstName} ${lastName}`}
                 />
@@ -210,24 +213,26 @@ export const ProfilePage: React.FC = () => {
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '2px', color: '#fff' }}>
                 {firstName} {lastName}
               </h3>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '3px 12px',
-                borderRadius: '999px',
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.35)',
-                color: '#38bdf8',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                marginTop: '4px',
-                marginBottom: '10px'
-              }}>
-                <Sparkles size={12} color="#38bdf8" />
-                <span>{avatarMeta.name} &bull; {avatarMeta.title}</span>
-              </div>
-              <p className="text-muted text-xs" style={{ marginBottom: '12px' }}>{user?.email}</p>
+              {isStudent && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 12px',
+                  borderRadius: '999px',
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  color: '#38bdf8',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  marginTop: '4px',
+                  marginBottom: '10px'
+                }}>
+                  <Sparkles size={12} color="#38bdf8" />
+                  <span>{avatarMeta.name} &bull; {avatarMeta.title}</span>
+                </div>
+              )}
+              <p className="text-muted text-xs" style={{ marginBottom: '12px', marginTop: isStudent ? '0' : '6px' }}>{user?.email}</p>
               <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
                 {user?.activeRole.replace('_', ' ')}
               </span>
@@ -412,8 +417,9 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Animated Avatar Selector Gallery */}
-          <div className="card" style={{ marginTop: '24px' }}>
+          {/* Animated Avatar Selector Gallery - Only displayed in Student Portal */}
+          {isStudent && (
+            <div className="card" style={{ marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -554,8 +560,9 @@ export const ProfilePage: React.FC = () => {
               })}
             </div>
           </div>
-        </>
-      )}
+        )}
+      </>
+    )}
 
       {activeTab === 'security' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
