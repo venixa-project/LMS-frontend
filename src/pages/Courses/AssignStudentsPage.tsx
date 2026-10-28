@@ -49,21 +49,80 @@ export const AssignStudentsPage: React.FC = () => {
   const targetCourseId = id || courses[0]?.id;
   const course = getCourseById(targetCourseId || '') || courses[0];
 
-  // Faculty access check
+  // Faculty access check: course ownership & appointment
   const isTrainerAssignedCourse = useMemo(() => {
     if (!course || !isFaculty) return true;
     const trainerId = user?.id || '';
-    const assignedIds = course.instructors || [];
+    if (course.createdBy === trainerId) return true;
+    if (course.instructors && course.instructors.includes(trainerId)) return true;
     const isTrainerWilson = trainerId === 'u-004' || user?.email === 'trainer@lms.demo';
-    const wilsonCourses = ['crs-001', 'crs-002', 'crs-004'];
-    if (isTrainerWilson && wilsonCourses.includes(course.id)) return true;
-    return assignedIds.includes(trainerId) || course.createdBy === trainerId;
+    const isTrainerSharma = trainerId === 'u-003' || user?.email === 'priya.sharma@lms.demo';
+    const isTrainerRodriguez = trainerId === 'u-005' || user?.email === 'emily.rodriguez@lms.demo';
+    if (isTrainerWilson && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(course.id)) return true;
+    if (isTrainerSharma && ['crs-003'].includes(course.id)) return true;
+    if (isTrainerRodriguez && ['crs-005'].includes(course.id)) return true;
+    return false;
   }, [course, isFaculty, user]);
 
-  // All students from people store
+  // All students from people store (institution-wide)
   const allStudents = useMemo(() => {
     return getStudents();
   }, [getStudents]);
+
+  // 1. Authorized Cohorts for current user
+  const userAuthorizedCohorts = useMemo(() => {
+    if (!isFaculty) return cohorts;
+    const currentUserId = user?.id || '';
+    const isTrainerWilson = currentUserId === 'u-004' || user?.email === 'trainer@lms.demo';
+    const isTrainerSharma = currentUserId === 'u-003' || user?.email === 'priya.sharma@lms.demo';
+    const isTrainerRodriguez = currentUserId === 'u-005' || user?.email === 'emily.rodriguez@lms.demo';
+
+    return cohorts.filter((coh) => {
+      if (coh.instructors && coh.instructors.includes(currentUserId)) return true;
+      if (coh.instructorIds && coh.instructorIds.includes(currentUserId)) return true;
+      if ((coh as unknown as { instructorId?: string }).instructorId === currentUserId) return true;
+
+      if (isTrainerWilson && (coh.id === 'coh-001' || coh.id === 'coh-002')) return true;
+      if (isTrainerSharma && (coh.id === 'coh-003' || coh.id === 'coh-005')) return true;
+      if (isTrainerRodriguez && coh.id === 'coh-004') return true;
+
+      if (course && coh.courseId === course.id) {
+        if (course.createdBy === currentUserId) return true;
+        if (course.instructors && course.instructors.includes(currentUserId)) return true;
+      }
+
+      return false;
+    });
+  }, [cohorts, isFaculty, user, course]);
+
+  // 2. Cohort restrictions linked to the target course
+  // "If a course is linked to a specific cohort or class, restrict the eligible student list accordingly."
+  const effectiveCohorts = useMemo(() => {
+    if (!isFaculty) return cohorts;
+    const linkedToCourse = userAuthorizedCohorts.filter((c) => c.courseId === course?.id);
+    if (linkedToCourse.length > 0) {
+      return linkedToCourse;
+    }
+    return userAuthorizedCohorts;
+  }, [isFaculty, cohorts, userAuthorizedCohorts, course]);
+
+  // 3. Authorized Student IDs for trainer (trainers can ONLY access students in their assigned cohorts)
+  const authorizedStudentIds = useMemo(() => {
+    if (!isFaculty) return null; // Admin has institution-wide access
+    const setOfIds = new Set<string>();
+    effectiveCohorts.forEach((coh) => {
+      coh.studentIds?.forEach((stId) => setOfIds.add(stId));
+    });
+    return setOfIds;
+  }, [isFaculty, effectiveCohorts]);
+
+  // 4. Base student pool - strictly restricted for trainers!
+  const baseStudents = useMemo(() => {
+    if (!isFaculty || authorizedStudentIds === null) {
+      return allStudents;
+    }
+    return allStudents.filter((st) => authorizedStudentIds.has(st.id));
+  }, [allStudents, isFaculty, authorizedStudentIds]);
 
   // Filter & Search states
   const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
@@ -104,15 +163,27 @@ export const AssignStudentsPage: React.FC = () => {
     );
   }, [course, enrollments]);
 
-  // Cohort options filtered by department (if department is selected)
+  // Cohort options filtered by department (and restricted to trainer's authorized cohorts if faculty)
   const availableCohorts = useMemo(() => {
-    if (selectedDeptId === 'all') return cohorts;
-    return cohorts.filter((c) => c.departmentId === selectedDeptId);
-  }, [cohorts, selectedDeptId]);
+    const pool = isFaculty ? effectiveCohorts : cohorts;
+    if (selectedDeptId === 'all') return pool;
+    return pool.filter((c) => c.departmentId === selectedDeptId);
+  }, [isFaculty, effectiveCohorts, cohorts, selectedDeptId]);
+
+  // Filtered departments for trainers
+  const availableDepartments = useMemo(() => {
+    if (!isFaculty) return mockDepartments;
+    const deptIds = new Set<string>();
+    if (user?.departmentId) deptIds.add(user.departmentId);
+    effectiveCohorts.forEach((c) => {
+      if (c.departmentId) deptIds.add(c.departmentId);
+    });
+    return mockDepartments.filter((d) => deptIds.has(d.id));
+  }, [isFaculty, effectiveCohorts, user]);
 
   // Filtered students list
   const filteredStudents = useMemo(() => {
-    return allStudents.filter((st) => {
+    return baseStudents.filter((st) => {
       // 1. Department Filter
       if (selectedDeptId !== 'all') {
         if (st.departmentId !== selectedDeptId) {
@@ -146,7 +217,7 @@ export const AssignStudentsPage: React.FC = () => {
 
       return true;
     });
-  }, [allStudents, selectedDeptId, selectedCohortId, searchQuery, cohorts]);
+  }, [baseStudents, selectedDeptId, selectedCohortId, searchQuery, cohorts]);
 
   // Eligible students in currently filtered view
   const eligibleStudentsInView = useMemo(() => {
@@ -158,7 +229,7 @@ export const AssignStudentsPage: React.FC = () => {
   // Bulk selection handlers
   const handleToggleStudent = (studentId: string) => {
     if (enrolledStudentIdsForCourse.has(studentId)) return;
-    const targetStudent = allStudents.find((s) => s.id === studentId);
+    const targetStudent = baseStudents.find((s) => s.id === studentId);
     if (targetStudent?.status !== 'active') return;
 
     setSelectedStudentIds((prev) => {
@@ -368,6 +439,49 @@ export const AssignStudentsPage: React.FC = () => {
             </span>
           </div>
         </div>
+
+        {/* Access Scope Banner */}
+        {isFaculty ? (
+          <div
+            style={{
+              marginTop: '1.25rem',
+              padding: '10px 14px',
+              background: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              color: 'var(--primary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+            <span>
+              <strong>Authorized Cohort Assignment Scope:</strong> You can only view and assign students from your authorized cohorts/batches ({effectiveCohorts.map((c) => `${c.code}`).join(', ') || 'No batches assigned'}). Cross-cohort and institution-wide rosters are restricted.
+            </span>
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: '1.25rem',
+              padding: '10px 14px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: '8px',
+              fontSize: '0.8rem',
+              color: 'var(--success)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+            <span>
+              <strong>Institution Administrator Scope:</strong> Full institution-wide enrollment access active. You can assign eligible students across all departments and cohorts.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Assignment Success Notification */}
@@ -427,7 +541,9 @@ export const AssignStudentsPage: React.FC = () => {
                 <Users size={18} color="var(--primary)" /> Student Selection & Targeting
               </h2>
               <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Filter students by academic department or batch cohort, search by name, ID, or email, and enroll in bulk.
+                {isFaculty
+                  ? 'Filter students from your authorized cohort batches and enroll them into this course roster.'
+                  : 'Filter students by academic department or batch cohort, search by name, ID, or email, and enroll in bulk.'}
               </p>
             </div>
 
@@ -472,12 +588,16 @@ export const AssignStudentsPage: React.FC = () => {
                 }}
                 style={{ width: '100%', fontSize: '0.825rem' }}
               >
-                <option value="all">All Departments ({allStudents.length} Students)</option>
-                {mockDepartments.map((dept) => {
-                  const count = allStudents.filter((s) => s.departmentId === dept.id).length;
+                <option value="all">
+                  {isFaculty
+                    ? `All Authorized Departments (${baseStudents.length} Students)`
+                    : `All Departments (${allStudents.length} Students)`}
+                </option>
+                {availableDepartments.map((dept) => {
+                  const count = baseStudents.filter((s) => s.departmentId === dept.id).length;
                   return (
                     <option key={dept.id} value={dept.id}>
-                      {dept.name} ({count} students)
+                      {dept.name} ({count} student{count === 1 ? '' : 's'})
                     </option>
                   );
                 })}
@@ -495,7 +615,11 @@ export const AssignStudentsPage: React.FC = () => {
                 onChange={(e) => setSelectedCohortId(e.target.value)}
                 style={{ width: '100%', fontSize: '0.825rem' }}
               >
-                <option value="all">All Cohorts / Batches</option>
+                <option value="all">
+                  {isFaculty
+                    ? `All Authorized Cohorts (${availableCohorts.length})`
+                    : 'All Cohorts / Batches'}
+                </option>
                 {availableCohorts.map((coh) => (
                   <option key={coh.id} value={coh.id}>
                     {coh.name} ({coh.code})
@@ -571,7 +695,9 @@ export const AssignStudentsPage: React.FC = () => {
               Candidate Students ({filteredStudents.length})
             </span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Showing {filteredStudents.length} of {allStudents.length} total students
+              {isFaculty
+                ? `Showing ${filteredStudents.length} of ${baseStudents.length} authorized students`
+                : `Showing ${filteredStudents.length} of ${allStudents.length} total students`}
             </span>
           </div>
 
@@ -635,14 +761,42 @@ export const AssignStudentsPage: React.FC = () => {
             <tbody>
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <Users size={36} color="var(--border-color)" style={{ marginBottom: '0.75rem' }} />
-                    <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      No students found matching your criteria.
+                  <td colSpan={7} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <div
+                      style={{
+                        width: '54px',
+                        height: '54px',
+                        borderRadius: '50%',
+                        background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
+                        color: 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 12px',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      <Users size={26} />
                     </div>
-                    <p style={{ fontSize: '0.78rem', marginTop: '0.25rem' }}>
-                      Try broadening your search keywords or resetting the department/cohort filters.
-                    </p>
+                    {isFaculty && baseStudents.length === 0 ? (
+                      <>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                          No Students in Your Authorized Cohorts
+                        </div>
+                        <p style={{ fontSize: '0.825rem', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
+                          You do not have any students assigned to your authorized cohorts or classes for this course. Contact your Institution Administrator to assign students to your batches.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                          No students found matching your criteria.
+                        </div>
+                        <p style={{ fontSize: '0.825rem', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
+                          Try broadening your search keywords or resetting the department and cohort filters.
+                        </p>
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : (

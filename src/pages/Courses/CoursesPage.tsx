@@ -21,6 +21,7 @@ export const CoursesPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isAuth = !!user;
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const isOrgAdmin =
     user?.activeRole === 'org_admin' ||
@@ -28,7 +29,7 @@ export const CoursesPage: React.FC = () => {
     (user?.activeRole as string) === 'industrial_admin';
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
-  const isAdmin = isPlatformAdmin || isOrgAdmin || (!isFaculty && !isLearner);
+  const isAdmin = isPlatformAdmin || isOrgAdmin || (isAuth && !isFaculty && !isLearner);
   const isCatalog = location.pathname === '/catalog';
   const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
 
@@ -233,13 +234,61 @@ export const CoursesPage: React.FC = () => {
 
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
     const matchesFaculty = !isFaculty || (
-      c.instructors?.includes('u-004') ||
-      c.instructors?.includes(user?.id || '') ||
+      c.status === 'published' ||
       c.createdBy === user?.id ||
-      c.id === 'crs-001' || c.id === 'crs-002' || c.id === 'crs-003' || c.id === 'crs-004'
+      c.instructors?.includes(user?.id || '') ||
+      (user?.id === 'u-004' && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(c.id)) ||
+      (user?.id === 'u-003' && ['crs-003'].includes(c.id)) ||
+      (user?.id === 'u-005' && ['crs-005'].includes(c.id))
     );
     return matchesSearch && matchesStatus && matchesCategory && matchesFaculty;
   });
+
+  const getCoursePermissions = (course: Course) => {
+    if (isAdmin) {
+      return {
+        canEdit: true,
+        canManageContent: true,
+        canAssignStudents: true,
+        canViewEnrollments: true,
+        canShare: true,
+        canChangeStatus: true,
+        canChangeFaculty: true,
+        canDelete: true,
+        isOwner: true,
+        isAuthorizedTrainer: true,
+      };
+    }
+
+    const userId = user?.id || '';
+    const isCreator = Boolean(userId && course.createdBy === userId);
+    const isAssignedInstructor = Boolean(userId && course.instructors && course.instructors.includes(userId));
+
+    const isWilson = userId === 'u-004' || user?.email === 'trainer@lms.demo';
+    const isSharma = userId === 'u-003' || user?.email === 'priya.sharma@lms.demo';
+    const isRodriguez = userId === 'u-005' || user?.email === 'emily.rodriguez@lms.demo';
+
+    const isDemoOwner =
+      (isWilson && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(course.id)) ||
+      (isSharma && ['crs-003'].includes(course.id)) ||
+      (isRodriguez && ['crs-005'].includes(course.id));
+
+    const isOwner = isCreator || (isAssignedInstructor && (!course.createdBy || course.instructors?.[0] === userId)) || isDemoOwner;
+    const isAuthorizedTrainer = isCreator || isAssignedInstructor || isDemoOwner;
+
+    return {
+      canEdit: isAuthorizedTrainer,
+      canManageContent: isAuthorizedTrainer,
+      canAssignStudents: isAuthorizedTrainer,
+      canViewEnrollments: isAuthorizedTrainer,
+      canShare: true,
+      canChangeStatus: false,
+      canChangeFaculty: false,
+      canDelete: isOwner,
+      isOwner,
+      isAuthorizedTrainer,
+    };
+  };
 
   const availableCategories = useMemo(() => {
     const cats = new Set<string>();
@@ -622,6 +671,7 @@ export const CoursesPage: React.FC = () => {
             const courseDeptName = mockDepartments.find((d) => d.id === c.departmentId)?.name || c.category;
             const totalLessons = c.modules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
             const isManageMenuOpen = activeManageMenuCourseId === c.id;
+            const coursePerms = getCoursePermissions(c);
 
             return (
               <div
@@ -633,7 +683,8 @@ export const CoursesPage: React.FC = () => {
                   justifyContent: 'space-between',
                   position: 'relative',
                   overflow: 'visible',
-                  minHeight: '485px'
+                  minHeight: '485px',
+                  zIndex: isManageMenuOpen ? 60 : 1
                 }}
               >
                 <div>
@@ -909,48 +960,24 @@ export const CoursesPage: React.FC = () => {
                   </div>
 
                   {/* 8. Reduced & Clean Action Buttons */}
+                  {/* 8. Role-Based Action Buttons */}
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {isCatalog ? (
-                      enrolledCourseIds.includes(c.id) ? (
-                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                          <Link
-                            to={`/course-player/${c.id}`}
-                            className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                          >
-                            <Play size={13} /> Continue
-                          </Link>
-                          <Link
-                            to={`/course/${c.id}`}
-                            className="btn btn-primary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                          >
-                            <Eye size={13} /> Details
-                          </Link>
-                        </div>
-                      ) : (
-                        <Link
-                          to={`/course/${c.id}`}
-                          className="btn btn-primary btn-sm"
-                          style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
-                        >
-                          <Eye size={13} /> View Details & Enroll &rarr;
-                        </Link>
-                      )
-                    ) : isLearner ? (
+                    {isLearner || !isAuth ? (
+                      // Student or Public Guest Experience
                       !enrolledCourseIds.includes(c.id) ? (
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                           <button
                             type="button"
                             onClick={() => handleEnrollCourse(c)}
                             className="btn btn-primary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                            style={{ flex: 1.2, justifyContent: 'center', gap: '6px', fontWeight: 600 }}
                           >
                             <Plus size={13} /> Enroll in Course
                           </button>
                           <Link
                             to={`/course/${c.id}`}
                             className="btn btn-secondary btn-sm"
+                            style={{ flex: 0.8, justifyContent: 'center', gap: '5px' }}
                             title="View Course Syllabus & Details"
                           >
                             <Eye size={13} /> Syllabus
@@ -961,14 +988,14 @@ export const CoursesPage: React.FC = () => {
                           <Link
                             to={`/course-player/${c.id}`}
                             className="btn btn-secondary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
+                            style={{ flex: 1, justifyContent: 'center', gap: '5px' }}
                           >
                             <Play size={13} /> Review Lessons
                           </Link>
                           <Link
                             to="/my-certificates"
                             className="btn btn-primary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center' }}
+                            style={{ flex: 1, justifyContent: 'center', gap: '5px', fontWeight: 600 }}
                           >
                             <Award size={13} /> View Certificate
                           </Link>
@@ -978,46 +1005,45 @@ export const CoursesPage: React.FC = () => {
                           <Link
                             to={`/course-player/${c.id}`}
                             className="btn btn-primary btn-sm"
-                            style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                            style={{ flex: 1.2, justifyContent: 'center', gap: '6px', fontWeight: 600 }}
                           >
                             <Play size={13} /> Continue Learning &rarr;
                           </Link>
                           <Link
                             to={`/course/${c.id}`}
                             className="btn btn-secondary btn-sm"
+                            style={{ flex: 0.8, justifyContent: 'center', gap: '5px' }}
                             title="View Course Syllabus & Details"
                           >
-                            <Eye size={13} />
+                            <Eye size={13} /> Details
                           </Link>
                         </div>
                       )
-                    ) : (
+                    ) : isAdmin ? (
+                      // Institution Admin Action Layout: View Details, Edit, and Manage Dropdown
                       <>
-                        {/* Action 1: Continue Learning / View Materials */}
                         <Link
-                          to={`/course-player/${c.id}`}
-                          className="btn btn-primary btn-sm"
-                          style={{ flex: 1.2, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600 }}
-                          title="Open course learning experience, video lessons, and curriculum materials"
+                          to={`/course/${c.id}`}
+                          className="btn btn-secondary btn-sm"
+                          style={{ flex: 1, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                          title="View course information and full curriculum syllabus"
                         >
-                          <Play size={13} /> Continue Learning
+                          <Eye size={13} /> View Details
                         </Link>
 
-                        {/* Action 2: Course Builder Edit */}
                         <Link
                           to={`/course-builder?id=${c.id}`}
                           className="btn btn-secondary btn-sm"
-                          style={{ flex: 1, justifyContent: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 10px' }}
-                          title="Edit course in Course Builder"
+                          style={{ flex: 0.9, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                          title="Edit course configuration and syllabus in Course Builder"
                         >
-                          <Edit2 size={13} /> {isFaculty ? 'Edit' : 'Edit'}
+                          <Edit2 size={13} /> Edit
                         </Link>
 
-                        {/* Primary Action: Manage Menu Trigger */}
                         <div className="course-manage-menu-container" style={{ position: 'relative' }}>
                           <button
                             type="button"
-                            className="btn btn-secondary btn-sm"
+                            className="btn btn-primary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveManageMenuCourseId(isManageMenuOpen ? null : c.id);
@@ -1026,12 +1052,13 @@ export const CoursesPage: React.FC = () => {
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px',
-                              padding: '6px 10px',
+                              padding: '6px 12px',
                               fontWeight: 600,
                               fontSize: '0.8rem',
-                              background: isManageMenuOpen ? 'var(--bg-card-hover)' : undefined
+                              whiteSpace: 'nowrap',
+                              background: isManageMenuOpen ? 'var(--primary-dark, #4338ca)' : undefined
                             }}
-                            title="More course management options"
+                            title="Administrative course management actions"
                             aria-expanded={isManageMenuOpen}
                           >
                             <span>Manage</span>
@@ -1044,14 +1071,15 @@ export const CoursesPage: React.FC = () => {
                             />
                           </button>
 
-                          {/* Manage Dropdown Menu */}
                           {isManageMenuOpen && (
                             <div
+                              className="course-manage-dropdown"
                               style={{
                                 position: 'absolute',
                                 right: 0,
                                 bottom: 'calc(100% + 8px)',
                                 minWidth: '220px',
+                                maxWidth: '280px',
                                 background: 'var(--bg-card)',
                                 border: '1px solid var(--border-subtle)',
                                 borderRadius: 'var(--radius-md)',
@@ -1066,54 +1094,7 @@ export const CoursesPage: React.FC = () => {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Link
-                                to={`/course/${c.id}`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
-                                onClick={() => setActiveManageMenuCourseId(null)}
-                              >
-                                <Eye size={14} color="var(--primary)" /> View Details & Syllabus
-                              </Link>
-
-                              <Link
-                                to={`/course-player/${c.id}`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
-                                onClick={() => setActiveManageMenuCourseId(null)}
-                              >
-                                <Play size={14} color="var(--primary)" /> Open Course Player
-                              </Link>
-
-                              <Link
                                 to={`/courses/${c.id}/assign-students`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
                                 onClick={() => setActiveManageMenuCourseId(null)}
                               >
                                 <UserPlus size={14} color="var(--primary)" /> Assign Students
@@ -1121,56 +1102,13 @@ export const CoursesPage: React.FC = () => {
 
                               <Link
                                 to={`/enrollments?courseId=${c.id}`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
                                 onClick={() => setActiveManageMenuCourseId(null)}
                               >
                                 <Users size={14} color="var(--primary)" /> View Enrollments
                               </Link>
 
-                              <Link
-                                to={`/courses/${c.id}/assign-students`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
-                                onClick={() => setActiveManageMenuCourseId(null)}
-                              >
-                                <UserPlus size={14} color="var(--primary)" /> Assign Students
-                              </Link>
-
                               <button
                                 type="button"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  background: 'none',
-                                  border: 'none',
-                                  width: '100%',
-                                  textAlign: 'left',
-                                  cursor: 'pointer'
-                                }}
                                 onClick={() => {
                                   setActiveManageMenuCourseId(null);
                                   setShareModalCourse(c);
@@ -1181,17 +1119,6 @@ export const CoursesPage: React.FC = () => {
 
                               <Link
                                 to={`/course-player/${c.id}`}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  textDecoration: 'none',
-                                  cursor: 'pointer'
-                                }}
                                 onClick={() => setActiveManageMenuCourseId(null)}
                               >
                                 <Play size={14} color="var(--primary)" /> Preview as Student
@@ -1199,48 +1126,18 @@ export const CoursesPage: React.FC = () => {
 
                               <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
 
-                              {isAdmin && (
-                                <button
-                                  type="button"
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '7px 10px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontSize: '0.8rem',
-                                    color: 'var(--text-main)',
-                                    background: 'none',
-                                    border: 'none',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    cursor: 'pointer'
-                                  }}
-                                  onClick={() => {
-                                    setActiveManageMenuCourseId(null);
-                                    openFacultyModal(c);
-                                  }}
-                                >
-                                  <GraduationCap size={14} color="var(--primary)" /> Change Lead Faculty
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveManageMenuCourseId(null);
+                                  openFacultyModal(c);
+                                }}
+                              >
+                                <GraduationCap size={14} color="var(--primary)" /> Change Lead Faculty
+                              </button>
 
                               <button
                                 type="button"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '7px 10px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-main)',
-                                  background: 'none',
-                                  border: 'none',
-                                  width: '100%',
-                                  textAlign: 'left',
-                                  cursor: 'pointer'
-                                }}
                                 onClick={() => {
                                   setActiveManageMenuCourseId(null);
                                   openStatusModal(c);
@@ -1249,37 +1146,175 @@ export const CoursesPage: React.FC = () => {
                                 <CheckCircle2 size={14} color="var(--primary)" /> Change Course Status
                               </button>
 
-                              {isAdmin && (
-                                <>
-                                  <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
-                                  <button
-                                    type="button"
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      padding: '7px 10px',
-                                      borderRadius: 'var(--radius-sm)',
-                                      fontSize: '0.8rem',
-                                      color: 'var(--danger)',
-                                      background: 'none',
-                                      border: 'none',
-                                      width: '100%',
-                                      textAlign: 'left',
-                                      cursor: 'pointer'
-                                    }}
-                                    onClick={() => {
-                                      setActiveManageMenuCourseId(null);
-                                      openDeleteModal(c);
-                                    }}
-                                  >
-                                    <Trash2 size={14} color="var(--danger)" /> Delete Course
-                                  </button>
-                                </>
-                              )}
+                              <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+
+                              <button
+                                type="button"
+                                className="dropdown-danger"
+                                style={{ color: 'var(--danger)' }}
+                                onClick={() => {
+                                  setActiveManageMenuCourseId(null);
+                                  openDeleteModal(c);
+                                }}
+                              >
+                                <Trash2 size={14} color="var(--danger)" /> Delete Course
+                              </button>
                             </div>
                           )}
                         </div>
+                      </>
+                    ) : (
+                      // Trainer / Faculty Action Layout: View Course, Edit Course (if authorized), and Manage Dropdown
+                      <>
+                        <Link
+                          to={`/course/${c.id}`}
+                          className="btn btn-secondary btn-sm"
+                          style={{ flex: 1, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                          title="View course details and syllabus"
+                        >
+                          <Eye size={13} /> View Course
+                        </Link>
+
+                        {coursePerms.canEdit ? (
+                          <Link
+                            to={`/course-builder?id=${c.id}`}
+                            className="btn btn-secondary btn-sm"
+                            style={{ flex: 1, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                            title="Edit course lessons and author content"
+                          >
+                            <Edit2 size={13} /> Edit Course
+                          </Link>
+                        ) : (
+                          <Link
+                            to={`/course-player/${c.id}`}
+                            className="btn btn-secondary btn-sm"
+                            style={{ flex: 1, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                            title="Preview course from a student's perspective"
+                          >
+                            <Play size={13} /> Preview as Student
+                          </Link>
+                        )}
+
+                        {coursePerms.isAuthorizedTrainer && (
+                          <div className="course-manage-menu-container" style={{ position: 'relative' }}>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveManageMenuCourseId(isManageMenuOpen ? null : c.id);
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '6px 12px',
+                                fontWeight: 600,
+                                fontSize: '0.8rem',
+                                whiteSpace: 'nowrap',
+                                background: isManageMenuOpen ? 'var(--primary-dark, #4338ca)' : undefined
+                              }}
+                              title="Trainer management options"
+                              aria-expanded={isManageMenuOpen}
+                            >
+                              <span>Manage</span>
+                              <ChevronDown
+                                size={13}
+                                style={{
+                                  transform: isManageMenuOpen ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.15s ease'
+                                }}
+                              />
+                            </button>
+
+                            {isManageMenuOpen && (
+                              <div
+                                className="course-manage-dropdown"
+                                style={{
+                                  position: 'absolute',
+                                  right: 0,
+                                  bottom: 'calc(100% + 8px)',
+                                  minWidth: '220px',
+                                  maxWidth: '280px',
+                                  background: 'var(--bg-card)',
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: 'var(--radius-md)',
+                                  boxShadow: '0 12px 28px rgba(0, 0, 0, 0.28), 0 4px 10px rgba(0, 0, 0, 0.15)',
+                                  zIndex: 100,
+                                  padding: '6px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '2px',
+                                  backdropFilter: 'blur(8px)'
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {coursePerms.canAssignStudents && (
+                                  <Link
+                                    to={`/courses/${c.id}/assign-students`}
+                                    onClick={() => setActiveManageMenuCourseId(null)}
+                                  >
+                                    <UserPlus size={14} color="var(--primary)" /> Assign Students
+                                  </Link>
+                                )}
+
+                                {coursePerms.canManageContent && (
+                                  <Link
+                                    to={`/course-builder?id=${c.id}&step=modules`}
+                                    onClick={() => setActiveManageMenuCourseId(null)}
+                                  >
+                                    <Layers size={14} color="var(--primary)" /> Manage Lessons / Content
+                                  </Link>
+                                )}
+
+                                {coursePerms.canViewEnrollments && (
+                                  <Link
+                                    to={`/enrollments?courseId=${c.id}`}
+                                    onClick={() => setActiveManageMenuCourseId(null)}
+                                  >
+                                    <Users size={14} color="var(--primary)" /> View Enrollments
+                                  </Link>
+                                )}
+
+                                {coursePerms.canShare && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveManageMenuCourseId(null);
+                                      setShareModalCourse(c);
+                                    }}
+                                  >
+                                    <Share2 size={14} color="var(--primary)" /> Share Course
+                                  </button>
+                                )}
+
+                                <Link
+                                  to={`/course-player/${c.id}`}
+                                  onClick={() => setActiveManageMenuCourseId(null)}
+                                >
+                                  <Play size={14} color="var(--primary)" /> Preview as Student
+                                </Link>
+
+                                {coursePerms.canDelete && (
+                                  <>
+                                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
+                                    <button
+                                      type="button"
+                                      className="dropdown-danger"
+                                      style={{ color: 'var(--danger)' }}
+                                      onClick={() => {
+                                        setActiveManageMenuCourseId(null);
+                                        openDeleteModal(c);
+                                      }}
+                                    >
+                                      <Trash2 size={14} color="var(--danger)" /> Delete Course
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -2023,29 +2058,59 @@ export const CoursesPage: React.FC = () => {
                 Are you sure you want to permanently delete <strong>"{deleteModalCourse.title}"</strong>?
               </p>
 
-              {(deleteModalCourse.enrolledLearners || 0) > 0 && (
+              {(deleteModalCourse.enrolledLearners || 0) > 0 ? (
+                <div
+                  style={{
+                    padding: '12px 14px',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.8rem',
+                    color: 'var(--danger)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px'
+                  }}
+                >
+                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                      Active Enrolled Learners Impact ({deleteModalCourse.enrolledLearners} Students)
+                    </div>
+                    <div style={{ lineHeight: 1.45 }}>
+                      {isFaculty ? (
+                        <>
+                          <strong>Deletion Blocked by Enrollment Rules:</strong> This course has active enrolled learners. Deletion is restricted to prevent silent destruction of learner progress, assessment attempts, and certificates. Please <strong>Archive</strong> this course instead to safeguard student records while retiring new enrollments.
+                        </>
+                      ) : (
+                        <>
+                          This course has <strong>{deleteModalCourse.enrolledLearners} active enrolled students</strong>. Deleting will permanently remove syllabus modules, lesson content, and submitted assessments. To preserve learner records while retiring the course from new enrollments, choose <strong>Archive Instead</strong>.
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <div
                   style={{
                     padding: '10px 14px',
-                    background: 'rgba(245, 158, 11, 0.08)',
-                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
                     borderRadius: 'var(--radius-md)',
                     fontSize: '0.78rem',
-                    color: '#d97706',
+                    color: 'var(--success)',
                     display: 'flex',
-                    alignItems: 'flex-start',
+                    alignItems: 'center',
                     gap: '8px'
                   }}
                 >
-                  <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <strong>Warning:</strong> This course has <strong>{deleteModalCourse.enrolledLearners} active enrolled students</strong>. If you want to preserve student records while hiding the course from new enrollments, choose <strong>Archive Instead</strong>.
-                  </div>
+                  <CheckCircle2 size={16} />
+                  <span>This course has 0 enrolled learners. Deletion is safe and will not impact student records.</span>
                 </div>
               )}
 
               <p className="text-muted text-xs" style={{ margin: 0 }}>
-                This action will delete all modules, lessons, and configuration. This cannot be undone.
+                This action will permanently delete all curriculum modules, lessons, and configuration. This cannot be undone.
               </p>
             </div>
 
@@ -2073,8 +2138,15 @@ export const CoursesPage: React.FC = () => {
               <button
                 type="button"
                 className="btn btn-primary"
-                style={{ background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}
+                disabled={isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0}
+                style={{
+                  background: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'var(--text-muted)' : 'var(--danger)',
+                  borderColor: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'var(--border-subtle)' : 'var(--danger)',
+                  color: '#fff',
+                  cursor: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'not-allowed' : 'pointer'
+                }}
                 onClick={handleConfirmDelete}
+                title={isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'Deletion blocked: Course has active enrolled learners. Please archive instead.' : undefined}
               >
                 Delete Course
               </button>

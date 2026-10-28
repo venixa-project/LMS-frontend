@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
@@ -20,7 +20,7 @@ import {
   Eye, Check, AlertCircle, Sparkles, Send, Users, UserCheck, Search,
   GraduationCap, Clock, Award, Shield, CheckSquare, Square, X,
   Layers, ExternalLink, Share2, AlertTriangle, UserPlus, Info, Edit2, RefreshCw,
-  Calendar, PenTool
+  Calendar, PenTool, Upload
 } from 'lucide-react';
 import { useSignatureStore } from '../../lib/signatureStore';
 
@@ -59,9 +59,85 @@ export const CourseBuilderPage: React.FC = () => {
   const [difficultyLevel, setDifficultyLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('advanced');
   const [durationHours, setDurationHours] = useState(24);
   const [completionPolicy, setCompletionPolicy] = useState('all_lessons_and_passing_assessment');
-  const [thumbnailUrl, setThumbnailUrl] = useState(
-    'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'
-  );
+  const DEFAULT_COURSE_THUMBNAIL = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80';
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>(DEFAULT_COURSE_THUMBNAIL);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [isDraggingThumbnail, setIsDraggingThumbnail] = useState(false);
+  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleThumbnailFileSelect = (file: File) => {
+    setThumbnailError(null);
+
+    // Accept common image formats: PNG, JPG, JPEG, and WebP
+    const validMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+
+    if (!validMimeTypes.includes(file.type.toLowerCase()) && !validExtensions.includes(ext)) {
+      setThumbnailError('Unsupported file format. Please upload a PNG, JPG, JPEG, or WebP image.');
+      if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
+      return;
+    }
+
+    // Maximum file size: 5 MB
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeInMb = (file.size / (1024 * 1024)).toFixed(2);
+      setThumbnailError(`File size exceeds 5 MB limit (selected: ${sizeInMb} MB). Please choose a smaller image.`);
+      if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        setThumbnailUrl(result);
+        setThumbnailError(null);
+      }
+    };
+    reader.onerror = () => {
+      setThumbnailError('Failed to read image file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+
+    if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
+  };
+
+  const handleThumbnailDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingThumbnail(true);
+  };
+
+  const handleThumbnailDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingThumbnail(false);
+  };
+
+  const handleThumbnailDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingThumbnail(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleThumbnailFileSelect(file);
+    }
+  };
+
+  const handleRemoveThumbnail = () => {
+    setThumbnailUrl('');
+    setThumbnailError(null);
+    if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
+  };
+
+  const handleResetDefaultThumbnail = () => {
+    setThumbnailUrl(DEFAULT_COURSE_THUMBNAIL);
+    setThumbnailError(null);
+    if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
+  };
+
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
   // Course Availability Window (Start Date & End Date)
@@ -399,6 +475,7 @@ export const CourseBuilderPage: React.FC = () => {
         if (existing.category) setCategory(existing.category);
         if (existing.durationHours) setDurationHours(existing.durationHours);
         if (existing.thumbnail) setThumbnailUrl(existing.thumbnail);
+        if (existing.completionPolicy) setCompletionPolicy(existing.completionPolicy);
         if (existing.modules && existing.modules.length > 0) {
           setModules(existing.modules);
           setActiveModuleIndex(0);
@@ -1160,13 +1237,15 @@ export const CourseBuilderPage: React.FC = () => {
               <Share2 size={16} /> Share Course Link
             </button>
 
-            <button
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px' }}
-              onClick={() => navigate(`/courses/${publishedCourse.id}/assign-students`)}
-            >
-              <UserPlus size={16} /> Assign More Students
-            </button>
+            {isAdmin && (
+              <button
+                className="btn btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px' }}
+                onClick={() => navigate(`/courses/${publishedCourse.id}/assign-students`)}
+              >
+                <UserPlus size={16} /> Assign More Students
+              </button>
+            )}
 
             <button
               className="btn btn-secondary"
@@ -1500,75 +1579,210 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Thumbnail & Certification Policy */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontWeight: 600 }}>
-                Course Thumbnail URL
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="https://images.unsplash.com/..."
-                value={thumbnailUrl}
-                onChange={(e) => setThumbnailUrl(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  onClick={() =>
-                    setThumbnailUrl(
-                      'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'
-                    )
-                  }
-                >
-                  Tech Preset 1
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  onClick={() =>
-                    setThumbnailUrl(
-                      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80'
-                    )
-                  }
-                >
-                  Code Preset 2
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                  onClick={() =>
-                    setThumbnailUrl(
-                      'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=600&q=80'
-                    )
-                  }
-                >
-                  Cloud Preset 3
-                </button>
-              </div>
-            </div>
+          {/* Course Cover / Thumbnail Image Upload (Replaces manual URL & Completion Policy) */}
+          <div className="form-group" style={{ marginBottom: '24px' }}>
+            <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Course Cover & Thumbnail Image</span>
+              <span className="text-muted text-xs" style={{ fontWeight: 400 }}>
+                PNG, JPG, JPEG, WebP &bull; Max 5 MB &bull; 16:9 Aspect Ratio
+              </span>
+            </label>
 
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontWeight: 600 }}>
-                Completion Policy
-              </label>
-              <select
-                className="form-select"
-                value={completionPolicy}
-                onChange={(e) => setCompletionPolicy(e.target.value)}
+            <input
+              type="file"
+              ref={thumbnailFileInputRef}
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleThumbnailFileSelect(file);
+              }}
+            />
+
+            {thumbnailError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: 'var(--danger)',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.825rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                }}
               >
-                <option value="all_lessons_and_passing_assessment">
-                  Require 100% lesson completion and passing assessment score
-                </option>
-                <option value="lessons_only">Require all lessons viewed/completed only</option>
-                <option value="passing_assessment_only">Pass final assessment only</option>
-              </select>
-            </div>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{thumbnailError}</span>
+              </div>
+            )}
+
+            {thumbnailUrl ? (
+              /* Image Preview Box with Replace & Remove actions */
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '20px',
+                  alignItems: 'center',
+                  padding: '16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div
+                  style={{
+                    width: '240px',
+                    height: '135px',
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    background: '#0f172a',
+                    border: '1px solid var(--border-subtle)',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src={thumbnailUrl}
+                    alt="Course Thumbnail Preview"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={() => setThumbnailError('Failed to display thumbnail image. Please replace with a valid image.')}
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      left: '6px',
+                      background: 'rgba(0,0,0,0.65)',
+                      color: '#fff',
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backdropFilter: 'blur(2px)',
+                    }}
+                  >
+                    Preview
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Cover Image Selected
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    This image will appear on course catalogue cards, student learning dashboards, search results, and course overview pages.
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => thumbnailFileInputRef.current?.click()}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                    >
+                      <RefreshCw size={14} /> Replace Image
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger-outline btn-sm"
+                      onClick={handleRemoveThumbnail}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.8rem',
+                        color: 'var(--danger)',
+                        border: '1px solid var(--danger)',
+                        background: 'transparent',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Trash2 size={14} /> Remove Image
+                    </button>
+                    {thumbnailUrl !== DEFAULT_COURSE_THUMBNAIL && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={handleResetDefaultThumbnail}
+                        style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
+                      >
+                        Reset to Default Cover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Drag and Drop Upload Area */
+              <div
+                onDragOver={handleThumbnailDragOver}
+                onDragLeave={handleThumbnailDragLeave}
+                onDrop={handleThumbnailDrop}
+                onClick={() => thumbnailFileInputRef.current?.click()}
+                style={{
+                  border: isDraggingThumbnail ? '2px dashed var(--primary)' : '2px dashed var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '32px 20px',
+                  textAlign: 'center',
+                  background: isDraggingThumbnail ? 'rgba(37, 99, 235, 0.06)' : 'var(--bg-input)',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    background: 'rgba(37, 99, 235, 0.12)',
+                    color: 'var(--primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Upload size={22} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-main)', marginBottom: '3px' }}>
+                    Drag & Drop your course cover image here, or <span style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Browse Files</span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    Supports PNG, JPG, JPEG, and WebP (Max 5 MB)
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => thumbnailFileInputRef.current?.click()}
+                    style={{ fontSize: '0.8rem' }}
+                  >
+                    Upload Image
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleResetDefaultThumbnail}
+                    style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                  >
+                    Use Default Cover
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ------------------------------------------------------------- */}

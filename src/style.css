@@ -520,11 +520,24 @@ h6 {
 }
 
 .page-body {
-  padding: 28px;
-  max-width: 1560px;
+  padding: 24px 28px;
+  max-width: 1600px;
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
+  min-width: 0;
+}
+
+@media (max-width: 1366px) {
+  .page-body {
+    padding: 20px 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-body {
+    padding: 16px 12px;
+  }
 }
 
 /* Card Styles */
@@ -1720,6 +1733,174 @@ h6 {
     border-radius: var(--radius-md);
     font-size: 0.75rem;
     color: var(--text-secondary);
+  }
+
+  /* Trainer Dashboard Specific Responsive Layout Classes */
+  .trainer-dashboard-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .trainer-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1200px) {
+    .trainer-kpi-grid {
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .trainer-kpi-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+  }
+
+  .trainer-schedule-split-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    align-items: start;
+  }
+
+  @media (max-width: 1380px) {
+    .trainer-schedule-split-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+  }
+
+  .trainer-secondary-split-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    align-items: start;
+  }
+
+  @media (max-width: 1200px) {
+    .trainer-secondary-split-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+  }
+
+  .trainer-schedule-split-grid > *,
+  .trainer-secondary-split-grid > * {
+    align-self: start;
+    height: fit-content;
+  }
+
+  .trainer-card {
+    height: fit-content;
+    align-self: start;
+    padding: 18px 20px;
+  }
+
+  .trainer-table-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    margin: 0;
+    border-radius: var(--radius-md);
+  }
+
+  .trainer-schedule-table {
+    width: 100%;
+    min-width: 620px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.835rem;
+  }
+
+  .trainer-schedule-table th,
+  .trainer-schedule-table td {
+    padding: 9px 12px;
+    vertical-align: middle;
+  }
+
+  .trainer-schedule-table .col-datetime {
+    width: 140px;
+    min-width: 130px;
+    white-space: nowrap;
+  }
+
+  .trainer-schedule-table .col-title {
+    min-width: 190px;
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  .trainer-schedule-table .col-cohort {
+    width: 110px;
+    min-width: 95px;
+  }
+
+  .trainer-schedule-table .col-status {
+    width: 105px;
+    min-width: 95px;
+  }
+
+  .trainer-schedule-table .col-actions {
+    width: 185px;
+    min-width: 175px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Course Card Manage Dropdown Menu */
+  .course-manage-dropdown a,
+  .course-manage-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-main);
+    text-decoration: none;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .course-manage-dropdown a:hover,
+  .course-manage-dropdown button:hover {
+    background: var(--bg-card-hover, rgba(99, 102, 241, 0.08));
+    color: var(--primary);
+  }
+
+  .course-manage-dropdown button.dropdown-danger:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
+    color: var(--danger) !important;
   }
 
   @keyframes slideInRight {

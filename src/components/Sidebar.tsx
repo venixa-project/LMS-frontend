@@ -591,8 +591,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
             const groupBadgeCount = items.reduce((acc, curr) => acc + (curr.badge || 0), 0);
 
             // Case A: Single item group or Main/Dashboard:
-            // "Dashboard should remain directly accessible without expanding."
-            if (isMainGroup && items.length === 1) {
+            // Display directly as a normal navigation item without unnecessary expand/collapse arrows or redundant nesting
+            if (items.length === 1) {
               const mainItem = items[0];
               const Icon = iconMap[mainItem.icon] || GroupIcon;
               const active = isItemActive(mainItem);
