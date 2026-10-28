@@ -71,9 +71,7 @@ import { UnauthorizedPage } from './pages/ErrorPages/UnauthorizedPage';
 import { useAuthStore } from './lib/store';
 
 const IndexRouteRedirect: React.FC = () => {
-  const { user } = useAuthStore();
-  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
-  return <Navigate to={isStudent ? '/leaderboard' : '/dashboard'} replace />;
+  return <Navigate to="/dashboard" replace />;
 };
 
 export const App: React.FC = () => {

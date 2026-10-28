@@ -26,6 +26,10 @@ import {
 import { ProctoringPolicy, ProctoringSessionStatus } from '../../types';
 import { useCertificateStore } from '../../lib/certificateStore';
 import { useCourseStore } from '../../lib/courseStore';
+import { useGamificationStore, QuizRewardResult } from '../../lib/gamificationStore';
+import { RankBadge } from '../../components/Gamification/RankBadge';
+import { getRankForPoints } from '../../lib/gamificationConfig';
+import { Zap, Sparkles } from 'lucide-react';
 
 export const ExamPlayerPage: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
@@ -38,6 +42,8 @@ export const ExamPlayerPage: React.FC = () => {
   const storeAssessment = id ? getAssessmentById(id) : undefined;
   const assessment = storeAssessment || mockAssessments.find((a) => a.id === id) || mockAssessments[0];
   const navigate = useNavigate();
+
+  const [quizReward, setQuizReward] = useState<QuizRewardResult | null>(null);
 
   // Proctoring store actions
   const {
@@ -563,6 +569,19 @@ export const ExamPlayerPage: React.FC = () => {
           });
         }
       }
+    }
+
+    // Gamification Quiz Points calculation with deduplication
+    try {
+      const reward = useGamificationStore.getState().recordQuizSubmission(
+        candidateId,
+        assessment.id,
+        assessment.title,
+        calculatedScore
+      );
+      setQuizReward(reward);
+    } catch (e) {
+      console.warn('Gamification quiz award error:', e);
     }
 
     setStage('results');
@@ -1230,6 +1249,95 @@ export const ExamPlayerPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Gamification Learning Points & Rank Rewards */}
+        {quizReward && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(30, 27, 75, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
+              border: quizReward.rankChanged
+                ? '2px solid #ffd700'
+                : '1.5px solid rgba(129, 140, 248, 0.35)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 24px',
+              marginBottom: '28px',
+              textAlign: 'left',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '16px',
+              boxShadow: quizReward.rankChanged ? '0 0 25px rgba(255, 215, 0, 0.25)' : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffd700',
+                  flexShrink: 0,
+                }}
+              >
+                <Zap size={24} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
+                    Gamification Learning Points
+                  </h4>
+                  {quizReward.rankChanged && (
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 900,
+                        background: '#ffd700',
+                        color: '#0f172a',
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Sparkles size={11} /> RANK PROMOTED!
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                  {quizReward.totalAwarded > 0 ? (
+                    <>
+                      Earned <strong>+{quizReward.totalAwarded} XP</strong>
+                      {quizReward.completionAwarded && ' (+15 completion)'}
+                      {quizReward.scoreBonusAwarded && ` (+${finalScore >= 95 ? 15 : 10} score bonus)`}
+                      {' for this assessment submission.'}
+                    </>
+                  ) : (
+                    'Submission verified. Eligible points for this assessment have already been claimed.'
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Scholar Standing
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#ffd700' }}>
+                  {quizReward.newPoints.toLocaleString()} XP
+                </div>
+              </div>
+              <RankBadge tier={getRankForPoints(quizReward.newPoints)} size="sm" />
+            </div>
+          </div>
+        )}
 
         {/* Explainable Fair Review Notice */}
         <div

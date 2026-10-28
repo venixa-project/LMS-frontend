@@ -23,9 +23,8 @@ export const LoginPage: React.FC = () => {
   const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || (redirectQuery ? decodeURIComponent(redirectQuery) : undefined);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      const currentUser = useAuthStore.getState().user || user;
-      const isStudent = currentUser?.activeRole === 'student' || currentUser?.activeRole === 'learner' || currentUser?.activeRole === 'guest';
+    if (isAuthenticated && user) {
+      const isStudent = user.activeRole === 'student' || user.activeRole === 'learner' || user.activeRole === 'guest';
       navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
@@ -38,9 +37,10 @@ export const LoginPage: React.FC = () => {
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated && storeState.user) {
       const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
-      const target = isStudent
-        ? (from && from !== '/login' && from !== '/dashboard' && from !== '/' ? from : '/leaderboard')
-        : (from && from !== '/login' ? from : '/dashboard');
+      if (isStudent) {
+        sessionStorage.setItem('show_student_leaderboard_popup', 'true');
+      }
+      const target = isStudent ? '/leaderboard' : (from && from !== '/login' ? from : '/dashboard');
       navigate(target, { replace: true });
     }
   };
@@ -54,8 +54,10 @@ export const LoginPage: React.FC = () => {
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated && storeState.user) {
       const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
-      const target = isStudent ? '/leaderboard' : '/dashboard';
-      navigate(target, { replace: true });
+      if (isStudent) {
+        sessionStorage.setItem('show_student_leaderboard_popup', 'true');
+      }
+      navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
     }
   };
 

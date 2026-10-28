@@ -8,8 +8,13 @@ import {
   Users, UserPlus, Upload, Search, Filter, Mail, CheckCircle2,
   Clock, AlertCircle, X, Download, Shield, Eye, MoreHorizontal,
   GraduationCap, Edit2, UserMinus, UserCheck, BookOpen, Award,
-  Calendar, Activity, ArrowRight, Check
+  Calendar, Activity, ArrowRight, Check, Flame, Zap, Trophy, Sparkles
 } from 'lucide-react';
+import { useGamificationStore } from '../../lib/gamificationStore';
+import { RANK_TIERS, getRankForPoints, getRankProgress, getNextRank, PointAwardEvent } from '../../lib/gamificationConfig';
+import { RankBadge } from '../../components/Gamification/RankBadge';
+import { AwardPointsModal } from '../../components/Gamification/AwardPointsModal';
+import { AdminRankOverview } from '../../components/Gamification/AdminRankOverview';
 
 interface Props {
   initialMode?: 'all' | 'students' | 'faculty' | 'staff';
@@ -23,6 +28,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { users, toggleUserStatus } = usePeopleStore();
+  const { profiles } = useGamificationStore();
+
+  const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
+  const [awardTargetStudentId, setAwardTargetStudentId] = useState<string>('u-007');
+  const [awardTargetStudentName, setAwardTargetStudentName] = useState<string>('');
+  const [rankFilter, setRankFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'default' | 'points' | 'streak'>('default');
 
   // Determine active tab from search params, location, or initial mode (defaults to students)
   const resolveTab = (): 'students' | 'faculty' | 'staff' => {
@@ -131,8 +143,34 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
     // Status filter
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
+    // Rank Tier filter (students tab)
+    if (activeTab === 'students' && rankFilter !== 'all') {
+      const p = profiles[u.id] || { totalPoints: 0 };
+      const tier = getRankForPoints(p.totalPoints);
+      if (tier.id !== rankFilter) return false;
+    }
+
     return matchesSearch && matchesRole && matchesDept && matchesStatus;
   });
+
+  // Apply sorting for students
+  if (activeTab === 'students' && sortBy !== 'default') {
+    filteredUsers.sort((a, b) => {
+      const profA = profiles[a.id];
+      const profB = profiles[b.id];
+      const pointsA = profA ? profA.totalPoints : 0;
+      const pointsB = profB ? profB.totalPoints : 0;
+      if (sortBy === 'points') {
+        return pointsB - pointsA;
+      }
+      if (sortBy === 'streak') {
+        const streakA = profA ? (profA.streakData?.currentStreak ?? profA.currentStreak) : 0;
+        const streakB = profB ? (profB.streakData?.currentStreak ?? profB.currentStreak) : 0;
+        return streakB - streakA;
+      }
+      return 0;
+    });
+  }
 
   // Handle Status Toggle (Activate / Deactivate) via Store
   const handleConfirmStatusChange = () => {
@@ -318,6 +356,26 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </div>
       )}
 
+      {/* Gamification & Learning Points Overview (When viewing students) */}
+      {activeTab === 'students' && (
+        <div style={{ marginBottom: '20px' }}>
+          <AdminRankOverview
+            onOpenAwardModal={(studentId) => {
+              if (studentId) {
+                setAwardTargetStudentId(studentId);
+                const found = users.find((u) => u.id === studentId);
+                if (found) setAwardTargetStudentName(found.displayName);
+              }
+              setIsAwardModalOpen(true);
+            }}
+            onViewStudent={(studentId) => {
+              const found = users.find((u) => u.id === studentId);
+              if (found) setSelectedUserDetail(found);
+            }}
+          />
+        </div>
+      )}
+
       {/* Filter toolbar */}
       <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -334,6 +392,34 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Rank Filter (for students tab) */}
+            {activeTab === 'students' && (
+              <>
+                <select
+                  className="form-select"
+                  value={rankFilter}
+                  onChange={(e) => setRankFilter(e.target.value)}
+                  style={{ width: 'auto' }}
+                >
+                  <option value="all">All Ranks</option>
+                  {RANK_TIERS.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} Rank</option>
+                  ))}
+                </select>
+
+                <select
+                  className="form-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  style={{ width: 'auto' }}
+                >
+                  <option value="default">Sort: Default</option>
+                  <option value="points">Sort: XP (High to Low)</option>
+                  <option value="streak">Sort: Streak (High to Low)</option>
+                </select>
+              </>
+            )}
+
             {/* Department Filter */}
             <select
               className="form-select"
@@ -370,21 +456,141 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
       <div className="table-container">
         <table className="table">
           <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Department</th>
-              <th>Status</th>
-              <th>Last Active</th>
-              <th>Actions</th>
-            </tr>
+            {activeTab === 'students' ? (
+              <tr>
+                <th>Scholar Name</th>
+                <th>Current Rank</th>
+                <th>Learning Points</th>
+                <th>Login Streak</th>
+                <th>Rank Progress</th>
+                <th>Department</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            ) : (
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Status</th>
+                <th>Last Active</th>
+                <th>Actions</th>
+              </tr>
+            )}
           </thead>
           <tbody>
             {filteredUsers.map((u) => {
               const dept = mockDepartments.find((d) => d.id === u.departmentId);
               const isStudent = u.activeRole === 'student' || u.activeRole === 'learner';
               const isFaculty = u.activeRole === 'trainer' || u.activeRole === 'instructor';
+
+              if (activeTab === 'students') {
+                const prof = profiles[u.id] || profiles['u-007'] || { totalPoints: 0, currentStreak: 0, streakData: { currentStreak: 0 } };
+                const tier = getRankForPoints(prof.totalPoints);
+                const nxt = getNextRank(tier.tier);
+                const prog = getRankProgress(prof.totalPoints);
+
+                return (
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '34px',
+                          height: '34px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          fontSize: '0.8rem'
+                        }}>
+                          {u.firstName?.[0]}{u.lastName?.[0]}
+                        </div>
+                        <div>
+                          <span style={{ fontWeight: 600 }}>{u.displayName}</span>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Roll: STU-2026-0{u.id.slice(-2)} &bull; {u.email}</div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <RankBadge tier={tier} size="xs" />
+                        <span style={{ fontWeight: 800, color: tier.color, fontSize: '0.82rem' }}>
+                          {tier.name}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td>
+                      <div style={{ fontWeight: 800, color: '#ffd700', fontSize: '0.88rem' }}>
+                        {prof.totalPoints.toLocaleString()} XP
+                      </div>
+                    </td>
+
+                    <td>
+                      <span style={{ color: '#f97316', fontWeight: 700, fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                        <Flame size={13} /> {prof.streakData?.currentStreak ?? prof.currentStreak ?? 0}d
+                      </span>
+                    </td>
+
+                    <td>
+                      <div style={{ minWidth: '95px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: '2px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{nxt ? nxt.name : 'MAX'}</span>
+                          <span style={{ fontWeight: 700, color: tier.color }}>{prog.progressPercent}%</span>
+                        </div>
+                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+                          <div style={{ width: `${prog.progressPercent}%`, height: '100%', background: tier.color, borderRadius: '999px' }} />
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>{dept ? dept.name : 'Engineering & Technology'}</td>
+
+                    <td>
+                      <span className={`badge badge-${u.status}`}>
+                        {u.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setSelectedUserDetail(u)}
+                          title="View profile and gamification standing"
+                        >
+                          <Eye size={13} /> View
+                        </button>
+
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setAwardTargetStudentId(u.id);
+                            setAwardTargetStudentName(u.displayName);
+                            setIsAwardModalOpen(true);
+                          }}
+                          title="Award Learning Points"
+                          style={{
+                            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontWeight: 700,
+                            padding: '4px 8px',
+                          }}
+                        >
+                          <Award size={13} /> Award
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
 
               return (
                 <tr key={u.id}>
@@ -396,8 +602,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                         borderRadius: '50%',
                         background: isFaculty
                           ? 'linear-gradient(135deg, #06b6d4, #3b82f6)'
-                          : isStudent
-                          ? 'linear-gradient(135deg, var(--primary), var(--accent-purple))'
                           : 'linear-gradient(135deg, #f59e0b, #ef4444)',
                         color: '#fff',
                         display: 'flex',
@@ -410,9 +614,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       </div>
                       <div>
                         <span style={{ fontWeight: 600 }}>{u.displayName}</span>
-                        {isStudent && (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Roll: STU-2026-0{u.id.slice(-2)}</div>
-                        )}
                         {isFaculty && (
                           <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)' }}>Lead Trainer</div>
                         )}
@@ -422,7 +623,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                   <td>{u.email}</td>
                   <td>
                     <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
-                      {isFaculty ? 'Trainer' : isStudent ? 'Student' : 'Platform Admin'}
+                      {isFaculty ? 'Trainer' : 'Platform Admin'}
                     </span>
                   </td>
                   <td>{dept ? dept.name : 'Engineering & Technology'}</td>
@@ -439,7 +640,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => setSelectedUserDetail(u)}
-                        title="View profile, attendance, and progress"
+                        title="View profile and teaching details"
                       >
                         <Eye size={13} /> {isFacultyViewer ? 'View Progress' : 'View'}
                       </button>
@@ -656,6 +857,114 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Gamification Standing & Audit Trail */}
+                  {(() => {
+                    const prof = profiles[selectedUserDetail.id] || profiles['u-007'] || {
+                      totalPoints: 0,
+                      currentStreak: 0,
+                      bestStreak: 0,
+                      streakData: { currentStreak: 0, bestStreak: 0 },
+                      events: [] as PointAwardEvent[],
+                      history: [] as PointAwardEvent[],
+                    };
+                    const tier = getRankForPoints(prof.totalPoints);
+                    const nxt = getNextRank(tier.tier);
+                    const prog = getRankProgress(prof.totalPoints);
+                    const pointEvents: PointAwardEvent[] = prof.events || prof.history || [];
+
+                    return (
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.75)',
+                          border: `1.5px solid ${tier.color}40`,
+                          borderRadius: 'var(--radius-md)',
+                          padding: '14px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <RankBadge tier={tier} size="xs" />
+                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: tier.color }}>
+                              {tier.name.toUpperCase()} RANK
+                            </span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#ffd700' }}>
+                              &bull; {prof.totalPoints.toLocaleString()} Points
+                            </span>
+                          </div>
+
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => {
+                              setAwardTargetStudentId(selectedUserDetail.id);
+                              setAwardTargetStudentName(selectedUserDetail.displayName);
+                              setIsAwardModalOpen(true);
+                            }}
+                            style={{ padding: '4px 10px', fontSize: '0.72rem', borderRadius: '8px' }}
+                          >
+                            <Award size={12} /> Award Points
+                          </button>
+                        </div>
+
+                        {/* Streak & Next Tier Grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.75rem', marginBottom: '8px' }}>
+                          <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '6px 8px', borderRadius: '6px' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Streak: </span>
+                            <strong style={{ color: '#f97316' }}>🔥 {prof.streakData?.currentStreak ?? prof.currentStreak ?? 0}d</strong>
+                            <span style={{ color: 'var(--text-muted)' }}> (Best: {prof.streakData?.bestStreak ?? prof.bestStreak ?? 0}d)</span>
+                          </div>
+                          <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '6px 8px', borderRadius: '6px' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Next Rank: </span>
+                            <strong style={{ color: nxt ? nxt.color : '#ffd700' }}>
+                              {nxt ? `${nxt.name} (${prog.pointsToNextRank} pts)` : 'MAX RANK (Legend)'}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* Next Rank Progress */}
+                        {nxt && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: '3px' }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>Progress to {nxt.name}</span>
+                              <span style={{ color: tier.color, fontWeight: 700 }}>{prog.progressPercent}%</span>
+                            </div>
+                            <div style={{ height: '5px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+                              <div style={{ width: `${prog.progressPercent}%`, height: '100%', background: tier.color, borderRadius: '999px' }} />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Recent Points Events History */}
+                        <div>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                            Recent Point-Award History
+                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                            {pointEvents.length === 0 ? (
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>No point awards recorded yet.</div>
+                            ) : (
+                              pointEvents.slice(-3).reverse().map((ev: PointAwardEvent) => (
+                                <div
+                                  key={ev.id}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    fontSize: '0.7rem',
+                                    background: 'rgba(0, 0, 0, 0.25)',
+                                    padding: '4px 8px',
+                                    borderRadius: '6px',
+                                  }}
+                                >
+                                  <span>{ev.reason || ev.description} ({ev.awardingSource || ev.source || ev.category})</span>
+                                  <strong style={{ color: '#10b981' }}>+{ev.points} pts</strong>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Course Progress breakdown */}
                   <div>
@@ -915,6 +1224,23 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           </div>
         </div>
       )}
+
+      {/* Trainer & Admin Award Learning Points Modal */}
+      <AwardPointsModal
+        isOpen={isAwardModalOpen}
+        onClose={() => setIsAwardModalOpen(false)}
+        preselectedStudentId={awardTargetStudentId}
+        preselectedStudentName={awardTargetStudentName}
+        authorizedStudents={users
+          .filter((u) => u.activeRole === 'student' || u.activeRole === 'learner')
+          .map((u) => ({ id: u.id, name: u.displayName, email: u.email }))}
+        awardingRole={user?.activeRole === 'trainer' || user?.activeRole === 'instructor' ? 'trainer' : 'admin'}
+        awardingUserId={user?.id || 'staff-01'}
+        awardingUserName={user?.displayName || 'Faculty Member'}
+        onAwardSuccess={(sId, pts) => {
+          showNotice(`Successfully recorded +${pts} learning points for scholar.`);
+        }}
+      />
     </div>
   );
 };
