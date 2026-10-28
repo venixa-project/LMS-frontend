@@ -997,34 +997,25 @@ export const CoursesPage: React.FC = () => {
                       )
                     ) : (
                       <>
-                        {/* Primary Action: Edit */}
+                        {/* Action 1: Continue Learning / View Materials */}
+                        <Link
+                          to={`/course-player/${c.id}`}
+                          className="btn btn-primary btn-sm"
+                          style={{ flex: 1.2, justifyContent: 'center', gap: '5px', fontSize: '0.8rem', padding: '6px 10px', fontWeight: 600 }}
+                          title="Open course learning experience, video lessons, and curriculum materials"
+                        >
+                          <Play size={13} /> Continue Learning
+                        </Link>
+
+                        {/* Action 2: Course Builder Edit */}
                         <Link
                           to={`/course-builder?id=${c.id}`}
                           className="btn btn-secondary btn-sm"
                           style={{ flex: 1, justifyContent: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 10px' }}
-                          title="Open course editor"
+                          title="Edit course in Course Builder"
                         >
-                          <Edit2 size={13} /> {isFaculty ? 'Edit Materials' : 'Edit'}
+                          <Edit2 size={13} /> {isFaculty ? 'Edit' : 'Edit'}
                         </Link>
-
-                        {/* Secondary Action: Assign Students */}
-                        {(isAdmin || (isFaculty && (c.instructors?.includes(user?.id || '') || c.instructors?.includes('u-004') || c.createdBy === user?.id))) && (
-                          <Link
-                            to={`/courses/${c.id}/assign-students`}
-                            className="btn btn-primary btn-sm"
-                            style={{
-                              flex: 1.2,
-                              justifyContent: 'center',
-                              gap: '5px',
-                              fontSize: '0.8rem',
-                              padding: '6px 10px',
-                              fontWeight: 600
-                            }}
-                            title="Assign eligible students directly to this course"
-                          >
-                            <UserPlus size={13} /> Assign Students
-                          </Link>
-                        )}
 
                         {/* Primary Action: Manage Menu Trigger */}
                         <div className="course-manage-menu-container" style={{ position: 'relative' }}>
@@ -1093,7 +1084,43 @@ export const CoursesPage: React.FC = () => {
                                 }}
                                 onClick={() => setActiveManageMenuCourseId(null)}
                               >
-                                <Eye size={14} color="var(--primary)" /> View Details
+                                <Eye size={14} color="var(--primary)" /> View Details & Syllabus
+                              </Link>
+
+                              <Link
+                                to={`/course-player/${c.id}`}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '7px 10px',
+                                  borderRadius: 'var(--radius-sm)',
+                                  fontSize: '0.8rem',
+                                  color: 'var(--text-main)',
+                                  textDecoration: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => setActiveManageMenuCourseId(null)}
+                              >
+                                <Play size={14} color="var(--primary)" /> Open Course Player
+                              </Link>
+
+                              <Link
+                                to={`/courses/${c.id}/assign-students`}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '7px 10px',
+                                  borderRadius: 'var(--radius-sm)',
+                                  fontSize: '0.8rem',
+                                  color: 'var(--text-main)',
+                                  textDecoration: 'none',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => setActiveManageMenuCourseId(null)}
+                              >
+                                <UserPlus size={14} color="var(--primary)" /> Assign Students
                               </Link>
 
                               <Link

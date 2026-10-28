@@ -6,6 +6,7 @@ import {
 import { QuestionBank, Question, QuizQuestionItem, QuizOption } from '../../../types';
 import { mockQuestionBanks, mockQuestions } from '../../../data/mockData';
 import { exportQuestionsToCsv } from './csvTemplateUtils';
+import { getStoredQuestionBanks, getStoredQuestions } from '../../../lib/questionBankStorage';
 
 interface Props {
   existingQuestions: QuizQuestionItem[];
@@ -18,8 +19,8 @@ export const QuestionBankSelectorTab: React.FC<Props> = ({
   onAddQuestions,
   courseTitle
 }) => {
-  const [banks] = useState<QuestionBank[]>(mockQuestionBanks);
-  const [allQuestions] = useState<Question[]>(mockQuestions);
+  const [banks] = useState<QuestionBank[]>(() => getStoredQuestionBanks());
+  const [allQuestions] = useState<Question[]>(() => getStoredQuestions());
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');

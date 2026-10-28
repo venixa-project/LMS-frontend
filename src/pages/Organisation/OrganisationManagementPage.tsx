@@ -7,6 +7,7 @@ import { BranchesManagementView } from './components/BranchesManagementView';
 import { DepartmentsDesignationsView } from './components/DepartmentsDesignationsView';
 import { TeamsHierarchyView } from './components/TeamsHierarchyView';
 import { ToastContainer } from './components/ToastContainer';
+import { useOrganisationBranding } from '../../lib/useOrganisationBranding';
 
 interface Props {
   subNav?: 'ca-company-profile' | 'ca-branches-locations' | 'ca-departments-designations';
@@ -49,6 +50,7 @@ const subNavItems: NavOption[] = [
 const OrganisationContent: React.FC<Props> = ({ subNav }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { companyName, companyCode } = useOrganisationBranding();
 
   // Determine current active sub navigation from prop or URL
   const determineActiveSubNav = (): SubNavKey => {
@@ -93,7 +95,9 @@ const OrganisationContent: React.FC<Props> = ({ subNav }) => {
             >
               Organisation Management
             </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Acme Learning Corp &bull; org-001</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+              {companyName} &bull; {companyCode || 'org-001'}
+            </span>
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: 800, color: 'var(--text-main)' }}>
             {currentOption.label}

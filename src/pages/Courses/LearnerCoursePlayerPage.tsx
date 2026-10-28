@@ -30,6 +30,25 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const [showCertModal, setShowCertModal] = useState(false);
   const [downloadingCert, setDownloadingCert] = useState(false);
 
+  // Persistent notes per lesson
+  const [lessonNotes, setLessonNotes] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem(`venilearn_notes_${course.id}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const handleSaveNote = (text: string) => {
+    const activeLessonId = allLessons[currentLessonIndex]?.id || 'les-default';
+    const updated = { ...lessonNotes, [activeLessonId]: text };
+    setLessonNotes(updated);
+    try {
+      localStorage.setItem(`venilearn_notes_${course.id}`, JSON.stringify(updated));
+    } catch {}
+  };
+
   // Check if learner already earned a certificate for this course
   const existingCert = user ? getCertificatesByLearner(user.id).find((c) => c.courseId === course.id) : undefined;
 
@@ -379,10 +398,17 @@ export const LearnerCoursePlayerPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Downloadable Resources & Discussion */}
-          <div className="card">
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '12px' }}>Lesson Attachments & Notes</h3>
-            <div style={{ display: 'flex', gap: '12px' }}>
+          {/* Downloadable Resources & Lesson Notes */}
+          <div className="card" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={18} color="var(--primary)" />
+                <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>Curriculum Materials & Lesson Notes</h3>
+              </div>
+              <span className="text-muted text-xs">Synchronized with course progress</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '20px' }}>
               <div
                 style={{
                   background: 'var(--bg-input)',
@@ -391,16 +417,34 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                   padding: '12px 16px',
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
                   gap: '10px',
-                  cursor: 'pointer'
+                  transition: 'all 0.15s ease',
                 }}
-                onClick={() => alert("Downloading lecture_cheatsheet.pdf mock")}
               >
-                <Download size={16} color="var(--primary)" />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Architectural-Guide.pdf</div>
-                  <div className="text-muted text-xs">2.4 MB &bull; PDF document</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Download size={18} color="var(--primary)" />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{currentLesson.title.slice(0, 24)}-Guide.pdf</div>
+                    <div className="text-muted text-xs">2.4 MB &bull; Lecture Document</div>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  onClick={() => {
+                    const blob = new Blob([`# VeniLearn LMS\nCourse: ${course.title}\nLesson: ${currentLesson.title}\nDuration: ${currentLesson.durationMinutes || 30} mins\n\nOfficial Course Study Guide & Materials.`], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentLesson.title.replace(/\s+/g, '_')}_StudyGuide.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download
+                </button>
               </div>
 
               <div
@@ -411,17 +455,53 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                   padding: '12px 16px',
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
                   gap: '10px',
-                  cursor: 'pointer'
+                  transition: 'all 0.15s ease',
                 }}
-                onClick={() => alert("Opening sandbox workspace mock")}
               >
-                <FileText size={16} color="var(--accent-cyan)" />
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Starter-Repository.zip</div>
-                  <div className="text-muted text-xs">850 KB &bull; Source code files</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <FileText size={18} color="var(--accent-purple)" />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Lesson-Starter-Code.zip</div>
+                    <div className="text-muted text-xs">850 KB &bull; Source Exercises</div>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  onClick={() => {
+                    const blob = new Blob([`// Starter exercises for ${currentLesson.title}\nconsole.log("Ready to practice!");\n`], { type: 'text/javascript' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentLesson.title.replace(/\s+/g, '_')}_starter.js`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download
+                </button>
               </div>
+            </div>
+
+            {/* Interactive Personal Notes Box */}
+            <div style={{ background: 'var(--bg-input)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Personal Study Notes ({currentLesson.title})
+                </label>
+                <span className="text-muted text-xs">Auto-saved to your profile</span>
+              </div>
+              <textarea
+                rows={3}
+                className="form-textarea"
+                style={{ width: '100%', fontSize: '0.85rem', resize: 'vertical' }}
+                placeholder="Jot down key takeaways, questions, or architectural ideas for this lesson..."
+                value={lessonNotes[currentLesson.id] || ''}
+                onChange={(e) => handleSaveNote(e.target.value)}
+              />
             </div>
           </div>
         </div>

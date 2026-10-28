@@ -7,6 +7,7 @@ import {
   Settings, Menu, Building, HelpCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useOrganisationBranding } from '../lib/useOrganisationBranding';
 
 interface Props {
   onToggleSidebar: () => void;
@@ -23,37 +24,19 @@ export const Navbar: React.FC<Props> = ({
 }) => {
   const { user, logout, unreadNotifications } = useAuthStore();
   const { preference, resolvedTheme, setTheme } = useThemeStore();
-  const [selectedOrgId, setSelectedOrgId] = useState('org-001');
+  const [selectedOrgId, setSelectedOrgId] = useState(() => sessionStorage.getItem('venilearn_active_org_id') || 'org-001');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Company logo and branding state from storage
-  const [companyInfo, setCompanyInfo] = useState<{ name?: string; logo?: string } | null>(() => {
-    try {
-      const cached = localStorage.getItem('venilearn_company');
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
+  const isPlatformAdmin = user?.activeRole === 'platform_admin';
+  const { companyName, companyLogo } = useOrganisationBranding();
+  const [navbarLogoSrc, setNavbarLogoSrc] = useState(companyLogo || '/logo.png');
 
   useEffect(() => {
-    const handleCompanyUpdate = () => {
-      try {
-        const cached = localStorage.getItem('venilearn_company');
-        setCompanyInfo(cached ? JSON.parse(cached) : null);
-      } catch {}
-    };
-
-    window.addEventListener('venilearn_company_updated', handleCompanyUpdate);
-    window.addEventListener('storage', handleCompanyUpdate);
-    return () => {
-      window.removeEventListener('venilearn_company_updated', handleCompanyUpdate);
-      window.removeEventListener('storage', handleCompanyUpdate);
-    };
-  }, []);
+    setNavbarLogoSrc(companyLogo || '/logo.png');
+  }, [companyLogo]);
 
   // Close theme menu when clicking outside
   useEffect(() => {
@@ -76,8 +59,6 @@ export const Navbar: React.FC<Props> = ({
     navigate('/login');
   };
 
-  const isPlatformAdmin = user?.activeRole === 'platform_admin';
-
   return (
     <header className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -99,18 +80,35 @@ export const Navbar: React.FC<Props> = ({
             textDecoration: 'none'
           }}
         >
-          <div className="brand-logo-card" style={{ padding: '4px 10px' }}>
+          <div className="brand-logo-card" style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <img
-              src="/logo.png"
-              alt="VeniLearn Logo"
+              src={isPlatformAdmin ? '/logo.png' : navbarLogoSrc}
+              alt={isPlatformAdmin ? 'VeniLearn Platform' : companyName}
               className="brand-logo-img"
               style={{
                 height: '26px',
                 width: 'auto',
-                maxWidth: '120px',
+                maxWidth: '90px',
                 objectFit: 'contain'
               }}
+              onError={() => setNavbarLogoSrc('/logo.png')}
             />
+            {!isPlatformAdmin && (
+              <span
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: 'var(--text-main)',
+                  maxWidth: '120px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={companyName}
+              >
+                {companyName}
+              </span>
+            )}
           </div>
         </Link>
 
@@ -120,7 +118,12 @@ export const Navbar: React.FC<Props> = ({
             <Building size={16} color="var(--primary)" />
             <select
               value={selectedOrgId}
-              onChange={(e) => setSelectedOrgId(e.target.value)}
+              onChange={(e) => {
+                const nextOrg = e.target.value;
+                setSelectedOrgId(nextOrg);
+                sessionStorage.setItem('venilearn_active_org_id', nextOrg);
+                window.dispatchEvent(new CustomEvent('venilearn_org_switched', { detail: { orgId: nextOrg } }));
+              }}
               className="form-select nav-org-select"
               style={{
                 padding: '4px 8px',
@@ -138,42 +141,58 @@ export const Navbar: React.FC<Props> = ({
             </select>
           </div>
         ) : (
-          <div className="nav-org-select-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            {companyInfo?.logo ? (
-              <div
+          <div
+            className="nav-org-select-container"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.85rem',
+              color: 'var(--text-secondary)',
+              maxWidth: '320px',
+            }}
+          >
+            <div
+              style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '6px',
+                background: '#ffffff',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                padding: '2px',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+              title={companyName}
+            >
+              <img
+                src={navbarLogoSrc}
+                alt={companyName}
                 style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '5px',
-                  background: '#ffffff',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  padding: '2px',
-                  flexShrink: 0,
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  display: 'block',
                 }}
-                title={companyInfo.name || 'Company Logo'}
-              >
-                <img
-                  src={companyInfo.logo}
-                  alt={companyInfo.name || 'Company Logo'}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    objectFit: 'contain',
-                    display: 'block',
-                  }}
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-              </div>
-            ) : (
-              <Building size={14} color="var(--primary)" />
-            )}
-            <span style={{ fontWeight: 600 }}>{companyInfo?.name || 'Venixa Technologies'}</span>
+                onError={() => setNavbarLogoSrc('/logo.png')}
+              />
+            </div>
+            <span
+              style={{
+                fontWeight: 700,
+                color: 'var(--text-main)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={companyName}
+            >
+              {companyName}
+            </span>
           </div>
         )}
       </div>
