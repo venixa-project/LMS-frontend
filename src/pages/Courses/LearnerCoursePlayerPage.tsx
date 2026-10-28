@@ -2,31 +2,26 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
-import { Course } from '../../types';
+import { useCertificateStore } from '../../lib/certificateStore';
+import { generateCertificatePdf } from '../../lib/certificatePdf';
+import { mockCourses } from '../../data/mockData';
+import { Certificate } from '../../types';
 import {
-  ArrowLeft, CheckCircle2, Circle, Play, Pause, FileText, Download,
-  ChevronRight, ChevronLeft, Bookmark, Award, Clock, BookOpen,
-  Video
+  ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
+  ChevronRight, ChevronLeft, Bookmark, Share2, Sparkles, Award,
+  ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye,
+  Pause, Video
 } from 'lucide-react';
 
 export const LearnerCoursePlayerPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { courses } = useCourseStore();
+  const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
   const { id } = useParams<{ id: string }>();
-  const { courses, enrolledCourseIds } = useCourseStore();
 
-  // Selected course resolution (from route ID or first enrolled course)
-  const course: Course = useMemo(() => {
-    if (id) {
-      const found = courses.find((c) => c.id === id);
-      if (found) return found;
-    }
-    const enrolled = courses.find((c) => enrolledCourseIds.includes(c.id));
-    return enrolled || courses[0];
-  }, [courses, id, enrolledCourseIds]);
-
-  const allLessons = useMemo(() => {
-    return course.modules.flatMap((m) => m.lessons);
-  }, [course]);
+  // Resolve course from store first, fallback to mockCourses
+  const course = courses.find((c) => c.id === id) || mockCourses.find((c) => c.id === id) || mockCourses[0];
+  const allLessons = useMemo(() => course.modules?.flatMap((m) => m.lessons) || [], [course]);
 
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
 
@@ -48,25 +43,78 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [unlockedCert, setUnlockedCert] = useState<Certificate | null>(null);
+  const [showCertModal, setShowCertModal] = useState(false);
+  const [downloadingCert, setDownloadingCert] = useState(false);
 
-  const currentLesson = allLessons[currentLessonIndex] || allLessons[0] || {
-    id: 'placeholder',
-    title: 'Introduction',
-    type: 'video' as const,
-    duration: 15,
-    order: 1,
-    status: 'published' as const
-  };
+  // Check if learner already earned a certificate for this course
+  const existingCert = user ? getCertificatesByLearner(user.id).find((c) => c.courseId === course.id) : undefined;
 
-  const isCompleted = completedLessonIds.includes(currentLesson.id);
+  // Course Availability Calculations
+  const now = new Date();
+  const isBeforeStart = Boolean(course.startDate && new Date(course.startDate) > now);
+  const isAfterEnd = Boolean(course.endDate && new Date(course.endDate) < now);
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isPrivileged = !isStudent; // Admins and Trainers
+  const exitLink = isStudent ? '/my-learning' : '/courses';
+
+  const currentLesson = allLessons[currentLessonIndex] || allLessons[0];
+  const isCompleted = currentLesson ? completedLessonIds.includes(currentLesson.id) : false;
 
   // Find module containing current lesson
-  const currentModule = course.modules.find((m) => m.lessons.some((l) => l.id === currentLesson.id)) || course.modules[0];
+  const currentModule = course.modules.find((m) => m.lessons.some((l) => l.id === currentLesson?.id)) || course.modules[0];
   const currentModuleIndex = course.modules.findIndex((m) => m.id === currentModule?.id);
 
   const progressPercent = allLessons.length > 0
     ? Math.min(100, Math.round((completedLessonIds.length / allLessons.length) * 100))
     : 0;
+  const requiredPercentage = course.completionPercentageRequired ?? course.certificateConfig?.requiredCompletionPercentage ?? 100;
+
+  const toggleComplete = () => {
+    // End Date restriction: freeze progress modifications after course end date
+    if (isAfterEnd || !currentLesson) return;
+
+    if (isCompleted) {
+      const nextList = completedLessonIds.filter((lid) => lid !== currentLesson.id);
+      setCourseCompletionMap((prev) => ({
+        ...prev,
+        [course.id]: nextList,
+      }));
+    } else {
+      const nextList = [...completedLessonIds, currentLesson.id];
+      setCourseCompletionMap((prev) => ({
+        ...prev,
+        [course.id]: nextList,
+      }));
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2500);
+
+      // Verify completion percentage eligibility for certificate issuance
+      const newPercent = Math.round((nextList.length / allLessons.length) * 100);
+      if (newPercent >= requiredPercentage && course.certificateConfig?.enabled !== false) {
+        const student = user || {
+          id: 'u-007',
+          displayName: 'Alex Thompson',
+          email: 'alex.thompson@student.acmelearning.com',
+        };
+        const issueResult = issueCourseCertificate({
+          course,
+          learner: {
+            id: student.id,
+            name: student.displayName || 'Alex Thompson',
+            email: student.email,
+          },
+          scoreAchieved: 95,
+          completionPercentage: newPercent,
+        });
+
+        if (issueResult.success && issueResult.certificate) {
+          setUnlockedCert(issueResult.certificate);
+          setShowCertModal(true);
+        }
+      }
+    }
+  };
 
   // Toggle individual lesson completion from playlist
   const toggleLessonCompletion = (lessonId: string, e: React.MouseEvent) => {
@@ -112,32 +160,90 @@ export const LearnerCoursePlayerPage: React.FC = () => {
 
   const lessonDuration = currentLesson.duration || (currentLesson as any).durationMinutes || 15;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* 1. TOP BANNER: Back to My Enrolled Courses, Course Title, Level & Progress */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <Link to="/my-learning" className="btn btn-secondary btn-sm" style={{ gap: '6px' }}>
-            <ArrowLeft size={14} /> Back to My Enrolled Courses
-          </Link>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span className="badge badge-primary" style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {course.category}
-            </span>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
-              {course.title}
-            </h2>
-            <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
-              {course.level || 'Beginner'}
-            </span>
-            <span className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              &bull; Module {currentModuleIndex + 1}: {currentModule?.title}
-            </span>
-          </div>
+  // RULE 1: Before Start Date - Blocked Access for Students
+  if (isBeforeStart && isStudent) {
+    return (
+      <div style={{ maxWidth: '680px', margin: '48px auto', textAlign: 'center', padding: '48px 32px' }} className="card">
+        <div style={{
+          width: '72px',
+          height: '72px',
+          borderRadius: '50%',
+          background: 'rgba(99, 102, 241, 0.15)',
+          color: 'var(--primary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 20px',
+          boxShadow: '0 0 0 8px rgba(99, 102, 241, 0.08)'
+        }}>
+          <Clock size={36} />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <span className="badge badge-secondary" style={{ marginBottom: '12px' }}>
+          Course Access Scheduled
+        </span>
+
+        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '10px' }}>
+          This Course is Not Yet Open
+        </h1>
+
+        <p className="text-secondary" style={{ fontSize: '1.05rem', marginBottom: '24px', lineHeight: 1.5 }}>
+          This course will be available from <strong>{new Date(course.startDate!).toLocaleString()}</strong> ({user?.timezone || 'America/New_York'}).
+        </p>
+
+        <div style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+          padding: '16px 20px',
+          marginBottom: '28px',
+          textAlign: 'left',
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)'
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: '4px', color: 'var(--text-main)' }}>
+            Course: {course.title}
+          </div>
+          <div>Students cannot start lessons, view quizzes, or submit work before the official scheduled start date and time. Please check back when access opens.</div>
+        </div>
+
+        <Link to={exitLink} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 24px' }}>
+          <ArrowLeft size={16} /> Return to My Learning
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Top Banner Navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <Link to={exitLink} className="btn btn-secondary btn-sm" style={{ gap: '6px' }}>
+          <ArrowLeft size={14} /> Exit to Courses
+        </Link>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          {(existingCert || unlockedCert) && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setUnlockedCert(existingCert || unlockedCert);
+                setShowCertModal(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(37, 99, 235, 0.1)',
+                color: 'var(--primary)',
+                border: '1px solid var(--primary)',
+                fontWeight: 600
+              }}
+            >
+              <Award size={15} /> View Earned Certificate
+            </button>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '180px' }}>
             <span className="text-muted text-xs font-semibold">{progressPercent}% Completed</span>
             <div className="progress-bar-bg" style={{ height: '8px', flex: 1 }}>
@@ -155,7 +261,49 @@ export const LearnerCoursePlayerPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. MAIN PLAYER GRID: Video/Document Player on Left (75%), Curriculum Playlist on Right (25%) */}
+      {/* RULE 2: Scheduled Start Notice for Admins/Trainers */}
+      {isBeforeStart && isPrivileged && (
+        <div style={{
+          background: 'rgba(99, 102, 241, 0.08)',
+          border: '1px solid var(--primary)',
+          color: 'var(--text-main)',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.85rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={16} color="var(--primary)" />
+            <span><strong>Admin / Creator Preview:</strong> This course is scheduled to open for students on <strong>{new Date(course.startDate!).toLocaleString()}</strong> ({user?.timezone || 'America/New_York'}). Students cannot access it yet.</span>
+          </div>
+          <span className="badge badge-primary">Preview Mode</span>
+        </div>
+      )}
+
+      {/* RULE 3: After End Date - Read-Only Enforcement */}
+      {isAfterEnd && (
+        <div style={{
+          background: '#fffbeb',
+          border: '1px solid #fde68a',
+          color: '#92400e',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.85rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Lock size={16} color="#d97706" />
+            <span><strong>Course access period has ended ({new Date(course.endDate!).toLocaleString()}):</strong> Content is in read-only review mode. Lesson progress modifications and submissions are disabled.</span>
+          </div>
+          <span className="badge badge-warning">Read-Only</span>
+        </div>
+      )}
+
+      {/* Main Player Grid: Content on Left (75%), Curriculum on Right (25%) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
         {/* Main Content Area */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -288,26 +436,24 @@ export const LearnerCoursePlayerPage: React.FC = () => {
               <ChevronLeft size={16} /> Previous Lesson
             </button>
 
-            {/* Current Lesson Indicator & Automatic Completion State */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span className="text-muted text-xs font-semibold">
-                Lesson {currentLessonIndex + 1} of {allLessons.length}
-              </span>
-              <span
-                className={`badge badge-${isCompleted ? 'active' : 'primary'}`}
-                style={{ fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            {isAfterEnd ? (
+              <button
+                className="btn btn-secondary"
+                disabled
+                title="Course access period has ended"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.8, cursor: 'not-allowed' }}
               >
-                {isCompleted ? (
-                  <>
-                    <CheckCircle2 size={13} color="var(--success)" /> Completed
-                  </>
-                ) : (
-                  <>
-                    <Clock size={13} /> In Progress
-                  </>
-                )}
-              </span>
-            </div>
+                <Lock size={16} /> Course Ended &bull; Read-Only
+              </button>
+            ) : (
+              <button
+                className={`btn ${isCompleted ? 'btn-success' : 'btn-primary'}`}
+                onClick={toggleComplete}
+              >
+                <CheckCircle2 size={16} />
+                {isCompleted ? 'Completed' : 'Mark as Complete'}
+              </button>
+            )}
 
             {currentLessonIndex < allLessons.length - 1 ? (
               <button
@@ -497,6 +643,93 @@ export const LearnerCoursePlayerPage: React.FC = () => {
           <div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>+10 XP Points Earned!</div>
             <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>Lesson completed. Progress updated automatically.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Course Completion & Certificate Unlocked Modal */}
+      {showCertModal && unlockedCert && (
+        <div className="modal-overlay" onClick={() => setShowCertModal(false)}>
+          <div className="modal-card" style={{ maxWidth: '600px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              padding: '32px 28px',
+              background: 'radial-gradient(ellipse at center, rgba(37, 99, 235, 0.15) 0%, transparent 80%), var(--bg-card)'
+            }}>
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #2563EB, #F472B6)',
+                margin: '0 auto 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35)'
+              }}>
+                <Award size={36} color="#fff" />
+              </div>
+
+              <span className="badge badge-active" style={{ marginBottom: '8px' }}>
+                Course Completed &bull; 100% Progress
+              </span>
+              <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '8px 0 6px' }}>
+                Congratulations, {user?.displayName || 'Alex'}!
+              </h2>
+              <p className="text-secondary text-sm" style={{ maxWidth: '440px', margin: '0 auto 16px' }}>
+                You have satisfied all academic curriculum requirements for <strong>{course.title}</strong>. Your official verified certificate has been recorded.
+              </p>
+
+              <div style={{
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 16px',
+                marginBottom: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+                textAlign: 'left'
+              }}>
+                <div>
+                  <span className="text-muted text-xs">Credential ID:</span>
+                  <div style={{ fontWeight: 700 }}>{unlockedCert.id}</div>
+                </div>
+                <div>
+                  <span className="text-muted text-xs">Issued By:</span>
+                  <div style={{ fontWeight: 600 }}>{unlockedCert.issuingOrganization || 'Acme Learning Corp'}</div>
+                </div>
+                <div>
+                  <span className="text-muted text-xs">Status:</span>
+                  <div style={{ color: 'var(--success)', fontWeight: 700 }}>Verified &bull; Active</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  disabled={downloadingCert}
+                  onClick={async () => {
+                    setDownloadingCert(true);
+                    try {
+                      await generateCertificatePdf(unlockedCert);
+                    } catch (err) {
+                      console.error(err);
+                    } finally {
+                      setDownloadingCert(false);
+                    }
+                  }}
+                  style={{ gap: '8px' }}
+                >
+                  <Download size={16} /> {downloadingCert ? 'Generating PDF...' : 'Download Verified PDF'}
+                </button>
+                <Link to="/my-certificates" className="btn btn-secondary" style={{ gap: '8px' }}>
+                  <ExternalLink size={16} /> View in My Certificates
+                </Link>
+                <button className="btn btn-secondary" onClick={() => setShowCertModal(false)}>
+                  Continue Learning
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

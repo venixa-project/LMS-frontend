@@ -9,7 +9,7 @@ import {
   validateCircularPrerequisites,
   PathTemplatePreset,
 } from '../../lib/learningPathStore';
-import { mockDepartments } from '../../data/mockData';
+import { mockDepartments, mockOrganizations } from '../../data/mockData';
 import {
   LearningPath,
   LearningPathCourse,
@@ -29,6 +29,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   ArrowRight,
   X,
   Award,
@@ -54,6 +57,17 @@ import {
   FileCheck,
   Info,
 } from 'lucide-react';
+
+// Helper to detect institution type from organization name, slug, or profile
+export const detectOrganizationType = (orgNameOrSlug?: string): LearningPathInstitutionType => {
+  if (!orgNameOrSlug) return 'corporate';
+  const lower = orgNameOrSlug.toLowerCase();
+  if (lower.includes('school') || lower.includes('k12') || lower.includes('k-12')) return 'school';
+  if (lower.includes('university') || lower.includes('college') || lower.includes('campus') || lower.includes('.edu')) return 'higher_ed';
+  if (lower.includes('academy') || lower.includes('institute') || lower.includes('bootcamp') || lower.includes('training')) return 'training_institute';
+  if (lower.includes('corp') || lower.includes('inc') || lower.includes('company') || lower.includes('enterprise')) return 'corporate';
+  return 'corporate';
+};
 
 export const LearningPathsPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -108,8 +122,23 @@ export const LearningPathsPage: React.FC = () => {
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  // Builder Form State
-  const [builderStep, setBuilderStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  // Organization detection from active user organization profile
+  const userOrg = useMemo(() => {
+    return mockOrganizations.find((o) => o.id === (user?.organizationId || 'org-001'));
+  }, [user]);
+
+  const detectedOrgType: LearningPathInstitutionType = useMemo(() => {
+    return detectOrganizationType(userOrg?.name || userOrg?.slug);
+  }, [userOrg]);
+
+  // Builder Form State (4 Steps Workflow)
+  const [builderStep, setBuilderStep] = useState<1 | 2 | 3 | 4>(1);
+  const [templateOrgType, setTemplateOrgType] = useState<LearningPathInstitutionType>(detectedOrgType);
+  const [suggestionOffset, setSuggestionOffset] = useState<number>(0);
+  const [showAllTemplatesModal, setShowAllTemplatesModal] = useState<boolean>(false);
+  const [showAdvancedRules, setShowAdvancedRules] = useState<boolean>(false);
+  const [assignLearnerSearch, setAssignLearnerSearch] = useState<string>('');
+
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formObjective, setFormObjective] = useState('');
@@ -139,8 +168,46 @@ export const LearningPathsPage: React.FC = () => {
   const [formDepartmentIds, setFormDepartmentIds] = useState<string[]>([]);
   const [formUserIds, setFormUserIds] = useState<string[]>([]);
 
-  // Builder Validation & Alerts
+  // Builder Validation & Navigation
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [visitedSteps, setVisitedSteps] = useState<number[]>([1]);
   const [builderErrors, setBuilderErrors] = useState<string[]>([]);
+
+  // Filter presets by templateOrgType
+  const relevantTemplates = useMemo(() => {
+    return PATH_TEMPLATE_PRESETS.filter((t) => t.institutionType === templateOrgType);
+  }, [templateOrgType]);
+
+  // Exactly 3 suggestions displayed at a time (cycles cleanly without repeating until exhausted)
+  const currentSuggestions = useMemo(() => {
+    if (relevantTemplates.length <= 3) return relevantTemplates;
+    const startIndex = suggestionOffset % relevantTemplates.length;
+    const result: PathTemplatePreset[] = [];
+    for (let i = 0; i < 3; i++) {
+      const idx = (startIndex + i) % relevantTemplates.length;
+      result.push(relevantTemplates[idx]);
+    }
+    return result;
+  }, [relevantTemplates, suggestionOffset]);
+
+  // Refresh suggestions action
+  const handleRefreshSuggestions = () => {
+    if (relevantTemplates.length <= 3) return;
+    setSuggestionOffset((prev) => (prev + 3) % relevantTemplates.length);
+  };
+
+  // Create from scratch action
+  const handleSelectCreateFromScratch = () => {
+    setSelectedTemplateId('scratch');
+    if (PATH_TEMPLATE_PRESETS.some((p) => p.name === formTitle.trim())) {
+      setFormTitle('');
+    }
+    if (PATH_TEMPLATE_PRESETS.some((p) => p.description === formDescription.trim())) {
+      setFormDescription('');
+    }
+    setFormCourses([]);
+    setBuilderErrors([]);
+  };
 
   // Courses accessible to current user for builder
   const availableCourses = useMemo(() => {
@@ -288,29 +355,40 @@ export const LearningPathsPage: React.FC = () => {
   const handleOpenCreateBuilder = () => {
     setEditingPathId(null);
     setBuilderStep(1);
+    setSelectedTemplateId(null);
+    setVisitedSteps([1]);
+    setTemplateOrgType(detectedOrgType);
+    setSuggestionOffset(0);
+    setShowAllTemplatesModal(false);
+    setShowAdvancedRules(false);
     setFormTitle('');
     setFormDescription('');
     setFormObjective('');
-    setFormInstitutionType('corporate');
-    setFormCategory('Employee Onboarding');
+    setFormInstitutionType(detectedOrgType);
+    setFormCategory(
+      detectedOrgType === 'corporate'
+        ? 'Employee Onboarding'
+        : detectedOrgType === 'higher_ed'
+        ? 'Department-Specific Subjects'
+        : detectedOrgType === 'school'
+        ? 'Grade-Wise Learning Paths'
+        : 'Certification Preparation'
+    );
     setFormDifficulty('Beginner');
-    setFormTargetGroup('Engineering & Technology');
-    setFormTargetRole('Associate Engineer');
+    setFormTargetGroup('');
+    setFormTargetRole('');
     setFormDepartmentId('dep-001');
     setFormThumbnail('');
     setFormStatus('published');
-    setFormCourses([
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-      { courseId: 'crs-004', order: 2, isRequired: true, prerequisiteCourseIds: ['crs-001'] },
-    ]);
+    setFormCourses([]);
     setFormEnforceSequence(true);
     setFormRequireAssessments(true);
     setFormCompletionThreshold(80);
     setFormCertificateEligible(true);
-    setFormCertificateTitle('Enterprise Learning Path Credential');
-    setFormCohortIds(['coh-001']);
-    setFormDepartmentIds(['dep-001']);
-    setFormUserIds(['u-007']);
+    setFormCertificateTitle('Verified Learning Path Credential');
+    setFormCohortIds([]);
+    setFormDepartmentIds([]);
+    setFormUserIds([]);
     setBuilderErrors([]);
     setIsBuilderOpen(true);
   };
@@ -319,10 +397,16 @@ export const LearningPathsPage: React.FC = () => {
   const handleOpenEditBuilder = (path: LearningPath) => {
     setEditingPathId(path.id);
     setBuilderStep(1);
+    setSelectedTemplateId(null);
+    setVisitedSteps([1, 2, 3, 4]);
+    setTemplateOrgType(path.institutionType || detectedOrgType);
+    setSuggestionOffset(0);
+    setShowAllTemplatesModal(false);
+    setShowAdvancedRules(false);
     setFormTitle(path.title);
     setFormDescription(path.description || '');
     setFormObjective(path.objective || '');
-    setFormInstitutionType(path.institutionType || 'corporate');
+    setFormInstitutionType(path.institutionType || detectedOrgType);
     setFormCategory(path.category || 'General Curriculum');
     setFormDifficulty(path.difficulty || 'Beginner');
     setFormTargetGroup(path.targetGroup || path.audience || '');
@@ -343,11 +427,70 @@ export const LearningPathsPage: React.FC = () => {
     setIsBuilderOpen(true);
   };
 
+  // Step validation helpers (4-step model)
+  const isStep1Valid = Boolean(formTitle.trim());
+  const isStep2Valid = formCourses.length > 0 && !validateCircularPrerequisites(formCourses).hasCycle;
+  const isStep3Valid = true;
+  const isStep4Valid = isStep1Valid && isStep2Valid;
+  const isAllRequiredValid = isStep1Valid && isStep2Valid;
+
+  const getStepValidationMessage = (step: number): string | null => {
+    if (step === 1 && !isStep1Valid) {
+      return 'Enter a Learning Path Name to proceed';
+    }
+    if (step === 2) {
+      if (formCourses.length === 0) return 'Add at least 1 course to proceed';
+      const cycle = validateCircularPrerequisites(formCourses);
+      if (cycle.hasCycle) return cycle.message;
+    }
+    return null;
+  };
+
+  const isCurrentStepValid = (step: number): boolean => {
+    if (step === 1) return isStep1Valid;
+    if (step === 2) return isStep2Valid;
+    return true;
+  };
+
+  const handleStepNavigation = (targetStep: 1 | 2 | 3 | 4) => {
+    if (targetStep === builderStep) return;
+
+    // Moving backward is always allowed
+    if (targetStep < builderStep) {
+      setBuilderStep(targetStep);
+      return;
+    }
+
+    // Moving forward requires current step validity
+    const currentError = getStepValidationMessage(builderStep);
+    if (currentError) {
+      setBuilderErrors([currentError]);
+      return;
+    }
+
+    setBuilderErrors([]);
+    setVisitedSteps((prev) => (prev.includes(targetStep) ? prev : [...prev, targetStep]));
+    setBuilderStep(targetStep);
+  };
+
   // Apply Quick-Start Template
   const handleApplyTemplate = (preset: PathTemplatePreset) => {
-    setFormTitle(preset.name);
-    setFormDescription(preset.description);
-    setFormObjective(preset.objective);
+    setSelectedTemplateId(preset.id);
+
+    // Only auto-populate title/description/objective if empty or currently matching a template name
+    const isTitleEmptyOrTemplate = !formTitle.trim() || PATH_TEMPLATE_PRESETS.some((p) => p.name === formTitle.trim());
+    if (isTitleEmptyOrTemplate) {
+      setFormTitle(preset.name);
+    }
+    const isDescEmptyOrTemplate = !formDescription.trim() || PATH_TEMPLATE_PRESETS.some((p) => p.description === formDescription.trim());
+    if (isDescEmptyOrTemplate) {
+      setFormDescription(preset.description);
+    }
+    const isObjEmptyOrTemplate = !formObjective.trim() || PATH_TEMPLATE_PRESETS.some((p) => p.objective === formObjective.trim());
+    if (isObjEmptyOrTemplate) {
+      setFormObjective(preset.objective);
+    }
+
     setFormInstitutionType(preset.institutionType);
     setFormCategory(preset.category);
     setFormDifficulty(preset.difficulty);
@@ -359,14 +502,19 @@ export const LearningPathsPage: React.FC = () => {
     setFormCertificateEligible(preset.certificateEligible);
     setFormCertificateTitle(preset.certificateTitle || `${preset.name} Certificate`);
 
-    // Setup sequence
-    const templatedCourses: LearningPathCourse[] = preset.defaultCourseIds.map((cId, idx) => ({
-      courseId: cId,
-      order: idx + 1,
-      isRequired: true,
-      prerequisiteCourseIds: idx > 0 ? [preset.defaultCourseIds[idx - 1]] : [],
-    }));
-    setFormCourses(templatedCourses);
+    // Setup sequence if courses are empty or unchanged default seed
+    const isDefaultSeedCourses = formCourses.length === 2 && formCourses[0]?.courseId === 'crs-001' && formCourses[1]?.courseId === 'crs-004';
+    if (formCourses.length === 0 || isDefaultSeedCourses) {
+      const templatedCourses: LearningPathCourse[] = preset.defaultCourseIds.map((cId, idx) => ({
+        courseId: cId,
+        order: idx + 1,
+        isRequired: true,
+        prerequisiteCourseIds: idx > 0 ? [preset.defaultCourseIds[idx - 1]] : [],
+      }));
+      setFormCourses(templatedCourses);
+    }
+
+    setBuilderErrors([]);
   };
 
   // Add course to form
@@ -1603,86 +1751,214 @@ export const LearningPathsPage: React.FC = () => {
         <div className="modal-overlay" onClick={() => setIsBuilderOpen(false)}>
           <div
             className="modal-card"
-            style={{ maxWidth: '840px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}
+            style={{
+              maxWidth: '960px',
+              width: '95%',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: 0,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
-            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+            {/* Modal Header - Pinned */}
+            <div
+              className="modal-header"
+              style={{
+                padding: '20px 28px',
+                borderBottom: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card)',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+              }}
+            >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                  <span className="badge badge-primary">{editingPathId ? 'Edit Learning Path' : 'Create Learning Path'}</span>
-                  <span className="text-muted text-xs">Multi-Tenant Curriculum Journey Studio</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span className="badge badge-primary" style={{ fontSize: '0.8rem', padding: '3px 10px', fontWeight: 700 }}>
+                    {editingPathId ? 'Edit Learning Path' : 'Create Learning Path'}
+                  </span>
+                  <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
+                    Curriculum Journey Studio
+                  </span>
                 </div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
-                  {formTitle || (editingPathId ? 'Edit Learning Journey' : 'New Learning Journey')}
+                <h3
+                  style={{
+                    fontSize: '1.45rem',
+                    fontWeight: 800,
+                    margin: 0,
+                    color: 'var(--text-main)',
+                    lineHeight: 1.3,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {formTitle.trim() || (editingPathId ? 'Edit Learning Journey' : 'New Learning Journey')}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsBuilderOpen(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                aria-label="Close modal"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                <X size={20} />
+                <X size={22} />
               </button>
             </div>
 
-            {/* Stepper Tabs Bar */}
+            {/* Stepper Tabs Bar - 4 Steps Horizontal Stepper */}
             <div
+              role="tablist"
+              aria-label="Learning Path Steps"
               style={{
-                display: 'flex',
-                borderBottom: '1px solid var(--border-subtle)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                 background: 'var(--bg-input)',
-                overflowX: 'auto',
+                borderBottom: '1px solid var(--border-subtle)',
+                padding: '12px 24px',
+                gap: '12px',
+                flexShrink: 0,
               }}
             >
               {[
-                { step: 1, label: 'A. Basic Details' },
-                { step: 2, label: 'B. Add Courses' },
-                { step: 3, label: 'C. Completion Rules' },
-                { step: 4, label: 'D. Assign Learners' },
-                { step: 5, label: 'E. Review & Publish' },
-              ].map((tab) => (
-                <button
-                  key={tab.step}
-                  type="button"
-                  onClick={() => setBuilderStep(tab.step as any)}
-                  style={{
-                    padding: '12px 18px',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: builderStep === tab.step ? '2px solid var(--primary)' : '2px solid transparent',
-                    color: builderStep === tab.step ? 'var(--primary)' : 'var(--text-secondary)',
-                    fontWeight: builderStep === tab.step ? 700 : 500,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    transition: 'var(--transition)',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
+                { step: 1 as const, shortLabel: 'Details', fullName: 'Step 1: Basic Details' },
+                { step: 2 as const, shortLabel: 'Courses', fullName: 'Step 2: Add Courses' },
+                { step: 3 as const, shortLabel: 'Completion', fullName: 'Step 3: Completion Rules' },
+                { step: 4 as const, shortLabel: 'Assign & Publish', fullName: 'Step 4: Assign & Publish' },
+              ].map((item) => {
+                const isStepFinished =
+                  (builderStep > item.step && (item.step === 1 ? isStep1Valid : item.step === 2 ? isStep2Valid : true)) ||
+                  (visitedSteps.includes(item.step) && builderStep !== item.step && (item.step === 1 ? isStep1Valid : item.step === 2 ? isStep2Valid : true));
+                const isActive = builderStep === item.step;
+                const isUpcoming = !isActive && !isStepFinished;
+                const canClick =
+                  item.step <= builderStep ||
+                  (item.step === builderStep + 1 && isCurrentStepValid(builderStep)) ||
+                  visitedSteps.includes(item.step);
+
+                return (
+                  <button
+                    key={item.step}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    title={item.fullName + (isStepFinished ? ' (Completed - click to revisit)' : isActive ? ' (Current Step)' : '')}
+                    disabled={!canClick}
+                    onClick={() => handleStepNavigation(item.step)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: isActive
+                        ? '2px solid var(--primary)'
+                        : isStepFinished
+                        ? '1px solid rgba(37, 99, 235, 0.35)'
+                        : '1px solid var(--border-subtle)',
+                      background: isActive
+                        ? 'var(--primary-light)'
+                        : isStepFinished
+                        ? 'rgba(37, 99, 235, 0.06)'
+                        : 'var(--bg-card)',
+                      color: isActive
+                        ? 'var(--text-main)'
+                        : isStepFinished
+                        ? 'var(--primary)'
+                        : 'var(--text-secondary)',
+                      cursor: canClick ? 'pointer' : 'not-allowed',
+                      opacity: isUpcoming && !canClick ? 0.6 : 1,
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left',
+                      minWidth: 0,
+                    }}
+                  >
+                    {/* Step Number or Completion Checkmark */}
+                    <span
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        fontSize: '0.825rem',
+                        fontWeight: 800,
+                        background: isActive
+                          ? 'var(--primary)'
+                          : isStepFinished
+                          ? 'var(--primary)'
+                          : 'var(--border-subtle)',
+                        color: isActive || isStepFinished ? '#ffffff' : 'var(--text-muted)',
+                        boxShadow: isActive ? '0 0 0 2px var(--primary-light)' : 'none',
+                      }}
+                    >
+                      {isStepFinished ? <Check size={14} strokeWidth={3} /> : item.step}
+                    </span>
+
+                    {/* Step Label and Current Status */}
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          fontSize: '0.925rem',
+                          fontWeight: isActive ? 700 : isStepFinished ? 600 : 500,
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden',
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {item.shortLabel}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.75rem',
+                          color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                          fontWeight: isActive ? 600 : 400,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {isActive ? 'In Progress' : isStepFinished ? 'Completed' : 'Upcoming'}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Builder Body */}
-            <div className="modal-body" style={{ padding: '24px' }}>
+            {/* Builder Body - Scrollable Content */}
+            <div className="modal-body" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '26px 28px' }}>
               {/* Error Banners */}
               {builderErrors.length > 0 && (
                 <div
                   style={{
-                    padding: '12px 16px',
-                    background: 'rgba(239, 68, 68, 0.15)',
+                    padding: '14px 18px',
+                    background: 'rgba(239, 68, 68, 0.12)',
                     border: '1px solid var(--danger-border)',
                     borderRadius: 'var(--radius-md)',
                     color: 'var(--danger)',
-                    fontSize: '0.85rem',
-                    marginBottom: '16px',
+                    fontSize: '0.9rem',
+                    marginBottom: '22px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
+                    gap: '12px',
+                    lineHeight: 1.45,
                   }}
                 >
-                  <AlertTriangle size={18} />
+                  <AlertTriangle size={20} style={{ flexShrink: 0 }} />
                   <div>
                     {builderErrors.map((err, i) => (
                       <div key={i}>{err}</div>
@@ -1691,64 +1967,294 @@ export const LearningPathsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 1: BASIC DETAILS */}
+              {/* TAB 1: BASIC DETAILS & RECOMMENDED TEMPLATES */}
               {builderStep === 1 && (
                 <div>
-                  {/* Quick-Start Templates Selector */}
+                  {/* Recommended for Your Organization Section */}
                   {!editingPathId && (
                     <div
                       style={{
-                        padding: '16px',
-                        background: 'rgba(99, 102, 241, 0.08)',
-                        border: '1px solid rgba(99, 102, 241, 0.25)',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: '20px',
+                        padding: '20px 22px',
+                        background: 'rgba(99, 102, 241, 0.05)',
+                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                        borderRadius: 'var(--radius-lg)',
+                        marginBottom: '28px',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <Sparkles size={16} color="var(--primary)" />
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                          Quick-Start Journey Templates (Optional)
-                        </span>
-                      </div>
-                      <p className="text-secondary text-xs" style={{ marginBottom: '12px' }}>
-                        Select a pre-configured template tailored to your organization type to auto-fill settings and courses.
-                      </p>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
-                        {PATH_TEMPLATE_PRESETS.map((tpl) => (
-                          <button
-                            key={tpl.id}
-                            type="button"
-                            onClick={() => handleApplyTemplate(tpl)}
+                      {/* Section Header with Context & Actions */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                          marginBottom: '12px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Sparkles size={18} color="var(--primary)" />
+                            <h4 style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)', margin: 0 }}>
+                              Recommended for Your Organization
+                            </h4>
+                          </div>
+                          <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                            Tailored for <strong>{userOrg?.name || 'Your Organization'}</strong> ({templateOrgType === 'corporate' ? 'Company / Corporate' : templateOrgType === 'higher_ed' ? 'College / University' : templateOrgType === 'school' ? 'School (K-12)' : 'Training Institute'})
+                          </p>
+                        </div>
+
+                        {/* Top Controls: Category Switcher, Refresh, View All */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <select
+                            value={templateOrgType}
+                            onChange={(e) => {
+                              setTemplateOrgType(e.target.value as any);
+                              setSuggestionOffset(0);
+                            }}
+                            className="form-input"
+                            aria-label="Switch recommendation category"
                             style={{
-                              padding: '10px 12px',
-                              textAlign: 'left',
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border-subtle)',
-                              borderRadius: 'var(--radius-md)',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
+                              fontSize: '0.825rem',
+                              padding: '4px 10px',
+                              height: '32px',
+                              width: 'auto',
+                              fontWeight: 600,
                             }}
                           >
-                            <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>
-                              {tpl.name}
-                            </span>
-                            <span className="text-muted text-xs" style={{ fontSize: '0.7rem' }}>
-                              {tpl.institutionType.toUpperCase()} &bull; {tpl.category}
-                            </span>
+                            <option value="corporate">Corporate / Company</option>
+                            <option value="higher_ed">College / University</option>
+                            <option value="school">School (K-12)</option>
+                            <option value="training_institute">Training Institute</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            onClick={handleRefreshSuggestions}
+                            title="Show next 3 relevant templates"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '0.825rem',
+                              padding: '5px 12px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <RefreshCw size={13} /> Refresh Suggestions
                           </button>
-                        ))}
+
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => setShowAllTemplatesModal(true)}
+                            style={{
+                              fontSize: '0.825rem',
+                              color: 'var(--primary)',
+                              fontWeight: 700,
+                              padding: '5px 10px',
+                            }}
+                          >
+                            View All ({relevantTemplates.length})
+                          </button>
+                        </div>
                       </div>
+
+                      {/* 3 Template Suggestions + Create from Scratch Grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))',
+                          gap: '12px',
+                        }}
+                      >
+                        {/* Option: Create from Scratch */}
+                        <button
+                          type="button"
+                          onClick={handleSelectCreateFromScratch}
+                          style={{
+                            padding: '14px 16px',
+                            textAlign: 'left',
+                            background: selectedTemplateId === 'scratch' ? 'var(--primary-light)' : 'var(--bg-card)',
+                            border: selectedTemplateId === 'scratch' ? '2px solid var(--primary)' : '1px dashed var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            transition: 'var(--transition)',
+                            boxShadow: selectedTemplateId === 'scratch' ? '0 0 0 1px var(--primary)' : 'none',
+                          }}
+                        >
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  fontSize: '0.925rem',
+                                  color: selectedTemplateId === 'scratch' ? 'var(--primary)' : 'var(--text-main)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                }}
+                              >
+                                <Sliders size={15} /> Create from Scratch
+                              </span>
+                              {selectedTemplateId === 'scratch' && (
+                                <span
+                                  style={{
+                                    width: '18px',
+                                    height: '18px',
+                                    borderRadius: '50%',
+                                    background: 'var(--primary)',
+                                    color: '#fff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <Check size={12} strokeWidth={3} />
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 500 }}>
+                              Blank canvas
+                            </div>
+                          </div>
+                          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                            Build an empty journey from the ground up without preselected courses or rules.
+                          </p>
+                        </button>
+
+                        {/* 3 Relevant Templates */}
+                        {currentSuggestions.map((tpl) => {
+                          const isSelected = selectedTemplateId === tpl.id;
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => handleApplyTemplate(tpl)}
+                              style={{
+                                padding: '14px 16px',
+                                textAlign: 'left',
+                                background: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
+                                border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                                transition: 'var(--transition)',
+                                boxShadow: isSelected ? '0 0 0 1px var(--primary)' : 'none',
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px' }}>
+                                  <span
+                                    style={{
+                                      fontWeight: 700,
+                                      fontSize: '0.925rem',
+                                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
+                                      lineHeight: 1.35,
+                                      whiteSpace: 'normal',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {tpl.name}
+                                  </span>
+                                  {isSelected && (
+                                    <span
+                                      style={{
+                                        width: '18px',
+                                        height: '18px',
+                                        borderRadius: '50%',
+                                        background: 'var(--primary)',
+                                        color: '#fff',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      <Check size={12} strokeWidth={3} />
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: '0.78rem',
+                                    color: 'var(--text-secondary)',
+                                    marginTop: '4px',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {tpl.category} &bull; {tpl.difficulty}
+                                </div>
+                              </div>
+
+                              <p
+                                style={{
+                                  fontSize: '0.8rem',
+                                  color: 'var(--text-secondary)',
+                                  lineHeight: 1.4,
+                                  margin: 0,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {tpl.description}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Selected State Notice */}
+                      {selectedTemplateId && selectedTemplateId !== 'scratch' && (
+                        <div
+                          style={{
+                            marginTop: '14px',
+                            padding: '8px 14px',
+                            background: 'var(--primary-light)',
+                            borderRadius: 'var(--radius-md)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontSize: '0.825rem',
+                            color: 'var(--primary)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>
+                            Template pre-populated. You can adjust the path name, courses, and completion settings at any time.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Form fields */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                      <label className="form-label">
-                        Learning Path Name <span className="required">*</span>
+                  {/* Essential Fields */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div className="form-group">
+                      <label
+                        className="form-label"
+                        style={{
+                          fontSize: '0.95rem',
+                          fontWeight: 700,
+                          marginBottom: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        Learning Path Name <span style={{ color: 'var(--danger)', fontWeight: 800 }}>*</span>
                       </label>
                       <input
                         type="text"
@@ -1756,92 +2262,60 @@ export const LearningPathsPage: React.FC = () => {
                         className="form-input"
                         placeholder="e.g., Enterprise Software Systems Architecture Track"
                         value={formTitle}
-                        onChange={(e) => setFormTitle(e.target.value)}
+                        onChange={(e) => {
+                          setFormTitle(e.target.value);
+                          if (builderErrors.length > 0) setBuilderErrors([]);
+                        }}
+                        style={{
+                          fontSize: '0.95rem',
+                          padding: '10px 14px',
+                          border: !formTitle.trim() && builderErrors.length > 0 ? '1px solid var(--danger)' : undefined,
+                        }}
                       />
+                      {!formTitle.trim() ? (
+                        <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
+                          Give this learning path a clear title visible to students and trainers.
+                        </span>
+                      ) : null}
+                      {!formTitle.trim() && builderErrors.length > 0 && (
+                        <div style={{ color: 'var(--danger)', fontSize: '0.825rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={14} /> Learning Path Name is required to proceed.
+                        </div>
+                      )}
                     </div>
 
-                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                      <label className="form-label">Short Description / Objective</label>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '6px' }}>
+                        Short Description / Learning Objective (Optional)
+                      </label>
                       <textarea
-                        rows={2}
+                        rows={3}
                         className="form-textarea"
-                        placeholder="Outline the goals and outcomes of this learning journey..."
+                        placeholder="Outline the core goals, expected outcomes, and target competencies for this path..."
                         value={formDescription}
                         onChange={(e) => setFormDescription(e.target.value)}
+                        style={{ fontSize: '0.925rem', padding: '10px 14px', lineHeight: 1.5 }}
                       />
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label">Institution Type / Purpose</label>
-                      <select
-                        className="form-input"
-                        value={formInstitutionType}
-                        onChange={(e) => setFormInstitutionType(e.target.value as any)}
-                      >
-                        <option value="corporate">Corporate Company (Onboarding, Compliance, Skill Prep)</option>
-                        <option value="higher_ed">College / University (Semester, Degree Major, Sequence)</option>
-                        <option value="school">School (K-12) (Grade, Subject Sequence, Remedial)</option>
-                        <option value="training_institute">Training Institute (Certification, Bootcamp, Fast Track)</option>
-                        <option value="general">General / Independent Organization</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Purpose / Category</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Employee Onboarding, Degree Specialization, Remedial Learning"
-                        value={formCategory}
-                        onChange={(e) => setFormCategory(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Difficulty Level</label>
-                      <select
-                        className="form-input"
-                        value={formDifficulty}
-                        onChange={(e) => setFormDifficulty(e.target.value as any)}
-                      >
-                        <option value="Beginner">Beginner (Foundational)</option>
-                        <option value="Intermediate">Intermediate (Core Practice)</option>
-                        <option value="Advanced">Advanced (Expert / Capstone)</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Target Audience / Department</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Engineering & IT, Grade 11 Science, New Hires"
-                        value={formTargetGroup}
-                        onChange={(e) => setFormTargetGroup(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Target Role / Career Milestone</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Cloud Architect, Senior Developer, Board Candidate"
-                        value={formTargetRole}
-                        onChange={(e) => setFormTargetRole(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Initial Status</label>
-                      <select
-                        className="form-input"
-                        value={formStatus}
-                        onChange={(e) => setFormStatus(e.target.value as any)}
-                      >
-                        <option value="published">Published (Visible to eligible learners)</option>
-                        <option value="draft">Draft (Work in progress)</option>
-                      </select>
+                    {/* Derived Context Clarification Badge */}
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: '0.8rem',
+                        color: 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <Info size={15} color="var(--primary)" style={{ flexShrink: 0 }} />
+                      <span>
+                        Organization tenant (<strong>{userOrg?.name || 'Current Organization'}</strong>) and creator permissions (<strong>{user?.displayName || 'Active User'}</strong>) are automatically applied.
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1850,36 +2324,38 @@ export const LearningPathsPage: React.FC = () => {
               {/* TAB 2: ADD COURSES */}
               {builderStep === 2 && (
                 <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '22px' }}>
                     {/* Left: Available Courses Picker */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <label className="form-label" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
                           Select from Course Catalog
                         </label>
-                        <span className="text-muted text-xs">{availableCourses.length} courses available</span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {availableCourses.length} courses available
+                        </span>
                       </div>
 
                       {/* Filter in picker */}
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="Search courses..."
+                        placeholder="Search courses by name or category..."
                         value={courseSearchInput}
                         onChange={(e) => setCourseSearchInput(e.target.value)}
-                        style={{ marginBottom: '10px', height: '34px', fontSize: '0.8rem' }}
+                        style={{ marginBottom: '12px', height: '40px', fontSize: '0.9rem' }}
                       />
 
                       <div
                         style={{
-                          maxHeight: '340px',
+                          maxHeight: '360px',
                           overflowY: 'auto',
                           display: 'flex',
                           flexDirection: 'column',
                           gap: '8px',
                           border: '1px solid var(--border-subtle)',
                           borderRadius: 'var(--radius-md)',
-                          padding: '8px',
+                          padding: '10px',
                           background: 'var(--bg-input)',
                         }}
                       >
@@ -1899,23 +2375,25 @@ export const LearningPathsPage: React.FC = () => {
                               <div
                                 key={c.id}
                                 style={{
-                                  padding: '10px 12px',
+                                  padding: '12px 14px',
                                   background: 'var(--bg-card)',
                                   borderRadius: 'var(--radius-sm)',
                                   border: '1px solid var(--border-subtle)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
-                                  gap: '10px',
+                                  gap: '12px',
                                 }}
                               >
                                 <div>
-                                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{c.title}</div>
-                                  <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.925rem', color: 'var(--text-main)', lineHeight: 1.35 }}>
+                                    {c.title}
+                                  </div>
+                                  <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                                     <span>{c.category}</span>
                                     {hrs && <span>&bull; {hrs} hrs</span>}
-                                    {isDraft && <span className="badge badge-draft" style={{ fontSize: '0.65rem' }}>Draft</span>}
-                                    {isArchived && <span className="badge badge-error" style={{ fontSize: '0.65rem' }}>Archived</span>}
+                                    {isDraft && <span className="badge badge-draft" style={{ fontSize: '0.725rem' }}>Draft</span>}
+                                    {isArchived && <span className="badge badge-error" style={{ fontSize: '0.725rem' }}>Archived</span>}
                                   </div>
                                 </div>
 
@@ -1924,9 +2402,9 @@ export const LearningPathsPage: React.FC = () => {
                                   disabled={isAdded}
                                   onClick={() => handleAddCourseToForm(c.id)}
                                   className={`btn btn-xs ${isAdded ? 'btn-ghost' : 'btn-primary'}`}
-                                  style={{ flexShrink: 0 }}
+                                  style={{ flexShrink: 0, padding: '6px 14px', fontSize: '0.85rem', fontWeight: 600 }}
                                 >
-                                  {isAdded ? <Check size={12} /> : <Plus size={12} />} {isAdded ? 'Added' : 'Add'}
+                                  {isAdded ? <Check size={14} /> : <Plus size={14} />} {isAdded ? 'Added' : 'Add'}
                                 </button>
                               </div>
                             );
@@ -1937,33 +2415,37 @@ export const LearningPathsPage: React.FC = () => {
                     {/* Right: Sequenced Path Courses */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <label className="form-label" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
                           Sequenced Courses in Path ({formCourses.length})
                         </label>
-                        <span className="text-muted text-xs">Reorder with controls</span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Reorder with controls</span>
                       </div>
 
                       {formCourses.length === 0 ? (
                         <div
                           style={{
-                            padding: '30px',
+                            padding: '36px 20px',
                             textAlign: 'center',
-                            border: '1px dashed var(--border-subtle)',
+                            border: '2px dashed var(--border-subtle)',
                             borderRadius: 'var(--radius-md)',
-                            color: 'var(--text-muted)',
-                            fontSize: '0.85rem',
+                            color: 'var(--text-secondary)',
+                            fontSize: '0.925rem',
+                            lineHeight: 1.5,
                           }}
                         >
-                          No courses in sequence yet. Select courses from catalog on the left to build your path.
+                          No courses in sequence yet. Select courses from the catalog on the left to build your path.
+                          <div style={{ color: 'var(--warning)', fontSize: '0.85rem', marginTop: '8px', fontWeight: 600 }}>
+                            * At least 1 course is required to proceed past this step.
+                          </div>
                         </div>
                       ) : (
                         <div
                           style={{
-                            maxHeight: '340px',
+                            maxHeight: '360px',
                             overflowY: 'auto',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '8px',
+                            gap: '10px',
                           }}
                         >
                           {formCourses.map((ci, idx) => {
@@ -1971,110 +2453,113 @@ export const LearningPathsPage: React.FC = () => {
                             const title = crs?.title || `Course ID: ${ci.courseId}`;
                             const isDraft = crs?.status === 'draft';
                             const hrs = crs?.durationHours || (crs?.estimatedDuration ? Math.round(crs.estimatedDuration / 60) : null);
-
-                            // Potential earlier courses in sequence that can be prerequisites
                             const earlierCourses = formCourses.slice(0, idx);
 
                             return (
                               <div
                                 key={ci.courseId}
                                 style={{
-                                  padding: '10px 12px',
-                                  background: 'var(--bg-input)',
+                                  padding: '12px 14px',
+                                  background: 'var(--bg-card)',
                                   borderRadius: 'var(--radius-md)',
                                   border: '1px solid var(--border-subtle)',
                                 }}
                               >
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span
                                       style={{
-                                        width: '22px',
-                                        height: '22px',
+                                        width: '26px',
+                                        height: '26px',
                                         borderRadius: '50%',
                                         background: 'var(--primary)',
                                         color: '#fff',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 700,
+                                        fontSize: '0.85rem',
+                                        fontWeight: 800,
+                                        flexShrink: 0,
                                       }}
                                     >
                                       {idx + 1}
                                     </span>
                                     <div>
-                                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{title}</div>
-                                      <div className="text-muted text-xs" style={{ display: 'flex', gap: '6px' }}>
+                                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.35 }}>
+                                        {title}
+                                      </div>
+                                      <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', display: 'flex', gap: '8px', marginTop: '3px' }}>
                                         {hrs && <span>{hrs} hrs</span>}
-                                        {isDraft && <span style={{ color: 'var(--warning)' }}>&bull; Warning: Draft Course</span>}
+                                        {isDraft && <span style={{ color: 'var(--warning)', fontWeight: 600 }}>&bull; Warning: Draft Course</span>}
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <button
                                       type="button"
                                       disabled={idx === 0}
                                       onClick={() => handleMoveCourseUp(idx)}
                                       className="btn btn-ghost btn-xs"
-                                      style={{ padding: '4px' }}
+                                      style={{ padding: '6px' }}
                                       title="Move Up"
                                     >
-                                      <ArrowUp size={12} />
+                                      <ArrowUp size={14} />
                                     </button>
                                     <button
                                       type="button"
                                       disabled={idx === formCourses.length - 1}
                                       onClick={() => handleMoveCourseDown(idx)}
                                       className="btn btn-ghost btn-xs"
-                                      style={{ padding: '4px' }}
+                                      style={{ padding: '6px' }}
                                       title="Move Down"
                                     >
-                                      <ArrowDown size={12} />
+                                      <ArrowDown size={14} />
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveCourseFromForm(ci.courseId)}
                                       className="btn btn-ghost btn-xs"
-                                      style={{ color: 'var(--danger)', padding: '4px' }}
-                                      title="Remove"
+                                      style={{ color: 'var(--danger)', padding: '6px' }}
+                                      title="Remove from Sequence"
                                     >
-                                      <Trash2 size={12} />
+                                      <Trash2 size={14} />
                                     </button>
                                   </div>
                                 </div>
 
                                 {/* Prerequisite Configuration */}
                                 {idx > 0 && (
-                                  <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.75rem' }}>
-                                    <span className="text-muted" style={{ marginRight: '6px' }}>
-                                      Prerequisite Course:
+                                  <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.825rem' }}>
+                                    <span style={{ color: 'var(--text-secondary)', marginRight: '8px', fontWeight: 600 }}>
+                                      Prerequisites:
                                     </span>
-                                    {earlierCourses.map((ec, ecIdx) => {
-                                      const ecCrs = courses.find((c) => c.id === ec.courseId);
-                                      const isSelected = (ci.prerequisiteCourseIds || []).includes(ec.courseId);
+                                    <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                                      {earlierCourses.map((ec, ecIdx) => {
+                                        const ecCrs = courses.find((c) => c.id === ec.courseId);
+                                        const isSelected = (ci.prerequisiteCourseIds || []).includes(ec.courseId);
 
-                                      return (
-                                        <button
-                                          key={ec.courseId}
-                                          type="button"
-                                          onClick={() => handleTogglePrerequisite(ci.courseId, ec.courseId)}
-                                          style={{
-                                            padding: '2px 8px',
-                                            marginRight: '4px',
-                                            borderRadius: 'var(--radius-sm)',
-                                            border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
-                                            background: isSelected ? 'var(--primary-light)' : 'transparent',
-                                            color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
-                                            fontSize: '0.7rem',
-                                            cursor: 'pointer',
-                                          }}
-                                        >
-                                          Step {ecIdx + 1}: {ecCrs?.title?.substring(0, 16)}...
-                                        </button>
-                                      );
-                                    })}
+                                        return (
+                                          <button
+                                            key={ec.courseId}
+                                            type="button"
+                                            onClick={() => handleTogglePrerequisite(ci.courseId, ec.courseId)}
+                                            style={{
+                                              padding: '4px 10px',
+                                              borderRadius: 'var(--radius-sm)',
+                                              border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                              background: isSelected ? 'var(--primary-light)' : 'var(--bg-input)',
+                                              color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
+                                              fontSize: '0.8rem',
+                                              fontWeight: isSelected ? 700 : 500,
+                                              cursor: 'pointer',
+                                            }}
+                                          >
+                                            Step {ecIdx + 1}: {ecCrs?.title || ec.courseId}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -2088,69 +2573,99 @@ export const LearningPathsPage: React.FC = () => {
                   {/* Circular Dependency Check Status */}
                   <div
                     style={{
-                      marginTop: '16px',
-                      padding: '10px 14px',
+                      marginTop: '20px',
+                      padding: '12px 16px',
                       background: 'var(--bg-input)',
                       border: '1px solid var(--border-subtle)',
                       borderRadius: 'var(--radius-md)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '0.8rem',
-                      color: 'var(--text-muted)',
+                      gap: '10px',
+                      fontSize: '0.875rem',
+                      color: 'var(--text-secondary)',
                     }}
                   >
-                    <CheckCircle2 size={16} color="var(--success)" />
-                    <span>Circular dependency validator verified: Sequential prerequisites graph has no circular loops.</span>
+                    <CheckCircle2 size={18} color="var(--success)" style={{ flexShrink: 0 }} />
+                    <span>Prerequisites validator verified: Sequential course path contains no circular dependency loops.</span>
                   </div>
                 </div>
               )}
 
-              {/* TAB 3: COMPLETION RULES */}
+              {/* TAB 3: COMPLETION (SIMPLIFIED RULES) */}
               {builderStep === 3 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                  <div style={{ padding: '16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Default Option: Complete All Courses */}
+                  <div
+                    style={{
+                      padding: '18px 20px',
+                      background: 'var(--bg-card)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Strict Course Progression Order</div>
-                        <div className="text-secondary text-xs">
-                          Require learners to complete preceding courses before subsequent courses unlock.
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                          Complete all courses in this path (Default)
+                        </div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          Learners must complete preceding courses and prerequisites in sequence to unlock subsequent learning modules.
                         </div>
                       </div>
                       <input
                         type="checkbox"
                         checked={formEnforceSequence}
                         onChange={(e) => setFormEnforceSequence(e.target.checked)}
-                        style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                        style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
                       />
                     </div>
                   </div>
 
-                  <div style={{ padding: '16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  {/* Optional: Require Passing Assessments */}
+                  <div
+                    style={{
+                      padding: '18px 20px',
+                      background: 'var(--bg-card)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Pass Assessment Requirements</div>
-                        <div className="text-secondary text-xs">
-                          Distinguishes simple video/reading completion from passing quizzes and capstones (Passing grade ≥ 70%).
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                          Require assessments to be passed
+                        </div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          Requires learners to achieve a passing evaluation score on all required module quizzes and capstones.
                         </div>
                       </div>
                       <input
                         type="checkbox"
                         checked={formRequireAssessments}
                         onChange={(e) => setFormRequireAssessments(e.target.checked)}
-                        style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                        style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
                       />
                     </div>
                   </div>
 
-                  <div style={{ padding: '16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ marginBottom: '8px' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Minimum Overall Completion Threshold</div>
-                      <div className="text-secondary text-xs">
-                        Percentage of course modules and lessons required to satisfy journey requirements.
+                  {/* Optional: Minimum Overall Completion Percentage */}
+                  <div
+                    style={{
+                      padding: '18px 20px',
+                      background: 'var(--bg-card)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                        Minimum overall completion percentage
+                      </div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        Specify the overall progress percentage required across lessons and activities to mark the journey completed.
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginTop: '14px' }}>
                       <input
                         type="range"
                         min="50"
@@ -2158,292 +2673,542 @@ export const LearningPathsPage: React.FC = () => {
                         step="5"
                         value={formCompletionThreshold}
                         onChange={(e) => setFormCompletionThreshold(Number(e.target.value))}
-                        style={{ flex: 1, accentColor: 'var(--primary)' }}
+                        style={{ flex: 1, accentColor: 'var(--primary)', height: '8px' }}
                       />
-                      <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--primary)', minWidth: '50px' }}>
+                      <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)', minWidth: '60px' }}>
                         {formCompletionThreshold}%
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ padding: '16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Issue Verifiable Milestone Certificate</div>
-                        <div className="text-secondary text-xs">
-                          Automatically generate and award verified digital certificate upon journey completion.
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={formCertificateEligible}
-                        onChange={(e) => setFormCertificateEligible(e.target.checked)}
-                        style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                      />
-                    </div>
+                  {/* Collapsible Advanced Settings */}
+                  <div
+                    style={{
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-card)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedRules(!showAdvancedRules)}
+                      style={{
+                        width: '100%',
+                        padding: '14px 20px',
+                        background: 'none',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        color: 'var(--text-main)',
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Sliders size={16} color="var(--primary)" />
+                        Advanced Settings (Optional)
+                      </span>
+                      {showAdvancedRules ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
 
-                    {formCertificateEligible && (
-                      <div style={{ marginTop: '12px' }}>
-                        <label className="form-label">Certificate Title</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={formCertificateTitle}
-                          onChange={(e) => setFormCertificateTitle(e.target.value)}
-                          placeholder="e.g. Certified Full-Stack Cloud Solutions Architect"
-                        />
+                    {showAdvancedRules && (
+                      <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', paddingTop: '16px' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.925rem', color: 'var(--text-main)' }}>
+                              Issue Verifiable Digital Certificate
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                              Award a tamper-proof digital completion credential when all completion rules are met.
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={formCertificateEligible}
+                            onChange={(e) => setFormCertificateEligible(e.target.checked)}
+                            style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                          />
+                        </div>
+
+                        {formCertificateEligible && (
+                          <div style={{ marginTop: '14px' }}>
+                            <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                              Certificate Credential Title
+                            </label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={formCertificateTitle}
+                              onChange={(e) => setFormCertificateTitle(e.target.value)}
+                              placeholder="e.g. Certified Full-Stack Cloud Solutions Architect"
+                              style={{ fontSize: '0.875rem', padding: '8px 12px' }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* TAB 4: ASSIGN LEARNERS */}
+              {/* TAB 4: ASSIGN & PUBLISH (COMBINED STEP 4) */}
               {builderStep === 4 && (
-                <div>
-                  <div
-                    style={{
-                      padding: '12px 16px',
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid var(--info-border)',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.8rem',
-                      color: 'var(--info)',
-                      marginBottom: '18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                    }}
-                  >
-                    <Info size={18} />
-                    <span>
-                      Frontend State Sync: Assignments are stored locally in state and sync with session store. Respects multi-tenant organization boundaries.
-                    </span>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {/* Section 1: Target Audience Assignment */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                          1. Assign Target Audience (Optional)
+                        </h4>
+                        <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '3px 0 0 0' }}>
+                          Assign cohort batches, departments, or individual learners now, or publish immediately and assign later.
+                        </p>
+                      </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                    {/* Assign by Cohorts / Batches */}
-                    <div>
-                      <label className="form-label">Assign Classes & Cohort Batches</label>
-                      <div
+                      {/* Selected Count Indicator */}
+                      <span
                         style={{
-                          maxHeight: '260px',
-                          overflowY: 'auto',
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          padding: '4px 12px',
+                          borderRadius: 'var(--radius-full)',
+                          background: 'var(--primary-light)',
+                          color: 'var(--primary)',
                         }}
                       >
-                        {cohorts.map((coh) => {
-                          const isAssigned = formCohortIds.includes(coh.id);
-                          return (
-                            <label
-                              key={coh.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px 10px',
-                                background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
-                                borderRadius: 'var(--radius-sm)',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isAssigned}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormCohortIds([...formCohortIds, coh.id]);
-                                  } else {
-                                    setFormCohortIds(formCohortIds.filter((id) => id !== coh.id));
-                                  }
-                                }}
-                                style={{ accentColor: 'var(--primary)' }}
-                              />
-                              <div>
-                                <div style={{ fontWeight: 600 }}>{coh.name}</div>
-                                <div className="text-muted text-xs">
-                                  {coh.code} &bull; {coh.learnerCount || 0} students
-                                </div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
+                        {formCohortIds.length} cohorts, {formDepartmentIds.length} depts, {formUserIds.length} learners
+                      </span>
                     </div>
 
-                    {/* Assign by Departments */}
-                    <div>
-                      <label className="form-label">Assign Institution Departments</label>
-                      <div
-                        style={{
-                          maxHeight: '260px',
-                          overflowY: 'auto',
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '8px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px',
-                        }}
-                      >
-                        {mockDepartments.map((dept) => {
-                          const isAssigned = formDepartmentIds.includes(dept.id);
-                          return (
-                            <label
-                              key={dept.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px 10px',
-                                background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
-                                borderRadius: 'var(--radius-sm)',
-                                cursor: 'pointer',
-                                fontSize: '0.85rem',
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isAssigned}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormDepartmentIds([...formDepartmentIds, dept.id]);
-                                  } else {
-                                    setFormDepartmentIds(formDepartmentIds.filter((id) => id !== dept.id));
-                                  }
-                                }}
-                                style={{ accentColor: 'var(--primary)' }}
-                              />
-                              <div>
-                                <div style={{ fontWeight: 600 }}>{dept.name}</div>
-                                <div className="text-muted text-xs">{dept.memberCount} members</div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 5: REVIEW & PUBLISH */}
-              {builderStep === 5 && (
-                <div>
-                  <div
-                    style={{
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '20px',
-                      marginBottom: '20px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      {renderInstitutionBadge(formInstitutionType)}
-                      <span className="badge badge-secondary">{formDifficulty}</span>
+                    {/* Quick Search across assignments */}
+                    <div style={{ marginBottom: '12px' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Filter cohorts, departments, or learners..."
+                        value={assignLearnerSearch}
+                        onChange={(e) => setAssignLearnerSearch(e.target.value)}
+                        style={{ height: '36px', fontSize: '0.875rem' }}
+                      />
                     </div>
 
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 6px 0' }}>
-                      {formTitle || 'Untitled Learning Journey'}
-                    </h3>
-                    <p className="text-secondary text-xs" style={{ marginBottom: '16px' }}>
-                      {formDescription || 'No description entered.'}
-                    </p>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.8rem', textAlign: 'center' }}>
-                      <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)' }}>
-                        <div className="text-muted text-xs">Total Courses</div>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{formCourses.length}</div>
-                      </div>
-                      <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)' }}>
-                        <div className="text-muted text-xs">Total Duration</div>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>
-                          {calculateTotalDuration(formCourses) || 0} hrs
-                        </div>
-                      </div>
-                      <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)' }}>
-                        <div className="text-muted text-xs">Assigned Cohorts</div>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{formCohortIds.length}</div>
-                      </div>
-                      <div style={{ padding: '8px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)' }}>
-                        <div className="text-muted text-xs">Certificate</div>
-                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: formCertificateEligible ? 'var(--success)' : 'var(--text-muted)' }}>
-                          {formCertificateEligible ? 'Enabled' : 'Disabled'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '10px' }}>
-                    Course Progression Preview
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {formCourses.map((ci, idx) => {
-                      const crs = courses.find((c) => c.id === ci.courseId);
-                      return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                      {/* Cohort Batches */}
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                          Cohort Batches ({cohorts.length})
+                        </label>
                         <div
-                          key={ci.courseId}
                           style={{
-                            padding: '10px 14px',
-                            background: 'var(--bg-card)',
-                            borderRadius: 'var(--radius-sm)',
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            background: 'var(--bg-input)',
                             border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '8px',
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            fontSize: '0.85rem',
+                            flexDirection: 'column',
+                            gap: '6px',
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Step {idx + 1}</span>
-                            <span style={{ fontWeight: 600 }}>{crs?.title}</span>
-                          </div>
-                          <span className="text-muted text-xs">{crs?.category}</span>
+                          {cohorts
+                            .filter((coh) => {
+                              if (!assignLearnerSearch.trim()) return true;
+                              const q = assignLearnerSearch.toLowerCase();
+                              return coh.name.toLowerCase().includes(q) || coh.code.toLowerCase().includes(q);
+                            })
+                            .map((coh) => {
+                              const isAssigned = formCohortIds.includes(coh.id);
+                              return (
+                                <label
+                                  key={coh.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '8px 10px',
+                                    background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
+                                    border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormCohortIds([...formCohortIds, coh.id]);
+                                      } else {
+                                        setFormCohortIds(formCohortIds.filter((id) => id !== coh.id));
+                                      }
+                                    }}
+                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                  />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {coh.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                      {coh.code} &bull; {coh.learnerCount || 0} students
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
                         </div>
-                      );
-                    })}
+                      </div>
+
+                      {/* Departments */}
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                          Departments ({mockDepartments.length})
+                        </label>
+                        <div
+                          style={{
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                          }}
+                        >
+                          {mockDepartments
+                            .filter((dept) => {
+                              if (!assignLearnerSearch.trim()) return true;
+                              return dept.name.toLowerCase().includes(assignLearnerSearch.toLowerCase());
+                            })
+                            .map((dept) => {
+                              const isAssigned = formDepartmentIds.includes(dept.id);
+                              return (
+                                <label
+                                  key={dept.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '8px 10px',
+                                    background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
+                                    border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormDepartmentIds([...formDepartmentIds, dept.id]);
+                                      } else {
+                                        setFormDepartmentIds(formDepartmentIds.filter((id) => id !== dept.id));
+                                      }
+                                    }}
+                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                  />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {dept.name}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                      {dept.memberCount} members
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* Individual Learners */}
+                      <div>
+                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                          Individual Learners
+                        </label>
+                        <div
+                          style={{
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                          }}
+                        >
+                          {peopleList
+                            .filter((u) => {
+                              const isStudent = u.roles?.some((r) => r.name === 'student' || r.name === 'learner') || u.activeRole === 'student';
+                              if (!isStudent) return false;
+                              if (!assignLearnerSearch.trim()) return true;
+                              const q = assignLearnerSearch.toLowerCase();
+                              return u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+                            })
+                            .slice(0, 20)
+                            .map((u) => {
+                              const isAssigned = formUserIds.includes(u.id);
+                              return (
+                                <label
+                                  key={u.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '8px 10px',
+                                    background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
+                                    border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isAssigned}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormUserIds([...formUserIds, u.id]);
+                                      } else {
+                                        setFormUserIds(formUserIds.filter((id) => id !== u.id));
+                                      }
+                                    }}
+                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                  />
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {u.displayName}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                      {u.email}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: Review Summary Before Publishing */}
+                  <div>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '10px' }}>
+                      2. Review Summary
+                    </h4>
+
+                    <div
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '20px 22px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        {renderInstitutionBadge(formInstitutionType)}
+                        <span className="badge badge-secondary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
+                          {formDifficulty}
+                        </span>
+                        <span className="badge badge-primary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
+                          {formCategory}
+                        </span>
+                      </div>
+
+                      <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-main)' }}>
+                        {formTitle || 'Untitled Learning Journey'}
+                      </h3>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
+                        {formDescription || 'No description entered.'}
+                      </p>
+
+                      {/* Stat Metrics Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', textAlign: 'center', marginBottom: '16px' }}>
+                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Courses</div>
+                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-main)' }}>{formCourses.length}</div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Duration</div>
+                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-main)' }}>
+                            {calculateTotalDuration(formCourses) || 0} hrs
+                          </div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Completion Req.</div>
+                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--primary)' }}>
+                            {formCompletionThreshold}%
+                          </div>
+                        </div>
+                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Certificate</div>
+                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: formCertificateEligible ? 'var(--success)' : 'var(--text-muted)' }}>
+                            {formCertificateEligible ? 'Enabled' : 'Disabled'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sequenced Courses Mini List */}
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
+                        Curriculum Sequence ({formCourses.length} courses):
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {formCourses.map((ci, idx) => {
+                          const crs = courses.find((c) => c.id === ci.courseId);
+                          return (
+                            <div
+                              key={ci.courseId}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'var(--bg-input)',
+                                borderRadius: 'var(--radius-sm)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '0.825rem',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Step {idx + 1}:</span>
+                                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{crs?.title || ci.courseId}</span>
+                              </div>
+                              <span style={{ color: 'var(--text-secondary)' }}>{crs?.category}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Validation / Ready Status */}
+                      <div style={{ marginTop: '16px' }}>
+                        {isAllRequiredValid ? (
+                          <div
+                            style={{
+                              padding: '12px 14px',
+                              background: 'rgba(16, 185, 129, 0.1)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              borderRadius: 'var(--radius-md)',
+                              color: 'var(--success)',
+                              fontSize: '0.85rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontWeight: 600,
+                            }}
+                          >
+                            <CheckCircle2 size={16} /> All requirements met. Ready to publish or save as draft.
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              padding: '12px 14px',
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid var(--danger-border)',
+                              borderRadius: 'var(--radius-md)',
+                              color: 'var(--danger)',
+                              fontSize: '0.85rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <AlertTriangle size={16} />
+                            <div>
+                              Please complete required items:
+                              {!isStep1Valid && <div>&bull; Learning Path Name is required in Step 1.</div>}
+                              {formCourses.length === 0 && <div>&bull; At least 1 course must be added in Step 2.</div>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Modal Footer Controls */}
+            {/* Modal Footer Controls - 4-Step Navigation */}
             <div
               className="modal-footer"
               style={{
-                padding: '16px 24px',
+                padding: '16px 28px',
                 borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                gap: '16px',
+                flexShrink: 0,
+                flexWrap: 'wrap',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 10,
               }}
             >
-              <div>
+              {/* Left: Back button & Step Progress */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 {builderStep > 1 && (
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    onClick={() => setBuilderStep((builderStep - 1) as any)}
+                    onClick={() => handleStepNavigation((builderStep - 1) as any)}
+                    style={{ fontSize: '0.875rem', fontWeight: 600, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
-                    Back
+                    <ChevronLeft size={16} /> Back
                   </button>
+                )}
+
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '4px 12px',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    color: 'var(--text-main)',
+                  }}
+                >
+                  Step {builderStep} of 4
+                </div>
+
+                {/* Inline Validation Alert if Next is Blocked */}
+                {!isCurrentStepValid(builderStep) && (
+                  <span
+                    style={{
+                      fontSize: '0.825rem',
+                      color: 'var(--warning)',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <AlertTriangle size={14} />
+                    {getStepValidationMessage(builderStep)}
+                  </span>
                 )}
               </div>
 
+              {/* Right: Cancel, Save as Draft, Next / Publish */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={() => setIsBuilderOpen(false)}
+                  style={{ fontSize: '0.875rem', padding: '7px 14px' }}
                 >
                   Cancel
                 </button>
@@ -2452,29 +3217,193 @@ export const LearningPathsPage: React.FC = () => {
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => handleSavePath('draft')}
+                  style={{ fontSize: '0.875rem', fontWeight: 600, padding: '7px 14px' }}
                 >
                   Save as Draft
                 </button>
 
-                {builderStep < 5 ? (
+                {builderStep < 4 ? (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
-                    onClick={() => setBuilderStep((builderStep + 1) as any)}
+                    disabled={!isCurrentStepValid(builderStep)}
+                    onClick={() => handleStepNavigation((builderStep + 1) as any)}
+                    title={getStepValidationMessage(builderStep) || 'Proceed to next step'}
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 700,
+                      padding: '7px 18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      opacity: !isCurrentStepValid(builderStep) ? 0.6 : 1,
+                      cursor: !isCurrentStepValid(builderStep) ? 'not-allowed' : 'pointer',
+                    }}
                   >
-                    Next Step <ChevronRight size={14} />
+                    Next Step <ChevronRight size={16} />
                   </button>
                 ) : (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
+                    disabled={!isAllRequiredValid}
                     onClick={() => handleSavePath('published')}
-                    style={{ background: 'var(--success)', borderColor: 'var(--success)' }}
+                    title={!isAllRequiredValid ? 'Please resolve missing requirements before publishing' : 'Publish Learning Path'}
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 700,
+                      padding: '7px 20px',
+                      background: isAllRequiredValid ? 'var(--success)' : 'var(--text-muted)',
+                      borderColor: isAllRequiredValid ? 'var(--success)' : 'var(--border-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: !isAllRequiredValid ? 'not-allowed' : 'pointer',
+                      opacity: !isAllRequiredValid ? 0.6 : 1,
+                    }}
                   >
-                    <CheckCircle2 size={14} /> Publish Learning Path
+                    <CheckCircle2 size={16} /> Publish Learning Path
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW ALL TEMPLATES MODAL */}
+      {showAllTemplatesModal && (
+        <div className="modal-overlay" onClick={() => setShowAllTemplatesModal(false)} style={{ zIndex: 120 }}>
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '860px',
+              width: '90%',
+              maxHeight: '85vh',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="modal-header"
+              style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                  All Recommended Learning Path Templates
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Select any curriculum template to pre-populate courses and completion criteria.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setShowAllTemplatesModal(false)}
+                aria-label="Close templates modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Filter Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                padding: '12px 24px',
+                background: 'var(--bg-input)',
+                borderBottom: '1px solid var(--border-subtle)',
+                flexWrap: 'wrap',
+              }}
+            >
+              {[
+                { type: 'corporate' as const, label: 'Company / Corporate' },
+                { type: 'higher_ed' as const, label: 'College / University' },
+                { type: 'school' as const, label: 'School (K-12)' },
+                { type: 'training_institute' as const, label: 'Training Institute' },
+              ].map((cat) => (
+                <button
+                  key={cat.type}
+                  type="button"
+                  onClick={() => setTemplateOrgType(cat.type)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.825rem',
+                    fontWeight: 600,
+                    border: templateOrgType === cat.type ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                    background: templateOrgType === cat.type ? 'var(--primary-light)' : 'var(--bg-card)',
+                    color: templateOrgType === cat.type ? 'var(--primary)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {cat.label} ({PATH_TEMPLATE_PRESETS.filter((p) => p.institutionType === cat.type).length})
+                </button>
+              ))}
+            </div>
+
+            {/* Templates Grid */}
+            <div
+              className="modal-body"
+              style={{
+                padding: '20px 24px',
+                overflowY: 'auto',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                gap: '14px',
+              }}
+            >
+              {relevantTemplates.map((tpl) => {
+                const isSelected = selectedTemplateId === tpl.id;
+                return (
+                  <div
+                    key={tpl.id}
+                    style={{
+                      padding: '16px',
+                      background: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
+                      border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: isSelected ? 'var(--primary)' : 'var(--text-main)', marginBottom: '4px' }}>
+                        {tpl.name}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        {tpl.category} &bull; {tpl.difficulty}
+                      </div>
+                      <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
+                        {tpl.description}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={`btn btn-xs ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => {
+                        handleApplyTemplate(tpl);
+                        setShowAllTemplatesModal(false);
+                      }}
+                      style={{ width: '100%', fontWeight: 700 }}
+                    >
+                      {isSelected ? 'Currently Applied' : 'Use This Template'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

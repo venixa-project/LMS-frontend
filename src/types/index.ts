@@ -44,6 +44,15 @@ export interface Role {
   updatedAt: string;
 }
 
+export interface UserSignatureSettings {
+  signatoryName: string;
+  designationTitle: string;
+  signatureImage?: string;
+  isConfigured: boolean;
+  configuredAt?: string;
+  signatureToken?: string;
+}
+
 // --- User & Profile ---
 export interface User {
   id: string;
@@ -65,6 +74,7 @@ export interface User {
   rollNo?: string;
   specialization?: string;
   eligibleCourseIds?: string[];
+  signatureSettings?: UserSignatureSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,9 +161,54 @@ export interface Course {
   enrollmentCapacity?: number;
   enrollmentApprovalRequired?: boolean;
   createdBy?: string;
+  startDate?: string;
+  endDate?: string;
+  completionPercentageRequired?: number;
+  completionPoints?: number;
   createdAt: string;
   finalAssessment?: QuizAssessmentConfig;
+  certificateConfig?: CourseCertificateConfig;
   updatedAt: string;
+}
+
+// --- Course Certificate Configuration ---
+export interface CourseCertificateConfig {
+  enabled: boolean;
+  title?: string;
+  issuingOrganization?: string;
+  templateId?: 'standard' | 'executive' | 'distinction' | 'technical';
+  requireAllLessons?: boolean;
+  requirePassingAssessment?: boolean;
+  minimumAssessmentScore?: number;
+  requiredCompletionPercentage?: number;
+  completionPoints?: number;
+  validityMonths?: number;
+  expiryDate?: string;
+  authorizedSignerName?: string;
+  authorizedSignerTitle?: string;
+  authorizedSignatureImage?: string;
+  secondarySignerName?: string;
+  secondarySignerTitle?: string;
+  secondarySignatureImage?: string;
+}
+
+// --- Assessment Certificate Configuration ---
+export interface AssessmentCertificateConfig {
+  enabled: boolean;
+  title?: string;
+  issuingOrganization?: string;
+  templateId?: 'standard' | 'executive' | 'distinction' | 'technical';
+  minimumScore?: number;
+  requiredCompletionPercentage?: number;
+  completionPoints?: number;
+  validityMonths?: number;
+  expiryDate?: string;
+  authorizedSignerName?: string;
+  authorizedSignerTitle?: string;
+  authorizedSignatureImage?: string;
+  secondarySignerName?: string;
+  secondarySignerTitle?: string;
+  secondarySignatureImage?: string;
 }
 
 // --- Assessment & Quiz Configuration Types for Course Builder ---
@@ -506,6 +561,9 @@ export interface Assessment {
   passingMarks?: number;
   availabilityStart?: string;
   availabilityEnd?: string;
+  completionPercentageRequired?: number;
+  completionPoints?: number;
+  certificateConfig?: AssessmentCertificateConfig;
   feedbackVisibility?: 'immediate' | 'after_window' | 'manual' | 'never';
   resultReleasePolicy?: 'immediate' | 'after_window' | 'manual';
   mode?: 'human' | 'ai_assisted' | 'automated';
@@ -866,16 +924,36 @@ export interface Certificate {
   id: string;
   learnerId: string;
   learnerName: string;
+  learnerEmail?: string;
   courseId: string;
   courseName?: string;
   courseTitle?: string;
+  assessmentId?: string;
+  assessmentTitle?: string;
+  type?: 'course' | 'assessment';
+  pointsAwarded?: number;
+  issuingOrganization?: string;
   issueDate?: string;
   issuedAt?: string;
   expiryDate?: string;
   status: 'active' | 'expired' | 'revoked';
+  revokedAt?: string;
+  revokedBy?: string;
+  revocationReason?: string;
   verificationUrl?: string;
   verificationHash?: string;
   templateId?: string;
+  scoreAchieved?: number;
+  completionPercentage?: number;
+  authorizedSignerName?: string;
+  authorizedSignerTitle?: string;
+  authorizedSignatureImage?: string;
+  secondarySignerName?: string;
+  secondarySignerTitle?: string;
+  secondarySignatureImage?: string;
+  organizationId?: string;
+  departmentId?: string;
+  cohortId?: string;
 }
 
 // --- Notification ---
@@ -906,6 +984,58 @@ export interface NotificationTemplate {
   isEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Announcement ---
+export type AnnouncementCategory =
+  | 'General'
+  | 'Academic'
+  | 'Examination'
+  | 'Holiday'
+  | 'Urgent'
+  | 'Maintenance'
+  | 'Course Updates'
+  | 'Quiz & Assessment Notices'
+  | 'Assignment Deadlines'
+  | 'Live Class Reminders'
+  | 'Learning Material Updates'
+  | 'Schedule Changes';
+
+export type AnnouncementPriority = 'normal' | 'important' | 'urgent';
+export type AnnouncementStatus = 'published' | 'draft' | 'scheduled' | 'archived';
+export type AnnouncementScope = 'institution' | 'course' | 'cohort' | 'department';
+
+export interface Announcement {
+  id: string;
+  organizationId: string;
+  title: string;
+  content: string;
+  category: AnnouncementCategory;
+  priority: AnnouncementPriority;
+  status: AnnouncementStatus;
+  scope: AnnouncementScope;
+  targetAudience: string;
+  audienceType: 'all' | 'students' | 'faculty' | 'course' | 'cohort' | 'department';
+  targetCourseId?: string;
+  targetCohortId?: string;
+  targetDepartmentId?: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  createdAt: string;
+  publishedAt?: string;
+  scheduledAt?: string;
+  expiresAt?: string;
+  channels: ('in_app' | 'email')[];
+  deliveryStatus?: {
+    inAppDelivered: boolean;
+    emailSent: boolean;
+    emailDeliveredCount: number;
+    totalTargetRecipients: number;
+  };
+  readByUserIds: string[];
+  associatedAssessmentId?: string;
+  associatedSessionId?: string;
 }
 
 // --- Integration ---

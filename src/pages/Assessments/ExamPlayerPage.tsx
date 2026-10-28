@@ -8,7 +8,7 @@ import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proct
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
-  FileText, Video, Mic
+  FileText, Video, Mic, Download, Lock
 } from 'lucide-react';
 import { VeniGuardSetup } from './components/VeniGuardSetup';
 import { VeniGuardStatusPanel } from './components/VeniGuardStatusPanel';
@@ -24,6 +24,8 @@ import {
   stopAllMediaTracks,
 } from '../../lib/proctoringMedia';
 import { ProctoringPolicy, ProctoringSessionStatus } from '../../types';
+import { useCertificateStore } from '../../lib/certificateStore';
+import { useCourseStore } from '../../lib/courseStore';
 
 export const ExamPlayerPage: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
@@ -80,6 +82,18 @@ export const ExamPlayerPage: React.FC = () => {
 
   // Lifecycle stage: 'readiness' -> 'in_exam' -> 'results'
   const [stage, setStage] = useState<'readiness' | 'in_exam' | 'results'>('readiness');
+
+  // Availability & Permission Rules
+  const now = new Date();
+  const startDate = assessment.availabilityStart ? new Date(assessment.availabilityStart) : null;
+  const endDate = assessment.availabilityEnd ? new Date(assessment.availabilityEnd) : null;
+  const isBeforeStart = Boolean(startDate && now < startDate);
+  const isAfterEnd = Boolean(endDate && now > endDate);
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isPrivileged = !isStudent;
+
+  // Check if learner already earned an assessment certificate
+  const existingAssessmentCert = user ? useCertificateStore.getState().getCertificatesByLearner(user.id).find((c) => c.assessmentId === assessment.id) : undefined;
 
   // Exam questions & answer state
   const loadedQuestions = id ? getQuestionsForAssessment(assessment.id) : [];
@@ -462,6 +476,7 @@ export const ExamPlayerPage: React.FC = () => {
   const unansweredCount = questions.length - answeredCount;
 
   const handleSelectAnswer = (optId: string) => {
+    if (isAfterEnd && isStudent) return; // Read-only lockdown
     setSelectedAnswers({ ...selectedAnswers, [currentQ.id]: optId });
     setSaveStatus('Saving...');
     setTimeout(() => setSaveStatus('Saved'), 500);
@@ -476,6 +491,12 @@ export const ExamPlayerPage: React.FC = () => {
   };
 
   const handleSubmitExam = () => {
+    if (isAfterEnd && isStudent) {
+      alert('Assessment closed: Access period has ended and no further submissions are accepted.');
+      setIsSubmitModalOpen(false);
+      return;
+    }
+
     setIsSubmitModalOpen(false);
 
     // Stop streams cleanly
@@ -505,8 +526,45 @@ export const ExamPlayerPage: React.FC = () => {
 
     // Score calculation
     const calculatedScore = Math.round((answeredCount / questions.length) * 100);
+    const passThreshold = assessment.passingMarks || assessment.passmark || 70;
+    const isExamPassed = calculatedScore >= passThreshold;
     setFinalScore(calculatedScore);
-    setPassed(calculatedScore >= (assessment.passingMarks || 70));
+    setPassed(isExamPassed);
+
+    // Automatic Certificate Generation if candidate passed
+    if (isExamPassed) {
+      // 1. Dedicated Assessment Certificate
+      if (assessment.certificateConfig?.enabled !== false) {
+        useCertificateStore.getState().issueAssessmentCertificate({
+          assessment,
+          learner: {
+            id: candidateId,
+            name: candidateName,
+            email: candidateEmail,
+          },
+          scoreAchieved: calculatedScore,
+          completionPercentage: 100,
+        });
+      }
+
+      // 2. Course Certificate if part of an enrolled course
+      if (assessment.courseId) {
+        const course = useCourseStore.getState().getCourseById(assessment.courseId);
+        if (course && course.certificateConfig?.enabled !== false) {
+          useCertificateStore.getState().issueCourseCertificate({
+            course,
+            learner: {
+              id: candidateId,
+              name: candidateName,
+              email: candidateEmail,
+            },
+            scoreAchieved: calculatedScore,
+            completionPercentage: 100,
+          });
+        }
+      }
+    }
+
     setStage('results');
   };
 
@@ -515,6 +573,148 @@ export const ExamPlayerPage: React.FC = () => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // -------------------------------------------------------------
+  // SCHEDULED OPENING (BEFORE START DATE) RESTRICTION
+  // -------------------------------------------------------------
+  if (isBeforeStart && isStudent) {
+    return (
+      <div style={{ maxWidth: '680px', margin: '40px auto', padding: '0 16px' }}>
+        <div className="card" style={{ padding: '36px', textAlign: 'center' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'rgba(37, 99, 235, 0.12)',
+            color: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px'
+          }}>
+            <Clock size={32} />
+          </div>
+          <span className="badge badge-warning" style={{ fontSize: '0.85rem', marginBottom: '10px' }}>
+            Scheduled Assessment
+          </span>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '8px' }}>
+            {assessment.title}
+          </h1>
+          <p className="text-secondary" style={{ fontSize: '0.95rem', marginBottom: '20px' }}>
+            This assessment will be available from{' '}
+            <strong style={{ color: 'var(--text-main)' }}>
+              {startDate?.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}
+            </strong>.
+          </p>
+          <div style={{
+            padding: '16px',
+            background: 'var(--bg-input)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            fontSize: '0.85rem',
+            marginBottom: '24px',
+            textAlign: 'left'
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: '6px' }}>Assessment Information:</div>
+            <div>&bull; Total Duration: {assessment.durationMinutes || 45} minutes</div>
+            <div>&bull; Total Marks: {assessment.totalMarks || 100} Marks (Pass: {assessment.passingMarks || 70} Marks)</div>
+            <div>&bull; Maximum Attempts Allowed: {assessment.maxAttempts || 2}</div>
+            <div>&bull; Institution Timezone: {user?.timezone || 'Institution Local Time'}</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <Link to="/assessments" className="btn btn-primary">
+              <ArrowLeft size={16} /> Return to Assessments
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // POST-DEADLINE (AFTER END DATE) READ-ONLY ACCESS
+  // -------------------------------------------------------------
+  if (isAfterEnd && isStudent && stage === 'readiness') {
+    return (
+      <div style={{ maxWidth: '720px', margin: '40px auto', padding: '0 16px' }}>
+        <div className="card" style={{ padding: '36px' }}>
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px 18px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            color: 'var(--danger)'
+          }}>
+            <Lock size={24} style={{ flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Assessment closed &mdash; view only</div>
+              <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>
+                The access period for this assessment ended on{' '}
+                <strong>{endDate?.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</strong>.
+                New attempts and answer submissions are no longer accepted.
+              </div>
+            </div>
+          </div>
+
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '8px' }}>
+            {assessment.title}
+          </h1>
+          <p className="text-secondary text-xs" style={{ marginBottom: '20px' }}>
+            Course: {assessment.courseId || 'General Assessment'} &bull; {assessment.durationMinutes || 45} Minutes &bull; {assessment.totalMarks || 100} Total Marks
+          </p>
+
+          <div style={{
+            background: 'var(--bg-input)',
+            borderRadius: 'var(--radius-md)',
+            padding: '18px',
+            marginBottom: '24px',
+            fontSize: '0.875rem'
+          }}>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}>Instructions & Rules</h4>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              {assessment.instructions || 'Read all instructions carefully. Answer all questions within the allocated timeframe.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <Link to="/assessments" className="btn btn-secondary">
+              <ArrowLeft size={16} /> All Assessments
+            </Link>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  const textContent = `VENILEARN ASSESSMENT QUESTION PAPER\nAssessment: ${assessment.title}\nCourse: ${assessment.courseId || 'General'}\nTotal Marks: ${assessment.totalMarks || 100}\nDuration: ${assessment.durationMinutes || 45} mins\n========================================\n\n` +
+                    questions.map((q, idx) => `Q${idx + 1}. [${q.points || 1} mark(s)] ${q.prompt}\n${(q.options || []).map((o, oidx) => `   (${String.fromCharCode(65 + oidx)}) ${o.text}`).join('\n')}\n`).join('\n');
+                  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `${assessment.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_question_paper.txt`;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download size={14} /> Download Question Paper
+              </button>
+
+              {existingAssessmentCert && (
+                <Link to="/my-certificates" className="btn btn-primary" style={{ gap: '6px' }}>
+                  <Award size={14} /> View Earned Certificate
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // -------------------------------------------------------------
   // STAGE 1: PRE-EXAM PROCTORING SETUP (FEATURE A)
@@ -557,6 +757,47 @@ export const ExamPlayerPage: React.FC = () => {
           isWebcamActive={isWebcamActive}
           isScreenSharing={isScreenSharing}
         />
+
+        {/* Availability Status Banners */}
+        {isBeforeStart && isPrivileged && (
+          <div style={{
+            background: 'rgba(37, 99, 235, 0.12)',
+            border: '1px solid rgba(37, 99, 235, 0.35)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: 'var(--primary)'
+          }}>
+            <Eye size={18} />
+            <span style={{ fontSize: '0.85rem' }}>
+              <strong>Admin / Creator Preview Mode:</strong> This assessment is scheduled to open on{' '}
+              {startDate?.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.
+              Unauthorized students cannot access it currently.
+            </span>
+          </div>
+        )}
+
+        {isAfterEnd && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: 'var(--danger)'
+          }}>
+            <Lock size={18} />
+            <span style={{ fontSize: '0.85rem' }}>
+              <strong>Assessment closed &mdash; view only:</strong> The assessment deadline was{' '}
+              {endDate?.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.
+              All responses are read-only and new submissions are blocked.
+            </span>
+          </div>
+        )}
 
         {/* Top Sticky Question & Timer Bar */}
         <div
@@ -1010,6 +1251,42 @@ export const ExamPlayerPage: React.FC = () => {
             Your session telemetry, timestamps, and recorded events have been logged securely. You can review your event timeline and submit explanations for any technical disruptions on your dedicated report page.
           </div>
         </div>
+
+        {/* Certificate & Points Unlocked Banner */}
+        {passed && (assessment.certificateConfig?.enabled !== false || assessment.courseId) && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.12))',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            textAlign: 'left'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Award size={28} color="var(--success)" />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--success)' }}>
+                  Assessment Certificate & Points Unlocked!
+                </div>
+                <div className="text-secondary text-xs">
+                  Your qualifying score ({finalScore}%) met all passing requirements.
+                  {(assessment.completionPoints || assessment.certificateConfig?.completionPoints) ? (
+                    <strong style={{ color: 'var(--primary)', marginLeft: '6px' }}>
+                      +{assessment.completionPoints || assessment.certificateConfig?.completionPoints} Reward Points Awarded!
+                    </strong>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <Link to="/my-certificates" className="btn btn-primary btn-sm" style={{ flexShrink: 0, gap: '6px' }}>
+              <Award size={14} /> View in My Certificates
+            </Link>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
