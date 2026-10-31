@@ -52,11 +52,11 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
       style={{
         padding: '16px 20px',
         background: isFirstPlace
-          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.85) 65%)'
-          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(15, 23, 42, 0.85) 65%)',
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, var(--bg-card) 65%)'
+          : 'linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, var(--bg-card) 65%)',
         border: isFirstPlace
           ? '1.5px solid rgba(255, 215, 0, 0.5)'
-          : '1.5px solid rgba(129, 140, 248, 0.35)',
+          : '1.5px solid var(--border-subtle)',
         borderRadius: '16px',
         position: 'relative',
         overflow: 'hidden',
@@ -174,7 +174,7 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
           {/* User Details & Quick Stats */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#fff' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
                 {currentUser.name.replace(' (You)', '')}
               </h3>
               <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>
@@ -230,8 +230,8 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
         {/* Right Column: Points, Rank Movement, & Next Rank Progress */}
         <div
           style={{
-            background: 'rgba(15, 23, 42, 0.6)',
-            border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: '14px',
             padding: '12px 16px',
           }}

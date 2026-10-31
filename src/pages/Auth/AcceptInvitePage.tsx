@@ -1,23 +1,22 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../lib/store';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { apiClient } from '../../lib/apiClient';
 import {
-  CheckCircle, Shield, Lock, Eye, EyeOff, User,
-  Building, Check, AlertTriangle
+  CheckCircle, Eye, EyeOff, Building, Check
 } from 'lucide-react';
 
 export const AcceptInvitePage: React.FC = () => {
-  const [tokenStatus] = useState<'valid' | 'expired'>('valid');
-  const [firstName, setFirstName] = useState('Taylor');
-  const [lastName, setLastName] = useState('Morgan');
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token') || '';
+  const tenantId = searchParams.get('tenantId') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const { login } = useAuthStore();
   const navigate = useNavigate();
 
   // Password requirements
@@ -28,16 +27,24 @@ export const AcceptInvitePage: React.FC = () => {
   const isMatch = password.length > 0 && password === confirmPassword;
   const isPasswordValid = hasMinLength && hasUpper && hasNumber && hasSpecial && isMatch;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isPasswordValid || !acceptedTerms) return;
+    if (!token) {
+      setError('This invitation link is missing its security token. Ask your administrator to send a new invitation.');
+      return;
+    }
 
     setIsLoading(true);
-    setTimeout(async () => {
-      setIsLoading(false);
+    setError('');
+    try {
+      await apiClient.post('/auth/accept-invite', { token, password }, tenantId ? { 'X-Tenant-Id': tenantId } : undefined);
       setIsCompleted(true);
-      await login('alex@lms.demo', 'demoPass123');
-    }, 1200);
+    } catch (requestError: any) {
+      setError(requestError.message || 'Unable to set up this account. Ask your administrator to resend the invitation.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -90,17 +97,17 @@ export const AcceptInvitePage: React.FC = () => {
               <CheckCircle size={36} />
             </div>
 
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Welcome to VeniLearn LMS!</h2>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Your account is ready</h2>
             <p className="text-secondary text-sm" style={{ marginBottom: '24px', lineHeight: 1.5 }}>
-              Your account has been successfully configured. You are now enrolled in VeniLearn as a <strong>Learner</strong>.
+              Your password was created successfully. Sign in with your work or student email and the password you just set.
             </p>
 
             <button
               className="btn btn-primary"
               style={{ width: '100%', padding: '12px' }}
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/login')}
             >
-              Go to Learner Dashboard
+              Go to Student Sign In
             </button>
           </div>
         ) : (
@@ -119,8 +126,8 @@ export const AcceptInvitePage: React.FC = () => {
                 <Building size={20} />
               </div>
               <div>
-                <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Accept Organization Invitation</h2>
-                <p className="text-muted text-xs">VeniLearn &bull; Invited by Sarah Chen</p>
+                <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Create your portal password</h2>
+                <p className="text-muted text-xs">Your institution approved your account access</p>
               </div>
             </div>
 
@@ -135,35 +142,15 @@ export const AcceptInvitePage: React.FC = () => {
               justifyContent: 'space-between'
             }}>
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Assigned Role & Scope</div>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Learner &bull; Cohort: Spring 2026 Engineering</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Account access</div>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>VeniLearn Portal</div>
               </div>
-              <span className="badge badge-active">Invitation Active</span>
+              <span className="badge badge-active">Approved</span>
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">First Name</label>
-                  <input
-                    type="text"
-                    required
-                    className="form-input"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Last Name</label>
-                  <input
-                    type="text"
-                    required
-                    className="form-input"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                  />
-                </div>
-              </div>
+              {!token && <div className="form-error" role="alert">Invitation token is missing. Ask your administrator to send a new link.</div>}
+              {error && <div className="form-error" role="alert" style={{ marginBottom: '12px' }}>{error}</div>}
 
               <div className="form-group">
                 <label className="form-label">Create Password</label>
@@ -247,7 +234,7 @@ export const AcceptInvitePage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isLoading || !isPasswordValid || !acceptedTerms}
+                disabled={isLoading || !isPasswordValid || !acceptedTerms || !token}
                 className="btn btn-primary"
                 style={{ width: '100%', padding: '12px' }}
               >

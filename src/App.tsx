@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { RoleGuard } from './components/RoleGuard';
 
@@ -7,6 +7,7 @@ import { RoleGuard } from './components/RoleGuard';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { ForgotPasswordPage } from './pages/Auth/ForgotPasswordPage';
 import { AcceptInvitePage } from './pages/Auth/AcceptInvitePage';
+import { ChangePasswordPage } from './pages/Auth/ChangePasswordPage';
 import { ProfilePage } from './pages/Auth/ProfilePage';
 
 
@@ -74,6 +75,15 @@ const IndexRouteRedirect: React.FC = () => {
   return <Navigate to="/dashboard" replace />;
 };
 
+const FirstLoginPasswordGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAuthenticated } = useAuthStore();
+  const location = useLocation();
+  if (isAuthenticated && user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
+  }
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
 
   return (
@@ -88,8 +98,9 @@ export const App: React.FC = () => {
         <Route path="/exam/:id" element={<ExamPlayerPage />} />
 
         {/* Main Application Shell Protected Layout */}
-        <Route path="/" element={<AppShell />}>
+        <Route path="/" element={<FirstLoginPasswordGuard><AppShell /></FirstLoginPasswordGuard>}>
           <Route index element={<IndexRouteRedirect />} />
+          <Route path="change-password" element={<ChangePasswordPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
 
           {/* Platform Admin Only Protected Routes */}

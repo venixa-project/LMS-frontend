@@ -39,10 +39,10 @@ export const CompanyProfileView: React.FC = () => {
   const hqBranch = useMemo(() => branches.find((b) => b.isHeadquarters), [branches]);
 
   // Form State
-  const [name, setName] = useState<string>(currentCompany.name || 'Venixa Private Limited');
-  const [tradeName, setTradeName] = useState<string>(currentCompany.tradeName || 'Venixa Technologies');
-  const [code, setCode] = useState<string>(currentCompany.code || 'VNX');
-  const [website, setWebsite] = useState<string>(currentCompany.website || 'https://www.venixatech.com');
+  const [name, setName] = useState<string>(currentCompany.name || '');
+  const [tradeName, setTradeName] = useState<string>(currentCompany.tradeName || '');
+  const [code, setCode] = useState<string>(currentCompany.code || '');
+  const [website, setWebsite] = useState<string>(currentCompany.website || '');
   const [logo, setLogo] = useState<string>(currentCompany.logo || '');
   const [logoError, setLogoError] = useState<string | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState<boolean>(false);
@@ -51,17 +51,17 @@ export const CompanyProfileView: React.FC = () => {
   // Sync form state if company data updates while not editing
   useEffect(() => {
     if (!isEditing) {
-      setName(currentCompany.name || 'Venixa Private Limited');
-      setTradeName(currentCompany.tradeName || 'Venixa Technologies');
-      setCode(currentCompany.code || 'VNX');
-      setWebsite(currentCompany.website || 'https://www.venixatech.com');
+      setName(currentCompany.name || '');
+      setTradeName(currentCompany.tradeName || '');
+      setCode(currentCompany.code || '');
+      setWebsite(currentCompany.website || '');
       setLogo(currentCompany.logo || '');
-      setCinNumber(currentCompany.cinNumber || 'U72200KA2023PTC178921');
-      setTaxId(currentCompany.taxId || 'AABCV1234F');
-      setGstin(currentCompany.gstin || '29AABCV1234F1Z5');
+      setCinNumber(currentCompany.cinNumber || '');
+      setTaxId(currentCompany.taxId || '');
+      setGstin(currentCompany.gstin || '');
       setIncorporationDate(currentCompany.incorporationDate || '2023-01-15');
-      setStreetAddress(currentCompany.streetAddress || 'Global Tech Park, Outer Ring Road');
-      setSuite(currentCompany.suite || 'Tower B, 7th Floor');
+      setStreetAddress(currentCompany.streetAddress || '');
+      setSuite(currentCompany.suite || '');
       setCity(currentCompany.city || 'Bengaluru');
       setState(currentCompany.state || 'Karnataka');
       setPostalCode(currentCompany.postalCode || '560103');
@@ -70,8 +70,8 @@ export const CompanyProfileView: React.FC = () => {
       setTimezone(currentCompany.timezone || 'Asia/Kolkata (IST, UTC+5:30)');
       setFiscalYear(currentCompany.fiscalYear || 'April 1 - March 31');
       setWorkWeek(currentCompany.workWeek || 'Monday - Friday (5 Days)');
-      setOfficialEmail(currentCompany.officialEmail || 'corporate@venixatech.com');
-      setPhone(currentCompany.phone || '+91 (80) 4123-9800');
+      setOfficialEmail(currentCompany.officialEmail || '');
+      setPhone(currentCompany.phone || '');
       setLogoError(null);
       setShowRemoveConfirm(false);
     }
@@ -79,19 +79,19 @@ export const CompanyProfileView: React.FC = () => {
 
   // Legal & Tax IDs
   const [cinNumber, setCinNumber] = useState<string>(
-    currentCompany.cinNumber || 'U72200KA2023PTC178921'
+    currentCompany.cinNumber || ''
   );
-  const [taxId, setTaxId] = useState<string>(currentCompany.taxId || 'AABCV1234F');
-  const [gstin, setGstin] = useState<string>(currentCompany.gstin || '29AABCV1234F1Z5');
+  const [taxId, setTaxId] = useState<string>(currentCompany.taxId || '');
+  const [gstin, setGstin] = useState<string>(currentCompany.gstin || '');
   const [incorporationDate, setIncorporationDate] = useState<string>(
     currentCompany.incorporationDate || '2023-01-15'
   );
 
   // Registered Address
   const [streetAddress, setStreetAddress] = useState<string>(
-    currentCompany.streetAddress || 'Global Tech Park, Outer Ring Road'
+    currentCompany.streetAddress || ''
   );
-  const [suite, setSuite] = useState<string>(currentCompany.suite || 'Tower B, 7th Floor');
+  const [suite, setSuite] = useState<string>(currentCompany.suite || '');
   const [city, setCity] = useState<string>(currentCompany.city || 'Bengaluru');
   const [state, setState] = useState<string>(currentCompany.state || 'Karnataka');
   const [postalCode, setPostalCode] = useState<string>(currentCompany.postalCode || '560103');
@@ -111,10 +111,10 @@ export const CompanyProfileView: React.FC = () => {
 
   // Official Contacts
   const [officialEmail, setOfficialEmail] = useState<string>(
-    currentCompany.officialEmail || 'corporate@venixatech.com'
+    currentCompany.officialEmail || ''
   );
-  const [phone, setPhone] = useState<string>(currentCompany.phone || '+91 (80) 4123-9800');
-  const [hrEmail, setHrEmail] = useState<string>('people@venixatech.com');
+  const [phone, setPhone] = useState<string>(currentCompany.phone || '');
+  const [hrEmail, setHrEmail] = useState<string>('');
 
   const companyEmployees = employees.filter(
     (e) => e.companyId === currentCompany.id || e.companyId === 'comp-1'
@@ -169,17 +169,17 @@ export const CompanyProfileView: React.FC = () => {
     setShowRemoveConfirm(false);
     setLogoError(null);
     // Reset all form state to current committed company values
-    setName(currentCompany.name || 'Venixa Private Limited');
-    setTradeName(currentCompany.tradeName || 'Venixa Technologies');
-    setCode(currentCompany.code || 'VNX');
-    setWebsite(currentCompany.website || 'https://www.venixatech.com');
+    setName(currentCompany.name || '');
+    setTradeName(currentCompany.tradeName || '');
+    setCode(currentCompany.code || '');
+    setWebsite(currentCompany.website || '');
     setLogo(currentCompany.logo || '');
-    setCinNumber(currentCompany.cinNumber || 'U72200KA2023PTC178921');
-    setTaxId(currentCompany.taxId || 'AABCV1234F');
-    setGstin(currentCompany.gstin || '29AABCV1234F1Z5');
+    setCinNumber(currentCompany.cinNumber || '');
+    setTaxId(currentCompany.taxId || '');
+    setGstin(currentCompany.gstin || '');
     setIncorporationDate(currentCompany.incorporationDate || '2023-01-15');
-    setStreetAddress(currentCompany.streetAddress || 'Global Tech Park, Outer Ring Road');
-    setSuite(currentCompany.suite || 'Tower B, 7th Floor');
+    setStreetAddress(currentCompany.streetAddress || '');
+    setSuite(currentCompany.suite || '');
     setCity(currentCompany.city || 'Bengaluru');
     setState(currentCompany.state || 'Karnataka');
     setPostalCode(currentCompany.postalCode || '560103');
@@ -188,8 +188,8 @@ export const CompanyProfileView: React.FC = () => {
     setTimezone(currentCompany.timezone || 'Asia/Kolkata (IST, UTC+5:30)');
     setFiscalYear(currentCompany.fiscalYear || 'April 1 - March 31');
     setWorkWeek(currentCompany.workWeek || 'Monday - Friday (5 Days)');
-    setOfficialEmail(currentCompany.officialEmail || 'corporate@venixatech.com');
-    setPhone(currentCompany.phone || '+91 (80) 4123-9800');
+    setOfficialEmail(currentCompany.officialEmail || '');
+    setPhone(currentCompany.phone || '');
   };
 
   const handleSave = () => {

@@ -27,7 +27,11 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { users, toggleUserStatus } = usePeopleStore();
+  const { users, toggleUserStatus, fetchPeople, isLoading, deleteUser, inviteUser } = usePeopleStore();
+
+  useEffect(() => {
+    fetchPeople();
+  }, [fetchPeople]);
   const { profiles } = useGamificationStore();
 
   const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
@@ -173,9 +177,9 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   }
 
   // Handle Status Toggle (Activate / Deactivate) via Store
-  const handleConfirmStatusChange = () => {
+  const handleConfirmStatusChange = async () => {
     if (!statusChangeUser) return;
-    const res = toggleUserStatus(statusChangeUser.id);
+    const res = await toggleUserStatus(statusChangeUser.id);
     if (res.success) {
       showNotice(res.message);
       if (selectedUserDetail?.id === statusChangeUser.id) {
@@ -356,26 +360,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </div>
       )}
 
-      {/* Gamification & Learning Points Overview (When viewing students) */}
-      {activeTab === 'students' && (
-        <div style={{ marginBottom: '20px' }}>
-          <AdminRankOverview
-            onOpenAwardModal={(studentId) => {
-              if (studentId) {
-                setAwardTargetStudentId(studentId);
-                const found = users.find((u) => u.id === studentId);
-                if (found) setAwardTargetStudentName(found.displayName);
-              }
-              setIsAwardModalOpen(true);
-            }}
-            onViewStudent={(studentId) => {
-              const found = users.find((u) => u.id === studentId);
-              if (found) setSelectedUserDetail(found);
-            }}
-          />
-        </div>
-      )}
-
       {/* Filter toolbar */}
       <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -453,8 +437,8 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
       </div>
 
       {/* Users Table */}
-      <div className="table-container">
-        <table className="table">
+      <div className={`table-container people-table-container ${activeTab === 'students' ? 'people-student-table-container' : ''}`}>
+        <table className={`table ${activeTab === 'students' ? 'people-student-table' : ''}`}>
           <thead>
             {activeTab === 'students' ? (
               <tr>
@@ -686,6 +670,25 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </table>
       </div>
 
+      {/* Gamification & Learning Points Overview (When viewing students) */}
+      {activeTab === 'students' && (
+        <div style={{ marginTop: '20px' }}>
+          <AdminRankOverview
+            onOpenAwardModal={(studentId) => {
+              if (studentId) {
+                setAwardTargetStudentId(studentId);
+                const found = users.find((u) => u.id === studentId);
+                if (found) setAwardTargetStudentName(found.displayName);
+              }
+              setIsAwardModalOpen(true);
+            }}
+            onViewStudent={(studentId) => {
+              const found = users.find((u) => u.id === studentId);
+              if (found) setSelectedUserDetail(found);
+            }}
+          />
+        </div>
+      )}
 
 
       {/* Confirmation Modal for Activation / Deactivation */}
@@ -703,7 +706,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
 
             <div className="modal-body">
               <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-                Are you sure you want to <strong>{statusChangeUser.status === 'active' ? 'suspend' : 'reactivate'}</strong> the account for <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?
+                {statusChangeUser.status === 'active'
+                  ? <>Are you sure you want to <strong>suspend</strong> <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>
+                  : statusChangeUser.status === 'pending_approval'
+                    ? <>Approve <strong>{statusChangeUser.displayName}</strong>? We will email their student login email and a temporary password. They must replace it at first sign-in.</>
+                    : statusChangeUser.status === 'invited'
+                      ? <>Resend temporary login credentials to <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>
+                    : <>Reactivate <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>}
               </p>
               {statusChangeUser.status === 'active' ? (
                 <div style={{
@@ -737,7 +746,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 style={statusChangeUser.status === 'active' ? { background: 'var(--danger)', color: '#fff' } : undefined}
                 onClick={handleConfirmStatusChange}
               >
-                Confirm {statusChangeUser.status === 'active' ? 'Suspension' : 'Reactivation'}
+                {statusChangeUser.status === 'active' ? 'Confirm Suspension' : statusChangeUser.status === 'pending_approval' ? 'Approve & Email Login' : statusChangeUser.status === 'invited' ? 'Resend Login Credentials' : 'Confirm Reactivation'}
               </button>
             </div>
           </div>

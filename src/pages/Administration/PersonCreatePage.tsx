@@ -33,7 +33,7 @@ export const PersonCreatePage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [departmentId, setDepartmentId] = useState(mockDepartments[0]?.id || 'dep-001');
-  const [status, setStatus] = useState<UserAccountStatus>('active');
+  const [status, setStatus] = useState<UserAccountStatus>('pending_approval');
 
   // Student specific
   const [rollNo, setRollNo] = useState('');
@@ -71,6 +71,44 @@ export const PersonCreatePage: React.FC = () => {
 
   // Track if form is dirty
   const isDirty = firstName.trim() !== '' || lastName.trim() !== '' || email.trim() !== '';
+
+  const resetAllFormState = (nextRoleType: 'student' | 'faculty' | 'staff') => {
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setPhone('');
+    setDepartmentId(mockDepartments[0]?.id || 'dep-001');
+    setStatus(nextRoleType === 'student' ? 'pending_approval' : 'invited');
+
+    setRollNo('');
+    setCohortName(cohorts[0]?.name || 'Spring 2026 Engineering');
+    setAdmissionDate('2026-10-22');
+    setGuardianName('');
+    setGuardianPhone('');
+
+    setFacultyEmpId('');
+    setFacultyTitle('Lead Trainer / Professor');
+    setSpecialization('Full-Stack Software Architecture');
+    setSelectedCourses([mockCourses[0]?.id || 'crs-001']);
+
+    setStaffEmpId('');
+    setStaffRoleTitle('Academic Operations Coordinator');
+    setOfficeLocation('Building B, Room 204');
+
+    setErrors({});
+    setShowDiscardPrompt(false);
+
+    if (nextRoleType === 'student') {
+      setCohortName(cohorts[0]?.name || 'Spring 2026 Engineering');
+      setAdmissionDate('2026-10-22');
+    }
+  };
+
+  const handleRoleSwitch = (nextRoleType: 'student' | 'faculty' | 'staff') => {
+    if (nextRoleType === activeRoleType) return;
+    setActiveRoleType(nextRoleType);
+    resetAllFormState(nextRoleType);
+  };
 
   const handleCancel = () => {
     if (isDirty) {
@@ -126,14 +164,14 @@ export const PersonCreatePage: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
 
     const activeRole: RoleName =
-      activeRoleType === 'student' ? 'learner' : activeRoleType === 'faculty' ? 'trainer' : 'org_admin';
+      activeRoleType === 'student' ? 'learner' : activeRoleType === 'faculty' ? 'trainer' : 'staff';
 
     const newUser: User = {
       id: `u-${Date.now()}`,
@@ -155,7 +193,7 @@ export const PersonCreatePage: React.FC = () => {
       updatedAt: new Date().toISOString()
     };
 
-    const res = addUser(newUser);
+    const res = await addUser(newUser);
 
     setTimeout(() => {
       setIsSubmitting(false);
@@ -235,7 +273,7 @@ export const PersonCreatePage: React.FC = () => {
           }}>
             <button
               type="button"
-              onClick={() => setActiveRoleType('student')}
+              onClick={() => handleRoleSwitch('student')}
               style={{
                 padding: '6px 14px',
                 fontSize: '0.8rem',
@@ -250,7 +288,7 @@ export const PersonCreatePage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setActiveRoleType('faculty')}
+              onClick={() => handleRoleSwitch('faculty')}
               style={{
                 padding: '6px 14px',
                 fontSize: '0.8rem',
@@ -265,7 +303,7 @@ export const PersonCreatePage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setActiveRoleType('staff')}
+              onClick={() => handleRoleSwitch('staff')}
               style={{
                 padding: '6px 14px',
                 fontSize: '0.8rem',
@@ -420,9 +458,8 @@ export const PersonCreatePage: React.FC = () => {
                 value={status}
                 onChange={(e) => setStatus(e.target.value as UserAccountStatus)}
               >
-                <option value="active">Active (Immediate Login Permitted)</option>
-                <option value="invited">Invited (Send Onboarding Email Link)</option>
                 <option value="pending_approval">Pending Dean / Admin Review</option>
+                <option value="invited">Invited (Awaiting Password Setup)</option>
               </select>
             </div>
           </div>

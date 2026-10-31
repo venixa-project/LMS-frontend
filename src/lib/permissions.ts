@@ -128,6 +128,8 @@ const STUDENT_PERMISSIONS: Permission[] = [
   { id: 'st-8', resource: 'notifications', action: 'view', scope: 'own', description: 'View academic notifications' },
 ];
 
+const STAFF_PERMISSIONS: Permission[] = [];
+
 const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {
   // 4 Core Canonical Roles
   platform_admin: PLATFORM_ADMIN_PERMISSIONS,
@@ -136,6 +138,7 @@ const ROLE_PERMISSIONS: Record<RoleName, Permission[]> = {
   industrial_admin: ORG_ADMIN_PERMISSIONS,
   trainer: TRAINER_PERMISSIONS,
   student: STUDENT_PERMISSIONS,
+  staff: STAFF_PERMISSIONS,
 
   // Role mappings for compatibility
   instructor: TRAINER_PERMISSIONS,
@@ -200,6 +203,14 @@ export interface NavItem {
 }
 
 export function getNavigationForRole(role: RoleName): NavItem[] {
+  if (role === 'staff') {
+    return [
+      { id: 'dashboard', label: 'Staff Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
+      { id: 'notifications', label: 'Announcements', icon: 'Bell', path: '/notifications', group: 'Communications' },
+      { id: 'profile', label: 'My Profile', icon: 'User', path: '/profile', group: 'Account' },
+    ];
+  }
+
   // 1. TRAINER NAVIGATION (Teaching, Assessments, Live Sessions, Grading)
   const trainerNav: NavItem[] = [
     { id: 'dashboard', label: 'Trainer Dashboard', icon: 'LayoutDashboard', path: '/dashboard', group: 'Main' },
@@ -285,8 +296,9 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
  * Normalizes any role variant into one of the 4 canonical roles:
  * 'platform_admin' | 'org_admin' | 'trainer' | 'student'
  */
-export function normalizeCanonicalRole(rawRole?: string): CanonicalRole {
+export function normalizeCanonicalRole(rawRole?: string): CanonicalRole | 'staff' {
   if (!rawRole) return 'student';
+  if (rawRole === 'staff') return 'staff';
   if (rawRole === 'trainer' || rawRole === 'instructor' || rawRole === 'assessment_author' || rawRole === 'grader') {
     return 'trainer';
   }
@@ -310,11 +322,16 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
   const role = normalizeCanonicalRole(rawRole);
   const cleanPath = pathname.split('?')[0].replace(/\/$/, '') || '/';
 
+  if (role === 'staff') {
+    return ['/dashboard', '/profile', '/notifications', '/change-password'].includes(cleanPath);
+  }
+
   // 1. Universal routes allowed for all authenticated roles
   if (
     cleanPath === '' ||
     cleanPath === '/' ||
     cleanPath === '/dashboard' ||
+    cleanPath === '/change-password' ||
     cleanPath === '/courses' ||
     cleanPath === '/my-courses' ||
     cleanPath === '/momentum' ||

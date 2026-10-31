@@ -179,13 +179,13 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
     <div
       className={`card rank-roadmap-card ${className}`}
       style={{
-        background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 27, 75, 0.65) 100%)',
-        border: '1px solid rgba(129, 140, 248, 0.25)',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '16px',
         padding: compact ? '14px 16px' : '18px 22px',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 8px 28px -4px rgba(0, 0, 0, 0.45)',
+        boxShadow: 'var(--shadow-md)',
       }}
     >
       {/* Background Ambient Glow */}
@@ -290,7 +290,7 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
                   margin: 0,
                   fontSize: compact ? '1rem' : '1.15rem',
                   fontWeight: 800,
-                  color: '#ffffff',
+                  color: 'var(--text-main)',
                   letterSpacing: '-0.01em',
                 }}
               >
@@ -532,8 +532,8 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
                       color: isCurrent
                         ? tier.color
                         : isPassed
-                        ? '#ffffff'
-                        : 'var(--text-secondary, #cbd5e1)',
+                        ? 'var(--text-main)'
+                        : 'var(--text-secondary)',
                       marginTop: '10px',
                       letterSpacing: '0.01em',
                     }}
@@ -752,8 +752,8 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
       {/* 4. INFORMATION PROGRESS PANEL BELOW ROADMAP (Requirement 4 & 5) */}
       <div
         style={{
-          background: 'rgba(15, 23, 42, 0.78)',
-          border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: '14px',
           padding: '14px 18px',
           display: 'flex',
@@ -829,7 +829,7 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
               <div
                 style={{
                   fontSize: '0.825rem',
-                  color: '#ffffff',
+                  color: 'var(--text-main)',
                   fontWeight: 700,
                   marginTop: '3px',
                 }}
@@ -969,7 +969,7 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
               <span
                 style={{
                   fontWeight: 800,
-                  color: isLegend ? '#fbbf24' : '#ffffff',
+                  color: isLegend ? '#fbbf24' : 'var(--text-main)',
                   fontSize: '0.85rem',
                 }}
               >
@@ -989,7 +989,8 @@ export const RankRoadmap: React.FC<RankRoadmapProps> = ({
           <div
             style={{
               height: '10px',
-              background: 'rgba(255, 255, 255, 0.08)',
+              background: 'var(--bg-card-hover)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: '999px',
               overflow: 'hidden',
               position: 'relative',

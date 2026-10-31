@@ -165,11 +165,11 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Trainer Management Handlers
   // --------------------------------------------------------------------------
-  const handleConfirmRemoveTrainer = () => {
+  const handleConfirmRemoveTrainer = async () => {
     if (!assignedTrainer) return;
     const trainerName = assignedTrainer.displayName;
 
-    const res = removeTrainerFromCohort(cohort.id);
+    const res = await removeTrainerFromCohort(cohort.id);
     if (res.success) {
       const updatedCohort: Cohort = {
         ...cohort,
@@ -183,12 +183,12 @@ export const CohortDetailsView: React.FC<Props> = ({
     setShowRemoveTrainerConfirm(false);
   };
 
-  const handleConfirmChangeTrainer = () => {
+  const handleConfirmChangeTrainer = async () => {
     if (!selectedTrainerIdToAssign) return;
     const newTrainer = mockUsers.find(u => u.id === selectedTrainerIdToAssign);
     if (!newTrainer) return;
 
-    const res = assignTrainerToCohort(cohort.id, selectedTrainerIdToAssign);
+    const res = await assignTrainerToCohort(cohort.id, selectedTrainerIdToAssign);
     if (res.success) {
       const updatedCohort: Cohort = {
         ...cohort,
@@ -207,11 +207,11 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Student Management Handlers
   // --------------------------------------------------------------------------
-  const handleConfirmRemoveStudent = () => {
+  const handleConfirmRemoveStudent = async () => {
     if (!studentToRemove) return;
     const studentName = studentToRemove.displayName;
 
-    const res = removeStudentFromCohort(cohort.id, studentToRemove.id);
+    const res = await removeStudentFromCohort(cohort.id, studentToRemove.id);
     if (res.success) {
       const updatedStudentIds = (cohort.studentIds || []).filter(id => id !== studentToRemove.id);
       const updatedCohort: Cohort = {
@@ -243,10 +243,10 @@ export const CohortDetailsView: React.FC<Props> = ({
     }
   };
 
-  const handleConfirmAddStudents = () => {
+  const handleConfirmAddStudents = async () => {
     if (newlySelectedStudentIds.length === 0) return;
 
-    const res = addStudentsToCohort(cohort.id, newlySelectedStudentIds);
+    const res = await addStudentsToCohort(cohort.id, newlySelectedStudentIds);
     if (res.success) {
       const updatedStudentIds = [...(cohort.studentIds || []), ...newlySelectedStudentIds];
       const updatedCohort: Cohort = {
@@ -268,7 +268,7 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Basic Cohort Details Edit
   // --------------------------------------------------------------------------
-  const handleSaveEditInfo = (e: React.FormEvent) => {
+  const handleSaveEditInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName.trim()) {
       setEditError('Cohort name cannot be empty.');
@@ -297,7 +297,7 @@ export const CohortDetailsView: React.FC<Props> = ({
       updatedAt: new Date().toISOString()
     };
 
-    const res = updateCohort(updatedCohort);
+    const res = await updateCohort(updatedCohort);
     if (res.success) {
       onUpdateCohort(updatedCohort);
       showNotice(res.message);

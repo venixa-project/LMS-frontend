@@ -14,6 +14,7 @@ interface Props {
   onToggleSidebar: () => void;
   onOpenRoleSwitcher: () => void;
   onOpenNotifications: () => void;
+  isNotificationsOpen?: boolean;
   onOpenSearch: () => void;
 }
 
@@ -21,6 +22,7 @@ export const Navbar: React.FC<Props> = ({
   onToggleSidebar,
   onOpenRoleSwitcher,
   onOpenNotifications,
+  isNotificationsOpen = false,
   onOpenSearch
 }) => {
   const { user, logout, unreadNotifications } = useAuthStore();
@@ -299,9 +301,9 @@ export const Navbar: React.FC<Props> = ({
               </div>
 
               {[
-                { id: 'light', label: 'Light', desc: 'Always light theme', icon: Sun, color: 'var(--warning)' },
-                { id: 'dark', label: 'Dark', desc: 'Always dark theme', icon: Moon, color: 'var(--primary)' },
-                { id: 'system', label: 'System (Device)', desc: `Follow OS (${resolvedTheme})`, icon: Monitor, color: 'var(--accent-cyan)' }
+                { id: 'dark', label: 'Dark', desc: 'Cosmic midnight theme', icon: Moon, color: 'var(--brand-indigo)' },
+                { id: 'light', label: 'Light', desc: 'Crisp day theme', icon: Sun, color: 'var(--brand-pink-soft)' },
+                { id: 'system', label: 'System (Device)', desc: `Follow OS (${resolvedTheme})`, icon: Monitor, color: 'var(--brand-blue-sky)' }
               ].map((opt) => {
                 const IconComp = opt.icon;
                 const isSelected = preference === opt.id;
@@ -349,33 +351,61 @@ export const Navbar: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Notifications Center button */}
+        {/* Liquid Glass Notification Bell */}
         <button
-          className="btn btn-secondary btn-sm"
+          className="liquid-glass-bell-btn"
           onClick={onOpenNotifications}
-          style={{ position: 'relative', padding: '7px' }}
-          title="Notifications"
+          style={{
+            position: 'relative',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '36px',
+            height: '36px',
+            padding: 0,
+            borderRadius: '12px',
+            background: isNotificationsOpen
+              ? 'linear-gradient(135deg, rgba(84, 71, 255, 0.28) 0%, rgba(244, 114, 182, 0.2) 100%)'
+              : 'rgba(129, 140, 248, 0.08)',
+            border: isNotificationsOpen
+              ? '1px solid rgba(129, 140, 248, 0.55)'
+              : '1px solid var(--border-subtle)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            boxShadow: isNotificationsOpen
+              ? '0 0 16px rgba(84, 71, 255, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.25)'
+              : 'var(--shadow-sm)',
+            color: isNotificationsOpen ? 'var(--brand-indigo-soft, #818CF8)' : 'var(--text-main)',
+            cursor: 'pointer',
+          }}
+          title={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
+          aria-label={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}
+          aria-expanded={isNotificationsOpen}
+          aria-haspopup="dialog"
         >
-          <Bell size={16} />
+          <Bell size={17} />
           {unreadNotifications > 0 && (
             <span
               style={{
                 position: 'absolute',
-                top: '-2px',
-                right: '-2px',
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
-                background: 'var(--primary)',
-                color: '#fff',
-                fontSize: '0.65rem',
+                top: '-3px',
+                right: '-3px',
+                minWidth: '17px',
+                height: '17px',
+                padding: '0 4px',
+                borderRadius: '999px',
+                background: 'linear-gradient(135deg, #EC4899 0%, #F232A9 100%)',
+                color: '#ffffff',
+                fontSize: '0.625rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 700
+                fontWeight: 800,
+                boxShadow: '0 2px 8px rgba(242, 50, 169, 0.5), 0 0 0 1.5px var(--bg-surface)',
+                lineHeight: 1,
               }}
             >
-              {unreadNotifications}
+              {unreadNotifications > 99 ? '99+' : unreadNotifications}
             </span>
           )}
         </button>

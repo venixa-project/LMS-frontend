@@ -41,6 +41,10 @@ export const LoginPage: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && user) {
+      if (user.mustChangePassword) {
+        navigate('/change-password', { replace: true });
+        return;
+      }
       const isStudent = user.activeRole === 'student' || user.activeRole === 'learner' || user.activeRole === 'guest';
       navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
     }
@@ -50,9 +54,13 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     sessionStorage.removeItem('venilearn_logged_out');
     clearError();
-    await login(email, password);
+    await login(email, password, searchParams.get('tenantId') || undefined);
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated && storeState.user) {
+      if (storeState.user.mustChangePassword) {
+        navigate('/change-password', { replace: true });
+        return;
+      }
       const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
       if (isStudent) {
         sessionStorage.setItem('show_student_leaderboard_popup', 'true');

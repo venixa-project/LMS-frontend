@@ -6,9 +6,10 @@ import { User, RoleName, Notification } from '../types';
 import { getPermissionsForRole, getNavigationForRole, can, type NavItem } from './permissions';
 import type { Permission, PermissionAction, PermissionResource } from '../types';
 import { mockUsers } from '../data/mockUsers';
+import { apiClient } from './apiClient';
+import { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
 
-export const AUTH_SESSION_KEY = 'venilearn_auth_session';
-export const LOGGED_OUT_KEY = 'venilearn_logged_out';
+export { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
 
 interface StoredSession {
   userId: string;
@@ -16,6 +17,7 @@ interface StoredSession {
   activeRole: RoleName;
   token?: string;
   expiresAt?: number;
+  userSnapshot?: User;
 }
 
 /**
@@ -50,24 +52,32 @@ function restoreSessionFromStorage(): {
       return null;
     }
 
-    // Lookup user in the trusted authority directory
+    // Demo personas come from the trusted local directory; backend users retain
+    // the profile returned with their server-issued JWT for session restoration.
     const trustedUser = mockUsers.find(
       (u) => u.id === session.userId || u.email.toLowerCase() === session.email?.toLowerCase()
     );
 
-    if (!trustedUser) {
+    const isServerSession = typeof session.token === 'string' && session.token.split('.').length === 3;
+    const restoredBackendUser = isServerSession && session.userSnapshot?.id === session.userId &&
+      session.userSnapshot.email.toLowerCase() === session.email?.toLowerCase()
+      ? session.userSnapshot
+      : null;
+
+    if (!trustedUser && !restoredBackendUser) {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
     }
 
     // Validate account status
-    if (trustedUser.status === 'suspended' || trustedUser.status === 'deactivated') {
+    const sessionUser = restoredBackendUser || trustedUser!;
+    if (sessionUser.status === 'suspended' || sessionUser.status === 'deactivated' || sessionUser.status !== 'active') {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
     }
 
     // Canonical role normalization
-    let targetRole: RoleName = session.activeRole || trustedUser.activeRole;
+    let targetRole: RoleName = session.activeRole || sessionUser.activeRole;
     if (targetRole === 'instructor' || targetRole === 'assessment_author' || targetRole === 'grader') {
       targetRole = 'trainer';
     } else if (targetRole === 'learner' || targetRole === 'guest') {
@@ -78,9 +88,11 @@ function restoreSessionFromStorage(): {
 
     // Ensure authorized canonical user persona matching the active role
     const canonicalUser = mockUsers.find((u) => u.activeRole === targetRole);
-    const verifiedUser: User = canonicalUser
-      ? { ...canonicalUser, activeRole: targetRole }
-      : { ...trustedUser, activeRole: targetRole };
+    const verifiedUser: User = restoredBackendUser
+      ? { ...restoredBackendUser, activeRole: targetRole }
+      : canonicalUser
+        ? { ...canonicalUser, activeRole: targetRole }
+        : { ...sessionUser, activeRole: targetRole };
 
     const permissions = getPermissionsForRole(targetRole);
     const navigation = getNavigationForRole(targetRole);
@@ -102,14 +114,15 @@ function restoreSessionFromStorage(): {
 /**
  * Persists verified session to localStorage
  */
-function persistSession(user: User, role: RoleName) {
+function persistSession(user: User, role: RoleName, accessToken?: string) {
   try {
     const payload: StoredSession = {
       userId: user.id,
       email: user.email,
       activeRole: role,
-      token: `venilearn-token-${user.id}-${Date.now()}`,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days expiration
+      token: accessToken || `venilearn-token-${user.id}-${Date.now()}`,
+      expiresAt: Date.now() + (accessToken ? 15 : 7 * 24 * 60) * 60 * 1000,
+      ...(accessToken ? { userSnapshot: user } : {}),
     };
     localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(payload));
     sessionStorage.removeItem(LOGGED_OUT_KEY);
@@ -213,7 +226,8 @@ interface AuthState {
   unreadNotifications: number;
 
   // Actions
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, tenantId?: string) => Promise<void>;
+  completePasswordChange: (accessToken: string) => void;
   logout: () => void;
   switchRole: (role: RoleName) => void;
   can: (action: PermissionAction, resource: PermissionResource) => boolean;
@@ -255,8 +269,74 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   notifications: initialUserNotifications,
   unreadNotifications: initialUserNotifications.filter((n) => !n.isRead).length,
 
-  login: async (email: string, password: string) => {
+  login: async (email: string, password: string, tenantId?: string) => {
     set({ isLoading: true, error: null });
+
+    try {
+      const response = await apiClient.post<{
+        accessToken: string;
+        user: {
+          id: string;
+          email: string;
+          firstName: string;
+          lastName: string;
+          displayName: string;
+          activeRole: string;
+          tenantId: string;
+          departmentId?: string;
+          avatarUrl?: string;
+          rollNo?: string;
+          roles?: string[];
+          mustChangePassword?: boolean;
+        };
+      }>('/auth/login', { email: email.toLowerCase().trim(), password, ...(tenantId ? { tenantId } : {}) });
+      const account = response.data.user;
+      const roleAliases: Record<string, RoleName> = {
+        platform_admin: 'platform_admin', org_admin: 'org_admin', trainer: 'trainer', student: 'student',
+        learner: 'student', instructor: 'trainer', lms_admin: 'org_admin', industrial_admin: 'org_admin', staff: 'staff',
+      };
+      const activeRole = roleAliases[account.activeRole] || 'student';
+      const authenticatedUser: User = {
+        id: account.id,
+        email: account.email,
+        firstName: account.firstName,
+        lastName: account.lastName,
+        displayName: account.displayName,
+        activeRole,
+        organizationId: account.tenantId,
+        departmentId: account.departmentId,
+        avatar: account.avatarUrl,
+        rollNo: account.rollNo,
+        roles: [],
+        status: 'active',
+        mustChangePassword: account.mustChangePassword || false,
+        mfaEnabled: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const permissions = getPermissionsForRole(activeRole);
+      const navigation = getNavigationForRole(activeRole);
+      localStorage.setItem('venilearn_active_tenant_id', account.tenantId);
+      persistSession(authenticatedUser, activeRole, response.data.accessToken);
+      const notifications = getUserNotifications(authenticatedUser);
+      set({
+        user: authenticatedUser,
+        permissions,
+        navigation,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+        notifications,
+        unreadNotifications: notifications.filter((notification) => !notification.isRead).length,
+      });
+      return;
+    } catch (authError: any) {
+      const isDemoLogin = email.toLowerCase().trim().endsWith('@lms.demo');
+      if (!isDemoLogin) {
+        set({ isLoading: false, error: authError.message || 'Unable to sign in. Check your email and password.' });
+        return;
+      }
+    }
 
     // Simulate network authentication
     await new Promise((resolve) => setTimeout(resolve, 350));
@@ -331,6 +411,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       notifications: [],
       unreadNotifications: 0,
     });
+  },
+
+  completePasswordChange: (accessToken: string) => {
+    const { user } = get();
+    if (!user) return;
+    const updatedUser = { ...user, mustChangePassword: false };
+    persistSession(updatedUser, updatedUser.activeRole, accessToken);
+    set({ user: updatedUser });
   },
 
   switchRole: (role: RoleName) => {

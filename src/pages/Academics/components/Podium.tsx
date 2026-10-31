@@ -23,8 +23,8 @@ export const Podium: React.FC<PodiumProps> = ({
       className="card"
       style={{
         padding: '20px 20px 16px',
-        background: 'radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, rgba(13, 18, 31, 0.98) 75%)',
-        border: '1.5px solid rgba(99, 102, 241, 0.35)',
+        background: 'radial-gradient(ellipse at top, rgba(84, 71, 255, 0.16) 0%, var(--bg-card) 75%)',
+        border: '1.5px solid var(--border-subtle)',
         borderRadius: '20px',
         overflow: 'hidden',
         position: 'relative',
@@ -116,10 +116,10 @@ export const Podium: React.FC<PodiumProps> = ({
           <Sparkles size={13} color="#ffd700" />
           <span>Top 3 Academic Podium &bull; {timeframeLabel}</span>
         </div>
-        <h2 style={{ fontSize: '1.35rem', fontWeight: 900, margin: 0, color: '#fff', letterSpacing: '-0.02em' }}>
+        <h2 style={{ fontSize: '1.35rem', fontWeight: 900, margin: 0, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
           Hall of Fame: Top 3 Scholars
         </h2>
-        <p className="text-secondary text-xs" style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '0.76rem' }}>
+        <p className="text-secondary text-xs" style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.76rem' }}>
           Recognizing the top learners demonstrating exceptional course mastery, speed, and learning momentum
         </p>
       </div>
@@ -192,11 +192,11 @@ export const Podium: React.FC<PodiumProps> = ({
             </div>
 
             {/* Member Info */}
-            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#fff', marginBottom: '2px' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', marginBottom: '2px' }}>
               {secondPlace.name.replace(' (You)', '')}
               {secondPlace.isCurrentUser && <span className="badge badge-primary" style={{ marginLeft: '6px', fontSize: '0.6rem' }}>YOU</span>}
             </div>
-            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.72rem' }}>
+            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
               {secondPlace.cohort}
             </div>
 
@@ -208,7 +208,7 @@ export const Podium: React.FC<PodiumProps> = ({
                   title={`${b.name}: ${b.description}`}
                   style={{
                     fontSize: '0.85rem',
-                    background: 'rgba(255, 255, 255, 0.08)',
+                    background: 'var(--bg-input)',
                     borderRadius: '50%',
                     padding: '2px 4px',
                   }}
@@ -314,7 +314,7 @@ export const Podium: React.FC<PodiumProps> = ({
 
             {/* Champion Name & Badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-              <span style={{ fontWeight: 900, fontSize: '1.05rem', color: '#fff' }}>{firstPlace.name.replace(' (You)', '')}</span>
+              <span style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--text-main)' }}>{firstPlace.name.replace(' (You)', '')}</span>
               {firstPlace.isCurrentUser && <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>}
             </div>
 
@@ -444,11 +444,11 @@ export const Podium: React.FC<PodiumProps> = ({
             </div>
 
             {/* Member Info */}
-            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#fff', marginBottom: '2px' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', marginBottom: '2px' }}>
               {thirdPlace.name.replace(' (You)', '')}
               {thirdPlace.isCurrentUser && <span className="badge badge-primary" style={{ marginLeft: '6px', fontSize: '0.6rem' }}>YOU</span>}
             </div>
-            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: '#94a3b8', fontSize: '0.72rem' }}>
+            <div className="text-secondary text-xs" style={{ marginBottom: '8px', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
               {thirdPlace.cohort}
             </div>
 
@@ -460,7 +460,7 @@ export const Podium: React.FC<PodiumProps> = ({
                   title={`${b.name}: ${b.description}`}
                   style={{
                     fontSize: '0.85rem',
-                    background: 'rgba(255, 255, 255, 0.08)',
+                    background: 'var(--bg-input)',
                     borderRadius: '50%',
                     padding: '2px 4px',
                   }}

@@ -21,7 +21,7 @@ export const ToastContainer: React.FC = () => {
         pointerEvents: 'none',
       }}
     >
-      {toasts.map((toast) => {
+      {toasts.map((toast: any) => {
         const Icon =
           toast.type === 'success'
             ? CheckCircle2

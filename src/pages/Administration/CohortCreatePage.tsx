@@ -265,7 +265,7 @@ export const CohortCreatePage: React.FC = () => {
       updatedAt: new Date().toISOString()
     };
 
-    const res = addCohort(newCohort);
+    const res = await addCohort(newCohort);
     if (!res.success) {
       setSubmitError(res.message);
       setIsSubmitting(false);

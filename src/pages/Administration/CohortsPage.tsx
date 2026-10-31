@@ -17,7 +17,11 @@ export const CohortsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Cohorts State from Centralized Store
-  const { cohorts, updateCohort } = useCohortStore();
+  const { cohorts, updateCohort, fetchCohorts, isLoading, deleteCohort } = useCohortStore();
+
+  useEffect(() => {
+    fetchCohorts();
+  }, [fetchCohorts]);
   const [search, setSearch] = useState('');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');

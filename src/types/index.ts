@@ -15,7 +15,7 @@ export type NotificationDeliveryStatus = 'queued' | 'sent' | 'delivered' | 'fail
 
 // --- Roles & Permissions (4 Canonical Roles: platform_admin, org_admin, trainer, student) ---
 export type CanonicalRole = 'platform_admin' | 'org_admin' | 'trainer' | 'student';
-export type RoleName = 'platform_admin' | 'org_admin' | 'lms_admin' | 'industrial_admin' | 'trainer' | 'student' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
+export type RoleName = 'platform_admin' | 'org_admin' | 'lms_admin' | 'industrial_admin' | 'trainer' | 'student' | 'staff' | 'instructor' | 'assessment_author' | 'grader' | 'learner' | 'guest' | 'bot_ai';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'archive' | 'publish' | 'assign' | 'enroll' | 'invite' | 'grade' | 'moderate' | 'release_results' | 'export' | 'configure' | 'review' | 'revoke' | 'delete';
 export type PermissionResource = 'users' | 'organizations' | 'cohorts' | 'courses' | 'lessons' | 'paths' | 'live_sessions' | 'question_banks' | 'assessments' | 'submissions' | 'grading' | 'proctoring' | 'reports' | 'notifications' | 'integrations' | 'platform_settings' | 'roles' | 'certificates' | 'departments';
 export type PermissionScope = 'global' | 'organization' | 'department' | 'cohort' | 'course' | 'assessment' | 'assigned' | 'own';
@@ -69,6 +69,7 @@ export interface User {
   organizationId: string;
   departmentId?: string;
   status: UserAccountStatus;
+  mustChangePassword?: boolean;
   lastLogin?: string;
   mfaEnabled: boolean;
   rollNo?: string;
