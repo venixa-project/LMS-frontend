@@ -16,6 +16,16 @@ import {
 } from 'lucide-react';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
 
+export interface RosterMember {
+  id: string;
+  name: string;
+  email: string;
+  cohort: string;
+  progress: number;
+  attendance: string;
+  enrolledAt: string;
+}
+
 export const CoursesPage: React.FC = () => {
   const { user } = useAuthStore();
   const location = useLocation();
@@ -33,9 +43,10 @@ export const CoursesPage: React.FC = () => {
   const isCatalog = location.pathname === '/catalog';
   const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
 
-  const { courses, enrolledCourseIds, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
-  const { getFaculty } = usePeopleStore();
+  const { courses, enrolledCourseIds, enrollments, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
+  const { getFaculty, getStudents } = usePeopleStore();
   const allFaculty = getFaculty();
+  const allStudents = useMemo(() => getStudents(), [getStudents]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -83,6 +94,7 @@ export const CoursesPage: React.FC = () => {
   const [facultyDeptFilter, setFacultyDeptFilter] = useState('all');
   const [selectedFacultyId, setSelectedFacultyId] = useState('');
   const [rosterCourse, setRosterCourse] = useState<Course | null>(null);
+  const [rosterSearchTerm, setRosterSearchTerm] = useState('');
   const [shareModalCourse, setShareModalCourse] = useState<Course | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -394,13 +406,72 @@ export const CoursesPage: React.FC = () => {
     showNotice(`Course status updated to ${newStatus}.`);
   };
 
-  // Mock course student enrollments for roster modal
-  const courseRoster = [
-    { id: '1', name: 'Alex Rivera', email: 'alex@lms.demo', cohort: 'Spring 2026 Engineering', progress: 68, attendance: '96.2%', enrolledAt: '2026-03-01' },
-    { id: '2', name: 'Daniel Wu', email: 'daniel.wu@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 92, attendance: '94.0%', enrolledAt: '2026-03-01' },
-    { id: '3', name: 'Sophia Patel', email: 'sophia.p@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 85, attendance: '98.0%', enrolledAt: '2026-03-05' },
-    { id: '4', name: 'Kwame Mensah', email: 'kwame.m@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 54, attendance: '91.5%', enrolledAt: '2026-03-10' },
-  ];
+  // Dynamic course student enrollments for roster modal
+  const dynamicRoster: RosterMember[] = useMemo(() => {
+    if (!rosterCourse) return [];
+
+    // 1. Check real enrollments in store for this course
+    const courseEnrollments = enrollments.filter(
+      (e) => e.courseId?.toLowerCase() === rosterCourse.id.toLowerCase()
+    );
+
+    if (courseEnrollments.length > 0) {
+      return courseEnrollments.map((enr, idx) => {
+        const student = allStudents.find((s) => s.id === enr.userId);
+        const userCohort = mockCohorts.find((c) => c.studentIds?.includes(enr.userId));
+        const cohortName = userCohort?.name || 'Spring 2026 Engineering';
+        return {
+          id: enr.id || `enr-${idx}`,
+          name: student?.displayName || (student ? `${student.firstName} ${student.lastName}` : `Student ${enr.userId}`),
+          email: student?.email || `${enr.userId}@venilearn.edu`,
+          cohort: cohortName,
+          progress: enr.progress ?? Math.floor(40 + (idx * 17) % 55),
+          attendance: `${(92 + (idx * 2) % 7).toFixed(1)}%`,
+          enrolledAt: enr.enrolledAt ? enr.enrolledAt.slice(0, 10) : '2026-03-01',
+        };
+      });
+    }
+
+    // 2. If course has enrolled learners count, generate mock entries for realistic preview
+    const learnerCount = rosterCourse.enrolledLearners ?? rosterCourse.learnerCount ?? 0;
+    if (learnerCount > 0) {
+      const count = Math.min(learnerCount, allStudents.length);
+      if (count > 0) {
+        return allStudents.slice(0, count).map((st, idx) => {
+          const userCohort = mockCohorts.find((c) => c.studentIds?.includes(st.id));
+          const cohortName = userCohort?.name || 'Spring 2026 Engineering';
+          return {
+            id: st.id,
+            name: st.displayName || `${st.firstName} ${st.lastName}`,
+            email: st.email,
+            cohort: cohortName,
+            progress: Math.floor(45 + (idx * 13) % 50),
+            attendance: `${(93 + (idx * 1.5) % 6).toFixed(1)}%`,
+            enrolledAt: '2026-03-01',
+          };
+        });
+      }
+      return [
+        { id: '1', name: 'Alex Rivera', email: 'alex@lms.demo', cohort: 'Spring 2026 Engineering', progress: 68, attendance: '96.2%', enrolledAt: '2026-03-01' },
+        { id: '2', name: 'Daniel Wu', email: 'daniel.wu@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 92, attendance: '94.0%', enrolledAt: '2026-03-01' },
+        { id: '3', name: 'Sophia Patel', email: 'sophia.p@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 85, attendance: '98.0%', enrolledAt: '2026-03-05' },
+        { id: '4', name: 'Kwame Mensah', email: 'kwame.m@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 54, attendance: '91.5%', enrolledAt: '2026-03-10' },
+      ];
+    }
+
+    return [];
+  }, [rosterCourse, enrollments, allStudents]);
+
+  const filteredCourseRoster: RosterMember[] = useMemo(() => {
+    if (!rosterSearchTerm.trim()) return dynamicRoster;
+    const q = rosterSearchTerm.toLowerCase().trim();
+    return dynamicRoster.filter(
+      (st) =>
+        st.name.toLowerCase().includes(q) ||
+        st.email.toLowerCase().includes(q) ||
+        st.cohort.toLowerCase().includes(q)
+    );
+  }, [dynamicRoster, rosterSearchTerm]);
 
   return (
     <div>
@@ -425,7 +496,7 @@ export const CoursesPage: React.FC = () => {
               : isLearner
                 ? (isMyLearning ? 'My Enrolled Courses & Learning History' : 'Course Catalog & Academic Programs')
                 : isFaculty
-                  ? 'My Assigned Courses & Learning Content'
+                  ? 'My Courses'
                   : 'Course Management & Curriculum Catalog'}
           </h1>
           <p className="text-secondary text-sm">
@@ -434,7 +505,7 @@ export const CoursesPage: React.FC = () => {
               : isLearner
                 ? (isMyLearning ? 'Access your enrolled curriculum, track lesson completion, and resume learning.' : 'Explore available courses, search disciplines, preview syllabi, and enroll in new programs.')
                 : isFaculty
-                  ? 'Manage curriculum modules, learning lessons, student rosters, and approval submissions for your courses'
+                  ? 'View and manage your courses, author curriculum, schedule assessments, and assign students from your authorized cohorts.'
                   : 'Oversee institutional syllabus, assign appointed faculty, generate shareable links, and publish courses'}
           </p>
         </div>
@@ -449,7 +520,7 @@ export const CoursesPage: React.FC = () => {
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {isFaculty ? (
               <Link to="/course-builder" className="btn btn-primary">
-                <Plus size={16} /> Author Learning Materials
+                <Plus size={16} /> Create New Course
               </Link>
             ) : (
               <>
@@ -564,7 +635,7 @@ export const CoursesPage: React.FC = () => {
                   <option value="published">Published</option>
                   <option value="draft">Draft</option>
                   <option value="in_review">In Review</option>
-                  <option value="archived">Archived</option>
+                  {isAdmin && <option value="archived">Archived</option>}
                 </select>
               )}
 
@@ -1743,7 +1814,7 @@ export const CoursesPage: React.FC = () => {
             <div className="modal-header">
               <div>
                 <h3 style={{ fontSize: '1.15rem', margin: 0 }}>Enrolled Students &bull; {rosterCourse.title}</h3>
-                <p className="text-muted text-xs">{rosterCourse.enrolledLearners} Total Enrolled Learners &bull; Section Spring 2026</p>
+                <p className="text-muted text-xs">{dynamicRoster.length} Total Enrolled Learners &bull; Authorized Class Roster</p>
               </div>
               <button onClick={() => setRosterCourse(null)} style={{ color: 'var(--text-muted)' }}>
                 <X size={20} />
@@ -1751,42 +1822,98 @@ export const CoursesPage: React.FC = () => {
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="table-container" style={{ maxHeight: '280px', overflowY: 'auto' }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Class / Cohort</th>
-                      <th>Progress</th>
-                      <th>Attendance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {courseRoster.map((st) => (
-                      <tr key={st.id}>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{st.name}</div>
-                          <div className="text-muted text-xs">{st.email}</div>
-                        </td>
-                        <td>
-                          <span className="badge badge-secondary">{st.cohort}</span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '2px' }}>
-                            <span>{st.progress}%</span>
-                          </div>
-                          <div className="progress-bar-bg" style={{ height: '5px' }}>
-                            <div className="progress-bar-fill" style={{ width: `${st.progress}%` }} />
-                          </div>
-                        </td>
-                        <td>
-                          <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '0.8rem' }}>{st.attendance}</span>
-                        </td>
+              {dynamicRoster.length > 0 && (
+                <div style={{ position: 'relative' }}>
+                  <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search enrolled students by name, email, or cohort..."
+                    value={rosterSearchTerm}
+                    onChange={(e) => setRosterSearchTerm(e.target.value)}
+                    className="form-input"
+                    style={{ paddingLeft: '32px', fontSize: '0.82rem', padding: '6px 32px' }}
+                  />
+                  {rosterSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setRosterSearchTerm('')}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {dynamicRoster.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '28px 16px' }}>
+                  <Users size={36} style={{ color: 'var(--text-muted)', margin: '0 auto 10px', opacity: 0.7 }} />
+                  <h4 style={{ fontSize: '1rem', margin: '0 0 6px', fontWeight: 700 }}>No Enrolled Students Yet</h4>
+                  <p className="text-secondary text-xs" style={{ maxWidth: '380px', margin: '0 auto 16px', lineHeight: 1.5 }}>
+                    This course currently has no active student enrollments. Use the student assignment tool to assign learners from your authorized cohorts.
+                  </p>
+                  <Link
+                    to={`/courses/${rosterCourse.id}/assign-students`}
+                    className="btn btn-primary btn-sm"
+                    onClick={() => setRosterCourse(null)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <UserPlus size={14} /> Assign Students to Course
+                  </Link>
+                </div>
+              ) : filteredCourseRoster.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+                  <p className="text-secondary text-sm" style={{ margin: 0 }}>
+                    No enrolled students matched "{rosterSearchTerm}".
+                  </p>
+                </div>
+              ) : (
+                <div className="table-container" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>Class / Cohort</th>
+                        <th>Progress</th>
+                        <th>Attendance</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filteredCourseRoster.map((st: RosterMember) => (
+                        <tr key={st.id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{st.name}</div>
+                            <div className="text-muted text-xs">{st.email}</div>
+                          </td>
+                          <td>
+                            <span className="badge badge-secondary">{st.cohort}</span>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '2px' }}>
+                              <span>{st.progress}%</span>
+                            </div>
+                            <div className="progress-bar-bg" style={{ height: '5px' }}>
+                              <div className="progress-bar-fill" style={{ width: `${st.progress}%` }} />
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '0.8rem' }}>{st.attendance}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">

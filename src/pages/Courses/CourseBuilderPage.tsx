@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
@@ -30,7 +30,7 @@ export const CourseBuilderPage: React.FC = () => {
   const editingCourseId = searchParams.get('id') || searchParams.get('edit');
 
   const { user } = useAuthStore();
-  const { addCourse, assignStudentsToCourse, courses } = useCourseStore();
+  const { addCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
@@ -49,18 +49,16 @@ export const CourseBuilderPage: React.FC = () => {
   // -------------------------------------------------------------
   // STEP 1: Basic Information
   // -------------------------------------------------------------
-  const [title, setTitle] = useState('Advanced Microservices & Distributed Systems');
-  const [courseCode, setCourseCode] = useState('CRS-2026-401');
-  const [description, setDescription] = useState(
-    'Architect resilient, event-driven enterprise architectures using Kafka, Docker, Kubernetes, and Domain-Driven Design principles.'
-  );
-  const [departmentId, setDepartmentId] = useState<string>(mockDepartments[0]?.id || 'dep-001');
-  const [category, setCategory] = useState('Backend Development');
-  const [difficultyLevel, setDifficultyLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('advanced');
-  const [durationHours, setDurationHours] = useState(24);
+  const [title, setTitle] = useState('');
+  const [courseCode, setCourseCode] = useState(() => `CRS-2026-${Math.floor(100 + Math.random() * 900)}`);
+  const [description, setDescription] = useState('');
+  const [departmentId, setDepartmentId] = useState<string>('');
+  const [category, setCategory] = useState('');
+  const [difficultyLevel, setDifficultyLevel] = useState<'beginner' | 'intermediate' | 'advanced' | ''>('');
+  const [durationHours, setDurationHours] = useState<number | ''>('');
   const [completionPolicy, setCompletionPolicy] = useState('all_lessons_and_passing_assessment');
   const DEFAULT_COURSE_THUMBNAIL = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80';
-  const [thumbnailUrl, setThumbnailUrl] = useState<string>(DEFAULT_COURSE_THUMBNAIL);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [isDraggingThumbnail, setIsDraggingThumbnail] = useState(false);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
@@ -177,257 +175,13 @@ export const CourseBuilderPage: React.FC = () => {
     }
   }, [selectedSignatoryOption, creatorDefaultSig]);
 
+    // -------------------------------------------------------------
+  // STEP 2: Curriculum & Lessons (Fresh Empty Outline in Create Mode)
   // -------------------------------------------------------------
-  // STEP 2: Curriculum & Lessons (with Quizzes, Documents & Assessments)
-  // -------------------------------------------------------------
-  const [modules, setModules] = useState<CourseModule[]>([
-    {
-      id: 'mod-1',
-      title: 'Module 1: Domain-Driven Design Fundamentals',
-      order: 1,
-      lessons: [
-        {
-          id: 'les-1',
-          title: '1.1 Strategic Design & Bounded Contexts',
-          type: 'video',
-          durationMinutes: 20,
-          isCompleted: false,
-          order: 1,
-          contentUrl: 'https://demo.video/1',
-        },
-        {
-          id: 'les-2',
-          title: '1.2 Aggregates, Entities & Domain Events',
-          type: 'document',
-          durationMinutes: 15,
-          isCompleted: false,
-          order: 2,
-          uploadedDocument: {
-            id: 'doc-init-1',
-            name: 'domain-driven-design-primer.pdf',
-            size: 2450000,
-            type: 'application/pdf',
-            uploadedAt: '2026-10-20T10:00:00Z',
-          },
-        },
-      ],
-    },
-    {
-      id: 'mod-2',
-      title: 'Module 2: Event-Driven Communication with Kafka',
-      order: 2,
-      assessment: {
-        id: 'asm-mod-2',
-        title: 'Module 2: Kafka & Resilient Messaging Assessment Checkpoint',
-        description: 'Comprehensive evaluation of message partitions, consumer lag, and Outbox persistence patterns.',
-        scope: 'module_assessment',
-        difficulty: 'medium',
-        timeLimitMinutes: 30,
-        passingPercentage: 75,
-        allowedAttempts: 2,
-        totalMarks: 40,
-        status: 'ready',
-        questions: [
-          {
-            id: 'q-mod2-1',
-            prompt: 'In Kafka architecture, what is the primary role of a partition within a topic?',
-            type: 'single_choice',
-            difficulty: 'medium',
-            points: 10,
-            explanation: 'Partitions provide horizontal parallelism and strictly ordered message logs.',
-            options: [
-              { id: 'opt-m1', text: 'To encrypt network payloads across brokers', isCorrect: false },
-              { id: 'opt-m2', text: 'To provide the unit of parallelism and ordered log storage', isCorrect: true },
-              { id: 'opt-m3', text: 'To run distributed SQL queries', isCorrect: false },
-              { id: 'opt-m4', text: 'To discard unacknowledged consumer messages', isCorrect: false },
-            ],
-          },
-          {
-            id: 'q-mod2-2',
-            prompt: 'How does the Outbox Pattern prevent dual-write inconsistencies between database transactions and message brokers?',
-            type: 'single_choice',
-            difficulty: 'medium',
-            points: 10,
-            explanation: 'It persists outgoing events in an outbox table within the same ACID database transaction.',
-            options: [
-              { id: 'opt-m5', text: 'By using synchronous HTTP REST webhooks', isCorrect: false },
-              { id: 'opt-m6', text: 'By storing events atomically in an outbox table within the same relational transaction', isCorrect: true },
-              { id: 'opt-m7', text: 'By disabling transaction rollbacks', isCorrect: false },
-              { id: 'opt-m8', text: 'By discarding failed message retries silently', isCorrect: false },
-            ],
-          },
-          {
-            id: 'q-mod2-3',
-            prompt: 'Which settings in Kafka ensure zero message loss for mission-critical event delivery? (Select all that apply)',
-            type: 'multiple_choice',
-            difficulty: 'medium',
-            points: 10,
-            explanation: 'Producer acks=all, min.insync.replicas >= 2, and idempotence ensure message delivery guarantees.',
-            options: [
-              { id: 'opt-m9', text: 'Producer acks configured to "all" (-1)', isCorrect: true },
-              { id: 'opt-m10', text: 'Broker min.insync.replicas configured to 2 or greater', isCorrect: true },
-              { id: 'opt-m11', text: 'enable.idempotence set to true on producer client', isCorrect: true },
-              { id: 'opt-m12', text: 'auto.offset.reset set to "none"', isCorrect: false },
-            ],
-          },
-          {
-            id: 'q-mod2-4',
-            prompt: 'Kafka consumers in the same consumer group can concurrently read the exact same partition of a topic.',
-            type: 'true_false',
-            difficulty: 'easy',
-            points: 10,
-            explanation: 'False. Each partition is assigned to at most one consumer instance per group.',
-            options: [
-              { id: 'opt-tf-m1', text: 'True', isCorrect: false },
-              { id: 'opt-tf-m2', text: 'False', isCorrect: true },
-            ],
-          },
-        ],
-      },
-      lessons: [
-        {
-          id: 'les-3',
-          title: '2.1 Kafka Broker Architecture & Partitions',
-          type: 'video',
-          durationMinutes: 30,
-          isCompleted: false,
-          order: 1,
-        },
-        {
-          id: 'les-4',
-          title: '2.2 Microservices Resiliency Quiz Checkpoint',
-          type: 'quiz',
-          durationMinutes: 15,
-          isCompleted: false,
-          order: 2,
-          quizConfig: {
-            id: 'quiz-les-4',
-            title: 'Lesson 2.2: Microservices Resiliency Quiz',
-            description: 'Verify your understanding of Kafka partitions and resiliency patterns.',
-            scope: 'lesson_quiz',
-            difficulty: 'medium',
-            timeLimitMinutes: 15,
-            passingPercentage: 70,
-            allowedAttempts: 3,
-            totalMarks: 25,
-            status: 'ready',
-            questions: [
-              {
-                id: 'q-l4-1',
-                prompt: 'What happens when a Kafka producer sends a record with a null key using the default partitioner?',
-                type: 'single_choice',
-                difficulty: 'easy',
-                points: 5,
-                explanation: 'Kafka employs sticky partitioning to batch records into available partitions efficiently.',
-                options: [
-                  { id: 'opt-l1', text: 'The record is routed using sticky partitioning across available partitions', isCorrect: true },
-                  { id: 'opt-l2', text: 'The producer rejects the record with an error', isCorrect: false },
-                  { id: 'opt-l3', text: 'The record is duplicated across all partitions', isCorrect: false },
-                  { id: 'opt-l4', text: 'The record is held in memory forever', isCorrect: false },
-                ],
-              },
-              {
-                id: 'q-l4-2',
-                prompt: 'Which architectural characteristics define resilient distributed microservices? (Select all that apply)',
-                type: 'multiple_choice',
-                difficulty: 'medium',
-                points: 10,
-                explanation: 'Circuit breakers, independent databases, and idempotent handlers prevent cascading failure.',
-                options: [
-                  { id: 'opt-l5', text: 'Circuit breakers and graceful fallback strategies for downstream timeouts', isCorrect: true },
-                  { id: 'opt-l6', text: 'Autonomous database per microservice pattern', isCorrect: true },
-                  { id: 'opt-l7', text: 'Idempotent consumer message handlers', isCorrect: true },
-                  { id: 'opt-l8', text: 'Synchronous blocking chains across all endpoints', isCorrect: false },
-                ],
-              },
-              {
-                id: 'q-l4-3',
-                prompt: 'The CAP Theorem states that in the presence of a network partition, a distributed system must choose between Consistency and Availability.',
-                type: 'true_false',
-                difficulty: 'medium',
-                points: 10,
-                explanation: 'True. Under network partition, a distributed system cannot guarantee both C and A.',
-                options: [
-                  { id: 'opt-tf-l1', text: 'True', isCorrect: true },
-                  { id: 'opt-tf-l2', text: 'False', isCorrect: false },
-                ],
-              },
-            ],
-          },
-        },
-      ],
-    },
-  ]);
+  const [modules, setModules] = useState<CourseModule[]>([]);
 
-  // Section C: Final Course Assessment
-  const [finalAssessment, setFinalAssessment] = useState<QuizAssessmentConfig | undefined>({
-    id: 'asm-final-course',
-    title: 'Advanced Microservices & Distributed Systems Final Capstone Exam',
-    description: 'Comprehensive evaluation covering all course modules, domain-driven design, and event-driven architectures.',
-    scope: 'final_assessment',
-    difficulty: 'hard',
-    timeLimitMinutes: 60,
-    passingPercentage: 75,
-    allowedAttempts: 2,
-    totalMarks: 50,
-    status: 'ready',
-    questions: [
-      {
-        id: 'q-fin-1',
-        prompt: 'When decomposing an enterprise monolith into microservices, which pattern effectively coordinates distributed transactions with compensating steps?',
-        type: 'single_choice',
-        difficulty: 'hard',
-        points: 15,
-        explanation: 'The Saga pattern coordinates local transactions with compensating rollbacks upon failure.',
-        options: [
-          { id: 'opt-f1', text: 'Saga Pattern with compensating transactions for rollback', isCorrect: true },
-          { id: 'opt-f2', text: 'Shared database tables with pessimistic locking', isCorrect: false },
-          { id: 'opt-f3', text: 'Synchronous nested RPC calls across 10 downstream services', isCorrect: false },
-          { id: 'opt-f4', text: 'Manual database restoration from backup tapes', isCorrect: false },
-        ],
-      },
-      {
-        id: 'q-fin-2',
-        prompt: 'Which operational pillars are recommended for production microservices observability? (Select all that apply)',
-        type: 'multiple_choice',
-        difficulty: 'hard',
-        points: 15,
-        explanation: 'Distributed tracing, centralized structured logging, and metrics monitoring form the core observability pillars.',
-        options: [
-          { id: 'opt-f5', text: 'Distributed tracing with unique trace ID propagation across all RPC boundaries', isCorrect: true },
-          { id: 'opt-f6', text: 'Centralized log aggregation with structured JSON logging and correlation IDs', isCorrect: true },
-          { id: 'opt-f7', text: 'Time-series metric monitoring with health probes (liveness & readiness)', isCorrect: true },
-          { id: 'opt-f8', text: 'Disabling logging in production to save network bandwidth', isCorrect: false },
-        ],
-      },
-      {
-        id: 'q-fin-3',
-        prompt: 'In Domain-Driven Design (DDD), an Aggregate Root is the only entry point through which external entities may access internal boundary objects.',
-        type: 'true_false',
-        difficulty: 'medium',
-        points: 10,
-        explanation: 'True. The Aggregate Root guarantees the consistency and invariants of all internal entities.',
-        options: [
-          { id: 'opt-tf-f1', text: 'True', isCorrect: true },
-          { id: 'opt-tf-f2', text: 'False', isCorrect: false },
-        ],
-      },
-      {
-        id: 'q-fin-4',
-        prompt: 'In CQRS (Command Query Responsibility Segregation), what is the primary benefit of separating read and write models?',
-        type: 'single_choice',
-        difficulty: 'medium',
-        points: 10,
-        explanation: 'CQRS allows read models to be optimized and scaled independently from write business rules.',
-        options: [
-          { id: 'opt-f9', text: 'It permits independent scaling and tailored data schemas for writes versus read queries', isCorrect: true },
-          { id: 'opt-f10', text: 'It eliminates the need for database backups', isCorrect: false },
-          { id: 'opt-f11', text: 'It guarantees that writes are immediately visible with zero latency', isCorrect: false },
-          { id: 'opt-f12', text: 'It forces all client applications to write queries in assembly language', isCorrect: false },
-        ],
-      },
-    ],
-  });
+  // Section C: Final Course Assessment (Unconfigured in Create Mode)
+  const [finalAssessment, setFinalAssessment] = useState<QuizAssessmentConfig | undefined>(undefined);
 
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
   const [step2Error, setStep2Error] = useState<string | null>(null);
@@ -459,48 +213,139 @@ export const CourseBuilderPage: React.FC = () => {
     onConfirm: () => { },
   });
 
-  // Load existing course if editing
+    // Resolved existing course for Edit Mode
+  const editingCourse = useMemo(() => {
+    if (!editingCourseId) return undefined;
+    return courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
+  }, [editingCourseId, courses]);
+
+  const isEditing = Boolean(editingCourseId && editingCourse);
+
+  // Helper to populate form when editing an existing course
+  const loadCourseIntoForm = useCallback((existing: Course) => {
+    setStep(1);
+    setTitle(existing.title || '');
+    setCourseCode(existing.id ? existing.id.toUpperCase().replace('CRS-', 'CRS-2026-') : `CRS-2026-${Math.floor(100 + Math.random() * 900)}`);
+    setDescription(existing.description || '');
+    setDepartmentId(existing.departmentId || '');
+    setCategory(existing.category || '');
+    setDifficultyLevel((existing.level as any) || 'intermediate');
+    setDurationHours(existing.durationHours !== undefined ? existing.durationHours : '');
+    setThumbnailUrl(existing.thumbnail || '');
+    setStartDate(existing.startDate || '');
+    setEndDate(existing.endDate || '');
+    if (existing.completionPolicy) setCompletionPolicy(existing.completionPolicy);
+
+    if (existing.modules && existing.modules.length > 0) {
+      setModules(JSON.parse(JSON.stringify(existing.modules)));
+      setActiveModuleIndex(0);
+    } else {
+      setModules([]);
+      setActiveModuleIndex(0);
+    }
+
+    if (existing.finalAssessment) {
+      setFinalAssessment(JSON.parse(JSON.stringify(existing.finalAssessment)));
+    } else {
+      setFinalAssessment(undefined);
+    }
+
+    if (existing.certificateConfig) {
+      setCertificateEnabled(existing.certificateConfig.enabled ?? true);
+      if (existing.certificateConfig.title) setCertTitle(existing.certificateConfig.title);
+      if (existing.certificateConfig.issuingOrganization) setCertIssuingOrg(existing.certificateConfig.issuingOrganization);
+      if (existing.certificateConfig.requireAllLessons !== undefined) setCertRequireAllLessons(existing.certificateConfig.requireAllLessons);
+      if (existing.certificateConfig.requirePassingAssessment !== undefined) setCertRequireAssessment(existing.certificateConfig.requirePassingAssessment);
+      if (existing.certificateConfig.minimumAssessmentScore !== undefined) setCertMinScore(existing.certificateConfig.minimumAssessmentScore);
+      if (existing.certificateConfig.requiredCompletionPercentage !== undefined) setCertMinPercentage(existing.certificateConfig.requiredCompletionPercentage);
+      if (existing.certificateConfig.completionPoints !== undefined) setCertPoints(existing.certificateConfig.completionPoints);
+      if (existing.certificateConfig.templateId) setCertTemplateId(existing.certificateConfig.templateId as any);
+      if (existing.certificateConfig.validityMonths !== undefined) setCertValidityMonths(existing.certificateConfig.validityMonths);
+      if (existing.certificateConfig.authorizedSignerName) setCertSignerName(existing.certificateConfig.authorizedSignerName);
+      if (existing.certificateConfig.authorizedSignerTitle) setCertSignerTitle(existing.certificateConfig.authorizedSignerTitle);
+      if (existing.certificateConfig.authorizedSignatureImage) setCertSignerSignatureImage(existing.certificateConfig.authorizedSignatureImage);
+    }
+
+    if (existing.instructors && existing.instructors.length > 0) {
+      setSelectedLeadFacultyId(existing.instructors[0]);
+    } else {
+      setSelectedLeadFacultyId(isFaculty ? (user?.id || 'u-004') : (user?.id || 'u-004'));
+    }
+
+    setPublishStatus(existing.status || 'draft');
+
+    const enrolledIds = enrollments
+      .filter((e) => e.courseId?.toLowerCase() === existing.id.toLowerCase())
+      .map((e) => e.userId);
+    setSelectedStudentIds(new Set(enrolledIds));
+
+    setStep1Error(null);
+    setStep2Error(null);
+    setPublishError(null);
+    setPublishedCourse(null);
+    setSaveDraftNotice(null);
+  }, [enrollments, isFaculty, user]);
+
+  // Helper to reset form to pristine, fresh state for Create Mode
+  const resetToEmptyForm = useCallback(() => {
+    setStep(1);
+    setTitle('');
+    setCourseCode(`CRS-2026-${Math.floor(100 + Math.random() * 900)}`);
+    setDescription('');
+    setDepartmentId('');
+    setCategory('');
+    setDifficultyLevel('');
+    setDurationHours('');
+    setThumbnailUrl('');
+    setStartDate('');
+    setEndDate('');
+    setCompletionPolicy('all_lessons_and_passing_assessment');
+    setModules([]);
+    setFinalAssessment(undefined);
+    setActiveModuleIndex(0);
+    setSelectedStudentIds(new Set());
+    setPublishStatus('draft');
+    setStep1Error(null);
+    setStep2Error(null);
+    setPublishError(null);
+    setPublishedCourse(null);
+    setSaveDraftNotice(null);
+    setSelectedLeadFacultyId(isFaculty ? (user?.id || 'u-004') : (user?.id || 'u-004'));
+    setFacultyDeptFilter('all');
+    setStudentDeptFilter('all');
+    setSelectedCohortId('all');
+    setStudentSearchQuery('');
+    setFacultySearchQuery('');
+    setCertificateEnabled(true);
+    setCertTitle('Certificate of Course Completion');
+    setCertIssuingOrg('Acme Learning Corp');
+    setCertRequireAllLessons(true);
+    setCertRequireAssessment(true);
+    setCertMinScore(70);
+    setCertMinPercentage(100);
+    setCertPoints(100);
+    setCertTemplateId('standard');
+    setCertValidityMonths(0);
+    setSelectedSignatoryOption('creator_default');
+  }, [isFaculty, user]);
+
+  // Track previous editing ID to isolate state between Create and Edit modes
+  const prevEditingIdRef = useRef<string | null>(editingCourseId);
+
   useEffect(() => {
     if (editingCourseId) {
       const existing = courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
       if (existing) {
-        setTitle(existing.title);
-        setCourseCode(existing.id.toUpperCase().replace('CRS-', 'CRS-2026-'));
-        setDescription(existing.description || '');
-        if (existing.departmentId) setDepartmentId(existing.departmentId);
-        if (existing.startDate) setStartDate(existing.startDate);
-        if (existing.endDate) setEndDate(existing.endDate);
-        if (existing.completionPoints !== undefined) setCertPoints(existing.completionPoints);
-        if (existing.completionPercentageRequired !== undefined) setCertMinPercentage(existing.completionPercentageRequired);
-        if (existing.category) setCategory(existing.category);
-        if (existing.durationHours) setDurationHours(existing.durationHours);
-        if (existing.thumbnail) setThumbnailUrl(existing.thumbnail);
-        if (existing.completionPolicy) setCompletionPolicy(existing.completionPolicy);
-        if (existing.modules && existing.modules.length > 0) {
-          setModules(existing.modules);
-          setActiveModuleIndex(0);
-        }
-        if (existing.finalAssessment) {
-          setFinalAssessment(existing.finalAssessment);
-        }
-        if (existing.certificateConfig) {
-          setCertificateEnabled(existing.certificateConfig.enabled ?? true);
-          if (existing.certificateConfig.title) setCertTitle(existing.certificateConfig.title);
-          if (existing.certificateConfig.issuingOrganization) setCertIssuingOrg(existing.certificateConfig.issuingOrganization);
-          if (existing.certificateConfig.requireAllLessons !== undefined) setCertRequireAllLessons(existing.certificateConfig.requireAllLessons);
-          if (existing.certificateConfig.requirePassingAssessment !== undefined) setCertRequireAssessment(existing.certificateConfig.requirePassingAssessment);
-          if (existing.certificateConfig.minimumAssessmentScore !== undefined) setCertMinScore(existing.certificateConfig.minimumAssessmentScore);
-          if (existing.certificateConfig.requiredCompletionPercentage !== undefined) setCertMinPercentage(existing.certificateConfig.requiredCompletionPercentage);
-          if (existing.certificateConfig.completionPoints !== undefined) setCertPoints(existing.certificateConfig.completionPoints);
-          if (existing.certificateConfig.templateId) setCertTemplateId(existing.certificateConfig.templateId as any);
-          if (existing.certificateConfig.validityMonths !== undefined) setCertValidityMonths(existing.certificateConfig.validityMonths);
-          if (existing.certificateConfig.authorizedSignerName) setCertSignerName(existing.certificateConfig.authorizedSignerName);
-          if (existing.certificateConfig.authorizedSignerTitle) setCertSignerTitle(existing.certificateConfig.authorizedSignerTitle);
-          if (existing.certificateConfig.authorizedSignatureImage) setCertSignerSignatureImage(existing.certificateConfig.authorizedSignatureImage);
-        }
+        loadCourseIntoForm(existing);
+      }
+    } else {
+      // Transitioning from Edit mode to Create mode or loading fresh: ensure pristine empty state
+      if (prevEditingIdRef.current !== null) {
+        resetToEmptyForm();
       }
     }
-  }, [editingCourseId, courses]);
+    prevEditingIdRef.current = editingCourseId;
+  }, [editingCourseId, courses, loadCourseIntoForm, resetToEmptyForm]);
 
   // -------------------------------------------------------------
   // STEP 3: Assign Faculty & Students
@@ -513,7 +358,7 @@ export const CourseBuilderPage: React.FC = () => {
   // Student assignment state (Optional)
   const [studentDeptFilter, setStudentDeptFilter] = useState<string>(departmentId);
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
-  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set(['st-1', 'st-2', 'u-007']));
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [selectedCohortId, setSelectedCohortId] = useState<string>('all');
 
   // Synchronize Step 3 department defaults when Step 1 department changes
@@ -553,9 +398,60 @@ export const CourseBuilderPage: React.FC = () => {
     return allFaculty.find((f) => f.id === selectedLeadFacultyId);
   }, [allFaculty, selectedLeadFacultyId]);
 
+    // Trainer authorized academic departments
+  const trainerAuthorizedDepartments = useMemo(() => {
+    if (!isFaculty) return mockDepartments;
+    const userDeptId = user?.departmentId || (user?.id === 'u-004' ? 'dep-001' : user?.id === 'u-003' ? 'dep-002' : 'dep-001');
+    return mockDepartments.filter((d) => d.id === userDeptId);
+  }, [isFaculty, user]);
+
+  // Trainer authorized cohorts/batches
+  const trainerAuthorizedCohorts = useMemo(() => {
+    if (!isFaculty) return cohorts;
+    const trainerId = user?.id || 'u-004';
+    return cohorts.filter((coh) => {
+      if (coh.instructors && coh.instructors.includes(trainerId)) return true;
+      if (coh.instructorIds && coh.instructorIds.includes(trainerId)) return true;
+      if (trainerId === 'u-004' && (coh.id === 'coh-001' || coh.id === 'coh-002')) return true;
+      if (trainerId === 'u-003' && (coh.id === 'coh-003' || coh.id === 'coh-005')) return true;
+      if (trainerId === 'u-005' && coh.id === 'coh-004') return true;
+      if (editingCourseId && coh.courseId === editingCourseId) return true;
+      return false;
+    });
+  }, [isFaculty, cohorts, user, editingCourseId]);
+
+  // Trainer authorized student IDs (strictly restricted to assigned cohorts)
+  const trainerAuthorizedStudentIds = useMemo(() => {
+    if (!isFaculty) return null;
+    const ids = new Set<string>();
+    trainerAuthorizedCohorts.forEach((c) => {
+      c.studentIds?.forEach((stId) => ids.add(stId));
+    });
+    return ids;
+  }, [isFaculty, trainerAuthorizedCohorts]);
+
+  // Already enrolled student IDs (prevents duplicate assignment)
+  const alreadyEnrolledStudentIds = useMemo(() => {
+    if (!editingCourseId) return new Set<string>();
+    const enrolled = enrollments
+      .filter((e) => e.courseId?.toLowerCase() === editingCourseId.toLowerCase())
+      .map((e) => e.userId);
+    return new Set<string>(enrolled);
+  }, [editingCourseId, enrollments]);
+
   // Filtered students for Step 3
   const filteredStudents = useMemo(() => {
     return allStudents.filter((st) => {
+      // Trainer isolation: must belong to trainer's authorized department & cohorts
+      if (isFaculty) {
+        if (trainerAuthorizedStudentIds && !trainerAuthorizedStudentIds.has(st.id)) {
+          return false;
+        }
+        if (trainerAuthorizedDepartments.length > 0 && !trainerAuthorizedDepartments.some((d) => d.id === st.departmentId)) {
+          return false;
+        }
+      }
+
       // Department filter
       if (studentDeptFilter !== 'all' && st.departmentId !== studentDeptFilter) {
         return false;
@@ -577,7 +473,7 @@ export const CourseBuilderPage: React.FC = () => {
       }
       return true;
     });
-  }, [allStudents, studentDeptFilter, selectedCohortId, studentSearchQuery, cohorts]);
+  }, [allStudents, isFaculty, trainerAuthorizedStudentIds, trainerAuthorizedDepartments, studentDeptFilter, selectedCohortId, studentSearchQuery, cohorts]);
 
   // Student selection helpers
   const handleToggleStudent = (studentId: string) => {
@@ -616,7 +512,7 @@ export const CourseBuilderPage: React.FC = () => {
   // -------------------------------------------------------------
   // STEP 4: Final Preview & Publish
   // -------------------------------------------------------------
-  const [publishStatus, setPublishStatus] = useState<EntityStatus>('published');
+  const [publishStatus, setPublishStatus] = useState<EntityStatus>('draft');
   const [shareableLinkEnabled, setShareableLinkEnabled] = useState(true);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -666,6 +562,18 @@ export const CourseBuilderPage: React.FC = () => {
     }
     if (!departmentId) {
       setStep1Error('Department selection is required.');
+      return false;
+    }
+    if (!category) {
+      setStep1Error('Course Category selection is required.');
+      return false;
+    }
+    if (!difficultyLevel) {
+      setStep1Error('Difficulty Level selection is required.');
+      return false;
+    }
+    if (durationHours === '' || Number(durationHours) < 1) {
+      setStep1Error('Estimated Duration in hours is required.');
       return false;
     }
     if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
@@ -1075,19 +983,20 @@ export const CourseBuilderPage: React.FC = () => {
     setPublishError(null);
 
     try {
-      const generatedId = `crs-${courseCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
-      const assignedInstructors = selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004'];
+      const generatedId = editingCourseId || `crs-${courseCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
+      const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
       const enrolledCount = selectedStudentIds.size;
 
       const newCourse: Course = {
+        createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
         id: generatedId,
         title: title.trim(),
         description: description.trim(),
         shortDescription: description.trim().slice(0, 140) + '...',
         category,
         departmentId,
-        level: difficultyLevel,
-        durationHours,
+        level: (difficultyLevel as any) || 'beginner',
+        durationHours: Number(durationHours) || 1,
         completionPolicy,
         thumbnail: thumbnailUrl,
         status: publishStatus,
@@ -1226,7 +1135,7 @@ export const CourseBuilderPage: React.FC = () => {
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px' }}
               onClick={() => navigate('/courses')}
             >
-              <BookOpen size={16} /> View in Courses & Catalog
+              <BookOpen size={16} /> {isFaculty ? 'Go to My Courses' : 'View in Courses & Catalog'}
             </button>
 
             <button
@@ -1301,8 +1210,18 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
           )}
 
-          <span className="badge badge-warning" style={{ fontWeight: 600 }}>
-            Lifecycle: {publishStatus} (v1.0)
+          {isEditing ? (
+            <span className="badge badge-primary" style={{ fontWeight: 600 }}>
+              Edit Mode: {editingCourse?.title || editingCourseId}
+            </span>
+          ) : (
+            <span className="badge badge-draft" style={{ fontWeight: 600 }}>
+              Create Mode &bull; New Course
+            </span>
+          )}
+
+          <span className="badge badge-warning" style={{ fontWeight: 600, textTransform: 'capitalize' }}>
+            Lifecycle: {publishStatus} (v{isEditing ? (editingCourse?.version || 1) : '1.0'})
           </span>
 
           <button
@@ -1332,7 +1251,7 @@ export const CourseBuilderPage: React.FC = () => {
         {[
           { stepNum: 1, title: '1. Basic Information', subtitle: 'Title, code & department' },
           { stepNum: 2, title: '2. Curriculum & Lessons', subtitle: 'Modules, lessons & format' },
-          { stepNum: 3, title: '3. Assign Faculty & Students', subtitle: 'Lead faculty & pre-enroll' },
+          { stepNum: 3, title: isFaculty ? '3. Assign Students' : '3. Assign Faculty & Students', subtitle: isFaculty ? 'Pre-enroll cohort students' : 'Lead faculty & pre-enroll' },
           { stepNum: 4, title: '4. Preview & Publish', subtitle: 'Audit & publish live' }
         ].map((s) => {
           const isActive = step === s.stepNum;
@@ -1517,10 +1436,14 @@ export const CourseBuilderPage: React.FC = () => {
               <select
                 className="form-select"
                 value={departmentId}
-                onChange={(e) => handleDepartmentChange(e.target.value)}
+                onChange={(e) => {
+                  handleDepartmentChange(e.target.value);
+                  if (step1Error) setStep1Error(null);
+                }}
                 style={{ fontWeight: 600 }}
               >
-                {mockDepartments.map((dept) => (
+                <option value="">Select Department...</option>
+                {trainerAuthorizedDepartments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
                     {dept.name} ({dept.id})
                   </option>
@@ -1536,7 +1459,15 @@ export const CourseBuilderPage: React.FC = () => {
               <label className="form-label" style={{ fontWeight: 600 }}>
                 Course Category / Domain
               </label>
-              <select className="form-select" value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select
+                className="form-select"
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  if (step1Error) setStep1Error(null);
+                }}
+              >
+                <option value="">Select Course Category / Domain...</option>
                 <option value="Frontend Development">Frontend Development</option>
                 <option value="Backend Development">Backend Development</option>
                 <option value="Data Science & ML">Data Science & ML</option>
@@ -1555,8 +1486,12 @@ export const CourseBuilderPage: React.FC = () => {
               <select
                 className="form-select"
                 value={difficultyLevel}
-                onChange={(e) => setDifficultyLevel(e.target.value as any)}
+                onChange={(e) => {
+                  setDifficultyLevel(e.target.value as any);
+                  if (step1Error) setStep1Error(null);
+                }}
               >
+                <option value="">Select Difficulty Level...</option>
                 <option value="beginner">Beginner (Foundational)</option>
                 <option value="intermediate">Intermediate (Core Skills)</option>
                 <option value="advanced">Advanced (Mastery)</option>
@@ -1573,8 +1508,13 @@ export const CourseBuilderPage: React.FC = () => {
                 min="1"
                 max="300"
                 className="form-input"
+                placeholder="e.g. 24"
                 value={durationHours}
-                onChange={(e) => setDurationHours(parseInt(e.target.value) || 1)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDurationHours(val === '' ? '' : parseInt(val) || 1);
+                  if (step1Error) setStep1Error(null);
+                }}
               />
             </div>
           </div>
@@ -2457,7 +2397,23 @@ export const CourseBuilderPage: React.FC = () => {
 
             {/* Right Column: Active Module Lessons Editor */}
             <div className="card">
-              {modules[activeModuleIndex] ? (
+              {modules.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <Layers size={44} style={{ color: 'var(--text-muted)', margin: '0 auto 12px', opacity: 0.6 }} />
+                  <h3 style={{ fontSize: '1.1rem', margin: '0 0 8px' }}>Your Curriculum is Empty</h3>
+                  <p className="text-secondary text-sm" style={{ maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                    Start structuring your course syllabus by adding your first learning module. Each module can hold video lessons, documents, and interactive quizzes.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleAddModule}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <Plus size={16} /> Add First Module
+                  </button>
+                </div>
+              ) : modules[activeModuleIndex] ? (
                 <div>
                   <div
                     style={{
@@ -2957,252 +2913,273 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
           </div>
 
-          {/* SECTION A: SELECT LEAD FACULTY */}
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '8px',
-                    background: 'var(--primary-light, rgba(99, 102, 241, 0.15))',
-                    color: 'var(--primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  <Award size={18} />
-                </span>
-                <div>
-                  <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>A. Select Lead Faculty</h3>
-                  <p className="text-secondary text-xs" style={{ margin: 0 }}>
-                    Select one certified lead faculty member to oversee curriculum and grading.
-                  </p>
-                </div>
-              </div>
-
-              {/* Department Selector for Faculty (defaults to Step 1 dept) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label className="text-xs text-muted" style={{ fontWeight: 600 }}>
-                  Faculty Department:
-                </label>
-                <select
-                  className="form-select"
-                  value={facultyDeptFilter}
-                  onChange={(e) => setFacultyDeptFilter(e.target.value)}
-                  style={{ fontSize: '0.82rem', padding: '5px 10px', minWidth: '180px' }}
-                >
-                  <option value="all">All Departments ({mockDepartments.length})</option>
-                  {mockDepartments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Real-time search bar for faculty */}
-            <div style={{ position: 'relative', marginBottom: '16px' }}>
-              <Search
-                size={16}
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)'
-                }}
-              />
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Search faculty by name, employee/faculty ID (e.g. FAC-2026-004), or email..."
-                value={facultySearchQuery}
-                onChange={(e) => setFacultySearchQuery(e.target.value)}
-                style={{ paddingLeft: '36px' }}
-              />
-              {facultySearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setFacultySearchQuery('')}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--text-muted)'
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* Faculty List Grid */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '12px',
-                maxHeight: '280px',
-                overflowY: 'auto',
-                padding: '4px'
-              }}
-            >
-              {filteredFaculty.map((fac) => {
-                const isSelected = selectedLeadFacultyId === fac.id;
-                const isInactive = fac.status === 'suspended' || fac.status === 'deactivated';
-                const isCourseDept = fac.departmentId === departmentId;
-
-                return (
-                  <div
-                    key={fac.id}
-                    onClick={() => {
-                      if (!isInactive) {
-                        setSelectedLeadFacultyId(fac.id);
-                      }
-                    }}
+          {/* SECTION A: LEAD FACULTY */}
+          {!isFaculty ? (
+            /* Admin Lead Faculty Selector */
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span
                     style={{
-                      padding: '12px 14px',
-                      borderRadius: 'var(--radius-md)',
-                      background: isSelected
-                        ? 'var(--primary-light, rgba(99, 102, 241, 0.12))'
-                        : isInactive
-                          ? 'var(--bg-input)'
-                          : 'var(--bg-card)',
-                      border: isSelected
-                        ? '2px solid var(--primary)'
-                        : isInactive
-                          ? '1px dashed var(--border-subtle)'
-                          : '1px solid var(--border-subtle)',
-                      cursor: isInactive ? 'not-allowed' : 'pointer',
-                      opacity: isInactive ? 0.6 : 1,
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: 'var(--primary-light, rgba(99, 102, 241, 0.15))',
+                      color: 'var(--primary)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'all 0.15s ease'
+                      justifyContent: 'center'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          background: isSelected ? 'var(--primary)' : 'var(--bg-input)',
-                          color: isSelected ? '#fff' : 'var(--text-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        {fac.displayName ? fac.displayName.slice(0, 2).toUpperCase() : fac.firstName.slice(0, 1)}
-                      </div>
-
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                          {fac.displayName || `${fac.firstName} ${fac.lastName}`}
-                        </div>
-                        <div className="text-muted text-xs">
-                          ID: <strong style={{ color: 'var(--text-primary)' }}>{fac.rollNo || fac.id}</strong> &bull;{' '}
-                          {getDepartmentName(fac.departmentId)}
-                        </div>
-                        <div className="text-muted text-xs" style={{ fontSize: '0.72rem' }}>
-                          {fac.email}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      {isInactive ? (
-                        <span className="badge badge-danger" style={{ fontSize: '0.68rem' }}>
-                          Inactive
-                        </span>
-                      ) : isSelected ? (
-                        <span
-                          className="badge badge-primary"
-                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
-                        >
-                          <Check size={12} /> Assigned
-                        </span>
-                      ) : (
-                        <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>
-                          Select
-                        </span>
-                      )}
-
-                      {isCourseDept && !isInactive && !isSelected && (
-                        <div
-                          style={{
-                            fontSize: '0.65rem',
-                            color: 'var(--primary)',
-                            fontWeight: 600,
-                            marginTop: '2px'
-                          }}
-                        >
-                          Dept Match
-                        </div>
-                      )}
-                    </div>
+                    <Award size={18} />
+                  </span>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>A. Select Lead Faculty</h3>
+                    <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                      Select one certified lead faculty member to oversee curriculum and grading.
+                    </p>
                   </div>
-                );
-              })}
+                </div>
 
-              {filteredFaculty.length === 0 && (
-                <div
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label className="text-xs text-muted" style={{ fontWeight: 600 }}>
+                    Faculty Department:
+                  </label>
+                  <select
+                    className="form-select"
+                    value={facultyDeptFilter}
+                    onChange={(e) => setFacultyDeptFilter(e.target.value)}
+                    style={{ fontSize: '0.82rem', padding: '5px 10px', minWidth: '180px' }}
+                  >
+                    {!isFaculty && <option value="all">All Departments ({mockDepartments.length})</option>}
+                    {trainerAuthorizedDepartments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ position: 'relative', marginBottom: '16px' }}>
+                <Search
+                  size={16}
                   style={{
-                    gridColumn: '1 / -1',
-                    textAlign: 'center',
-                    padding: '24px',
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
                     color: 'var(--text-muted)'
                   }}
-                >
-                  <Search size={20} style={{ margin: '0 auto 6px', opacity: 0.5 }} />
-                  <div style={{ fontSize: '0.85rem' }}>No faculty matching your query</div>
-                </div>
-              )}
-            </div>
+                />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search faculty by name, employee/faculty ID (e.g. FAC-2026-004), or email..."
+                  value={facultySearchQuery}
+                  onChange={(e) => setFacultySearchQuery(e.target.value)}
+                  style={{ paddingLeft: '36px' }}
+                />
+                {facultySearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setFacultySearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)'
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
 
-            {/* Currently selected lead faculty confirmation bar */}
-            {
-              selectedFacultyMember && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginTop: '14px',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    fontSize: '0.85rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Shield size={16} color="var(--primary)" />
-                    <span>
-                      Selected Lead Faculty:{' '}
-                      <strong>{selectedFacultyMember.displayName || selectedFacultyMember.firstName}</strong> (
-                      {selectedFacultyMember.rollNo || selectedFacultyMember.id}) &bull;{' '}
-                      <span className="text-muted">{selectedFacultyMember.email}</span>
-                    </span>
-                  </div>
-                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                    Active & Certified
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: '12px',
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  padding: '4px'
+                }}
+              >
+                {filteredFaculty.map((fac) => {
+                  const isSelected = selectedLeadFacultyId === fac.id;
+                  const isInactive = fac.status === 'suspended' || fac.status === 'deactivated';
+
+                  return (
+                    <div
+                      key={fac.id}
+                      onClick={() => {
+                        if (!isInactive) {
+                          setSelectedLeadFacultyId(fac.id);
+                        }
+                      }}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        background: isSelected
+                          ? 'var(--primary-light, rgba(99, 102, 241, 0.12))'
+                          : isInactive
+                            ? 'var(--bg-input)'
+                            : 'var(--bg-card)',
+                        border: isSelected
+                          ? '2px solid var(--primary)'
+                          : isInactive
+                            ? '1px dashed var(--border-subtle)'
+                            : '1px solid var(--border-subtle)',
+                        cursor: isInactive ? 'not-allowed' : 'pointer',
+                        opacity: isInactive ? 0.6 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: isSelected ? 'var(--primary)' : 'var(--bg-input)',
+                            color: isSelected ? '#fff' : 'var(--text-primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          {fac.displayName ? fac.displayName.slice(0, 1) : fac.firstName.slice(0, 1)}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
+                            {fac.displayName || `${fac.firstName} ${fac.lastName}`}
+                          </div>
+                          <div className="text-secondary text-xs">
+                            {fac.rollNo || fac.id} &bull; {getDepartmentName(fac.departmentId)}
+                          </div>
+                          <div className="text-muted text-xs">{fac.email}</div>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <span
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: 'var(--primary)',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <Check size={14} />
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Trainer Workflow: Automatic Appointed Lead Faculty Card (Read-Only) */
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: 'var(--primary-light, rgba(99, 102, 241, 0.15))',
+                      color: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Award size={18} />
                   </span>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>A. Appointed Lead Faculty</h3>
+                    <p className="text-secondary text-xs" style={{ margin: 0 }}>
+                      As the course creator, you are automatically designated as Lead Faculty to direct curriculum content and oversee grading.
+                    </p>
+                  </div>
                 </div>
-              )
-            }
-          </div >
+                <span className="badge badge-active" style={{ fontSize: '0.75rem' }}>
+                  Automatic Lead Assignment
+                </span>
+              </div>
+
+              <div
+                style={{
+                  padding: '16px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--primary-light, rgba(99, 102, 241, 0.08))',
+                  border: '2px solid var(--primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      background: 'var(--primary)',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: '1rem',
+                      boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
+                    }}
+                  >
+                    <GraduationCap size={22} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                        {user?.displayName || `${user?.firstName || 'Dr.'} ${user?.lastName || 'Wilson'}`}
+                      </h4>
+                      <span className="badge badge-primary" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+                        Lead Faculty
+                      </span>
+                    </div>
+                    <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                      <strong>Faculty ID:</strong> {user?.rollNo || 'FAC-2026-004'} &bull; <strong>Department:</strong> {getDepartmentName(departmentId || user?.departmentId)}
+                    </div>
+                    <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                      {user?.email} &bull; {user?.specialization || 'Full-Stack Systems & Architecture'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <div className="badge badge-neutral" style={{ fontSize: '0.72rem', border: '1px solid var(--border-subtle)' }}>
+                    Assigned Scope: Authorized Cohorts Only
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SECTION B: SELECT STUDENTS (OPTIONAL) */}
           < div className="card" >
@@ -3268,8 +3245,10 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setSelectedCohortId(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
-                    <option value="all">All Cohorts / Batches</option>
-                    {cohorts.map((c) => (
+                    <option value="all">
+                      {isFaculty ? `Authorized Cohorts (${trainerAuthorizedCohorts.length})` : 'All Cohorts / Batches'}
+                    </option>
+                    {trainerAuthorizedCohorts.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -3299,6 +3278,65 @@ export const CourseBuilderPage: React.FC = () => {
                 <strong>Note:</strong> Pre-enrollment is optional. If no students are selected, the course publishes with 0 enrollments and learners can join later via <strong>Share Course Link</strong> or the <strong>Assign Students</strong> roster.
               </span>
             </div>
+
+            {/* Selected Students Summary Chips */}
+            {selectedStudentIds.size > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  marginBottom: '12px',
+                  padding: '10px 14px',
+                  background: 'var(--bg-input)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-subtle)',
+                  alignItems: 'center'
+                }}
+              >
+                <span className="text-xs text-muted" style={{ fontWeight: 700, marginRight: '4px' }}>
+                  Selected Learners ({selectedStudentIds.size}):
+                </span>
+                {Array.from(selectedStudentIds).map((sId) => {
+                  const st = allStudents.find((s) => s.id === sId);
+                  if (!st) return null;
+                  return (
+                    <span
+                      key={st.id}
+                      className="badge badge-secondary"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.74rem',
+                        padding: '3px 8px'
+                      }}
+                    >
+                      <span>{st.displayName || `${st.firstName} ${st.lastName}`}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleStudent(st.id);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        title={`Remove ${st.displayName || st.firstName}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Student Search & Bulk Selection Toolbar */}
             <div
@@ -3382,19 +3420,21 @@ export const CourseBuilderPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStudents.map((st) => {
+                                    {filteredStudents.map((st) => {
+                    const isAlreadyEnrolled = alreadyEnrolledStudentIds.has(st.id);
                     const isChecked = selectedStudentIds.has(st.id);
                     const isInactive = st.status === 'suspended' || st.status === 'deactivated';
+                    const isDisabled = isInactive || isAlreadyEnrolled;
 
                     return (
                       <tr
                         key={st.id}
                         onClick={() => {
-                          if (!isInactive) handleToggleStudent(st.id);
+                          if (!isDisabled) handleToggleStudent(st.id);
                         }}
                         style={{
                           background: isChecked ? 'var(--primary-light, rgba(99, 102, 241, 0.08))' : 'transparent',
-                          cursor: isInactive ? 'not-allowed' : 'pointer',
+                          cursor: isDisabled ? 'not-allowed' : 'pointer',
                           opacity: isInactive ? 0.6 : 1,
                           borderBottom: '1px solid var(--border-subtle)',
                           fontSize: '0.85rem'
@@ -3403,10 +3443,10 @@ export const CourseBuilderPage: React.FC = () => {
                         <td style={{ textAlign: 'center', padding: '8px' }}>
                           <input
                             type="checkbox"
-                            checked={isChecked}
-                            disabled={isInactive}
-                            onChange={() => handleToggleStudent(st.id)}
-                            style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
+                            checked={isChecked || isAlreadyEnrolled}
+                            disabled={isDisabled}
+                            onChange={() => !isDisabled && handleToggleStudent(st.id)}
+                            style={{ accentColor: 'var(--primary)', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
                           />
                         </td>
                         <td style={{ padding: '8px 12px', fontWeight: 600 }}>
@@ -3440,7 +3480,11 @@ export const CourseBuilderPage: React.FC = () => {
                         </td>
                         <td style={{ padding: '8px 12px', fontSize: '0.8rem' }}>{getStudentCohort(st.id)}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                          {isInactive ? (
+                          {isAlreadyEnrolled ? (
+                            <span className="badge badge-primary" style={{ fontSize: '0.68rem' }}>
+                              Already Enrolled
+                            </span>
+                          ) : isInactive ? (
                             <span className="badge badge-danger" style={{ fontSize: '0.68rem' }}>
                               Suspended
                             </span>

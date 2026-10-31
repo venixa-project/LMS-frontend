@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
-import { mockDepartments } from '../../data/mockData';
+import { usePeopleStore } from '../../lib/peopleStore';
+import { mockDepartments, mockCohorts } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
 import { BackToCoursesButton } from '../../components/BackToCoursesButton';
 import {
-  BookOpen, Clock, Users, ShieldCheck, CheckCircle2, Lock,
+  BookOpen, HelpCircle, Clock, Users, ShieldCheck, CheckCircle2, Lock,
   Play, ArrowLeft, AlertCircle, Calendar, GraduationCap,
   Award, Check, ExternalLink, Sparkles, Share2, Layers,
   AlertTriangle, FileText, ChevronRight, UserPlus
@@ -84,7 +85,7 @@ export const PublicCourseDetailsPage: React.FC = () => {
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isTrainerOrAdmin = isAdmin || isFaculty;
 
-  const isAuthorizedTrainer = Boolean(
+    const isAuthorizedTrainer = Boolean(
     isAdmin ||
     course.createdBy === user?.id ||
     course.instructors?.includes(user?.id || '') ||
@@ -92,6 +93,45 @@ export const PublicCourseDetailsPage: React.FC = () => {
     (user?.id === 'u-003' && ['crs-003'].includes(course.id)) ||
     (user?.id === 'u-005' && ['crs-005'].includes(course.id))
   );
+
+  // Guard against unauthorized access to unpublished or draft courses
+  if (!isPublished && !isAdmin && !isAuthorizedTrainer) {
+    return (
+      <div style={{
+        minHeight: '80vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '32px 20px',
+        textAlign: 'center'
+      }}>
+        <div className="card" style={{ maxWidth: '520px', padding: '40px 32px' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.15)',
+            color: 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px auto'
+          }}>
+            <AlertCircle size={32} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', margin: '0 0 8px 0' }}>Course Unavailable</h2>
+          <p className="text-secondary text-sm" style={{ margin: '0 0 24px 0' }}>
+            This course is currently in draft or review status and is only accessible by its appointed instructor or institution administrator.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <Link to={isFaculty ? '/courses' : '/catalog'} className="btn btn-primary">
+              <BookOpen size={15} /> {isFaculty ? 'Back to My Courses' : 'Browse Course Catalog'}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const alreadyEnrolled = isEnrolled(course.id);
   const pendingApproval = hasRequested(course.id);
@@ -399,6 +439,141 @@ export const PublicCourseDetailsPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+                    {/* Trainer / Admin Management: Course Assessments Overview */}
+          {(isAuthorizedTrainer || isAdmin) && (
+            <div className="card" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <HelpCircle size={20} color="var(--warning, #f59e0b)" />
+                  <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Course Assessments & Evaluations</h2>
+                </div>
+                <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>
+                  Faculty Grading Scope
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                <div style={{ background: 'var(--bg-input)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '4px' }}>Lesson Quizzes & Practice</div>
+                  <div className="text-secondary text-xs">
+                    {course.modules?.reduce((sum, m) => sum + (m.lessons?.filter(l => l.type === 'quiz').length || 0), 0) || 2} interactive formative checkpoints configured
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-input)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '4px' }}>Module Evaluations</div>
+                  <div className="text-secondary text-xs">
+                    {course.modules?.filter(m => m.assessment).length || 1} summative module examinations active
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--bg-input)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '4px' }}>Final Course Capstone</div>
+                  <div className="text-secondary text-xs">
+                    {course.finalAssessment ? 'Configured & required for completion certificate' : 'Standard comprehensive assessment'}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-muted text-xs" style={{ margin: 0 }}>
+                Assessments are evaluated automatically and factored into learner completion certificates according to institutional minimum score rules.
+              </p>
+            </div>
+          )}
+
+          {/* Trainer / Admin Management: Assigned Students & Enrollment Roster */}
+          {(isAuthorizedTrainer || isAdmin) && (
+            <div className="card" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Users size={20} color="var(--primary)" />
+                  <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Assigned Students & Enrollment Progress</h2>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Link
+                    to={`/courses/${course.id}/assign-students`}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <UserPlus size={13} /> Assign Students
+                  </Link>
+                  <Link
+                    to={`/enrollments?courseId=${course.id}`}
+                    className="btn btn-primary btn-sm"
+                    style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Users size={13} /> View Full Roster
+                  </Link>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)' }}>
+                    {currentLearners}
+                  </div>
+                  <div className="text-muted text-xs">Total Active Learners</div>
+                </div>
+                <div style={{ height: '32px', width: '1px', background: 'var(--border-subtle)' }} />
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)' }}>
+                    {course.completionRate || 42}%
+                  </div>
+                  <div className="text-muted text-xs">Average Progress</div>
+                </div>
+                <div style={{ height: '32px', width: '1px', background: 'var(--border-subtle)' }} />
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    {maxCapacity}
+                  </div>
+                  <div className="text-muted text-xs">Course Capacity</div>
+                </div>
+              </div>
+
+              <div className="table-container" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                <table className="table" style={{ fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Learner</th>
+                      <th>Class / Cohort</th>
+                      <th>Curriculum Progress</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: 'Alex Rivera', email: 'alex@lms.demo', cohort: 'Spring 2026 Engineering', progress: 68, status: 'Active' },
+                      { name: 'Daniel Wu', email: 'daniel.wu@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 92, status: 'Active' },
+                      { name: 'Sophia Patel', email: 'sophia.p@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 85, status: 'Active' },
+                      { name: 'Kwame Mensah', email: 'kwame.m@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 54, status: 'Active' },
+                    ].map((st, sIdx) => (
+                      <tr key={sIdx}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{st.name}</div>
+                          <div className="text-muted text-xs">{st.email}</div>
+                        </td>
+                        <td>
+                          <span className="badge badge-secondary">{st.cohort}</span>
+                        </td>
+                        <td style={{ minWidth: '140px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '3px' }}>
+                            <span>{st.progress}%</span>
+                          </div>
+                          <div className="progress-bar-bg" style={{ height: '5px' }}>
+                            <div className="progress-bar-fill" style={{ width: `${st.progress}%` }} />
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-active">{st.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Prerequisites Card */}
           <div className="card" style={{ padding: '24px' }}>
