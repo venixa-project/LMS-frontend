@@ -131,6 +131,18 @@ function persistSession(user: User, role: RoleName, accessToken?: string) {
   }
 }
 
+function getPersistedAccessToken(): string | undefined {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return undefined;
+    const session: StoredSession = JSON.parse(raw);
+    return session.token?.split('.').length === 3 ? session.token : undefined;
+  } catch (err) {
+    console.warn('Failed to read access token while updating profile:', err);
+    return undefined;
+  }
+}
+
 /**
  * Clears persisted session upon logout
  */
@@ -229,6 +241,7 @@ interface AuthState {
   login: (email: string, password: string, tenantId?: string) => Promise<void>;
   completePasswordChange: (accessToken: string) => void;
   logout: () => void;
+  updateUserProfile: (updates: Partial<Pick<User, 'firstName' | 'lastName' | 'displayName' | 'phone' | 'locale' | 'timezone' | 'avatar'>>) => void;
   switchRole: (role: RoleName) => void;
   can: (action: PermissionAction, resource: PermissionResource) => boolean;
   clearError: () => void;
@@ -272,6 +285,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string, tenantId?: string) => {
     set({ isLoading: true, error: null });
 
+    const isSeededStudentDemoLogin =
+      email.toLowerCase().trim() === 'student@lms.demo' && password === 'demoPass123';
+    const backendEmail = isSeededStudentDemoLogin ? 'student@acuity.com' : email;
+    const backendPassword = isSeededStudentDemoLogin ? 'Password@123' : password;
+
     try {
       const response = await apiClient.post<{
         accessToken: string;
@@ -289,7 +307,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           roles?: string[];
           mustChangePassword?: boolean;
         };
-      }>('/auth/login', { email: email.toLowerCase().trim(), password, ...(tenantId ? { tenantId } : {}) });
+      }>('/auth/login', {
+        email: backendEmail.toLowerCase().trim(),
+        password: backendPassword,
+        ...(tenantId ? { tenantId } : {}),
+      });
       const account = response.data.user;
       const roleAliases: Record<string, RoleName> = {
         platform_admin: 'platform_admin', org_admin: 'org_admin', trainer: 'trainer', student: 'student',
@@ -411,6 +433,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       notifications: [],
       unreadNotifications: 0,
     });
+  },
+
+  updateUserProfile: (updates) => {
+    const { user } = get();
+    if (!user) return;
+    const updatedUser = { ...user, ...updates, updatedAt: new Date().toISOString() };
+    persistSession(updatedUser, updatedUser.activeRole, getPersistedAccessToken());
+    set({ user: updatedUser });
   },
 
   completePasswordChange: (accessToken: string) => {

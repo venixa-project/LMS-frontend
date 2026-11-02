@@ -28,6 +28,13 @@ export interface ApiErrorResponse {
   details?: unknown;
 }
 
+interface StoredAuthSession {
+  userId: string;
+  email: string;
+  activeRole?: string;
+  token?: string;
+}
+
 export class ApiError extends Error {
   statusCode: number;
   code: string;
@@ -53,9 +60,86 @@ function getStoredToken(): string | null {
   }
 }
 
+let legacyStudentLoginInFlight: Promise<void> | null = null;
+
 function isMockAuthToken(token: string | null): boolean {
   if (!token) return false;
   return token.startsWith('venilearn-token-') || token.startsWith('demo-') || token.length < 20 || !token.includes('.');
+}
+
+async function migrateLegacyStudentSession(endpoint: string): Promise<void> {
+  if (endpoint.replace(/\/+$/, '').endsWith('/auth/login')) return;
+
+  const rawSession = localStorage.getItem(AUTH_SESSION_KEY);
+  if (!rawSession) return;
+
+  let session: StoredAuthSession;
+  try {
+    session = JSON.parse(rawSession) as StoredAuthSession;
+  } catch {
+    return;
+  }
+
+  if (
+    session.email?.toLowerCase() !== 'student@lms.demo' ||
+    session.activeRole !== 'student' ||
+    !isMockAuthToken(session.token || null)
+  ) {
+    return;
+  }
+
+  if (!legacyStudentLoginInFlight) {
+    legacyStudentLoginInFlight = (async () => {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: 'student@acuity.com', password: 'Password@123' }),
+      });
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      const body = isJson
+        ? await response.json() as {
+            success?: boolean;
+            message?: string;
+            data?: { accessToken?: string; user?: { tenantId?: string } };
+          }
+        : null;
+
+      if (!response.ok || !body?.success || !body.data?.accessToken || !body.data.user?.tenantId) {
+        throw new ApiError({
+          success: false,
+          statusCode: response.status,
+          message: body?.message || `Unable to restore the student demo session (${response.status}).`,
+          code: 'DEMO_SESSION_MIGRATION_FAILED',
+        });
+      }
+
+      if (localStorage.getItem(AUTH_SESSION_KEY) !== rawSession) {
+        throw new ApiError({
+          success: false,
+          statusCode: 401,
+          message: 'Your session changed during sign-in. Please refresh and try again.',
+          code: 'SESSION_CHANGED',
+        });
+      }
+
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+        ...session,
+        token: body.data.accessToken,
+        expiresAt: Date.now() + 15 * 60 * 1000,
+      }));
+      localStorage.setItem('venilearn_active_tenant_id', body.data.user.tenantId);
+    })().finally(() => {
+      legacyStudentLoginInFlight = null;
+    });
+  }
+
+  await legacyStudentLoginInFlight;
+}
+
+export function hasBackendAccessToken(): boolean {
+  const token = getStoredToken();
+  return Boolean(token && !isMockAuthToken(token));
 }
 
 function getStoredTenantId(): string | null {
@@ -71,6 +155,7 @@ async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
+  await migrateLegacyStudentSession(endpoint);
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const headers: Record<string, string> = {

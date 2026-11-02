@@ -5,6 +5,7 @@ import { useCourseStore } from '../../lib/courseStore';
 import { useCertificateStore } from '../../lib/certificateStore';
 import { generateCertificatePdf } from '../../lib/certificatePdf';
 import { mockCourses } from '../../data/mockData';
+import { StudentCoursePlayer } from './StudentCoursePlayer';
 import { Certificate } from '../../types';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
@@ -13,7 +14,7 @@ import {
   Pause, Video
 } from 'lucide-react';
 
-export const LearnerCoursePlayerPage: React.FC = () => {
+const LegacyCoursePlayerPage: React.FC = () => {
   const { user } = useAuthStore();
   const { courses } = useCourseStore();
   const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
@@ -801,4 +802,11 @@ export const LearnerCoursePlayerPage: React.FC = () => {
       )}
     </div>
   );
+};
+
+export const LearnerCoursePlayerPage: React.FC = () => {
+  const { user } = useAuthStore();
+  return user?.activeRole === 'student' || user?.activeRole === 'learner'
+    ? <StudentCoursePlayer />
+    : <LegacyCoursePlayerPage />;
 };
