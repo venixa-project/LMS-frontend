@@ -53,34 +53,63 @@ interface CourseState {
 }
 
 const STORAGE_KEY_COURSES = 'venilearn_courses';
+const STORAGE_KEY_INITIALIZED = 'venilearn_courses_initialized';
 const STORAGE_KEY_ENROLLED = 'venilearn_enrolled_courses';
 const STORAGE_KEY_REQUESTED = 'venilearn_requested_courses';
 const STORAGE_KEY_ENROLLMENTS = 'venilearn_enrollments';
 
-// Safely load cached state from localStorage for multi-tab synchronization
+// Safely load cached state from localStorage with persistence of deletions and empty catalogues
 function loadInitialCourses(): Course[] {
   try {
-    const cached = localStorage.getItem(STORAGE_KEY_COURSES);
-    if (cached) {
+    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
+    const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_COURSES) : null;
+
+    if (cached !== null) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        if (!isInitialized && typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+        }
+        return parsed.map((c: Course) => ({
+          ...c,
+          organizationId: c.organizationId || 'org-001',
+        }));
       }
     }
+
+    // If marked initialized already, preserve empty catalogue (do NOT resurrect deleted demo courses!)
+    if (isInitialized) {
+      return [];
+    }
+
+    // Brand new clean installation: initialize with mockCourses tagged with default org-001
+    const seededCourses: Course[] = mockCourses.map((c) => ({
+      ...c,
+      organizationId: c.organizationId || 'org-001',
+    }));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(seededCourses));
+    }
+    return seededCourses;
   } catch (e) {
     console.error('Failed to parse courses from storage', e);
   }
-  return mockCourses;
+  return [];
 }
 
 function loadInitialEnrolled(): string[] {
   try {
-    const cached = localStorage.getItem(STORAGE_KEY_ENROLLED);
-    if (cached) {
+    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
+    const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ENROLLED) : null;
+    if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
         return parsed;
       }
+    }
+    if (isInitialized) {
+      return [];
     }
   } catch (e) {
     console.error('Failed to parse enrolled courses from storage', e);
@@ -90,8 +119,8 @@ function loadInitialEnrolled(): string[] {
 
 function loadInitialRequested(): string[] {
   try {
-    const cached = localStorage.getItem(STORAGE_KEY_REQUESTED);
-    if (cached) {
+    const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_REQUESTED) : null;
+    if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
         return parsed;
@@ -105,12 +134,16 @@ function loadInitialRequested(): string[] {
 
 function loadInitialEnrollments(): Enrollment[] {
   try {
-    const cached = localStorage.getItem(STORAGE_KEY_ENROLLMENTS);
-    if (cached) {
+    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
+    const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ENROLLMENTS) : null;
+    if (cached !== null) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
+    }
+    if (isInitialized) {
+      return [];
     }
   } catch (e) {
     console.error('Failed to parse enrollments from storage', e);
@@ -392,13 +425,23 @@ export const useCourseStore = create<CourseState>((set, get) => ({
 
   addCourse: (course: Course) => {
     set((state) => {
-      const exists = state.courses.some((c) => c.id === course.id);
+      const fallbackOrg = typeof window !== 'undefined'
+        ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
+        : 'org-001';
+      const courseWithOrg: Course = {
+        ...course,
+        organizationId: course.organizationId || fallbackOrg,
+      };
+      const exists = state.courses.some((c) => c.id === courseWithOrg.id);
       const updatedCourses = exists
-        ? state.courses.map((c) => (c.id === course.id ? course : c))
-        : [course, ...state.courses];
+        ? state.courses.map((c) => (c.id === courseWithOrg.id ? courseWithOrg : c))
+        : [courseWithOrg, ...state.courses];
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) { }
+        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      } catch (e) {
+        console.error('Failed to save courses to storage', e);
+      }
       return { courses: updatedCourses };
     });
   },
@@ -406,10 +449,40 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   deleteCourse: (courseId: string) => {
     set((state) => {
       const updatedCourses = state.courses.filter((c) => c.id !== courseId);
+      const updatedEnrolled = state.enrolledCourseIds.filter((id) => id !== courseId);
+      const updatedEnrollments = state.enrollments.filter((e) => e.courseId !== courseId);
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) { }
-      return { courses: updatedCourses };
+        localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
+        localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
+        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      } catch (e) {
+        console.error('Failed to save courses to storage', e);
+      }
+      return {
+        courses: updatedCourses,
+        enrolledCourseIds: updatedEnrolled,
+        enrollments: updatedEnrollments,
+      };
     });
   },
 }));
+
+// Cross-tab synchronization
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY_COURSES && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (Array.isArray(parsed)) {
+          useCourseStore.setState({
+            courses: parsed.map((c: Course) => ({
+              ...c,
+              organizationId: c.organizationId || 'org-001',
+            })),
+          });
+        }
+      } catch (err) {}
+    }
+  });
+}

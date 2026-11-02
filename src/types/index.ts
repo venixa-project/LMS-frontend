@@ -169,6 +169,7 @@ export interface Course {
   finalAssessment?: QuizAssessmentConfig;
   certificateConfig?: CourseCertificateConfig;
   updatedAt: string;
+  organizationId?: string;
 }
 
 // --- Course Certificate Configuration ---

@@ -987,8 +987,13 @@ export const CourseBuilderPage: React.FC = () => {
       const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
       const enrolledCount = selectedStudentIds.size;
 
+      const activeOrgId = typeof window !== 'undefined'
+        ? (sessionStorage.getItem('venilearn_active_org_id') || user?.organizationId || 'org-001')
+        : (user?.organizationId || 'org-001');
+
       const newCourse: Course = {
         createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
+        organizationId: activeOrgId,
         id: generatedId,
         title: title.trim(),
         description: description.trim(),

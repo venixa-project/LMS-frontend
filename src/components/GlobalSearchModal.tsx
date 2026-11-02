@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuthStore } from '../lib/store';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, BookOpen, ClipboardCheck, Users, Video, Shield, ArrowRight } from 'lucide-react';
-import { mockCourses, mockAssessments } from '../data/mockData';
+import { mockAssessments } from '../data/mockData';
+import { useCourseStore } from '../lib/courseStore';
 import { mockUsers } from '../data/mockUsers';
 
 interface Props {
@@ -12,22 +14,51 @@ interface Props {
 export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isPlatformAdmin = user?.activeRole === 'platform_admin';
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
+    return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+  });
+
+  useEffect(() => {
+    const handleOrgSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ orgId: string }>;
+      if (customEvent.detail?.orgId) {
+        setActiveOrgId(customEvent.detail.orgId);
+      } else {
+        const next = (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+        setActiveOrgId(next);
+      }
+    };
+    window.addEventListener('venilearn_org_switched', handleOrgSwitch);
+    return () => window.removeEventListener('venilearn_org_switched', handleOrgSwitch);
+  }, [isPlatformAdmin, user?.organizationId]);
 
   if (!isOpen) return null;
 
-  const filteredCourses = mockCourses.filter((c) =>
-    c.title.toLowerCase().includes(query.toLowerCase()) ||
-    c.description.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 3);
+  const { courses } = useCourseStore();
+
+  const filteredCourses = courses.filter((c) => {
+    const matchesOrg = (c.organizationId || 'org-001') === activeOrgId;
+    if (!matchesOrg) return false;
+    return (
+      c.title.toLowerCase().includes(query.toLowerCase()) ||
+      c.description.toLowerCase().includes(query.toLowerCase())
+    );
+  }).slice(0, 3);
 
   const filteredAssessments = mockAssessments.filter((a) =>
     a.title.toLowerCase().includes(query.toLowerCase())
   ).slice(0, 3);
 
-  const filteredUsers = mockUsers.filter((u) =>
-    u.displayName.toLowerCase().includes(query.toLowerCase()) ||
-    u.email.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 3);
+  const filteredUsers = mockUsers.filter((u) => {
+    const matchesOrg = (u.organizationId || 'org-001') === activeOrgId;
+    if (!matchesOrg) return false;
+    return (
+      u.displayName.toLowerCase().includes(query.toLowerCase()) ||
+      u.email.toLowerCase().includes(query.toLowerCase())
+    );
+  }).slice(0, 3);
 
   const handleSelect = (path: string) => {
     navigate(path);

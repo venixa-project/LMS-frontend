@@ -53,6 +53,25 @@ export const CoursesPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [learnerTab, setLearnerTab] = useState<'all' | 'in_progress' | 'completed'>('all');
 
+  // Active organization isolation state
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
+    return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+  });
+
+  useEffect(() => {
+    const handleOrgSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ orgId: string }>;
+      if (customEvent.detail?.orgId) {
+        setActiveOrgId(customEvent.detail.orgId);
+      } else {
+        const next = (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+        setActiveOrgId(next);
+      }
+    };
+    window.addEventListener('venilearn_org_switched', handleOrgSwitch);
+    return () => window.removeEventListener('venilearn_org_switched', handleOrgSwitch);
+  }, [isPlatformAdmin, user?.organizationId]);
+
   // Manage Dropdown Menu State
   const [activeManageMenuCourseId, setActiveManageMenuCourseId] = useState<string | null>(null);
 
@@ -212,13 +231,18 @@ export const CoursesPage: React.FC = () => {
     showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
   };
 
+  // Courses scoped to active organization
+  const orgScopedCourses = useMemo(() => {
+    return courses.filter((c) => (c.organizationId || 'org-001') === activeOrgId);
+  }, [courses, activeOrgId]);
+
   // Dynamic counts for learner tabs
-  const nonArchivedCourses = courses.filter((c) => c.status !== 'archived');
+  const nonArchivedCourses = orgScopedCourses.filter((c) => c.status !== 'archived');
   const enrolledCourses = nonArchivedCourses.filter((c) => enrolledCourseIds.includes(c.id));
   const inProgressCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'in_progress');
   const completedCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'completed');
 
-  const filteredCourses = courses.filter((c) => {
+  const filteredCourses = orgScopedCourses.filter((c) => {
     const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) ||
       c.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || c.category === categoryFilter;
@@ -304,7 +328,7 @@ export const CoursesPage: React.FC = () => {
 
   const availableCategories = useMemo(() => {
     const cats = new Set<string>();
-    courses.forEach((c) => {
+    orgScopedCourses.forEach((c) => {
       if (c.category) cats.add(c.category);
     });
     ['Frontend Development', 'Backend Development', 'Data Science & ML', 'DevOps & Cloud'].forEach((cat) => cats.add(cat));
@@ -681,7 +705,7 @@ export const CoursesPage: React.FC = () => {
                 border: '1px solid var(--border-subtle)'
               }}
             >
-              {filteredCourses.length} of {courses.length} Courses
+              {filteredCourses.length} of {orgScopedCourses.length} Courses
             </span>
           </div>
         </div>
