@@ -15,10 +15,16 @@ import { LoginRewardToast, LoginRewardToastData } from './Gamification/LoginRewa
 
 export const AppShell: React.FC = () => {
   // 1. Auth & Router Hooks (always called at top level)
-  const { user, isAuthenticated, isLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading, fetchNotifications } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
   const { recordDailyLogin } = useGamificationStore();
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchNotifications();
+    }
+  }, [isAuthenticated, user, fetchNotifications]);
 
   // 2. UI Layout States
   const [mobileOpen, setMobileOpen] = useState(false);

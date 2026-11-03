@@ -13,9 +13,16 @@ interface Props {
 }
 
 export const NotificationsDrawer: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead } = useAuthStore();
+  const { notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, fetchNotifications } = useAuthStore();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const navigate = useNavigate();
+
+  // Load latest notifications when drawer opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
+    }
+  }, [isOpen, fetchNotifications]);
 
   // Close when Escape key is pressed
   useEffect(() => {

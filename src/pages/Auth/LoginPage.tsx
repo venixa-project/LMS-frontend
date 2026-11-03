@@ -45,10 +45,9 @@ export const LoginPage: React.FC = () => {
         navigate('/change-password', { replace: true });
         return;
       }
-      const isStudent = user.activeRole === 'student' || user.activeRole === 'learner' || user.activeRole === 'guest';
-      navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
+      navigate(from && from !== '/login' ? from : '/dashboard', { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,11 +60,7 @@ export const LoginPage: React.FC = () => {
         navigate('/change-password', { replace: true });
         return;
       }
-      const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
-      if (isStudent) {
-        sessionStorage.setItem('show_student_leaderboard_popup', 'true');
-      }
-      const target = isStudent ? '/leaderboard' : (from && from !== '/login' ? from : '/dashboard');
+      const target = from && from !== '/login' ? from : '/dashboard';
       navigate(target, { replace: true });
     }
   };
@@ -78,11 +73,7 @@ export const LoginPage: React.FC = () => {
     await login(demoEmail, 'demoPass123');
     const storeState = useAuthStore.getState();
     if (storeState.isAuthenticated && storeState.user) {
-      const isStudent = storeState.user.activeRole === 'student' || storeState.user.activeRole === 'learner' || storeState.user.activeRole === 'guest';
-      if (isStudent) {
-        sessionStorage.setItem('show_student_leaderboard_popup', 'true');
-      }
-      navigate(isStudent ? '/leaderboard' : '/dashboard', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   };
 

@@ -111,6 +111,37 @@ export const CohortsPage: React.FC = () => {
   }, [searchParams, cohorts, viewingCohort, setSearchParams]);
 
   const filteredCohorts = useMemo(() => {
+    // Collect all identity tokens for current user to handle hybrid ID/UUID/email mapping
+    const userTokens = new Set<string>();
+    if (user?.id) userTokens.add(user.id.toLowerCase());
+    if (user?.email) userTokens.add(user.email.toLowerCase());
+    if (user?.rollNo) userTokens.add(user.rollNo.toLowerCase());
+    if (user?.displayName) userTokens.add(user.displayName.toLowerCase());
+
+    // Well-known demo persona cross-mappings for robust persistence
+    if (
+      user?.email?.toLowerCase() === 'trainer@lms.demo' ||
+      user?.id === 'u-004' ||
+      user?.id === 'b7db11e7-1f51-4a37-b965-c21819f4a350'
+    ) {
+      userTokens.add('b7db11e7-1f51-4a37-b965-c21819f4a350');
+      userTokens.add('u-004');
+      userTokens.add('trainer@lms.demo');
+      userTokens.add('dr. james wilson');
+      userTokens.add('dr. james wilson (trainer)');
+      userTokens.add('james wilson');
+    }
+    if (
+      user?.email?.toLowerCase() === 'student@lms.demo' ||
+      user?.id === 'u-001' ||
+      user?.id === 'f3d3c131-4b70-47d2-b3e2-ccd4d412e855'
+    ) {
+      userTokens.add('f3d3c131-4b70-47d2-b3e2-ccd4d412e855');
+      userTokens.add('u-001');
+      userTokens.add('student@lms.demo');
+      userTokens.add('alex thompson');
+    }
+
     return cohorts.filter((c) => {
       const matchesSearch =
         c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -120,43 +151,72 @@ export const CohortsPage: React.FC = () => {
       const matchesStatus = filterStatus === 'all' || c.status === filterStatus;
 
       // Faculty filter: show cohorts assigned to this trainer
-      const matchesFaculty = !isFaculty || Boolean(
-        user && (
-          (user.id && (c.instructorIds?.includes(user.id) || c.instructors?.includes(user.id))) ||
-          (user.email && (
-            (c.instructors && c.instructors.some((i: string) => i.toLowerCase() === user.email.toLowerCase())) ||
-            (c.instructorIds && c.instructorIds.some((i: string) => i.toLowerCase() === user.email.toLowerCase()))
-          )) ||
-          ((user.id === 'u-004' || user.email === 'trainer@lms.demo') && (c.id === 'coh-001' || c.id === 'coh-002' || c.id === 'coh-004'))
-        )
-      );
+      let matchesFaculty = !isFaculty;
+      if (isFaculty && user) {
+        const rawInstructors = [
+          ...(Array.isArray(c.instructors) ? c.instructors : c.instructors ? [c.instructors] : []),
+          ...(Array.isArray(c.instructorIds) ? c.instructorIds : c.instructorIds ? [c.instructorIds] : []),
+        ];
+
+        const hasInstructorMatch = rawInstructors.some((item) => {
+          if (!item) return false;
+          if (typeof item === 'string') {
+            return userTokens.has(item.toLowerCase());
+          }
+          if (typeof item === 'object') {
+            const val = (item as any).id || (item as any).userId || (item as any).email || (item as any).name;
+            return val && userTokens.has(String(val).toLowerCase());
+          }
+          return false;
+        });
+
+        const hasMemberInstructorMatch = Array.isArray((c as any).members) && (c as any).members.some((m: any) => {
+          const mRole = (m.role || '').toLowerCase();
+          const isTrainerRole = mRole === 'instructor' || mRole === 'trainer' || mRole === 'lead';
+          if (!isTrainerRole) return false;
+          const mId = m.userId || m.user?.id || m.user?.email;
+          return mId && userTokens.has(String(mId).toLowerCase());
+        });
+
+        const isDefaultDemoMatch =
+          userTokens.has('trainer@lms.demo') &&
+          (c.id === 'coh-001' || c.id === 'coh-002' || c.id === 'coh-004');
+
+        matchesFaculty = Boolean(hasInstructorMatch || hasMemberInstructorMatch || isDefaultDemoMatch);
+      }
 
       // Student filter: show cohorts this student is enrolled in
-      const matchesStudent = !isStudent || Boolean(
-        user && (
-          (user.id && c.studentIds?.includes(user.id)) ||
-          (user.email && c.studentIds?.some(sid => sid.toLowerCase() === user.email.toLowerCase())) ||
-          (user.rollNo && c.studentIds?.includes(user.rollNo)) ||
-          ((user.id === 'u-001' || user.email === 'student@lms.demo') && (c.studentIds?.includes('u-001') || c.id === 'coh-001'))
-        )
-      );
+      let matchesStudent = !isStudent;
+      if (isStudent && user) {
+        const studentIdsList = Array.isArray(c.studentIds) ? c.studentIds : [];
+        const hasStudentIdMatch = studentIdsList.some((sid) => typeof sid === 'string' && userTokens.has(sid.toLowerCase()));
+        const hasMemberStudentMatch = Array.isArray((c as any).members) && (c as any).members.some((m: any) => {
+          const mId = m.userId || m.user?.id || m.user?.email || m.user?.rollNo;
+          return mId && userTokens.has(String(mId).toLowerCase());
+        });
+        const isStudentDemoMatch = userTokens.has('student@lms.demo') && (c.id === 'coh-001' || studentIdsList.includes('u-001'));
+
+        matchesStudent = Boolean(hasStudentIdMatch || hasMemberStudentMatch || isStudentDemoMatch);
+      }
 
       return matchesSearch && matchesCourse && matchesStatus && matchesFaculty && matchesStudent;
     });
   }, [cohorts, search, filterCourse, filterStatus, isFaculty, isStudent, user]);
 
-  // Statistics
+  // Statistics — Accurately scoped to current viewer role
   const stats = useMemo(() => {
-    const total = cohorts.length;
-    const active = cohorts.filter(c => c.status === 'active').length;
-    const totalEnrolled = cohorts.reduce((acc, c) => acc + (c.studentIds ? c.studentIds.length : (c.learnerCount || 0)), 0);
-    const withFaculty = cohorts.filter(c => {
+    // When viewed by a Trainer (Faculty), stats must reflect assigned cohorts
+    const targetCohorts = isFaculty ? filteredCohorts : cohorts;
+    const total = targetCohorts.length;
+    const active = targetCohorts.filter(c => c.status === 'active').length;
+    const totalEnrolled = targetCohorts.reduce((acc, c) => acc + (c.studentIds ? c.studentIds.length : (c.learnerCount || 0)), 0);
+    const withFaculty = targetCohorts.filter(c => {
       const trainerId = c.instructorIds?.[0] || c.instructors?.[0];
       return Boolean(trainerId);
     }).length;
 
     return { total, active, totalEnrolled, withFaculty };
-  }, [cohorts]);
+  }, [cohorts, filteredCohorts, isFaculty]);
 
   // Handle Updates from Cohort Details View
   const handleUpdateCohort = (updated: Cohort) => {
@@ -469,17 +529,39 @@ export const CohortsPage: React.FC = () => {
           <tbody>
             {filteredCohorts.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-                  <UsersRound size={36} style={{ margin: '0 auto 10px auto', display: 'block', opacity: 0.5 }} />
-                  <p style={{ fontWeight: 700, margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-main)' }}>No cohorts found</p>
-                  <p style={{ margin: 0, fontSize: '0.85rem' }}>Try adjusting your search criteria or create a new cohort batch.</p>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '56px 20px', color: 'var(--text-muted)' }}>
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 14px auto'
+                  }}>
+                    <UsersRound size={28} style={{ opacity: 0.6, color: 'var(--primary)' }} />
+                  </div>
+                  <p style={{ fontWeight: 700, margin: '0 0 6px 0', fontSize: '1.05rem', color: 'var(--text-main)' }}>
+                    {isFaculty ? 'No Assigned Cohorts Found' : isStudent ? 'No Enrolled Cohorts Found' : 'No Cohorts Found'}
+                  </p>
+                  <p style={{ margin: '0 auto', fontSize: '0.875rem', maxWidth: '440px', lineHeight: 1.5 }}>
+                    {isFaculty
+                      ? 'You do not have any cohort batches assigned yet. When an institution admin appoints you to a batch, your roster and schedule will appear here.'
+                      : isStudent
+                      ? 'You are not enrolled in any academic batches yet. Contact your department administrator to get assigned.'
+                      : 'No cohorts match your current filters. Adjust your search or create a new cohort batch.'}
+                  </p>
                 </td>
               </tr>
             ) : (
               filteredCohorts.map((c, index) => {
-                const course = mockCourses.find((co) => co.id === c.courseId);
+                const course = mockCourses.find((co) => co.id === c.courseId) || (c as any).course;
                 const trainerId = c.instructorIds?.[0] || c.instructors?.[0];
-                const trainer = trainerId ? allUsers.find(u => u.id === trainerId) : null;
+                const trainer = trainerId
+                  ? allUsers.find(u => u.id === trainerId || (u.email && u.email.toLowerCase() === String(trainerId).toLowerCase()))
+                  : null;
                 const currentEnrolled = c.studentIds ? c.studentIds.length : (c.learnerCount || 0);
                 const maxCap = c.capacity || 30;
                 const percent = Math.min(100, Math.round((currentEnrolled / maxCap) * 100));

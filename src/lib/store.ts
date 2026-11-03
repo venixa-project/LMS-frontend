@@ -6,7 +6,7 @@ import { User, RoleName, Notification } from '../types';
 import { getPermissionsForRole, getNavigationForRole, can, type NavItem } from './permissions';
 import type { Permission, PermissionAction, PermissionResource } from '../types';
 import { mockUsers } from '../data/mockUsers';
-import { apiClient } from './apiClient';
+import { apiClient, hasBackendAccessToken } from './apiClient';
 import { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
 
 export { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
@@ -249,6 +249,7 @@ interface AuthState {
   switchRole: (role: RoleName) => void;
   can: (action: PermissionAction, resource: PermissionResource) => boolean;
   clearError: () => void;
+  fetchNotifications: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   sendCourseInvitations: (invitation: {
@@ -467,6 +468,57 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
+  fetchNotifications: async () => {
+    const { user } = get();
+    if (!user) return;
+
+    if (hasBackendAccessToken()) {
+      try {
+        const response = await apiClient.get<Array<{
+          id: string;
+          userId: string;
+          title: string;
+          message: string;
+          category: string;
+          linkUrl?: string | null;
+          isRead: boolean;
+          createdAt: string;
+        }>>('/notifications');
+
+        if (response.data && Array.isArray(response.data)) {
+          const mapped: Notification[] = response.data.map((n) => ({
+            id: n.id,
+            userId: n.userId,
+            title: n.title,
+            message: n.message,
+            category: n.category as any,
+            link: n.linkUrl || undefined,
+            isRead: n.isRead,
+            timestamp: n.createdAt,
+          }));
+
+          const localDefaults = getUserNotifications(user);
+          const backendIds = new Set(mapped.map((n) => n.id));
+          const merged = [...mapped, ...localDefaults.filter((l) => !backendIds.has(l.id))];
+
+          set({
+            notifications: merged,
+            unreadNotifications: merged.filter((n) => !n.isRead).length,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('Failed to fetch backend notifications, using local cache:', err);
+      }
+    }
+
+    const localNotifs = getUserNotifications(user);
+    set({
+      notifications: localNotifs,
+      unreadNotifications: localNotifs.filter((n) => !n.isRead).length,
+    });
+  },
+
   markNotificationRead: (id: string) => {
     const { notifications } = get();
     const updated = notifications.map((n) =>
@@ -480,6 +532,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const stored = loadStoredNotifications();
     const updatedStored = stored.map((n) => (n.id === id ? { ...n, isRead: true } : n));
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken()) {
+      apiClient.patch(`/notifications/${id}/read`).catch(() => {});
+    }
   },
 
   markAllNotificationsRead: () => {
@@ -491,6 +547,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const userIds = new Set(notifications.map((n) => n.id));
     const updatedStored = stored.map((n) => (userIds.has(n.id) ? { ...n, isRead: true } : n));
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken()) {
+      apiClient.post('/notifications/mark-all-read').catch(() => {});
+    }
   },
 
   sendCourseInvitations: (invitation) => {

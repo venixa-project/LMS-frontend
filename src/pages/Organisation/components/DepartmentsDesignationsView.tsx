@@ -199,11 +199,16 @@ export const DepartmentsDesignationsView: React.FC = () => {
         errors.parentId = 'Parent Department is required for a sub-department.';
       } else if (editingDept && deptParentId === editingDept.id) {
         errors.parentId = 'A department cannot be its own parent.';
-      } else {
-        // Prevent circular department relationship: parent cannot be a child of this department
-        const targetParent = departments.find((d) => d.id === deptParentId);
-        if (targetParent?.parentId === editingDept?.id) {
-          errors.parentId = 'Invalid circular department relationship detected.';
+      } else if (editingDept) {
+        // Prevent circular department relationship: parent cannot be this department or any of its descendants
+        let curr = departments.find((d) => d.id === deptParentId);
+        while (curr) {
+          if (curr.id === editingDept.id || curr.parentId === editingDept.id) {
+            errors.parentId = 'Invalid circular department relationship detected.';
+            break;
+          }
+          if (!curr.parentId) break;
+          curr = departments.find((d) => d.id === curr?.parentId);
         }
       }
     }
