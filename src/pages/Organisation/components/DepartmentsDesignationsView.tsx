@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useHRMS } from '../context/OrganisationContext';
+import { usePeopleStore } from '../../../lib/peopleStore';
 import { Department } from '../types';
 import {
   Building,
@@ -30,8 +31,16 @@ export const DepartmentsDesignationsView: React.FC = () => {
     updateDepartment: apiUpdateDept,
     deleteDepartment: apiDeleteDept,
     employees,
+    refreshData,
     showToast,
   } = useHRMS();
+
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    refreshData();
+    fetchPeople();
+  }, [refreshData, fetchPeople]);
 
   // Local state for departments synced with context
   const [departments, setDepartments] = useState<Department[]>(contextDepts);
@@ -82,6 +91,18 @@ export const DepartmentsDesignationsView: React.FC = () => {
     (e) => e.companyId === currentCompany.id || e.companyId === 'comp-1'
   );
 
+  // Combined deduplicated member list across employees and people directory
+  const allMembers = React.useMemo(() => {
+    const map = new Map<string, { id: string; departmentId?: string }>();
+    companyEmployees.forEach((e) => {
+      if (e.id) map.set(e.id, { id: e.id, departmentId: e.departmentId });
+    });
+    peopleUsers.forEach((u) => {
+      if (u.id) map.set(u.id, { id: u.id, departmentId: u.departmentId });
+    });
+    return Array.from(map.values());
+  }, [companyEmployees, peopleUsers]);
+
   const mainDepartments = departments.filter((d) => !d.parentId);
   const subDepartments = departments.filter((d) => !!d.parentId);
 
@@ -89,18 +110,31 @@ export const DepartmentsDesignationsView: React.FC = () => {
     return departments.filter((d) => d.parentId === parentId);
   };
 
-  const getDeptHeadCount = (deptNameOrId: string) => {
-    return companyEmployees.filter(
-      (e) =>
-        e.departmentId === deptNameOrId ||
-        e.departmentId.toLowerCase().includes(deptNameOrId.toLowerCase())
-    ).length;
+  const getDeptHeadCount = (deptOrId: Department | string) => {
+    const targetDept = typeof deptOrId === 'string'
+      ? departments.find((d) => d.id === deptOrId || d.name.toLowerCase() === deptOrId.toLowerCase())
+      : deptOrId;
+
+    const deptId = typeof deptOrId === 'string' ? (targetDept?.id || deptOrId) : deptOrId.id;
+    const deptName = targetDept?.name?.toLowerCase();
+    const deptCode = targetDept?.code?.toLowerCase();
+
+    const countedFromMembers = allMembers.filter((m) => {
+      if (!m.departmentId) return false;
+      if (m.departmentId === deptId) return true;
+      if (deptName && m.departmentId.toLowerCase() === deptName) return true;
+      if (deptCode && m.departmentId.toLowerCase() === deptCode) return true;
+      return false;
+    }).length;
+
+    const serverCount = targetDept?._count?.users ?? targetDept?.memberCount ?? 0;
+    return Math.max(countedFromMembers, serverCount);
   };
 
   const getMainDeptTotalHeadcount = (mainDept: Department) => {
     const subs = getSubDepartments(mainDept.id);
-    const direct = getDeptHeadCount(mainDept.name);
-    const subTotal = subs.reduce((sum, s) => sum + getDeptHeadCount(s.name), 0);
+    const direct = getDeptHeadCount(mainDept);
+    const subTotal = subs.reduce((sum, s) => sum + getDeptHeadCount(s), 0);
     return { direct, subTotal, total: direct + subTotal, subCount: subs.length };
   };
 
@@ -469,7 +503,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
             ORGANIZATION HEADCOUNT
           </span>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--brand-indigo)' }}>
-            {companyEmployees.length} Staff
+            {allMembers.length} Members
           </div>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Active workforce allocation</span>
         </div>
@@ -980,7 +1014,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
                         {isExpanded &&
                           matchingSubs.map((subDept, subIdx) => {
                             const subHead = companyEmployees.find((e) => e.id === subDept.headId);
-                            const subStaffCount = getDeptHeadCount(subDept.name);
+                            const subStaffCount = getDeptHeadCount(subDept);
                             const isLastSub = subIdx === matchingSubs.length - 1;
 
                             return (

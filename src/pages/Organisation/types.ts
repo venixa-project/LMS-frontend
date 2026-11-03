@@ -61,6 +61,8 @@ export interface Department {
   description?: string;
   parentId?: string;
   status?: 'Active' | 'Inactive' | 'active' | 'inactive';
+  memberCount?: number;
+  _count?: { users?: number };
 }
 
 export interface Designation {

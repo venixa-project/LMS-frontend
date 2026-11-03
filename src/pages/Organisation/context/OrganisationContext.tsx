@@ -189,6 +189,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             description: d.description || '',
             parentId: d.parentId || '',
             status: (d.status as any) || 'Active',
+            memberCount: d._count?.users ?? d.memberCount ?? 0,
+            _count: d._count,
           }))
         );
       }
