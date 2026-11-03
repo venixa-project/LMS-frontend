@@ -17,8 +17,10 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { useDashboardFilters } from '../context/DashboardFilterContext';
-import { mockDepartments, mockCourses, mockCertificates } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { usePeopleStore } from '../../lib/peopleStore';
+import { peopleApi } from '../../lib/peopleApiService';
+import { useCourseStore } from '../../lib/courseStore';
+import { User } from '../../types';
 
 export type RankingMetricType =
   | 'overall'
@@ -57,78 +59,74 @@ export const GamificationLeaderboard: React.FC = () => {
   const [viewAll, setViewAll] = useState<boolean>(false);
   const itemsPerPage = 8;
 
+  const { courses } = useCourseStore();
+  const { users: storeUsers, fetchPeople } = usePeopleStore();
+  const [realStudents, setRealStudents] = useState<User[]>([]);
+
+  useEffect(() => {
+    fetchPeople().catch(() => {});
+    peopleApi.list({ role: 'student', limit: 100 })
+      .then((res) => {
+        if (res.users && res.users.length > 0) {
+          setRealStudents(res.users);
+        }
+      })
+      .catch(() => {});
+  }, [fetchPeople]);
+
   // Reset pagination when department or course changes
   useEffect(() => {
     setCurrentPage(1);
   }, [departmentId, courseId]);
 
   // -------------------------------------------------------------
-  // Master Student Records Generation
+  // Master Student Records Generation from Genuine Registered Learners
   // -------------------------------------------------------------
   const masterStudentRows: StudentLeaderboardRow[] = useMemo(() => {
-    const rawStudents = mockUsers.filter(
+    const candidateStudents = realStudents.length > 0
+      ? realStudents
+      : storeUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
+
+    const rawStudents = candidateStudents.filter(
       (u) =>
-        (u.activeRole === 'student' || u.activeRole === 'learner') &&
         u.status !== 'suspended' &&
-        u.status !== 'deactivated'
+        u.status !== 'deactivated' &&
+        !u.email.toLowerCase().endsWith('@acuity.test')
     );
 
     return rawStudents.map((st, idx) => {
-      const seed = (idx * 37 + 19) % 100;
-      const deptId = st.departmentId || (idx % 2 === 0 ? 'dep-001' : 'dep-002');
-      const deptObj = mockDepartments.find((d) => d.id === deptId);
-      const deptName = deptObj ? deptObj.name : 'Engineering';
-
-      const coursesInDept = mockCourses.filter((c) => c.departmentId === deptId);
-      const assignedCourse = coursesInDept[idx % (coursesInDept.length || 1)] || mockCourses[idx % mockCourses.length];
-
-      const userCerts = mockCertificates.filter((c) => c.learnerId === st.id);
-      const certificationsCount = userCerts.length > 0 ? userCerts.length : (seed % 3) + 1;
-      const completedCoursesCount = Math.max(1, (seed % 4) + 1);
-      const assessmentScore = Math.min(99, Math.max(68, 70 + ((seed * 7) % 29)));
-      const activityDays = 8 + (seed % 22);
-      const basePoints = 720 + seed * 28;
-
-      // Composite score calculation
-      const compositeScore = Math.round(
-        basePoints * 0.4 +
-        completedCoursesCount * 80 +
-        certificationsCount * 120 +
-        assessmentScore * 3.5 +
-        activityDays * 8
-      );
+      const deptId = st.departmentId || 'dep-001';
+      const deptName = (st as any).department?.name || (st as any).departmentName || 'General Engineering';
+      const assignedCourse = courses.find((c) => !c.id.startsWith('crs-00')) || courses[0];
 
       return {
         id: st.id,
-        name: st.displayName || `${st.firstName} ${st.lastName}`,
+        name: st.displayName || `${st.firstName || ''} ${st.lastName || ''}`.trim() || st.email.split('@')[0],
         email: st.email,
-        studentId: st.rollNo || `STU-2026-${String(idx + 1).padStart(3, '0')}`,
+        studentId: st.rollNo || `STU-${st.id.slice(0, 8).toUpperCase()}`,
         avatar: st.avatar,
         departmentId: deptId,
         departmentName: deptName,
-        courseId: assignedCourse.id,
-        courseTitle: assignedCourse.title,
-        completedCourses: completedCoursesCount,
-        certifications: certificationsCount,
-        assessmentScore: assessmentScore,
-        activityDays: activityDays,
-        points: basePoints,
-        compositeScore: compositeScore,
+        courseId: assignedCourse?.id || 'crs-default',
+        courseTitle: assignedCourse?.title || 'General Curriculum',
+        completedCourses: 0,
+        certifications: 0,
+        assessmentScore: 100,
+        activityDays: 1,
+        points: 100,
+        compositeScore: 100,
       };
     });
-  }, []);
+  }, [realStudents, storeUsers, courses]);
 
   // -------------------------------------------------------------
   // Filter & Sort Logic
   // -------------------------------------------------------------
   const filteredAndSortedLearners = useMemo(() => {
     let list = masterStudentRows.filter((item) => {
-      // 1. Department filter (also checks parent/child departments)
-      if (departmentId !== 'all') {
-        const childDeptIds = mockDepartments.filter((d) => d.parentId === departmentId).map((d) => d.id);
-        if (item.departmentId !== departmentId && !childDeptIds.includes(item.departmentId)) {
-          return false;
-        }
+      // 1. Department filter
+      if (departmentId !== 'all' && item.departmentId !== departmentId) {
+        return false;
       }
 
       // 2. Course filter

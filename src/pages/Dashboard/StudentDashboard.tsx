@@ -469,9 +469,31 @@ export const StudentDashboard: React.FC = () => {
   }, [recommendedCategory, data]);
 
   const filteredRecommendedCourses = useMemo(() => {
-    if (recommendedCategory === 'all') return RECOMMENDED_COURSES;
-    return RECOMMENDED_COURSES.filter((course) => course.category === recommendedCategory);
-  }, [recommendedCategory]);
+    const realPublished = courses.filter((c) => !c.id.startsWith('crs-00') && c.status === 'published');
+    if (realPublished.length > 0) {
+      const mapped = realPublished.map((c, idx) => ({
+        id: c.id,
+        courseId: c.id,
+        title: c.title,
+        category: (c.category || 'general').toLowerCase(),
+        categoryName: c.category || 'General',
+        badge: idx === 0 ? '🔥 #1 Popular' : '⭐ Recommended',
+        badgeColor: idx === 0 ? 'var(--danger)' : 'var(--primary)',
+        rating: '4.9',
+        ratingCount: c.enrolledLearners || 12,
+        learnersCount: c.enrolledLearners || 12,
+        duration: `${c.durationHours || 10} Hours`,
+        modulesCount: c.modules?.length || 3,
+        level: c.level || 'Intermediate',
+        instructor: 'Faculty Trainer',
+        description: c.shortDescription || c.description?.slice(0, 120) || 'Comprehensive course curriculum.',
+        accentColor: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
+      }));
+      if (recommendedCategory === 'all') return mapped;
+      return mapped.filter((course) => course.category.includes(recommendedCategory));
+    }
+    return [];
+  }, [courses, recommendedCategory]);
 
   useEffect(() => {
     fetchCohorts();

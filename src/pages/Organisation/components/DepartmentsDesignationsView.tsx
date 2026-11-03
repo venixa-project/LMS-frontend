@@ -17,6 +17,8 @@ import {
   FolderTree,
   Plus,
   CheckCircle2,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 
 export const DepartmentsDesignationsView: React.FC = () => {
@@ -24,6 +26,9 @@ export const DepartmentsDesignationsView: React.FC = () => {
     currentCompany,
     departments: contextDepts,
     setDepartments: updateContextDepts,
+    createDepartment: apiCreateDept,
+    updateDepartment: apiUpdateDept,
+    deleteDepartment: apiDeleteDept,
     employees,
     showToast,
   } = useHRMS();
@@ -55,6 +60,13 @@ export const DepartmentsDesignationsView: React.FC = () => {
     code?: string;
     parentId?: string;
   }>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [modalServerError, setModalServerError] = useState<string | null>(null);
+
+  // Deletion Modal state
+  const [deletingDept, setDeletingDept] = useState<Department | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Expand / Collapse state for main departments in the hierarchy view
   const [expandedDeptIds, setExpandedDeptIds] = useState<Set<string>>(() => {
@@ -117,6 +129,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
   const openAddDeptModal = (preselectedParentId?: string, forceMode?: 'main' | 'sub') => {
     setEditingDept(null);
     setDeptValidationErrors({});
+    setModalServerError(null);
     setParentSearchTerm('');
 
     const randomSuffix = Math.floor(10 + Math.random() * 90);
@@ -151,6 +164,7 @@ export const DepartmentsDesignationsView: React.FC = () => {
   const openEditDeptModal = (d: Department) => {
     setEditingDept(d);
     setDeptValidationErrors({});
+    setModalServerError(null);
     setParentSearchTerm('');
 
     if (d.parentId) {
@@ -168,22 +182,23 @@ export const DepartmentsDesignationsView: React.FC = () => {
     setIsDeptModalOpen(true);
   };
 
-  // Department Form Save & Validation
-  const handleSaveDept = (e: React.FormEvent) => {
+  // Department Form Save & Validation with Database Persistence
+  const handleSaveDept = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { name?: string; code?: string; parentId?: string } = {};
+    setModalServerError(null);
 
     const trimmedName = deptName.trim();
     const trimmedCode = deptCode.trim().toUpperCase();
 
     // 1. Validate required name
-    if (!trimmedName) {
-      errors.name = 'Department Name is required.';
+    if (!trimmedName || trimmedName.length < 2) {
+      errors.name = 'Department Name must be at least 2 characters.';
     }
 
-    // 2. Validate required code & uniqueness
-    if (!trimmedCode) {
-      errors.code = 'Department Code is required.';
+    // 2. Validate required code & client uniqueness check
+    if (!trimmedCode || trimmedCode.length < 2) {
+      errors.code = 'Department Code must be at least 2 characters.';
     } else {
       const isDuplicate = departments.some(
         (d) => d.code.toUpperCase() === trimmedCode && d.id !== editingDept?.id
@@ -199,11 +214,16 @@ export const DepartmentsDesignationsView: React.FC = () => {
         errors.parentId = 'Parent Department is required for a sub-department.';
       } else if (editingDept && deptParentId === editingDept.id) {
         errors.parentId = 'A department cannot be its own parent.';
-      } else {
-        // Prevent circular department relationship: parent cannot be a child of this department
-        const targetParent = departments.find((d) => d.id === deptParentId);
-        if (targetParent?.parentId === editingDept?.id) {
-          errors.parentId = 'Invalid circular department relationship detected.';
+      } else if (editingDept) {
+        // Prevent circular department relationship: parent cannot be this department or any of its descendants
+        let curr = departments.find((d) => d.id === deptParentId);
+        while (curr) {
+          if (curr.id === editingDept.id || curr.parentId === editingDept.id) {
+            errors.parentId = 'Invalid circular department relationship detected.';
+            break;
+          }
+          if (!curr.parentId) break;
+          curr = departments.find((d) => d.id === curr?.parentId);
         }
       }
     }
@@ -214,59 +234,72 @@ export const DepartmentsDesignationsView: React.FC = () => {
       return;
     }
 
-    if (editingDept) {
-      // Preserve existing department records and relationships
-      const updated = departments.map((d) =>
-        d.id === editingDept.id
-          ? {
-              ...d,
-              name: trimmedName,
-              code: trimmedCode,
-              parentId: deptMode === 'sub' ? deptParentId : undefined,
-              headId: deptHeadId || undefined,
-              description: deptDescription.trim() || undefined,
-              status: d.status || 'Active',
-            }
-          : d
-      );
-      setDepartments(updated);
-      updateContextDepts(updated);
+    setIsSaving(true);
+    try {
+      if (editingDept) {
+        await apiUpdateDept(editingDept.id, {
+          name: trimmedName,
+          code: trimmedCode,
+          parentId: deptMode === 'sub' ? deptParentId : null,
+          headUserId: deptHeadId || null,
+          description: deptDescription.trim() || null,
+        });
 
-      if (deptMode === 'sub' && deptParentId) {
-        setExpandedDeptIds((prev) => new Set([...prev, deptParentId]));
+        if (deptMode === 'sub' && deptParentId) {
+          setExpandedDeptIds((prev) => new Set([...prev, deptParentId]));
+        }
+
+        showToast(
+          `${deptMode === 'sub' ? 'Sub-Department' : 'Main Department'} "${trimmedName}" updated successfully.`,
+          'success'
+        );
+      } else {
+        const created = await apiCreateDept({
+          name: trimmedName,
+          code: trimmedCode,
+          parentId: deptMode === 'sub' ? deptParentId : undefined,
+          headUserId: deptHeadId || undefined,
+          description: deptDescription.trim() || undefined,
+        });
+
+        // If sub-department, auto-expand parent row so the user immediately sees it
+        if (created.parentId) {
+          setExpandedDeptIds((prev) => new Set([...prev, created.parentId!]));
+        }
+
+        showToast(
+          `${deptMode === 'sub' ? 'Sub-Department' : 'Main Department'} "${created.name}" created successfully!`,
+          'success'
+        );
       }
 
-      showToast(
-        `${deptMode === 'sub' ? 'Sub-Department' : 'Main Department'} "${trimmedName}" updated.`,
-        'success'
-      );
-    } else {
-      const newDept: Department = {
-        id: `dept-${Date.now()}`,
-        companyId: currentCompany.id,
-        name: trimmedName,
-        code: trimmedCode,
-        parentId: deptMode === 'sub' ? deptParentId : undefined,
-        headId: deptHeadId || undefined,
-        description: deptDescription.trim() || undefined,
-        status: 'Active',
-      };
-      const updated = [newDept, ...departments];
-      setDepartments(updated);
-      updateContextDepts(updated);
-
-      // If sub-department, auto-expand parent row so the user immediately sees it
-      if (newDept.parentId) {
-        setExpandedDeptIds((prev) => new Set([...prev, newDept.parentId!]));
-      }
-
-      showToast(
-        `${deptMode === 'sub' ? 'Sub-Department' : 'Main Department'} "${newDept.name}" created successfully!`,
-        'success'
-      );
+      setIsDeptModalOpen(false);
+    } catch (err: any) {
+      console.error('Department save failed:', err);
+      const errMsg =
+        err?.response?.data?.message || err?.message || 'Failed to save department. Please try again.';
+      setModalServerError(errMsg);
+    } finally {
+      setIsSaving(false);
     }
+  };
 
-    setIsDeptModalOpen(false);
+  // Delete Department Handler
+  const handleDeleteConfirm = async () => {
+    if (!deletingDept) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiDeleteDept(deletingDept.id);
+      showToast(`Department "${deletingDept.name}" deleted successfully.`, 'success');
+      setDeletingDept(null);
+    } catch (err: any) {
+      console.error('Failed to delete department:', err);
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete department.';
+      setDeleteError(msg);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Valid Parent Candidates for Sub-Departments:
@@ -914,6 +947,31 @@ export const DepartmentsDesignationsView: React.FC = () => {
                               >
                                 <Edit size={12} /> Edit
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeletingDept(mainDept);
+                                  setDeleteError(null);
+                                }}
+                                title="Delete department"
+                                style={{
+                                  padding: '0.35rem 0.65rem',
+                                  borderRadius: '6px',
+                                  border: '1px solid var(--border-subtle)',
+                                  background: 'var(--bg-card)',
+                                  color: 'var(--danger, #ef4444)',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  transition: 'all 0.15s ease',
+                                }}
+                              >
+                                <Trash2 size={12} /> Delete
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1105,25 +1163,52 @@ export const DepartmentsDesignationsView: React.FC = () => {
                                 </td>
 
                                 <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditDeptModal(subDept)}
-                                    style={{
-                                      padding: '0.25rem 0.65rem',
-                                      borderRadius: '5px',
-                                      border: '1px solid var(--border-subtle)',
-                                      background: 'var(--bg-card)',
-                                      color: 'var(--text-main)',
-                                      fontSize: '0.72rem',
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem',
-                                    }}
-                                  >
-                                    <Edit size={11} /> Edit
-                                  </button>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditDeptModal(subDept)}
+                                      style={{
+                                        padding: '0.25rem 0.65rem',
+                                        borderRadius: '5px',
+                                        border: '1px solid var(--border-subtle)',
+                                        background: 'var(--bg-card)',
+                                        color: 'var(--text-main)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                      }}
+                                    >
+                                      <Edit size={11} /> Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDeletingDept(subDept);
+                                        setDeleteError(null);
+                                      }}
+                                      title="Delete sub-department"
+                                      style={{
+                                        padding: '0.25rem 0.55rem',
+                                        borderRadius: '5px',
+                                        border: '1px solid var(--border-subtle)',
+                                        background: 'var(--bg-card)',
+                                        color: 'var(--danger, #ef4444)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                        transition: 'all 0.15s ease',
+                                      }}
+                                    >
+                                      <Trash2 size={11} /> Delete
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -1213,6 +1298,27 @@ export const DepartmentsDesignationsView: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveDept} style={{ padding: '1.5rem' }}>
+              {/* Server-Side Validation / Operation Error Banner */}
+              {modalServerError && (
+                <div
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.10)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.9rem',
+                    color: 'var(--danger, #ef4444)',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    marginBottom: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}
+                >
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span>{modalServerError}</span>
+                </div>
+              )}
               {/* 1. SEPARATE DEPARTMENT CREATION INTO TWO MODES (SEGMENTED SELECTOR CARDS) */}
               {!editingDept ? (
                 <div style={{ marginBottom: '1.25rem' }}>
@@ -1814,33 +1920,173 @@ export const DepartmentsDesignationsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={deptMode === 'sub' && validParentCandidates.length === 0}
+                  disabled={isSaving || (deptMode === 'sub' && validParentCandidates.length === 0)}
                   style={{
                     padding: '0.55rem 1.4rem',
                     borderRadius: '8px',
                     border: 'none',
                     background:
-                      deptMode === 'sub' && validParentCandidates.length === 0
+                      isSaving || (deptMode === 'sub' && validParentCandidates.length === 0)
                         ? 'var(--text-muted)'
                         : 'var(--brand-blue, #2563EB)',
                     color: '#fff',
                     fontSize: '0.85rem',
                     fontWeight: 700,
                     cursor:
-                      deptMode === 'sub' && validParentCandidates.length === 0
+                      isSaving || (deptMode === 'sub' && validParentCandidates.length === 0)
                         ? 'not-allowed'
                         : 'pointer',
                     boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
                   }}
                 >
-                  {editingDept
-                    ? 'Save Changes'
-                    : deptMode === 'sub'
-                    ? 'Create Sub-Department'
-                    : 'Create Main Department'}
+                  {isSaving ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> Saving...
+                    </>
+                  ) : editingDept ? (
+                    'Save Changes'
+                  ) : deptMode === 'sub' ? (
+                    'Create Sub-Department'
+                  ) : (
+                    'Create Main Department'
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 2: DELETE CONFIRMATION & DEPENDENCY GUARD */}
+      {/* ========================================================= */}
+      {deletingDept && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'var(--bg-overlay)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => !isDeleting && setDeletingDept(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: 'var(--shadow-xl)',
+              border: '1px solid var(--border-subtle)',
+              padding: '1.75rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1rem' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--danger, #ef4444)',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                  Delete {deletingDept.parentId ? 'Sub-Department' : 'Department'}
+                </h3>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Are you sure you want to remove <strong>{deletingDept.name}</strong> ({deletingDept.code})?
+                </p>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  borderRadius: '8px',
+                  padding: '0.75rem 0.95rem',
+                  color: 'var(--danger, #ef4444)',
+                  fontSize: '0.825rem',
+                  fontWeight: 600,
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '0.5rem',
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.55, margin: '0 0 1.5rem 0' }}>
+              This action will permanently archive this department. Deletion will be rejected if active students, faculty, or sub-departments report to it.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setDeletingDept(null)}
+                disabled={isDeleting}
+                style={{
+                  padding: '0.55rem 1.1rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-card-subtle)',
+                  color: 'var(--text-secondary)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                style={{
+                  padding: '0.55rem 1.35rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'var(--danger, #ef4444)',
+                  color: '#fff',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.3)',
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  'Confirm Delete'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -86,10 +86,8 @@ const CoursesManagementPage: React.FC = () => {
   }, [cohorts, user]);
 
   const effectiveEnrolledIds = useMemo(() => {
-    const isDemoStudent = user?.id === 'u-001' || user?.email === 'student@lms.demo' || (isLearner && enrolledCourseIds.length === 0);
-    const demoIds = isDemoStudent ? ['crs-001', 'crs-002', 'crs-004'] : [];
-    return new Set([...enrolledCourseIds, ...cohortLinkedCourseIds, ...demoIds]);
-  }, [enrolledCourseIds, cohortLinkedCourseIds, user, isLearner]);
+    return new Set([...enrolledCourseIds, ...cohortLinkedCourseIds]);
+  }, [enrolledCourseIds, cohortLinkedCourseIds]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -154,6 +152,16 @@ const CoursesManagementPage: React.FC = () => {
   };
 
   const getCourseProgress = (courseId: string) => {
+    const enr = enrollments.find((e) => e.courseId === courseId);
+    if (enr) {
+      const isCompleted = enr.status === 'completed' || enr.progress >= 100;
+      return {
+        progress: enr.progress,
+        completedLessons: Math.round((enr.progress / 100) * 10),
+        totalLessons: 10,
+        status: isCompleted ? ('completed' as const) : ('in_progress' as const),
+      };
+    }
     return progressData[courseId] || { progress: 0, completedLessons: 0, totalLessons: 10, status: 'in_progress' as const };
   };
 

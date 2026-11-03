@@ -136,7 +136,7 @@ export const Navbar: React.FC<Props> = ({
                 border: '1px solid var(--border-subtle)'
               }}
             >
-              {mockOrganizations.map((org) => (
+              {(mockOrganizations.length > 0 ? mockOrganizations : (user?.organizationId ? [{ id: user.organizationId, name: "Active Organization", slug: "active" }] : [])).map((org) => (
                 <option key={org.id} value={org.id}>
                   {org.name} ({org.slug})
                 </option>

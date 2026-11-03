@@ -16,7 +16,10 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
-    return parsed && (Array.isArray(parsed) || typeof parsed === 'object') ? parsed : fallback;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item) => !item.id?.startsWith("asmt-00") && !item.id?.startsWith("q-00")) as unknown as T;
+    }
+    return parsed && typeof parsed === "object" ? parsed : fallback;
   } catch (err) {
     console.error(`Failed to load from localStorage (${key}):`, err);
     return fallback;

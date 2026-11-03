@@ -21,7 +21,7 @@ import {
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('admin@lms.demo');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('demoPass123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [showDemoRoles, setShowDemoRoles] = useState(true);
@@ -781,11 +781,11 @@ export const LoginPage: React.FC = () => {
             </a>
           </div>
 
-          {/* 1-Click Demo Role Switcher Toggle */}
+          {/* 1-Click Demo Role Switcher */}
           <div style={{
             marginTop: '20px',
             paddingTop: '16px',
-            borderTop: '1px solid rgba(129, 140, 248, 0.15)'
+            borderTop: '1px solid rgba(129, 140, 248, 0.2)'
           }}>
             <div
               onClick={() => setShowDemoRoles(!showDemoRoles)}
@@ -836,7 +836,8 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
+
+          </div>
       </div>
 
       {/* Simulated SSO / MFA Dialog (Dark Theme Styled) */}

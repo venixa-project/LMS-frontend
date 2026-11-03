@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments, mockCourses } from '../../data/mockData';
+import { mockCourses } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   UserPlus, GraduationCap, Shield, Users, ArrowLeft,
   CheckCircle2, AlertCircle, Sparkles, Building, BookOpen,
-  Briefcase, Mail, Phone, Hash, Award, Check, X
+  Briefcase, Mail, Phone, Hash, Award, Check, X, GitBranch
 } from 'lucide-react';
 
 export const PersonCreatePage: React.FC = () => {
@@ -15,6 +16,11 @@ export const PersonCreatePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { addUser, isEmailTaken } = usePeopleStore();
   const { cohorts } = useCohortStore();
+  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   // Role Type from Query or Default
   const initialRole = searchParams.get('role');
@@ -32,7 +38,51 @@ export const PersonCreatePage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [departmentId, setDepartmentId] = useState(mockDepartments[0]?.id || 'dep-001');
+  
+  // Two-tiered Department & Sub-Department selection state
+  const mainDepartments = useMemo(() => {
+    return departments.filter((d) => !d.parentId);
+  }, [departments]);
+
+  const [selectedMainDeptId, setSelectedMainDeptId] = useState<string>('');
+  const [selectedSubDeptId, setSelectedSubDeptId] = useState<string>('');
+
+  const availableSubDepartments = useMemo(() => {
+    if (!selectedMainDeptId) return [];
+    return departments.filter((d) => d.parentId === selectedMainDeptId);
+  }, [departments, selectedMainDeptId]);
+
+  // Auto-initialize first main department and sub-department when departments load
+  useEffect(() => {
+    if (departments.length > 0) {
+      if (!selectedMainDeptId || !departments.some((d) => d.id === selectedMainDeptId)) {
+        const firstMain = departments.find((d) => !d.parentId) || departments[0];
+        if (firstMain) {
+          setSelectedMainDeptId(firstMain.id);
+          const children = departments.filter((d) => d.parentId === firstMain.id);
+          setSelectedSubDeptId(children.length > 0 ? children[0].id : '');
+        }
+      }
+    }
+  }, [departments, selectedMainDeptId]);
+
+  const handleMainDeptChange = (newMainId: string) => {
+    setSelectedMainDeptId(newMainId);
+    const children = departments.filter((d) => d.parentId === newMainId);
+    setSelectedSubDeptId(children.length > 0 ? children[0].id : '');
+    if (errors.subDepartmentId || errors.departmentId) {
+      setErrors((prev) => ({ ...prev, subDepartmentId: '', departmentId: '' }));
+    }
+  };
+
+  const selectedMainDept = useMemo(() => {
+    return departments.find((d) => d.id === selectedMainDeptId);
+  }, [departments, selectedMainDeptId]);
+
+  const selectedSubDept = useMemo(() => {
+    return departments.find((d) => d.id === selectedSubDeptId);
+  }, [departments, selectedSubDeptId]);
+
   const [status, setStatus] = useState<UserAccountStatus>('active');
 
   // Student specific
@@ -85,7 +135,12 @@ export const PersonCreatePage: React.FC = () => {
     setLastName('');
     setEmail('');
     setPhone('');
-    setDepartmentId(mockDepartments[0]?.id || 'dep-001');
+    const firstMain = departments.find((d) => !d.parentId) || departments[0];
+    if (firstMain) {
+      setSelectedMainDeptId(firstMain.id);
+      const children = departments.filter((d) => d.parentId === firstMain.id);
+      setSelectedSubDeptId(children.length > 0 ? children[0].id : '');
+    }
     setStatus('active');
 
     setRollNo('');
@@ -168,6 +223,14 @@ export const PersonCreatePage: React.FC = () => {
       errs.staffEmpId = 'Staff Employee ID is required.';
     }
 
+    if (!selectedMainDeptId) {
+      errs.departmentId = 'Please select an academic department / division.';
+    }
+
+    if (activeRoleType === 'student' && availableSubDepartments.length > 0 && !selectedSubDeptId) {
+      errs.subDepartmentId = 'Please select an academic branch / sub-department for this student.';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -181,6 +244,8 @@ export const PersonCreatePage: React.FC = () => {
     const activeRole: RoleName =
       activeRoleType === 'student' ? 'learner' : activeRoleType === 'faculty' ? 'trainer' : 'staff';
 
+    const effectiveDepartmentId = selectedSubDeptId || selectedMainDeptId;
+
     const newUser: User = {
       id: `u-${Date.now()}`,
       email: email.trim(),
@@ -191,11 +256,11 @@ export const PersonCreatePage: React.FC = () => {
       activeRole,
       roles: [],
       organizationId: 'org-001',
-      departmentId,
+      departmentId: effectiveDepartmentId,
       status,
       mfaEnabled: false,
       rollNo: activeRoleType === 'student' ? rollNo.trim() : undefined,
-      specialization: activeRoleType === 'faculty' ? specialization.trim() : undefined,
+      specialization: activeRoleType === 'faculty' ? specialization.trim() : (activeRoleType === 'student' && selectedSubDept ? selectedSubDept.name : undefined),
       eligibleCourseIds: activeRoleType === 'faculty' ? selectedCourses : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -451,23 +516,80 @@ export const PersonCreatePage: React.FC = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            {/* Primary Department / Academic Division */}
             <div className="form-group">
               <label className="form-label">
-                Department / Academic Division <span className="required">*</span>
+                Academic Division / Main Department <span className="required">*</span>
               </label>
               <select
-                className="form-select"
-                value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
+                className={`form-select ${errors.departmentId ? 'input-error' : ''}`}
+                value={selectedMainDeptId}
+                onChange={(e) => handleMainDeptChange(e.target.value)}
+                disabled={isDeptsLoading}
               >
-                {mockDepartments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} &bull; {dept.memberCount} active members
-                  </option>
-                ))}
+                {isDeptsLoading ? (
+                  <option value="">Loading academic divisions...</option>
+                ) : mainDepartments.length === 0 ? (
+                  <option value="">No main departments available</option>
+                ) : (
+                  mainDepartments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code}) &bull; {dept._count?.users ?? dept.memberCount ?? 0} active members
+                    </option>
+                  ))
+                )}
               </select>
+              {errors.departmentId && <span className="form-error-msg">{errors.departmentId}</span>}
+              {mainDepartments.length === 0 && !isDeptsLoading && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  No departments found. Go to <Link to="/organisation/departments-designations" style={{ color: 'var(--brand-blue)', fontWeight: 600 }}>Departments & Hierarchy</Link> to create one.
+                </span>
+              )}
             </div>
 
+            {/* Sub-Department / Academic Branch (Specialization) */}
+            <div className="form-group">
+              <label className="form-label">
+                Sub-Department / Academic Branch
+                {activeRoleType === 'student' && availableSubDepartments.length > 0 && (
+                  <span className="required" style={{ marginLeft: '4px' }}>*</span>
+                )}
+              </label>
+              <select
+                className={`form-select ${errors.subDepartmentId ? 'input-error' : ''}`}
+                value={selectedSubDeptId}
+                onChange={(e) => {
+                  setSelectedSubDeptId(e.target.value);
+                  if (errors.subDepartmentId) setErrors((prev) => ({ ...prev, subDepartmentId: '' }));
+                }}
+                disabled={isDeptsLoading || availableSubDepartments.length === 0}
+              >
+                {availableSubDepartments.length === 0 ? (
+                  <option value="">No sub-units &mdash; Direct division enrollment</option>
+                ) : (
+                  <>
+                    <option value="">
+                      {activeRoleType === 'student'
+                        ? 'Select Academic Branch / Sub-Department *'
+                        : 'General Division (No Sub-Unit)'}
+                    </option>
+                    {availableSubDepartments.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name} ({sub.code}) [Sub-Unit] &bull; {sub._count?.users ?? sub.memberCount ?? 0} active members
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+              {errors.subDepartmentId && <span className="form-error-msg">{errors.subDepartmentId}</span>}
+              <span className="text-muted text-xs">
+                {availableSubDepartments.length > 0
+                  ? 'Assigns scholar to a specific academic branch under the parent division.'
+                  : 'This academic division has no sub-units; enrollment is directly under the division.'}
+              </span>
+            </div>
+
+            {/* Account Status */}
             <div className="form-group">
               <label className="form-label">Account Provisioning Status</label>
               <select
@@ -479,6 +601,48 @@ export const PersonCreatePage: React.FC = () => {
                 <option value="invited">Invited (Awaiting Password Setup)</option>
               </select>
             </div>
+          </div>
+
+          {/* Academic Hierarchy Path Confirmation */}
+          <div style={{
+            marginTop: '8px',
+            marginBottom: '20px',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md, 8px)',
+            background: 'var(--bg-input, rgba(255,255,255,0.03))',
+            border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            fontSize: '0.85rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <GitBranch size={16} color="var(--primary, #6366f1)" />
+              <span style={{ color: 'var(--text-secondary)' }}>Assigned Academic Path:</span>
+              <strong style={{ color: 'var(--text-main)' }}>
+                {selectedMainDept ? `${selectedMainDept.name} (${selectedMainDept.code})` : 'Unassigned'}
+              </strong>
+              {selectedSubDept ? (
+                <>
+                  <span style={{ color: 'var(--primary)', fontWeight: 700 }}>&rarr;</span>
+                  <span className="badge badge-primary" style={{ fontWeight: 600 }}>
+                    {selectedSubDept.name} ({selectedSubDept.code})
+                  </span>
+                </>
+              ) : (
+                <span className="badge badge-secondary" style={{ fontStyle: 'italic' }}>
+                  Main Division Only (No Sub-Unit)
+                </span>
+              )}
+            </div>
+
+            <span className="text-muted text-xs">
+              {selectedSubDept
+                ? `Scholar record will be filed under branch "${selectedSubDept.name}" reporting to "${selectedMainDept?.name}".`
+                : `Scholar will be enrolled at the top-level "${selectedMainDept?.name || 'Department'}" division.`}
+            </span>
           </div>
 
           {/* Conditional Role-Specific Fields */}

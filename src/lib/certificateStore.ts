@@ -115,124 +115,19 @@ function generateVerificationHash(certId: string, learnerId: string, courseId: s
   return `${hex1}${hex2}${hex3}${hex4}`.padEnd(40, 'a').slice(0, 40);
 }
 
-// Initial loader with pre-seeded rich mock certificates
 function loadInitialCertificates(): Certificate[] {
   try {
     const cached = localStorage.getItem(STORAGE_KEY_CERTIFICATES);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.filter((c: any) => !c.id?.startsWith('cert-00'));
       }
     }
   } catch (err) {
     console.error('Failed to parse cached certificates:', err);
   }
-
-  // Pre-seed default mock certificates with full metadata
-  return [
-    {
-      id: 'cert-001',
-      learnerId: 'u-007',
-      learnerName: 'Alex Thompson',
-      learnerEmail: 'alex.thompson@student.acmelearning.com',
-      courseId: 'crs-004',
-      courseName: 'TypeScript Mastery',
-      courseTitle: 'TypeScript Mastery & Advanced Type Systems',
-      issuingOrganization: 'Acme Learning Corp',
-      issueDate: '2026-08-15',
-      issuedAt: '2026-08-15T10:00:00Z',
-      status: 'active',
-      verificationUrl: '/verify-certificate/cert-001',
-      verificationHash: '9a4f8c2b7e1d5a3f6e8c0b2d4f7a1e3c8821fa5d',
-      templateId: 'standard',
-      scoreAchieved: 95,
-      completionPercentage: 100,
-      authorizedSignerName: 'Dr. James Wilson',
-      authorizedSignerTitle: 'Lead Instructor & Curriculum Director',
-      secondarySignerName: 'Sarah Chen',
-      secondarySignerTitle: 'Dean of Academic Affairs',
-      organizationId: 'org-001',
-      departmentId: 'dep-001',
-      cohortId: 'coh-001',
-    },
-    {
-      id: 'cert-002',
-      learnerId: 'u-010',
-      learnerName: 'David Kim',
-      learnerEmail: 'david.kim@student.acmelearning.com',
-      courseId: 'crs-001',
-      courseName: 'JavaScript Fundamentals',
-      courseTitle: 'JavaScript Fundamentals & Modern ESNext',
-      issuingOrganization: 'Acme Learning Corp',
-      issueDate: '2026-09-20',
-      issuedAt: '2026-09-20T14:30:00Z',
-      status: 'active',
-      verificationUrl: '/verify-certificate/cert-002',
-      verificationHash: '7b2d5f1a9e3c8821fa5d9a4f8c2b7e1d4f7a1e3c',
-      templateId: 'executive',
-      scoreAchieved: 88,
-      completionPercentage: 100,
-      authorizedSignerName: 'Dr. James Wilson',
-      authorizedSignerTitle: 'Lead Instructor',
-      secondarySignerName: 'Sarah Chen',
-      secondarySignerTitle: 'Dean of Academic Affairs',
-      organizationId: 'org-001',
-      departmentId: 'dep-001',
-      cohortId: 'coh-001',
-    },
-    {
-      id: 'cert-003',
-      learnerId: 'u-009',
-      learnerName: 'Maria Garcia',
-      learnerEmail: 'maria.garcia@student.acmelearning.com',
-      courseId: 'crs-004',
-      courseName: 'TypeScript Mastery',
-      courseTitle: 'TypeScript Mastery & Advanced Type Systems',
-      issuingOrganization: 'Acme Learning Corp',
-      issueDate: '2026-07-01',
-      issuedAt: '2026-07-01T09:00:00Z',
-      expiryDate: '2027-07-01',
-      status: 'active',
-      verificationUrl: '/verify-certificate/cert-003',
-      verificationHash: '1e3c8821fa5d9a4f8c2b7e1d4f7a1e3c7b2d5f1a',
-      templateId: 'technical',
-      scoreAchieved: 92,
-      completionPercentage: 100,
-      authorizedSignerName: 'Dr. James Wilson',
-      authorizedSignerTitle: 'Lead Curriculum Director',
-      secondarySignerName: 'Sarah Chen',
-      secondarySignerTitle: 'Dean of Academic Affairs',
-      organizationId: 'org-001',
-      departmentId: 'dep-001',
-      cohortId: 'coh-001',
-    },
-    {
-      id: 'cert-004',
-      learnerId: 'st-2',
-      learnerName: 'Marcus Vance',
-      learnerEmail: 'marcus.vance@student.acmelearning.com',
-      courseId: 'crs-002',
-      courseName: 'Advanced React Bootcamp',
-      courseTitle: 'Advanced React & Scalable Component Architecture',
-      issuingOrganization: 'Acme Learning Corp',
-      issueDate: '2026-09-10',
-      issuedAt: '2026-09-10T11:00:00Z',
-      status: 'active',
-      verificationUrl: '/verify-certificate/cert-004',
-      verificationHash: '4f7a1e3c8821fa5d9a4f8c2b7e1d5a3f6e8c0b2d',
-      templateId: 'distinction',
-      scoreAchieved: 96,
-      completionPercentage: 100,
-      authorizedSignerName: 'Dr. James Wilson',
-      authorizedSignerTitle: 'Principal Faculty',
-      secondarySignerName: 'Sarah Chen',
-      secondarySignerTitle: 'Dean of Academic Affairs',
-      organizationId: 'org-001',
-      departmentId: 'dep-001',
-      cohortId: 'coh-002',
-    },
-  ];
+  return [];
 }
 
 export const useCertificateStore = create<CertificateState>((set, get) => ({

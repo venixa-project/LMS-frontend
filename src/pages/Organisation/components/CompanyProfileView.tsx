@@ -331,7 +331,7 @@ export const CompanyProfileView: React.FC = () => {
           style={{
             fontSize: '0.8rem',
             fontWeight: 600,
-            color: fieldError ? '#ef4444' : '#94a3b8',
+            color: fieldError ? 'var(--danger, #ef4444)' : 'var(--text-secondary, #94a3b8)',
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
@@ -339,7 +339,7 @@ export const CompanyProfileView: React.FC = () => {
           }}
         >
           {label}
-          {isRequired && <span style={{ color: '#ef4444' }}>*</span>}
+          {isRequired && <span style={{ color: 'var(--danger, #ef4444)' }}>*</span>}
         </label>
 
         <input
@@ -358,19 +358,21 @@ export const CompanyProfileView: React.FC = () => {
             boxSizing: 'border-box',
             borderRadius: '8px',
             border: fieldError
-              ? '1.5px solid #ef4444'
+              ? '1.5px solid var(--danger, #ef4444)'
               : isEditing
-              ? '1px solid rgba(255, 255, 255, 0.14)'
-              : '1px solid rgba(255, 255, 255, 0.07)',
+              ? '1px solid var(--border-light)'
+              : '1px solid var(--border-subtle)',
             background: fieldError
               ? 'rgba(239, 68, 68, 0.08)'
               : isEditing
-              ? 'rgba(15, 23, 42, 0.75)'
-              : 'rgba(15, 23, 42, 0.35)',
+              ? 'var(--bg-input)'
+              : 'var(--bg-card-subtle)',
             boxShadow: fieldError
               ? '0 0 0 3px rgba(239, 68, 68, 0.2)'
+              : isEditing
+              ? 'var(--shadow-sm)'
               : 'none',
-            color: '#f8fafc',
+            color: 'var(--text-main)',
             fontSize: '0.875rem',
             padding: '0 14px',
             outline: 'none',
@@ -441,10 +443,10 @@ export const CompanyProfileView: React.FC = () => {
       {/* Single Clean Unified Box (Matching Reference Image 3) */}
       <div
         style={{
-          background: 'var(--bg-card, #0d111c)',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-md)',
           padding: '28px 32px',
           display: 'flex',
           flexDirection: 'column',
@@ -487,7 +489,7 @@ export const CompanyProfileView: React.FC = () => {
                   style={{
                     fontSize: '1.3rem',
                     fontWeight: 700,
-                    color: '#ffffff',
+                    color: 'var(--text-main)',
                     margin: 0,
                     letterSpacing: '-0.01em',
                   }}
@@ -513,15 +515,15 @@ export const CompanyProfileView: React.FC = () => {
                     fontWeight: 600,
                     padding: '2px 8px',
                     borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    color: '#94a3b8',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'var(--bg-card-subtle)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
                   {currentCompany.plan || 'Enterprise'} Plan
                 </span>
               </div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', display: 'block' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
                 Registration Date &bull; {incorporationDate || 'N/A'}
               </span>
             </div>
@@ -541,9 +543,9 @@ export const CompanyProfileView: React.FC = () => {
                     gap: '6px',
                     padding: '8px 18px',
                     borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    color: '#94a3b8',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-card-subtle)',
+                    color: 'var(--text-secondary)',
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -634,7 +636,7 @@ export const CompanyProfileView: React.FC = () => {
               style={{
                 fontSize: '0.8rem',
                 fontWeight: 600,
-                color: '#94a3b8',
+                color: 'var(--text-secondary)',
                 textAlign: 'center',
               }}
             >
@@ -649,8 +651,8 @@ export const CompanyProfileView: React.FC = () => {
                 borderRadius: '50%',
                 border: (isEditing ? logo : currentCompany.logo)
                   ? '2px solid rgba(99, 102, 241, 0.5)'
-                  : '2px dashed rgba(255, 255, 255, 0.2)',
-                background: 'rgba(15, 23, 42, 0.65)',
+                  : '2px dashed var(--border-light)',
+                background: 'var(--bg-card-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -804,9 +806,9 @@ export const CompanyProfileView: React.FC = () => {
                         type="button"
                         onClick={() => setShowRemoveConfirm(false)}
                         style={{
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          color: '#e2e8f0',
-                          border: 'none',
+                          background: 'var(--bg-card-subtle)',
+                          color: 'var(--text-secondary)',
+                          border: '1px solid var(--border-subtle)',
                           borderRadius: '4px',
                           padding: '2px 8px',
                           fontSize: '0.68rem',
@@ -910,7 +912,7 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section Divider */}
-        <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 0' }} />
+        <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
 
         {/* Section 2: Registered Office Address */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -929,7 +931,7 @@ export const CompanyProfileView: React.FC = () => {
             >
               <MapPin size={17} />
             </div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff', margin: 0 }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
               Registered Office Address
             </h3>
           </div>
@@ -980,7 +982,7 @@ export const CompanyProfileView: React.FC = () => {
         </div>
 
         {/* Section Divider */}
-        <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.08)', margin: '4px 0' }} />
+        <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '4px 0' }} />
 
         {/* Section 3: Fiscal, Operational & Headquarters Settings */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1008,7 +1010,7 @@ export const CompanyProfileView: React.FC = () => {
               >
                 <Clock size={17} />
               </div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#ffffff', margin: 0 }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
                 Fiscal, Operational & Headquarters Settings
               </h3>
             </div>
@@ -1063,15 +1065,15 @@ export const CompanyProfileView: React.FC = () => {
 
             {/* Operating Headquarters Display */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                 Operating Headquarters
               </label>
               <div
                 style={{
                   height: '42px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  background: 'rgba(15, 23, 42, 0.45)',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-card-subtle)',
                   padding: '0 14px',
                   display: 'flex',
                   alignItems: 'center',
@@ -1081,7 +1083,7 @@ export const CompanyProfileView: React.FC = () => {
               >
                 {hqBranch ? (
                   <>
-                    <span style={{ fontSize: '0.85rem', color: '#f8fafc', fontWeight: 600 }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600 }}>
                       {hqBranch.name} ({hqBranch.city}, {hqBranch.country})
                     </span>
                     <span

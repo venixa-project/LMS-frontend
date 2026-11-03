@@ -64,37 +64,17 @@ const STORAGE_KEY_ENROLLMENTS = 'venilearn_enrollments';
 // Safely load cached state from localStorage with persistence of deletions and empty catalogues
 function loadInitialCourses(): Course[] {
   try {
-    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
     const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_COURSES) : null;
 
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        if (!isInitialized && typeof window !== 'undefined') {
-          localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-        }
-        return parsed.map((c: Course) => ({
+        return parsed.filter((c: Course) => !c.id.startsWith('crs-00')).map((c: Course) => ({
           ...c,
-          organizationId: c.organizationId || 'org-001',
+          organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
         }));
       }
     }
-
-    // If marked initialized already, preserve empty catalogue (do NOT resurrect deleted demo courses!)
-    if (isInitialized) {
-      return [];
-    }
-
-    // Brand new clean installation: initialize with mockCourses tagged with default org-001
-    const seededCourses: Course[] = mockCourses.map((c) => ({
-      ...c,
-      organizationId: c.organizationId || 'org-001',
-    }));
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(seededCourses));
-    }
-    return seededCourses;
   } catch (e) {
     console.error('Failed to parse courses from storage', e);
   }
@@ -103,21 +83,19 @@ function loadInitialCourses(): Course[] {
 
 function loadInitialEnrolled(): string[] {
   try {
-    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
     const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ENROLLED) : null;
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed
+          .map((e: any) => (typeof e === 'string' ? e : e.courseId || e.id))
+          .filter((id: string) => typeof id === 'string' && !id.startsWith('crs-00'));
       }
-    }
-    if (isInitialized) {
-      return [];
     }
   } catch (e) {
     console.error('Failed to parse enrolled courses from storage', e);
   }
-  return ['crs-001', 'crs-002', 'crs-004'];
+  return [];
 }
 
 function loadInitialRequested(): string[] {
@@ -151,7 +129,7 @@ function loadInitialEnrollments(): Enrollment[] {
   } catch (e) {
     console.error('Failed to parse enrollments from storage', e);
   }
-  return mockEnrollments;
+  return [];
 }
 
 export const useCourseStore = create<CourseState>((set, get) => ({
@@ -494,7 +472,8 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         }));
 
         set((state) => {
-          const existingMap = new Map(state.courses.map((c) => [c.id, c]));
+          const cleanLocal = state.courses.filter((c) => !c.id.startsWith('crs-00'));
+          const existingMap = new Map(cleanLocal.map((c) => [c.id, c]));
           backendCourses.forEach((bc) => existingMap.set(bc.id, bc));
           const merged = Array.from(existingMap.values());
           try {
@@ -595,6 +574,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           id: c.id,
           slug: c.slug,
           status: c.status || persistedCourse.status,
+          organizationId: c.tenantId || persistedCourse.organizationId,
           modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
             id: m.id,
             title: m.title || `Module ${mIdx + 1}`,
@@ -640,6 +620,9 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   },
 
   deleteCourse: (courseId: string) => {
+    apiClient.delete(`/courses/${courseId}`).catch((err) => {
+      console.warn('Backend API delete note:', err);
+    });
     set((state) => {
       const updatedCourses = state.courses.filter((c) => c.id !== courseId);
       const updatedEnrolled = state.enrolledCourseIds.filter((id) => id !== courseId);
