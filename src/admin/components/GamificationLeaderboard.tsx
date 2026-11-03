@@ -80,7 +80,7 @@ export const GamificationLeaderboard: React.FC = () => {
       const deptName = deptObj ? deptObj.name : 'Engineering';
 
       const coursesInDept = mockCourses.filter((c) => c.departmentId === deptId);
-      const assignedCourse = coursesInDept[idx % (coursesInDept.length || 1)] || mockCourses[idx % mockCourses.length];
+      const assignedCourse = (coursesInDept.length > 0 ? coursesInDept[idx % coursesInDept.length] : null) || (mockCourses.length > 0 ? mockCourses[idx % mockCourses.length] : null);
 
       const userCerts = mockCertificates.filter((c) => c.learnerId === st.id);
       const certificationsCount = userCerts.length > 0 ? userCerts.length : (seed % 3) + 1;
@@ -106,8 +106,8 @@ export const GamificationLeaderboard: React.FC = () => {
         avatar: st.avatar,
         departmentId: deptId,
         departmentName: deptName,
-        courseId: assignedCourse.id,
-        courseTitle: assignedCourse.title,
+        courseId: assignedCourse?.id || 'crs-default',
+        courseTitle: assignedCourse?.title || 'General Curriculum',
         completedCourses: completedCoursesCount,
         certifications: certificationsCount,
         assessmentScore: assessmentScore,
