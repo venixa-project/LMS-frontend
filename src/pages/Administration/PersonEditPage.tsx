@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { peopleApi } from '../../lib/peopleApiService';
@@ -7,7 +7,7 @@ import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Building, Mail,
-  Phone, Users, Shield, GraduationCap, Award, Check, X
+  Phone, Users, Shield, GraduationCap, Award, Check, X, GitBranch
 } from 'lucide-react';
 
 export const PersonEditPage: React.FC = () => {
@@ -27,7 +27,20 @@ export const PersonEditPage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
+  
+  // Two-tiered department selection
+  const mainDepartments = useMemo(() => {
+    return departments.filter((d) => !d.parentId);
+  }, [departments]);
+
+  const [selectedMainDeptId, setSelectedMainDeptId] = useState('');
+  const [selectedSubDeptId, setSelectedSubDeptId] = useState('');
+
+  const availableSubDepartments = useMemo(() => {
+    if (!selectedMainDeptId) return [];
+    return departments.filter((d) => d.parentId === selectedMainDeptId);
+  }, [departments, selectedMainDeptId]);
+
   const [activeRole, setActiveRole] = useState<RoleName>('learner');
   const [status, setStatus] = useState<UserAccountStatus>('active');
   const [rollNo, setRollNo] = useState('');
@@ -39,6 +52,23 @@ export const PersonEditPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
 
+  const resolveDeptSelection = (rawDeptId: string) => {
+    if (!rawDeptId || departments.length === 0) return;
+    const target = departments.find((d) => d.id === rawDeptId);
+    if (!target) {
+      const firstMain = departments.find((d) => !d.parentId);
+      if (firstMain) setSelectedMainDeptId(firstMain.id);
+      return;
+    }
+    if (target.parentId) {
+      setSelectedMainDeptId(target.parentId);
+      setSelectedSubDeptId(target.id);
+    } else {
+      setSelectedMainDeptId(target.id);
+      setSelectedSubDeptId('');
+    }
+  };
+
   // Initialize fields from existing person
   useEffect(() => {
     if (existingPerson) {
@@ -46,7 +76,7 @@ export const PersonEditPage: React.FC = () => {
       setLastName(existingPerson.lastName || '');
       setEmail(existingPerson.email || '');
       setPhone(existingPerson.phone || '');
-      setDepartmentId(existingPerson.departmentId || '');
+      resolveDeptSelection(existingPerson.departmentId || '');
       setActiveRole(existingPerson.activeRole);
       setStatus(existingPerson.status);
       setRollNo(existingPerson.rollNo || '');
@@ -59,7 +89,7 @@ export const PersonEditPage: React.FC = () => {
           setLastName(p.lastName || '');
           setEmail(p.email || '');
           setPhone(p.phone || '');
-          setDepartmentId(p.departmentId || '');
+          resolveDeptSelection(p.departmentId || '');
           setActiveRole(p.activeRole);
           setStatus(p.status);
           setRollNo(p.rollNo || '');
@@ -67,7 +97,21 @@ export const PersonEditPage: React.FC = () => {
         }
       }).catch((e) => console.error(e));
     }
-  }, [existingPerson, id]);
+  }, [existingPerson, id, departments]);
+
+  const handleMainDeptChange = (newMainId: string) => {
+    setSelectedMainDeptId(newMainId);
+    const children = departments.filter((d) => d.parentId === newMainId);
+    setSelectedSubDeptId(children.length > 0 ? children[0].id : '');
+  };
+
+  const selectedMainDept = useMemo(() => {
+    return departments.find((d) => d.id === selectedMainDeptId);
+  }, [departments, selectedMainDeptId]);
+
+  const selectedSubDept = useMemo(() => {
+    return departments.find((d) => d.id === selectedSubDeptId);
+  }, [departments, selectedSubDeptId]);
 
   const isStudent = activeRole === 'student' || activeRole === 'learner';
   const isFaculty = activeRole === 'trainer' || activeRole === 'instructor';
@@ -81,6 +125,7 @@ export const PersonEditPage: React.FC = () => {
 
   const handleCancel = () => {
     // If dirty, confirm
+    const effectiveDepartmentId = selectedSubDeptId || selectedMainDeptId;
     const isDirty =
       existingPerson &&
       (firstName !== existingPerson.firstName ||
@@ -88,7 +133,7 @@ export const PersonEditPage: React.FC = () => {
         email !== existingPerson.email ||
         phone !== (existingPerson.phone || '') ||
         status !== existingPerson.status ||
-        departmentId !== (existingPerson.departmentId || ''));
+        effectiveDepartmentId !== (existingPerson.departmentId || ''));
 
     if (isDirty) {
       setShowDiscardPrompt(true);
@@ -116,6 +161,9 @@ export const PersonEditPage: React.FC = () => {
     } else if (isEmailTaken(email.trim(), id)) {
       errs.email = 'This email address is already registered to another account.';
     }
+    if (!selectedMainDeptId) {
+      errs.departmentId = 'Academic division / main department is required.';
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -126,6 +174,8 @@ export const PersonEditPage: React.FC = () => {
 
     setIsSubmitting(true);
 
+    const effectiveDepartmentId = selectedSubDeptId || selectedMainDeptId;
+
     const updatedUser: User = {
       ...existingPerson,
       firstName: firstName.trim(),
@@ -133,10 +183,10 @@ export const PersonEditPage: React.FC = () => {
       displayName: `${firstName.trim()} ${lastName.trim()}`,
       email: email.trim(),
       phone: phone.trim() || undefined,
-      departmentId,
+      departmentId: effectiveDepartmentId,
       status,
       rollNo: isStudent ? rollNo.trim() || undefined : undefined,
-      specialization: isFaculty ? specialization.trim() || undefined : undefined,
+      specialization: isFaculty ? specialization.trim() || undefined : (isStudent && selectedSubDept ? selectedSubDept.name : existingPerson.specialization),
       eligibleCourseIds: isFaculty ? selectedCourses : undefined,
       updatedAt: new Date().toISOString()
     };
@@ -335,28 +385,62 @@ export const PersonEditPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            {/* Primary Department / Academic Division */}
             <div className="form-group">
-              <label className="form-label">Department</label>
+              <label className="form-label">
+                Academic Division / Main Department <span className="required">*</span>
+              </label>
               <select
-                className="form-select"
-                value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
+                className={`form-select ${errors.departmentId ? 'input-error' : ''}`}
+                value={selectedMainDeptId}
+                onChange={(e) => handleMainDeptChange(e.target.value)}
                 disabled={isDeptsLoading}
               >
                 {isDeptsLoading ? (
-                  <option value="">Loading departments...</option>
-                ) : departments.length === 0 ? (
+                  <option value="">Loading divisions...</option>
+                ) : mainDepartments.length === 0 ? (
                   <option value="">No departments available</option>
                 ) : (
-                  departments.map((d) => (
+                  mainDepartments.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name} ({d.code}){d.parentId ? ' [Sub-Unit]' : ''}
+                      {d.name} ({d.code})
                     </option>
                   ))
                 )}
               </select>
+              {errors.departmentId && <span className="form-error-msg">{errors.departmentId}</span>}
             </div>
 
+            {/* Sub-Department / Academic Branch (Specialization) */}
+            <div className="form-group">
+              <label className="form-label">Sub-Department / Academic Branch</label>
+              <select
+                className="form-select"
+                value={selectedSubDeptId}
+                onChange={(e) => setSelectedSubDeptId(e.target.value)}
+                disabled={isDeptsLoading || availableSubDepartments.length === 0}
+              >
+                {availableSubDepartments.length === 0 ? (
+                  <option value="">No sub-units &mdash; Direct division enrollment</option>
+                ) : (
+                  <>
+                    <option value="">General Division (No Sub-Unit)</option>
+                    {availableSubDepartments.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name} ({sub.code}) [Sub-Unit]
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+              <span className="text-muted text-xs">
+                {availableSubDepartments.length > 0
+                  ? 'Assigns scholar to a specific academic branch under the parent division.'
+                  : 'This academic division has no sub-units; enrollment is directly under the division.'}
+              </span>
+            </div>
+
+            {/* Account Status */}
             <div className="form-group">
               <label className="form-label">Account Status</label>
               <select
@@ -370,6 +454,48 @@ export const PersonEditPage: React.FC = () => {
                 <option value="deactivated">Deactivated (Archived Account)</option>
               </select>
             </div>
+          </div>
+
+          {/* Academic Hierarchy Path Confirmation */}
+          <div style={{
+            marginTop: '8px',
+            marginBottom: '20px',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md, 8px)',
+            background: 'var(--bg-input, rgba(255,255,255,0.03))',
+            border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+            fontSize: '0.85rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <GitBranch size={16} color="var(--primary, #6366f1)" />
+              <span style={{ color: 'var(--text-secondary)' }}>Current Academic Path:</span>
+              <strong style={{ color: 'var(--text-main)' }}>
+                {selectedMainDept ? `${selectedMainDept.name} (${selectedMainDept.code})` : 'Unassigned'}
+              </strong>
+              {selectedSubDept ? (
+                <>
+                  <span style={{ color: 'var(--primary)', fontWeight: 700 }}>&rarr;</span>
+                  <span className="badge badge-primary" style={{ fontWeight: 600 }}>
+                    {selectedSubDept.name} ({selectedSubDept.code})
+                  </span>
+                </>
+              ) : (
+                <span className="badge badge-secondary" style={{ fontStyle: 'italic' }}>
+                  Main Division Only (No Sub-Unit)
+                </span>
+              )}
+            </div>
+
+            <span className="text-muted text-xs">
+              {selectedSubDept
+                ? `Member record is filed under branch "${selectedSubDept.name}" reporting to "${selectedMainDept?.name}".`
+                : `Member is enrolled directly under the "${selectedMainDept?.name || 'Department'}" division.`}
+            </span>
           </div>
 
           {isStudent && (

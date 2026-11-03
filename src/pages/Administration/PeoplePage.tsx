@@ -175,8 +175,11 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
     // Role filter
     const matchesRole = roleFilter === 'all' || u.activeRole === roleFilter;
 
-    // Department filter
-    const matchesDept = deptFilter === 'all' || u.departmentId === deptFilter;
+    // Department filter (matches direct assignment OR sub-departments under this parent)
+    const matchesDept =
+      deptFilter === 'all' ||
+      u.departmentId === deptFilter ||
+      departments.find((d) => d.id === u.departmentId)?.parentId === deptFilter;
 
     // Status filter
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
@@ -391,10 +394,24 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               onChange={(e) => setDeptFilter(e.target.value)}
               style={{ width: 'auto' }}
             >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-              ))}
+              <option value="all">All Departments &amp; Branches</option>
+              {departments
+                .filter((d) => !d.parentId)
+                .map((main) => {
+                  const subDepts = departments.filter((d) => d.parentId === main.id);
+                  return (
+                    <React.Fragment key={main.id}>
+                      <option value={main.id}>
+                        {main.name} ({main.code}) {subDepts.length > 0 ? `[All Branches]` : ''}
+                      </option>
+                      {subDepts.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          &nbsp;&nbsp;&nbsp;&nbsp;↳ {sub.name} ({sub.code})
+                        </option>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
             </select>
 
             {/* Status Filter */}
@@ -479,7 +496,27 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       </span>
                     </td>
 
-                    <td>{dept ? dept.name : 'Engineering & Technology'}</td>
+                    <td>
+                      {dept ? (
+                        dept.parentId ? (
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                              {dept.name} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({dept.code})</span>
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                              ↳ {departments.find((d) => d.id === dept.parentId)?.name || 'Parent Division'}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>{dept.name}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({dept.code}) &bull; Main Division</div>
+                          </div>
+                        )
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.82rem' }}>General / Unassigned</span>
+                      )}
+                    </td>
 
                     <td>
                       <span className={`badge badge-${u.status}`}>
@@ -592,7 +629,27 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       {isFaculty ? 'Trainer' : 'Platform Admin'}
                     </span>
                   </td>
-                  <td>{dept ? dept.name : 'Engineering & Technology'}</td>
+                  <td>
+                    {dept ? (
+                      dept.parentId ? (
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>
+                            {dept.name} <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({dept.code})</span>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            ↳ {departments.find((d) => d.id === dept.parentId)?.name || 'Parent Division'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.85rem' }}>{dept.name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({dept.code}) &bull; Main Division</div>
+                        </div>
+                      )
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.82rem' }}>General / Unassigned</span>
+                    )}
+                  </td>
                   <td>
                     <span className={`badge badge-${u.status}`}>
                       {u.status}
@@ -840,7 +897,15 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 <span className="badge badge-primary">{selectedUserDetail.activeRole.replace('_', ' ')}</span>
                 <span className={`badge badge-${selectedUserDetail.status}`}>{selectedUserDetail.status}</span>
                 <span className="badge badge-secondary">
-                  {departments.find((d) => d.id === selectedUserDetail.departmentId)?.name || 'General / Unassigned'}
+                  {(() => {
+                    const d = departments.find((dept) => dept.id === selectedUserDetail.departmentId);
+                    if (!d) return 'General / Unassigned';
+                    if (d.parentId) {
+                      const parent = departments.find((p) => p.id === d.parentId);
+                      return `${parent ? parent.name + ' → ' : ''}${d.name} (${d.code})`;
+                    }
+                    return `${d.name} (${d.code})`;
+                  })()}
                 </span>
               </div>
 

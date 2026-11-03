@@ -39,3 +39,4 @@ export const useDepartmentStore = create<DepartmentState>((set, get) => ({
     return get().departments.find((d) => d.id === id);
   },
 }));
+
