@@ -12,7 +12,9 @@ export const getApiBaseUrl = (): string => {
 export const API_BASE_URL = getApiBaseUrl();
 
 // Reliable streaming educational lecture video source for local media backup
-export const DEFAULT_LECTURE_STREAM_URL = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+// Uses locally hosted verified MP4 in public directory first, with external secondary fallback
+export const DEFAULT_LECTURE_STREAM_URL = '/sample_cloud_architecture_lesson.mp4';
+export const SECONDARY_LECTURE_STREAM_URL = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
 
 // In-memory registry to preserve local video files across component lifecycles in the active session
 export const activeVideoFileRegistry = new Map<string, { file: File; objectUrl: string }>();
@@ -26,6 +28,20 @@ export function registerVideoFile(id: string, file: File, objectUrl: string) {
 
 export function getActiveVideoFile(idOrName: string): { file: File; objectUrl: string } | undefined {
   return activeVideoFileRegistry.get(idOrName);
+}
+
+// In-memory registry for uploaded course documents
+export const activeDocumentFileRegistry = new Map<string, { file: File; objectUrl: string; text?: string; dataUrl?: string }>();
+
+export function registerDocumentFile(id: string, file: File, objectUrl: string, text?: string, dataUrl?: string) {
+  activeDocumentFileRegistry.set(id, { file, objectUrl, text, dataUrl });
+  if (file.name) {
+    activeDocumentFileRegistry.set(file.name, { file, objectUrl, text, dataUrl });
+  }
+}
+
+export function getActiveDocumentFile(idOrName: string): { file: File; objectUrl: string; text?: string; dataUrl?: string } | undefined {
+  return activeDocumentFileRegistry.get(idOrName);
 }
 
 export const ALLOWED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv', '.m4v'];

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { FileText, Upload, CheckCircle2, AlertCircle, X, Download, RefreshCw } from 'lucide-react';
 import { UploadedDocumentInfo } from '../../../types';
+import { registerDocumentFile } from '../../../lib/videoService';
 
 interface Props {
   document?: UploadedDocumentInfo;
@@ -55,13 +56,18 @@ export const DocumentUploadCard: React.FC<Props> = ({
       fileName.endsWith('.java') ||
       file.type.startsWith('text/');
 
+    const docId = `doc-${Date.now()}`;
+    const objectUrl = URL.createObjectURL(file);
+
     const fallbackDoc = () => {
+      registerDocumentFile(docId, file, objectUrl);
       const docInfo: UploadedDocumentInfo = {
-        id: `doc-${Date.now()}`,
+        id: docId,
         name: file.name,
         size: file.size,
         type: file.type || 'application/pdf',
         uploadedAt: new Date().toISOString(),
+        url: objectUrl,
         pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
       };
       onUpload(docInfo);
@@ -73,13 +79,15 @@ export const DocumentUploadCard: React.FC<Props> = ({
       reader.onload = (e) => {
         const text = (e.target?.result as string) || '';
         const words = text.split(/\s+/).filter(Boolean).length;
+        registerDocumentFile(docId, file, objectUrl, text);
         const docInfo: UploadedDocumentInfo = {
-          id: `doc-${Date.now()}`,
+          id: docId,
           name: file.name,
           size: file.size,
           type: file.type || 'text/plain',
           uploadedAt: new Date().toISOString(),
           text,
+          url: objectUrl,
           wordCount: words,
           charCount: text.length,
           pageCount: Math.max(1, Math.ceil(words / 350)),
@@ -89,12 +97,13 @@ export const DocumentUploadCard: React.FC<Props> = ({
       };
       reader.onerror = fallbackDoc;
       reader.readAsText(file);
-    } else if (file.size <= 3 * 1024 * 1024) {
+    } else if (file.size <= 15 * 1024 * 1024) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const dataUrl = (e.target?.result as string) || '';
+        registerDocumentFile(docId, file, objectUrl, undefined, dataUrl);
         const docInfo: UploadedDocumentInfo = {
-          id: `doc-${Date.now()}`,
+          id: docId,
           name: file.name,
           size: file.size,
           type: file.type || 'application/pdf',
@@ -108,7 +117,7 @@ export const DocumentUploadCard: React.FC<Props> = ({
       reader.onerror = fallbackDoc;
       reader.readAsDataURL(file);
     } else {
-      setTimeout(fallbackDoc, 300);
+      setTimeout(fallbackDoc, 200);
     }
   };
 
