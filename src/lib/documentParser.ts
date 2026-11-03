@@ -286,7 +286,7 @@ export async function extractDocumentContent(
       return {
         success: false,
         isScannedOrImageOnly: true,
-        error: `Document "${file.name}" appears to be a scanned image or empty. OCR (Optical Character Recognition) is required to parse scanned documents, or please upload a digital PDF/Word document with selectable text.`
+        error: `Document "${file.name}" is a scanned image or non-selectable raster PDF (0 readable words extracted). Server OCR is currently unconfigured. Please upload a digital PDF, DOCX, or TXT file with selectable text.`
       };
     }
 

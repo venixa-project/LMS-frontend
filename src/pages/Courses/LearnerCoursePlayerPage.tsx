@@ -5,16 +5,17 @@ import { useCourseStore } from '../../lib/courseStore';
 import { useCertificateStore } from '../../lib/certificateStore';
 import { generateCertificatePdf } from '../../lib/certificatePdf';
 import { mockCourses } from '../../data/mockData';
-import { StudentCoursePlayer } from './StudentCoursePlayer';
-import { Certificate } from '../../types';
+import { Certificate, QuizAssessmentConfig } from '../../types';
+import { LearnerVideoPlayer } from './components/LearnerVideoPlayer';
+import { LearnerQuizRunner } from './components/LearnerQuizRunner';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
   ChevronRight, ChevronLeft, Bookmark, Share2, Sparkles, Award,
   ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye,
-  Pause, Video
+  Pause, Video, HelpCircle
 } from 'lucide-react';
 
-const LegacyCoursePlayerPage: React.FC = () => {
+export const LearnerCoursePlayerPage: React.FC = () => {
   const { user } = useAuthStore();
   const { courses } = useCourseStore();
   const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
@@ -25,6 +26,11 @@ const LegacyCoursePlayerPage: React.FC = () => {
   const allLessons = useMemo(() => course.modules?.flatMap((m) => m.lessons) || [], [course]);
 
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
+  const [selectedAssessment, setSelectedAssessment] = useState<{
+    scope: 'module_assessment' | 'final_assessment';
+    config: QuizAssessmentConfig;
+    moduleTitle?: string;
+  } | null>(null);
 
   // Lesson completions state keyed by course
   const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>({
@@ -39,6 +45,7 @@ const LegacyCoursePlayerPage: React.FC = () => {
   useEffect(() => {
     setCurrentLessonIndex(0);
     setIsPlaying(false);
+    setSelectedAssessment(null);
   }, [course.id]);
 
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -327,90 +334,85 @@ const LegacyCoursePlayerPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
         {/* Main Content Area */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Video / Interactive Player Box */}
-          <div style={{
-            background: '#040711',
-            borderRadius: 'var(--radius-xl)',
-            overflow: 'hidden',
-            border: '1px solid var(--border-subtle)',
-            position: 'relative'
-          }}>
-            {currentLesson.type === 'video' ? (
-              <div style={{
-                height: '430px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'radial-gradient(circle at center, #1e1b4b 0%, #060913 70%)',
-                position: 'relative'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  style={{
-                    width: '68px',
-                    height: '68px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: 'var(--shadow-glow)',
-                    border: 'none',
-                    transition: 'transform 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
-                >
-                  {isPlaying ? (
-                    <Pause size={28} fill="#fff" />
-                  ) : (
-                    <Play size={28} fill="#fff" style={{ marginLeft: '4px' }} />
-                  )}
-                </button>
-                <div style={{ marginTop: '16px', fontWeight: 700, fontSize: '1rem', color: '#fff' }}>
-                  {currentLesson.title}
-                </div>
-                <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-                  {isPlaying ? 'Now Playing • HD 1080p Stream' : 'Simulated HD 1080p Stream • Captions Available'}
-                </div>
-
-                {/* Video controls bottom bar */}
-                <div style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  padding: '12px 20px',
-                  background: 'rgba(0,0,0,0.88)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '0.75rem',
-                  color: '#cbd5e1',
-                  borderTop: '1px solid rgba(255,255,255,0.08)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
-                    >
-                      {isPlaying ? <Pause size={14} fill="#cbd5e1" /> : <Play size={14} fill="#cbd5e1" />}
-                    </button>
-                    <span>{isPlaying ? '04:12' : '00:00'} / {lessonDuration}:00</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ cursor: 'pointer' }}>1.0x</span>
-                    <span style={{ cursor: 'pointer' }}>CC</span>
-                    <span style={{ background: 'rgba(255,255,255,0.12)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>1080p</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
+          {/* Video / Interactive Player / Quiz Box */}
+          {selectedAssessment ? (
+            <LearnerQuizRunner
+              quizConfig={selectedAssessment.config}
+              assessmentId={selectedAssessment.config.id}
+              courseId={course.id}
+              title={selectedAssessment.config.title}
+              onQuizPassed={(score, total) => {
+                setShowCelebration(true);
+                setTimeout(() => setShowCelebration(false), 2500);
+                if (selectedAssessment.scope === 'final_assessment') {
+                  const student = user || {
+                    id: 'u-007',
+                    displayName: 'Alex Thompson',
+                    email: 'alex.thompson@student.acmelearning.com',
+                  };
+                  const issueResult = issueCourseCertificate({
+                    course,
+                    learner: {
+                      id: student.id,
+                      name: student.displayName || 'Alex Thompson',
+                      email: student.email,
+                    },
+                    scoreAchieved: Math.round((score / total) * 100),
+                    completionPercentage: 100,
+                  });
+                  if (issueResult.success && issueResult.certificate) {
+                    setUnlockedCert(issueResult.certificate);
+                    setShowCertModal(true);
+                  }
+                }
+              }}
+            />
+          ) : currentLesson.type === 'video' ? (
+            <LearnerVideoPlayer
+              videoInfo={currentLesson.videoInfo}
+              contentUrl={currentLesson.contentUrl}
+              lessonTitle={currentLesson.title}
+              courseId={course?.id || id || ''}
+              onComplete={() => {
+                if (!completedLessonIds.includes(currentLesson.id)) {
+                  setCourseCompletionMap((prev) => ({
+                    ...prev,
+                    [course.id]: [...(prev[course.id] || []), currentLesson.id],
+                  }));
+                  setShowCelebration(true);
+                  setTimeout(() => setShowCelebration(false), 2200);
+                }
+              }}
+            />
+          ) : currentLesson.type === 'quiz' || Boolean(currentLesson.quizConfig) ? (
+            <LearnerQuizRunner
+              quizConfig={currentLesson.quizConfig}
+              assessmentId={currentLesson.quizConfig?.id}
+              courseId={course.id}
+              moduleId={currentModule?.id}
+              lessonId={currentLesson.id}
+              title={currentLesson.quizConfig?.title || currentLesson.title}
+              lessonTitle={currentLesson.title}
+              onQuizPassed={() => {
+                if (!completedLessonIds.includes(currentLesson.id)) {
+                  setCourseCompletionMap((prev) => ({
+                    ...prev,
+                    [course.id]: [...(prev[course.id] || []), currentLesson.id],
+                  }));
+                  setShowCelebration(true);
+                  setTimeout(() => setShowCelebration(false), 2200);
+                }
+              }}
+              onNextLesson={handleNext}
+            />
+          ) : (
+            <div style={{
+              background: '#040711',
+              borderRadius: 'var(--radius-xl)',
+              overflow: 'hidden',
+              border: '1px solid var(--border-subtle)',
+              position: 'relative'
+            }}>
               <div style={{ padding: '36px', minHeight: '360px', background: 'var(--bg-card)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                   <FileText size={24} color="var(--accent-cyan)" />
@@ -442,8 +444,8 @@ const LegacyCoursePlayerPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Action Row & Navigation Controls (No manual Mark as Complete button) */}
           <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', flexWrap: 'wrap', gap: '12px' }}>
@@ -632,6 +634,7 @@ const LegacyCoursePlayerPage: React.FC = () => {
                       <div
                         key={lesson.id}
                         onClick={() => {
+                          setSelectedAssessment(null);
                           setCurrentLessonIndex(lIndex);
                           setIsPlaying(false);
                         }}
@@ -673,6 +676,8 @@ const LegacyCoursePlayerPage: React.FC = () => {
                           <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             {lesson.type === 'video' ? (
                               <Video size={11} color="var(--primary)" />
+                            ) : lesson.type === 'quiz' || Boolean(lesson.quizConfig) ? (
+                              <HelpCircle size={11} color="var(--primary)" />
                             ) : (
                               <FileText size={11} color="var(--accent-cyan)" />
                             )}
@@ -683,8 +688,110 @@ const LegacyCoursePlayerPage: React.FC = () => {
                     );
                   })}
                 </div>
+
+                {/* Module Assessment Checkpoint */}
+                {module.assessment && (
+                  <div
+                    onClick={() =>
+                      setSelectedAssessment({
+                        scope: 'module_assessment',
+                        config: module.assessment!,
+                        moduleTitle: module.title,
+                      })
+                    }
+                    style={{
+                      marginTop: '6px',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      background:
+                        selectedAssessment?.config?.id === module.assessment.id
+                          ? 'rgba(99, 102, 241, 0.15)'
+                          : 'var(--bg-input)',
+                      border:
+                        selectedAssessment?.config?.id === module.assessment.id
+                          ? '1px solid var(--primary)'
+                          : '1px dashed var(--border-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <HelpCircle size={14} color="var(--primary)" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          color: 'var(--primary)',
+                        }}
+                      >
+                        {module.assessment.title || `Module ${mIdx + 1} Assessment`}
+                      </div>
+                      <div className="text-muted text-xs">
+                        {module.assessment.questions?.length || 0} Questions &bull; Checkpoint
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* Course Final Assessment */}
+            {course.finalAssessment && (
+              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
+                <div
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: 'var(--accent-purple)',
+                    textTransform: 'uppercase',
+                    marginBottom: '8px',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  Certification Final Exam
+                </div>
+                <div
+                  onClick={() =>
+                    setSelectedAssessment({
+                      scope: 'final_assessment',
+                      config: course.finalAssessment!,
+                    })
+                  }
+                  style={{
+                    padding: '12px',
+                    borderRadius: 'var(--radius-md)',
+                    background:
+                      selectedAssessment?.scope === 'final_assessment'
+                        ? 'rgba(168, 85, 247, 0.15)'
+                        : 'var(--bg-input)',
+                    border:
+                      selectedAssessment?.scope === 'final_assessment'
+                        ? '2px solid var(--accent-purple)'
+                        : '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Award size={20} color="var(--accent-purple)" />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                      {course.finalAssessment.title || 'Comprehensive Final Assessment'}
+                    </div>
+                    <div className="text-muted text-xs">
+                      {course.finalAssessment.questions?.length || 0} Questions &bull; Passing{' '}
+                      {course.finalAssessment.passingPercentage || 70}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -802,11 +909,4 @@ const LegacyCoursePlayerPage: React.FC = () => {
       )}
     </div>
   );
-};
-
-export const LearnerCoursePlayerPage: React.FC = () => {
-  const { user } = useAuthStore();
-  return user?.activeRole === 'student' || user?.activeRole === 'learner'
-    ? <StudentCoursePlayer />
-    : <LegacyCoursePlayerPage />;
 };

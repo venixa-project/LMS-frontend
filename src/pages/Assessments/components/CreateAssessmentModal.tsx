@@ -8,6 +8,7 @@
 // missing-answer review flagging, and template downloads.
 // ============================================================
 import React, { useState, useEffect, useRef } from 'react';
+import { ConfirmationModal } from '../../Courses/components/ConfirmationModal';
 import {
   X, Sparkles, PenTool, Upload, FileText, CheckCircle2, AlertTriangle,
   ArrowRight, ArrowLeft, RefreshCw, Trash2, Copy, MoveUp, MoveDown,
@@ -250,6 +251,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
   // Assessment Questions List
   const [questions, setQuestions] = useState<GeneratedQuestionSchema[]>([]);
+  const [questionToDelete, setQuestionToDelete] = useState<GeneratedQuestionSchema | null>(null);
   const [editingQId, setEditingQId] = useState<string | null>(null);
   const [regeneratingQId, setRegeneratingQId] = useState<string | null>(null);
 
@@ -833,8 +835,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   // ==============================================================
   // QUESTION LIST ACTIONS
   // ==============================================================
-  const handleDeleteQuestion = (id: string) => {
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  const confirmDeleteQuestion = () => {
+    if (!questionToDelete) return;
+    setQuestions((prev) => prev.filter((q) => q.id !== questionToDelete.id));
+    setQuestionToDelete(null);
   };
 
   const handleDuplicateQuestion = (q: GeneratedQuestionSchema) => {
@@ -4161,17 +4165,28 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteQuestion(q.id)}
+                            onClick={() => setQuestionToDelete(q)}
                             style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: 'var(--danger)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              padding: '5px 10px',
+                              borderRadius: 'var(--radius-sm, 6px)',
+                              background: 'rgba(239, 68, 68, 0.12)',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              color: '#ef4444',
                               cursor: 'pointer',
-                              padding: '4px'
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                              transition: 'all 0.15s ease',
+                              flexShrink: 0
                             }}
-                            title="Delete question"
+                            title="Delete Question"
+                            aria-label="Delete Question"
                           >
-                            <Trash2 size={15} />
+                            <Trash2 size={13} style={{ strokeWidth: 2.2 }} />
+                            <span>Delete</span>
                           </button>
                         </div>
                       </div>
@@ -5155,7 +5170,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             </div>
           </div>
         )}
-      </div>
+            <ConfirmationModal
+        isOpen={Boolean(questionToDelete)}
+        title="Delete Question"
+        message={`Are you sure you want to permanently delete this question? "${questionToDelete?.prompt?.slice(0, 90)}..." This action cannot be undone.`}
+        confirmLabel="Delete Question"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+        isDestructive={true}
+      />
     </div>
+  </div>
   );
 };

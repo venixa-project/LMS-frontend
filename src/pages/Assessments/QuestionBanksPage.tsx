@@ -7,6 +7,7 @@ import {
   Layers, Filter, Sparkles
 } from 'lucide-react';
 import { BulkUploadModal } from './components/BulkUploadModal';
+import { ConfirmationModal } from '../Courses/components/ConfirmationModal';
 import {
   getStoredQuestionBanks,
   saveStoredQuestionBanks,
@@ -19,6 +20,7 @@ import {
 export const QuestionBanksPage: React.FC = () => {
   // Repositories & Questions from persistent storage
   const [banks, setBanks] = useState<QuestionBank[]>(() => getStoredQuestionBanks());
+  const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
   const [selectedBank, setSelectedBank] = useState<QuestionBank>(() => {
     const loaded = getStoredQuestionBanks();
     return loaded[0] || {
@@ -191,10 +193,13 @@ export const QuestionBanksPage: React.FC = () => {
   };
 
   // Handle delete question
-  const handleDeleteQuestion = (questionId: string) => {
-    if (!confirm('Are you sure you want to remove this question from the repository?')) return;
+  const requestDeleteQuestion = (q: Question) => {
+    setQuestionToDelete(q);
+  };
 
-    const updated = questions.filter((q) => q.id !== questionId);
+  const confirmDeleteQuestion = () => {
+    if (!questionToDelete) return;
+    const updated = questions.filter((q) => q.id !== questionToDelete.id);
     setQuestions(updated);
     saveStoredQuestions(updated);
 
@@ -203,6 +208,7 @@ export const QuestionBanksPage: React.FC = () => {
     );
     setBanks(updatedBanks);
     saveStoredQuestionBanks(updatedBanks);
+    setQuestionToDelete(null);
   };
 
   // Handle CSV Export
@@ -501,12 +507,28 @@ export const QuestionBanksPage: React.FC = () => {
                       <Edit2 size={13} />
                     </button>
                     <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleDeleteQuestion(q.id)}
+                      className="btn btn-sm"
+                      onClick={() => requestDeleteQuestion(q)}
                       title="Delete Question"
-                      style={{ color: 'var(--danger)' }}
+                      aria-label="Delete Question"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '4px 9px',
+                        borderRadius: 'var(--radius-sm, 6px)',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.35)',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        transition: 'all 0.15s ease',
+                      }}
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={13} style={{ strokeWidth: 2.2 }} />
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
@@ -793,6 +815,16 @@ export const QuestionBanksPage: React.FC = () => {
           </div>
         </div>
       )}
+          <ConfirmationModal
+        isOpen={Boolean(questionToDelete)}
+        title="Delete Question"
+        message={`Are you sure you want to remove this question from "${selectedBank.name}"? "${questionToDelete?.prompt?.slice(0, 90)}..." This action cannot be undone.`}
+        confirmLabel="Delete Question"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+        isDestructive={true}
+      />
     </div>
   );
 };

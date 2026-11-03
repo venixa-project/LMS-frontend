@@ -5,6 +5,9 @@ import {
   ChevronDown, ChevronUp, Eye, Sparkles, Filter, Info
 } from 'lucide-react';
 import { QuizQuestionItem, QuizOption } from '../../../types';
+import { extractDocumentContent } from '../../../lib/documentParser';
+import { generateAssessmentQuestionsViaGateway } from '../../../lib/aiAssessmentService';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface Props {
   existingQuestions: QuizQuestionItem[];
@@ -34,19 +37,21 @@ export const PdfWordImportTab: React.FC<Props> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterNeedsReviewOnly, setFilterNeedsReviewOnly] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [questionToDelete, setQuestionToDelete] = useState<QuizQuestionItem | null>(null);
+  const [processingStatusText, setProcessingStatusText] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processingStages = [
     'Reading document binary & font streams...',
-    'Detecting question boundaries and numbered headings...',
-    'Segmenting multiple choice options and answer keys...',
-    'Assigning difficulty levels and parsing score weights...'
+    'Detecting headings, sections & paragraphs...',
+    'Analyzing document semantics & extracting facts...',
+    'Synthesizing curriculum questions via LMS AI Gateway...'
   ];
 
-  const handleProcessDocument = (uploadedFile: File) => {
+  const handleProcessDocument = async (uploadedFile: File) => {
     setErrorMessage(null);
     if (!uploadedFile.name.match(/\.(pdf|docx|doc|txt)$/i)) {
-      setErrorMessage('Unsupported document type. Please upload a .pdf, .docx, or .doc file.');
+      setErrorMessage('Unsupported document type. Please upload a .pdf, .docx, or .txt file.');
       return;
     }
 
@@ -58,114 +63,58 @@ export const PdfWordImportTab: React.FC<Props> = ({
     setFile(uploadedFile);
     setIsProcessing(true);
     setProcessingStage(0);
+    setProcessingStatusText(`Extracting text from "${uploadedFile.name}"...`);
 
-    // Simulate multi-stage document extraction pipeline
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      if (step < processingStages.length) {
-        setProcessingStage(step);
-      } else {
-        clearInterval(interval);
-        generateExtractedQuestions(uploadedFile.name);
+    try {
+      // 1. Real document text extraction (PDF via pdfjs-dist / DOCX via JSZip / TXT)
+      const parseResult = await extractDocumentContent(uploadedFile, (progress, stage, msg) => {
+        setProcessingStatusText(msg);
+        if (progress < 25) setProcessingStage(0);
+        else if (progress < 50) setProcessingStage(1);
+        else if (progress < 75) setProcessingStage(2);
+        else setProcessingStage(3);
+      });
+
+      if (!parseResult.success || !parseResult.docInfo?.text) {
+        setErrorMessage(parseResult.error || 'Failed to extract text from the document.');
         setIsProcessing(false);
+        return;
       }
-    }, 450);
-  };
 
-  const generateExtractedQuestions = (fileName: string) => {
-    const baseId = `doc-q-${Date.now()}`;
-    const cleanTopic = lessonTitle || moduleTitle || courseTitle || 'General Curriculum';
+      setProcessingStage(3);
+      setProcessingStatusText(`Synthesizing grounded questions from "${uploadedFile.name}" via LMS AI Gateway...`);
+      const cleanTopic = lessonTitle || moduleTitle || courseTitle || uploadedFile.name.replace(/\.[^/.]+$/, '');
 
-    // Generates realistic questions extracted from typical question paper formats
-    const mockExtracted: (QuizQuestionItem & { selected: boolean })[] = [
-      {
-        id: `${baseId}-1`,
-        prompt: `According to ${fileName}, what is the foundational boundary rule of an Aggregate Root?`,
-        type: 'single_choice',
-        options: [
-          { id: `opt-1a`, text: 'Direct access to internal boundary entities is strictly prohibited from external callers', isCorrect: true },
-          { id: `opt-1b`, text: 'Every entity inside the boundary must have its own public repository', isCorrect: false },
-          { id: `opt-1c`, text: 'Aggregates must always be persisted in in-memory caches only', isCorrect: false },
-          { id: `opt-1d`, text: 'Database foreign keys cannot exist across any microservices', isCorrect: false },
-        ],
-        points: 5,
+      // 2. Pass actual extracted document text to AI Gateway / Grounded Engine
+      const genResult = await generateAssessmentQuestionsViaGateway({
+        documentName: uploadedFile.name,
+        documentText: parseResult.docInfo.text,
+        topic: cleanTopic,
+        count: 6,
         difficulty: 'medium',
-        topic: cleanTopic,
-        explanation: 'Reference: Document Section 2.1 — Aggregate Boundary Principles.',
-        needsReview: false,
-        source: 'pdf_word',
-        selected: true
-      },
-      {
-        id: `${baseId}-2`,
-        prompt: 'Which mechanisms prevent loss of message state during network broker outages? (Select all that apply)',
-        type: 'multiple_choice',
-        options: [
-          { id: `opt-2a`, text: 'Producer idempotence configuration (enable.idempotence = true)', isCorrect: true },
-          { id: `opt-2b`, text: 'In-sync replica thresholds (min.insync.replicas >= 2)', isCorrect: true },
-          { id: `opt-2c`, text: 'Transactional Outbox pattern in relational databases', isCorrect: true },
-          { id: `opt-2d`, text: 'Disabling replication ack handshakes completely', isCorrect: false },
-        ],
-        points: 10,
-        difficulty: 'hard',
-        topic: cleanTopic,
-        explanation: 'Extracted from Document Appendix — Resilient Event Delivery.',
-        needsReview: false,
-        source: 'pdf_word',
-        selected: true
-      },
-      {
-        id: `${baseId}-3`,
-        prompt: 'Event Sourcing guarantees that application state can be completely reconstructed by replaying an immutable append-only event log.',
-        type: 'true_false',
-        options: [
-          { id: `opt-3a`, text: 'True', isCorrect: true },
-          { id: `opt-3b`, text: 'False', isCorrect: false },
-        ],
-        points: 5,
-        difficulty: 'easy',
-        topic: cleanTopic,
-        explanation: 'Extracted from Chapter 4 — Event Sourcing Paradigms.',
-        needsReview: false,
-        source: 'pdf_word',
-        selected: true
-      },
-      {
-        id: `${baseId}-4`,
-        prompt: 'Identify the trade-offs between Choreography and Orchestration in distributed Saga workflows.',
-        type: 'short_answer',
-        options: [],
-        correctAnswerText: 'Choreography avoids central coordinator single points of failure but risks cyclic dependencies; Orchestration centralizes saga logic but introduces a coordinator.',
-        points: 10,
-        difficulty: 'hard',
-        topic: cleanTopic,
-        explanation: 'Answer key uncertain in source document — administrator review recommended.',
-        needsReview: true, // Marked as Needs Review because answer key was uncertain
-        source: 'pdf_word',
-        selected: true
-      },
-      {
-        id: `${baseId}-5`,
-        prompt: 'What happens to consumer lag when partition processing exceeds consumer throughput over sustained periods?',
-        type: 'single_choice',
-        options: [
-          { id: `opt-5a`, text: 'Consumer lag increases progressively, delaying end-to-end event latency', isCorrect: false },
-          { id: `opt-5b`, text: 'The broker immediately crashes all consumer instances', isCorrect: false },
-          { id: `opt-5c`, text: 'Unprocessed messages are silently purged without warning', isCorrect: false },
-          { id: `opt-5d`, text: 'Consumer throughput automatically matches producer velocity', isCorrect: false },
-        ],
-        points: 5,
-        difficulty: 'medium',
-        topic: cleanTopic,
-        explanation: 'Source document missing explicit answer key annotation.',
-        needsReview: true, // Missing answer key detected in document
-        source: 'pdf_word',
-        selected: true
+        types: ['single_choice', 'multiple_choice', 'true_false', 'short_answer'],
+        pointsPerQuestion: 5,
+        allowGroundedFallback: true,
+      });
+
+      if (!genResult.success || genResult.questions.length === 0) {
+        setErrorMessage(genResult.error || 'No questions could be formulated from this document.');
+        setIsProcessing(false);
+        return;
       }
-    ];
 
-    setExtractedQuestions(mockExtracted);
+      const questionsWithSelection = genResult.questions.map((q) => ({
+        ...q,
+        source: 'pdf_word' as const,
+        selected: true,
+      }));
+
+      setExtractedQuestions(questionsWithSelection);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'An error occurred while processing the document.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleToggleSelectQuestion = (id: string) => {
@@ -184,8 +133,11 @@ export const PdfWordImportTab: React.FC<Props> = ({
     );
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    setExtractedQuestions(extractedQuestions.filter((q) => q.id !== id));
+  const confirmDeleteQuestion = () => {
+    if (questionToDelete) {
+      setExtractedQuestions((prev) => prev.filter((q) => q.id !== questionToDelete.id));
+      setQuestionToDelete(null);
+    }
   };
 
   const selectedCount = extractedQuestions.filter((q) => q.selected).length;
@@ -336,7 +288,7 @@ export const PdfWordImportTab: React.FC<Props> = ({
             }}
           >
             <Sparkles size={13} color="var(--accent-cyan, #06b6d4)" />
-            <span>Document extraction prototype: Questions are parsed into an editable preview before importing.</span>
+            <span>Document-Grounded Question Extraction: Questions are parsed from document text into an editable preview before importing.</span>
           </div>
         </div>
       )}
@@ -377,7 +329,7 @@ export const PdfWordImportTab: React.FC<Props> = ({
             Processing "{file?.name}"
           </div>
           <p className="text-secondary text-xs" style={{ margin: '0 auto 16px', maxWidth: '420px' }}>
-            {processingStages[processingStage]}
+            {processingStatusText || processingStages[processingStage]}
           </p>
 
           {/* Stepper Dots */}
@@ -665,12 +617,28 @@ export const PdfWordImportTab: React.FC<Props> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        className="btn-icon"
-                        style={{ color: 'var(--danger, #ef4444)' }}
-                        title="Delete question"
+                        onClick={() => setQuestionToDelete(q)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          padding: '5px 10px',
+                          borderRadius: 'var(--radius-sm, 6px)',
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          transition: 'all 0.15s ease',
+                          flexShrink: 0,
+                        }}
+                        title="Delete Question"
+                        aria-label="Delete Question"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={13} style={{ strokeWidth: 2.2 }} />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
@@ -757,6 +725,18 @@ export const PdfWordImportTab: React.FC<Props> = ({
           </div>
         </div>
       )}
+
+      {/* Question Delete Confirmation Dialog */}
+      <ConfirmationModal
+        isOpen={Boolean(questionToDelete)}
+        title="Delete Question"
+        message={`Are you sure you want to delete this question? "${questionToDelete?.prompt?.slice(0, 90)}..." This action cannot be undone.`}
+        confirmLabel="Delete Question"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+        isDestructive={true}
+      />
     </div>
   );
 };

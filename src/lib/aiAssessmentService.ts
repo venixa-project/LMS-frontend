@@ -9,8 +9,40 @@ import {
   AssessmentDifficultySetting,
   AssessmentQuestionTypeSetting,
   Question,
-  QuestionOption
+  QuestionOption,
+  QuizQuestionItem,
+  QuizOption
 } from '../types';
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
+export interface AIProviderStatus {
+  configured: boolean;
+  provider: 'gemini' | 'openai' | 'none';
+  name: string;
+  model: string;
+}
+
+export interface AIGatewayQueryParams {
+  topic?: string;
+  documentText?: string;
+  documentName?: string;
+  count?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  types?: ('single_choice' | 'multiple_choice' | 'true_false' | 'short_answer')[];
+  pointsPerQuestion?: number;
+  customPrompt?: string;
+  allowGroundedFallback?: boolean;
+}
+
+export interface AIGatewayResult {
+  success: boolean;
+  questions: QuizQuestionItem[];
+  providerUsed: string;
+  isGroundedFallback: boolean;
+  error?: string;
+}
 
 export interface GeneratedQuestionSchema {
   id: string;
@@ -135,7 +167,7 @@ export function getActiveAIProviderInfo(): {
   }
 
   return {
-    name: 'VeniLearn Grounded Document Parsing Engine (Local AI / Zero API Mode)',
+    name: 'Local Grounded Semantic Engine (Offline / Zero API Mode)',
     configured: false,
     type: 'local_grounded'
   };
@@ -293,172 +325,277 @@ Output JSON format: Array of questions with id, type, prompt, options (for choic
 function generateViaLocalGroundedEngine(
   config: AIGenerationConfig
 ): GeneratedQuestionSchema[] {
-  const text = config.documentText;
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const text = config.documentText || '';
+  const cleanText = text.replace(/\r\n/g, '\n').trim();
 
-  // Extract sentences with substantial semantic content
-  const sentences = text
+  const sentences = cleanText
     .split(/(?<=[.?!])\s+/)
     .map((s) => s.trim().replace(/\s+/g, ' '))
-    .filter((s) => s.length > 25 && s.length < 250);
+    .filter((s) => s.length >= 30 && s.length <= 320 && !s.startsWith('http'));
 
-  // Extract headings or section indicators
-  const headings = lines.filter((l) =>
-    l.length < 80 &&
-    (l.toUpperCase() === l || /^[0-9]+(\.[0-9]+)*\s+[A-Z]/.test(l) || /^(Chapter|Section|Module|Unit|Topic|Part)\b/i.test(l))
-  );
+  if (sentences.length === 0) {
+    throw new Error('Document does not contain sufficient complete sentences to extract questions.');
+  }
 
-  const fallbackHeadings = headings.length > 0
-    ? headings
-    : [config.documentName.replace(/\.[^/.]+$/, ''), 'Core Concepts', 'Detailed Principles', 'Application Analysis'];
+  const headings = cleanText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 3 && l.length < 80 && (l === l.toUpperCase() || /^[0-9]+(\.[0-9]+)*\s+[A-Z]/.test(l)));
 
-  // Identify definition-like sentences (e.g., "X is defined as...", "X refers to...", "X represents...")
-  const definitionCandidates = sentences.filter((s) =>
-    /\b(is defined as|refers to|means|is the process of|consists of|represents|is characterized by|is a|are)\b/i.test(s)
-  );
+  const topicLabel = config.documentName.replace(/\.[^/.]+$/, '') || headings[0] || 'Curriculum Subject';
 
-  // Identify key term candidates
-  const keyTerms: { term: string; definition: string }[] = [];
-  definitionCandidates.forEach((sentence) => {
-    const match = sentence.match(/^([A-Z][a-zA-Z0-9\s-]{2,35})\s+(?:is|refers to|means|is defined as|represents)\s+(.+)$/i);
-    if (match && match[1] && match[2]) {
-      keyTerms.push({
-        term: match[1].trim(),
-        definition: match[2].trim()
-      });
+  interface Proposition {
+    term: string;
+    predicate: string;
+    sentence: string;
+    type: 'definition' | 'action' | 'context' | 'statement';
+  }
+
+  const cleanTermAndPredicate = (rawTerm: string, rawPredicate: string) => {
+    let term = rawTerm
+      .replace(/^the\s+/i, '')
+      .replace(/\s+(and|or|which|that|in|to|for|with|of|is|are)$/i, '')
+      .trim();
+    if (term.length > 0) {
+      term = term.charAt(0).toUpperCase() + term.slice(1);
     }
-  });
 
-  const availableTypes = config.questionTypes.length > 0
-    ? config.questionTypes
-    : (['single_choice', 'true_false', 'multiple_choice', 'short_answer', 'essay'] as AssessmentQuestionTypeSetting[]);
+    let predicate = rawPredicate
+      .replace(/^[\s,;]+/, '')
+      .replace(/[.]+$/, '')
+      .trim();
+    if (predicate.length > 140) {
+      predicate = predicate.slice(0, 135).replace(/\s+\S*$/, '') + '...';
+    }
+    return { term, predicate };
+  };
 
-  const difficulties: ('easy' | 'medium' | 'hard')[] = [];
-  for (let i = 0; i < config.questionCount; i++) {
-    if (config.difficulty === 'mixed') {
-      const cycle = i % 3;
-      difficulties.push(cycle === 0 ? 'easy' : cycle === 1 ? 'medium' : 'hard');
-    } else {
-      difficulties.push(config.difficulty as 'easy' | 'medium' | 'hard');
+  const propositions: Proposition[] = [];
+  const termMap = new Map<string, string>();
+
+  for (const s of sentences) {
+    let matched = false;
+
+    let m = s.match(
+      /^([A-Z][A-Za-z0-9\s_-]{2,40})\s+(?:is defined as|is the process of|is characterized by|is a|is an|is|are|refers to|represents)\s+(.+)$/i
+    );
+    if (m && m[1] && m[2]) {
+      const { term, predicate } = cleanTermAndPredicate(m[1], m[2]);
+      if (term && predicate.length >= 10) {
+        propositions.push({ term, predicate, sentence: s, type: 'definition' });
+        termMap.set(term, predicate);
+        matched = true;
+      }
+    }
+
+    if (!matched) {
+      m = s.match(
+        /^([A-Z][A-Za-z0-9\s_-]{2,40})\s+(operates|produces|converts|occurs|takes place|generates|releases|consists of|uses|catalyzes|transfers|establishes|enables|requires|inhibits|regulates)\s+(.+)$/i
+      );
+      if (m && m[1] && m[2] && m[3]) {
+        const { term, predicate } = cleanTermAndPredicate(m[1], `${m[2]} ${m[3]}`);
+        if (term && predicate.length >= 10) {
+          propositions.push({ term, predicate, sentence: s, type: 'action' });
+          termMap.set(term, predicate);
+          matched = true;
+        }
+      }
+    }
+
+    if (!matched) {
+      m = s.match(/^(?:During|In)\s+([a-z0-9\s_-]{2,40}),\s+(.+)$/i);
+      if (m && m[1] && m[2]) {
+        const { term, predicate } = cleanTermAndPredicate(m[1], m[2]);
+        if (term && predicate.length >= 10) {
+          propositions.push({ term, predicate, sentence: s, type: 'context' });
+          termMap.set(term, predicate);
+          matched = true;
+        }
+      }
+    }
+
+    if (!matched) {
+      const capMatch = s.match(/\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b/);
+      if (capMatch && capMatch[1] && capMatch[1].length > 3) {
+        const rawPred = s.replace(capMatch[1], '').trim();
+        const { term, predicate } = cleanTermAndPredicate(capMatch[1], rawPred);
+        if (term && predicate.length >= 10) {
+          propositions.push({ term, predicate, sentence: s, type: 'statement' });
+          termMap.set(term, predicate);
+        }
+      }
     }
   }
+
+  if (propositions.length === 0) {
+    sentences.forEach((s) => {
+      const words = s.split(' ');
+      const term = words.slice(0, Math.min(3, words.length)).join(' ');
+      const predicate = words.slice(3).join(' ') || s;
+      propositions.push({ term, predicate, sentence: s, type: 'statement' });
+      termMap.set(term, predicate);
+    });
+  }
+
+  const allTerms = Array.from(termMap.keys());
+  const allPredicates = Array.from(termMap.values());
+  const availableTypes = config.questionTypes.length > 0
+    ? config.questionTypes
+    : (['single_choice', 'multiple_choice', 'true_false', 'short_answer'] as AssessmentQuestionTypeSetting[]);
+
+  const formatOptText = (txt: string) => {
+    const trimmed = txt.trim().replace(/[.]+$/, '');
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  };
 
   const generatedQuestions: GeneratedQuestionSchema[] = [];
 
   for (let i = 0; i < config.questionCount; i++) {
     const targetType = availableTypes[i % availableTypes.length];
-    const difficulty = difficulties[i];
-    const heading = fallbackHeadings[i % fallbackHeadings.length];
-    const sentenceIndex = (i * 2) % Math.max(1, sentences.length);
-    const sourceSentence = sentences[sentenceIndex] || `Key subject matter regarding ${heading} in the curriculum.`;
-    const altSentence1 = sentences[(sentenceIndex + 1) % Math.max(1, sentences.length)] || 'Alternative contextual principle.';
-    const altSentence2 = sentences[(sentenceIndex + 2) % Math.max(1, sentences.length)] || 'Secondary evaluation metric.';
+    const difficulty = (config.difficulty === 'mixed'
+      ? (i % 3 === 0 ? 'easy' : i % 3 === 1 ? 'medium' : 'hard')
+      : config.difficulty) as 'easy' | 'medium' | 'hard';
 
+    const prop = propositions[i % propositions.length];
     const qId = `gen-q-${Date.now()}-${i + 1}`;
-    let question: GeneratedQuestionSchema;
 
     if (targetType === 'single_choice') {
-      const termPair = keyTerms[i % Math.max(1, keyTerms.length)];
-      if (termPair) {
-        question = {
+      const isReverse = i % 2 === 1 && allTerms.length >= 4;
+
+      if (isReverse) {
+        const prompt = `Which of the following biological or technical components ${prop.predicate}?`;
+        const otherTerms = allTerms.filter((t) => t.toLowerCase() !== prop.term.toLowerCase());
+        const d1 = otherTerms[0] || 'Secondary catalytic pathway';
+        const d2 = otherTerms[1] || 'Auxiliary transport mechanism';
+        const d3 = otherTerms[2] || 'Unrelated metabolic substrate';
+
+        const rawOpts = [
+          { id: `opt-${i}-1`, text: formatOptText(prop.term), isCorrect: true },
+          { id: `opt-${i}-2`, text: formatOptText(d1), isCorrect: false },
+          { id: `opt-${i}-3`, text: formatOptText(d2), isCorrect: false },
+          { id: `opt-${i}-4`, text: formatOptText(d3), isCorrect: false },
+        ].sort(() => 0.5 - Math.random());
+
+        generatedQuestions.push({
           id: qId,
           type: 'single_choice',
-          prompt: `According to the document section "${heading}", what is the definition of "${termPair.term}"?`,
+          prompt,
           difficulty,
           points: difficulty === 'easy' ? 5 : difficulty === 'medium' ? 10 : 15,
-          topic: heading,
-          explanation: `Document Grounding: "${termPair.term} ${termPair.definition}"`,
-          options: [
-            { id: `opt-${i}-1`, text: termPair.definition.slice(0, 140), isCorrect: true },
-            { id: `opt-${i}-2`, text: `A secondary mechanism unrelated to ${termPair.term} processes.`, isCorrect: false },
-            { id: `opt-${i}-3`, text: `An outdated baseline deprecated in modern implementations.`, isCorrect: false },
-            { id: `opt-${i}-4`, text: `A metric that measures peripheral network latency exclusively.`, isCorrect: false }
-          ]
-        };
+          topic: prop.term,
+          explanation: `Document Grounding: "${prop.sentence}"`,
+          options: rawOpts,
+        });
       } else {
-        const words = sourceSentence.split(' ');
-        const keyChunk = words.slice(0, Math.min(6, words.length)).join(' ');
-        question = {
+        const prompt = `According to the curriculum text, which of the following accurately describes "${prop.term}"?`;
+        const otherPreds = allPredicates.filter((p) => p !== prop.predicate);
+        const d1 = otherPreds[0] || `Regulates intracellular or structural states independent of ${prop.term}`;
+        const d2 = otherPreds[1] || 'Inactivates standard functional mechanisms during baseline operation';
+        const d3 = otherPreds[2] || `Directly bypasses ${prop.term} processes without state transitions`;
+
+        const rawOpts = [
+          { id: `opt-${i}-1`, text: formatOptText(prop.predicate), isCorrect: true },
+          { id: `opt-${i}-2`, text: formatOptText(d1), isCorrect: false },
+          { id: `opt-${i}-3`, text: formatOptText(d2), isCorrect: false },
+          { id: `opt-${i}-4`, text: formatOptText(d3), isCorrect: false },
+        ].sort(() => 0.5 - Math.random());
+
+        generatedQuestions.push({
           id: qId,
           type: 'single_choice',
-          prompt: `Based on the uploaded document text concerning "${heading}", which statement is correct?`,
+          prompt,
           difficulty,
           points: difficulty === 'easy' ? 5 : difficulty === 'medium' ? 10 : 15,
-          topic: heading,
-          explanation: `Grounded in document: "${sourceSentence}"`,
-          options: [
-            { id: `opt-${i}-1`, text: sourceSentence, isCorrect: true },
-            { id: `opt-${i}-2`, text: `The document explicitly refutes ${keyChunk} in foundational modules.`, isCorrect: false },
-            { id: `opt-${i}-3`, text: `The described protocol operates without consideration of ${heading}.`, isCorrect: false },
-            { id: `opt-${i}-4`, text: `The procedure is strictly optional and has been superseded.`, isCorrect: false }
-          ]
-        };
+          topic: prop.term,
+          explanation: `Document Grounding: "${prop.sentence}"`,
+          options: rawOpts,
+        });
       }
     } else if (targetType === 'multiple_choice') {
-      question = {
+      const nextProp = propositions[(i + 1) % propositions.length];
+      const correct1 = formatOptText(prop.sentence.length < 130 ? prop.sentence : `${prop.term} ${prop.predicate}`);
+      const correct2 = formatOptText(nextProp.sentence.length < 130 ? nextProp.sentence : `${nextProp.term} ${nextProp.predicate}`);
+
+      const distractor1 = formatOptText(`${prop.term} is completely non-functional and bypassed during standard operations`);
+      const distractor2 = formatOptText(`${nextProp.term} operates inversely without any state transitions or interactions`);
+
+      const rawOpts = [
+        { id: `opt-${i}-1`, text: correct1, isCorrect: true },
+        { id: `opt-${i}-2`, text: correct2, isCorrect: true },
+        { id: `opt-${i}-3`, text: distractor1, isCorrect: false },
+        { id: `opt-${i}-4`, text: distractor2, isCorrect: false },
+      ].sort(() => 0.5 - Math.random());
+
+      generatedQuestions.push({
         id: qId,
         type: 'multiple_choice',
-        prompt: `Which of the following aspects of "${heading}" are explicitly affirmed in the uploaded study material? (Select all that apply)`,
+        prompt: `Which of the following aspects of "${topicLabel}" are explicitly affirmed in the study material? (Select all that apply)`,
         difficulty,
         points: difficulty === 'easy' ? 10 : difficulty === 'medium' ? 15 : 20,
-        topic: heading,
-        explanation: `Document Grounding:\n1. ${sourceSentence}\n2. ${altSentence1}`,
-        options: [
-          { id: `opt-${i}-1`, text: sourceSentence, isCorrect: true },
-          { id: `opt-${i}-2`, text: altSentence1, isCorrect: true },
-          { id: `opt-${i}-3`, text: `This specification applies only to unauthenticated external public guests.`, isCorrect: false },
-          { id: `opt-${i}-4`, text: `The architecture prohibits distributed data replication across zones.`, isCorrect: false }
-        ]
-      };
+        topic: topicLabel,
+        explanation: `Document Grounding:\n1. "${prop.sentence}"\n2. "${nextProp.sentence}"`,
+        options: rawOpts,
+      });
     } else if (targetType === 'true_false') {
       const isTrue = i % 2 === 0;
-      question = {
+      let promptText = '';
+      let explanationText = '';
+
+      if (isTrue) {
+        promptText = prop.sentence;
+        explanationText = `Directly confirmed by document statement: "${prop.sentence}"`;
+      } else {
+        const otherTerm = allTerms.find((t) => t.toLowerCase() !== prop.term.toLowerCase()) || 'unrelated modules';
+        promptText = prop.sentence
+          .replace(new RegExp(`\\b${prop.term}\\b`, 'i'), otherTerm)
+          .replace(/\b(produces|generates|creates|yields)\b/i, 'inhibits')
+          .replace(/\b(increases|accelerates|enhances)\b/i, 'diminishes')
+          .replace(/\b(aerobic|anaerobic)\b/i, (m) => (m.toLowerCase() === 'aerobic' ? 'strictly anaerobic' : 'strictly aerobic'));
+
+        if (promptText === prop.sentence) {
+          promptText = `According to the document, ${prop.term} does not participate in or affect ${topicLabel}.`;
+        }
+        explanationText = `The source document states the contrary: "${prop.sentence}"`;
+      }
+
+      generatedQuestions.push({
         id: qId,
         type: 'true_false',
-        prompt: isTrue
-          ? `True or False: According to the document, ${sourceSentence}`
-          : `True or False: According to the document, ${heading} strictly requires that no automated validation ever occur.`,
+        prompt: promptText,
         difficulty,
         points: 5,
-        topic: heading,
-        explanation: isTrue
-          ? `Grounded in document statement: "${sourceSentence}"`
-          : `False. The document establishes that ${sourceSentence}`,
+        topic: prop.term,
+        explanation: explanationText,
         options: [
           { id: `opt-${i}-t`, text: 'True', isCorrect: isTrue },
-          { id: `opt-${i}-f`, text: 'False', isCorrect: !isTrue }
-        ]
-      };
+          { id: `opt-${i}-f`, text: 'False', isCorrect: !isTrue },
+        ],
+      });
     } else if (targetType === 'short_answer') {
-      question = {
+      const conciseAnswer = `${prop.term} ${prop.predicate}.`;
+      generatedQuestions.push({
         id: qId,
         type: 'short_answer',
-        prompt: `Briefly summarize the primary principle or outcome associated with "${heading}" as described in the source document.`,
+        prompt: `Briefly summarize the primary function and outcome of "${prop.term}" as described in the source document.`,
         difficulty,
         points: difficulty === 'easy' ? 5 : 10,
-        topic: heading,
-        correctAnswer: sourceSentence,
-        explanation: `Document Source: "${sourceSentence}"`,
-        rubric: `Award full marks if the student accurately cites the main principle: "${sourceSentence.slice(0, 100)}..."`
-      };
+        topic: prop.term,
+        correctAnswer: conciseAnswer,
+        explanation: `Document Source: "${prop.sentence}"`,
+        rubric: `Award full marks if response accurately describes: "${prop.predicate}".`,
+      });
     } else {
-      // essay / descriptive
-      question = {
+      generatedQuestions.push({
         id: qId,
         type: 'essay',
-        prompt: `Provide a detailed critical analysis of "${heading}" based on the uploaded curriculum text. Discuss its implementation, trade-offs, and relationship to "${altSentence1.slice(0, 80)}...".`,
+        prompt: `Provide a detailed critical analysis of "${prop.term}" based on the uploaded curriculum text. Discuss its implementation and relationship to "${topicLabel}".`,
         difficulty,
         points: difficulty === 'easy' ? 15 : difficulty === 'medium' ? 20 : 25,
-        topic: heading,
-        explanation: `Comprehensive assessment of ${heading}. Relevant document excerpts:\n• ${sourceSentence}\n• ${altSentence1}\n• ${altSentence2}`,
-        rubric: `Scoring Criteria (Total Marks: ${difficulty === 'easy' ? 15 : 20}):\n1. Core understanding of ${heading} (40%)\n2. Accurate citations of document principles (30%)\n3. Critical analysis and application reasoning (30%)`
-      };
+        topic: prop.term,
+        explanation: `Grounded in document: "${prop.sentence}"`,
+        rubric: `Scoring Criteria:\n1. Core understanding of ${prop.term} (40%)\n2. Accurate citations of document principles (30%)\n3. Critical analysis and application reasoning (30%)`,
+      });
     }
-
-    generatedQuestions.push(question);
   }
 
   return generatedQuestions;
@@ -669,5 +806,149 @@ export function convertSchemaToQuestion(
     status: 'published',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Retrieve auth context token and tenant ID from localStorage session
+ */
+function getAuthContext(): { token: string; tenantId: string } {
+  try {
+    const raw = localStorage.getItem('venilearn_auth_session');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        token: parsed.token || 'venilearn-token-admin-dev',
+        tenantId: parsed.tenantId || '66206e39-2029-4ce6-8be1-cfa7176fb79f',
+      };
+    }
+  } catch {}
+  return {
+    token: 'venilearn-token-trainer-dev',
+    tenantId: '66206e39-2029-4ce6-8be1-cfa7176fb79f',
+  };
+}
+
+/**
+ * Query LMS Backend AI Gateway Provider Status (GET /api/v1/ai/provider-status)
+ */
+export async function fetchAIProviderStatus(): Promise<AIProviderStatus> {
+  const { token, tenantId } = getAuthContext();
+  try {
+    const res = await fetch(`${API_BASE_URL}/ai/provider-status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': tenantId,
+      },
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) {
+        return json.data as AIProviderStatus;
+      }
+    }
+  } catch (err) {
+    console.warn('Unable to reach backend AI provider status endpoint, using local detection:', err);
+  }
+
+  // Fallback to local detector
+  const local = getActiveAIProviderInfo();
+  return {
+    configured: local.configured,
+    provider: local.type === 'gemini' ? 'gemini' : local.type === 'openai' ? 'openai' : 'none',
+    name: local.name,
+    model: local.type === 'gemini' ? 'gemini-1.5-flash' : local.type === 'openai' ? 'gpt-4o-mini' : 'local-grounded-v2',
+  };
+}
+
+/**
+ * Call LMS Backend AI Gateway to generate questions (POST /api/v1/ai/generate-questions)
+ * Falls back to high-fidelity client-side grounded document engine if backend is offline.
+ */
+export async function generateAssessmentQuestionsViaGateway(
+  params: AIGatewayQueryParams
+): Promise<AIGatewayResult> {
+  const { token, tenantId } = getAuthContext();
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/ai/generate-questions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-Tenant-ID': tenantId,
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data && Array.isArray(json.data.questions)) {
+        const quizQuestions: QuizQuestionItem[] = json.data.questions.map((q: any, idx: number) => ({
+          id: q.id || `q-ai-${Date.now()}-${idx + 1}`,
+          prompt: q.prompt,
+          type: q.type || 'single_choice',
+          options: (q.options || []).map((opt: any, oIdx: number) => ({
+            id: opt.id || `opt-${idx}-${oIdx + 1}`,
+            text: opt.text,
+            isCorrect: Boolean(opt.isCorrect),
+          })),
+          points: q.points || (q.difficulty === 'hard' ? 10 : q.difficulty === 'medium' ? 5 : 2),
+          explanation: q.explanation || 'Grounded in uploaded curriculum reading.',
+          difficulty: q.difficulty || params.difficulty || 'medium',
+          topic: q.topic || params.topic || 'Curriculum Analysis',
+          correctAnswerText: q.correctAnswer || q.modelAnswer || (q.options?.find((o: any) => o.isCorrect)?.text),
+          needsReview: Boolean(q.needsReview),
+          source: 'ai',
+        }));
+
+        return {
+          success: true,
+          questions: quizQuestions,
+          providerUsed: json.data.providerUsed || 'LMS AI Gateway',
+          isGroundedFallback: Boolean(json.data.isGroundedFallback),
+        };
+      }
+    }
+  } catch (networkErr) {
+    console.warn('Network error reaching LMS AI gateway, activating local grounded engine fallback:', networkErr);
+  }
+
+  // High-fidelity local grounded extraction fallback
+  const localConfig: AIGenerationConfig = {
+    documentName: params.documentName || 'Course Document',
+    documentText: params.documentText || params.topic || 'Curriculum Overview',
+    difficulty: (params.difficulty as any) || 'medium',
+    questionCount: params.count || 5,
+    questionTypes: (params.types as any) || ['single_choice', 'multiple_choice', 'true_false', 'short_answer'],
+  };
+
+  const localRaw = generateViaLocalGroundedEngine(localConfig);
+  const quizQuestions: QuizQuestionItem[] = localRaw.map((q, idx) => ({
+    id: q.id || `q-grounded-${Date.now()}-${idx + 1}`,
+    prompt: q.prompt,
+    type: q.type as any,
+    options: (q.options || []).map((opt, oIdx) => ({
+      id: opt.id || `opt-${idx}-${oIdx + 1}`,
+      text: opt.text,
+      isCorrect: Boolean(opt.isCorrect),
+    })),
+    points: q.points,
+    explanation: q.explanation,
+    difficulty: q.difficulty,
+    topic: q.topic || params.topic || 'Subject Matter',
+    correctAnswerText: q.correctAnswer,
+    needsReview: false,
+    source: 'ai',
+  }));
+
+  return {
+    success: true,
+    questions: quizQuestions,
+    providerUsed: 'VeniLearn Grounded Document Parsing Engine (Semantic Fallback)',
+    isGroundedFallback: true,
   };
 }

@@ -234,6 +234,24 @@ export interface QuizQuestionItem {
   source?: 'manual' | 'ai' | 'excel_csv' | 'pdf_word' | 'question_bank';
 }
 
+export interface VideoLessonInfo {
+  id: string;
+  sourceType: 'upload' | 'youtube' | 'vimeo' | 'external';
+  title?: string;
+  description?: string;
+  fileName?: string;
+  originalName?: string;
+  fileSize?: number;
+  durationSeconds?: number;
+  durationFormatted?: string;
+  mimeType?: string;
+  url: string;
+  embedUrl?: string;
+  videoId?: string;
+  thumbnailUrl?: string;
+  uploadedAt?: string;
+}
+
 export interface UploadedDocumentInfo {
   id: string;
   name: string;
@@ -293,6 +311,7 @@ export interface Lesson {
   contentUrl?: string;
   quizConfig?: QuizAssessmentConfig;
   uploadedDocument?: UploadedDocumentInfo;
+  videoInfo?: VideoLessonInfo;
 }
 
 // --- Learning Path ---
