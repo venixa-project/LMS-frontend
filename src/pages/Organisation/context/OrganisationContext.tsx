@@ -48,6 +48,26 @@ interface OrganisationContextType {
   setHeadquartersBranch: (branchId: string) => { success: boolean; message: string };
   departments: Department[];
   setDepartments: React.Dispatch<React.SetStateAction<Department[]>>;
+  createDepartment: (dept: {
+    name: string;
+    code: string;
+    parentId?: string;
+    headUserId?: string;
+    costCenter?: string;
+    description?: string;
+  }) => Promise<Department>;
+  updateDepartment: (
+    id: string,
+    updates: {
+      name?: string;
+      code?: string;
+      parentId?: string | null;
+      headUserId?: string | null;
+      costCenter?: string | null;
+      description?: string | null;
+    }
+  ) => Promise<Department>;
+  deleteDepartment: (id: string) => Promise<void>;
   designations: Designation[];
   setDesignations: React.Dispatch<React.SetStateAction<Designation[]>>;
   employees: Employee[];
@@ -338,6 +358,93 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return { success: true, message: `${targetBranch.name} set as headquarters` };
   };
 
+  // Explicit async department operations that guarantee persistence
+  const createDepartment = async (deptData: {
+    name: string;
+    code: string;
+    parentId?: string;
+    headUserId?: string;
+    costCenter?: string;
+    description?: string;
+  }): Promise<Department> => {
+    const payload = {
+      name: deptData.name.trim(),
+      code: deptData.code.trim(),
+      parentId: deptData.parentId || undefined,
+      headUserId: deptData.headUserId || undefined,
+      costCenter: deptData.costCenter?.trim() || undefined,
+      description: deptData.description?.trim() || undefined,
+    };
+
+    const created = await organisationApi.createDepartment(payload);
+    if (!created || !created.id) {
+      throw new Error('Failed to create department: invalid response from server');
+    }
+
+    const newDept: Department = {
+      id: created.id,
+      companyId: currentCompany.id || 'comp-1',
+      name: created.name,
+      code: created.code,
+      headId: created.headUserId || created.headId || '',
+      costCenter: created.costCenter || '',
+      description: created.description || '',
+      parentId: created.parentId || '',
+      status: (created.status as any) || 'Active',
+    };
+
+    setDepartmentsState((prev) => [newDept, ...prev.filter((d) => d.id !== newDept.id)]);
+    return newDept;
+  };
+
+  const updateDepartment = async (
+    id: string,
+    updates: {
+      name?: string;
+      code?: string;
+      parentId?: string | null;
+      headUserId?: string | null;
+      costCenter?: string | null;
+      description?: string | null;
+    }
+  ): Promise<Department> => {
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.code !== undefined) payload.code = updates.code.trim();
+    if (updates.parentId !== undefined) payload.parentId = updates.parentId || null;
+    if (updates.headUserId !== undefined) payload.headUserId = updates.headUserId || null;
+    if (updates.costCenter !== undefined) payload.costCenter = updates.costCenter?.trim() || null;
+    if (updates.description !== undefined) payload.description = updates.description?.trim() || null;
+
+    const res = await organisationApi.updateDepartment(id, payload);
+
+    let updatedDept: Department;
+    setDepartmentsState((prev) => {
+      return prev.map((d) => {
+        if (d.id === id) {
+          updatedDept = {
+            ...d,
+            name: updates.name !== undefined ? updates.name.trim() : d.name,
+            code: updates.code !== undefined ? updates.code.trim() : d.code,
+            parentId: updates.parentId !== undefined ? (updates.parentId || '') : d.parentId,
+            headId: updates.headUserId !== undefined ? (updates.headUserId || '') : d.headId,
+            costCenter: updates.costCenter !== undefined ? (updates.costCenter || '') : d.costCenter,
+            description: updates.description !== undefined ? (updates.description || '') : d.description,
+          };
+          return updatedDept;
+        }
+        return d;
+      });
+    });
+
+    return updatedDept!;
+  };
+
+  const deleteDepartment = async (id: string): Promise<void> => {
+    await organisationApi.deleteDepartment(id);
+    setDepartmentsState((prev) => prev.filter((d) => d.id !== id));
+  };
+
   // Set Departments and persist
   const setDepartments: React.Dispatch<React.SetStateAction<Department[]>> = (action) => {
     setDepartmentsState((prev) => {
@@ -422,6 +529,9 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setHeadquartersBranch,
         departments,
         setDepartments,
+        createDepartment,
+        updateDepartment,
+        deleteDepartment,
         designations,
         setDesignations,
         employees,
