@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { peopleApi } from '../../lib/peopleApiService';
-import { mockDepartments, mockCourses } from '../../data/mockData';
+import { mockCourses } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Building, Mail,
@@ -13,6 +14,11 @@ export const PersonEditPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getUserById, updateUser, isEmailTaken } = usePeopleStore();
+  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   const existingPerson = id ? getUserById(id) : undefined;
 
@@ -21,7 +27,7 @@ export const PersonEditPage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [departmentId, setDepartmentId] = useState('dep-001');
+  const [departmentId, setDepartmentId] = useState('');
   const [activeRole, setActiveRole] = useState<RoleName>('learner');
   const [status, setStatus] = useState<UserAccountStatus>('active');
   const [rollNo, setRollNo] = useState('');
@@ -40,7 +46,7 @@ export const PersonEditPage: React.FC = () => {
       setLastName(existingPerson.lastName || '');
       setEmail(existingPerson.email || '');
       setPhone(existingPerson.phone || '');
-      setDepartmentId(existingPerson.departmentId || 'dep-001');
+      setDepartmentId(existingPerson.departmentId || '');
       setActiveRole(existingPerson.activeRole);
       setStatus(existingPerson.status);
       setRollNo(existingPerson.rollNo || '');
@@ -53,7 +59,7 @@ export const PersonEditPage: React.FC = () => {
           setLastName(p.lastName || '');
           setEmail(p.email || '');
           setPhone(p.phone || '');
-          setDepartmentId(p.departmentId || 'dep-001');
+          setDepartmentId(p.departmentId || '');
           setActiveRole(p.activeRole);
           setStatus(p.status);
           setRollNo(p.rollNo || '');
@@ -82,7 +88,7 @@ export const PersonEditPage: React.FC = () => {
         email !== existingPerson.email ||
         phone !== (existingPerson.phone || '') ||
         status !== existingPerson.status ||
-        departmentId !== (existingPerson.departmentId || 'dep-001'));
+        departmentId !== (existingPerson.departmentId || ''));
 
     if (isDirty) {
       setShowDiscardPrompt(true);
@@ -335,10 +341,19 @@ export const PersonEditPage: React.FC = () => {
                 className="form-select"
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
+                disabled={isDeptsLoading}
               >
-                {mockDepartments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
+                {isDeptsLoading ? (
+                  <option value="">Loading departments...</option>
+                ) : departments.length === 0 ? (
+                  <option value="">No departments available</option>
+                ) : (
+                  departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.code}){d.parentId ? ' [Sub-Unit]' : ''}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 

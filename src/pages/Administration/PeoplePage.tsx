@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockDepartments, mockCohorts, mockCourses } from '../../data/mockData';
+import { mockCohorts, mockCourses } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   Users, UserPlus, Upload, Search, Filter, Mail, CheckCircle2,
@@ -23,6 +24,11 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { users, toggleUserStatus, fetchPeople, isLoading, deleteUser, inviteUser, resetPassword } = usePeopleStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   useEffect(() => {
     fetchPeople();
@@ -386,8 +392,8 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
               style={{ width: 'auto' }}
             >
               <option value="all">All Departments</option>
-              {mockDepartments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
               ))}
             </select>
 
@@ -436,7 +442,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           </thead>
           <tbody>
             {filteredUsers.map((u, index) => {
-              const dept = mockDepartments.find((d) => d.id === u.departmentId);
+              const dept = departments.find((d) => d.id === u.departmentId);
               const isStudent = u.activeRole === 'student' || u.activeRole === 'learner';
               const isFaculty = u.activeRole === 'trainer' || u.activeRole === 'instructor';
               const isNearBottom = filteredUsers.length > 2 && index >= filteredUsers.length - 2;
@@ -834,7 +840,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 <span className="badge badge-primary">{selectedUserDetail.activeRole.replace('_', ' ')}</span>
                 <span className={`badge badge-${selectedUserDetail.status}`}>{selectedUserDetail.status}</span>
                 <span className="badge badge-secondary">
-                  {mockDepartments.find((d) => d.id === selectedUserDetail.departmentId)?.name || 'Engineering'}
+                  {departments.find((d) => d.id === selectedUserDetail.departmentId)?.name || 'General / Unassigned'}
                 </span>
               </div>
 

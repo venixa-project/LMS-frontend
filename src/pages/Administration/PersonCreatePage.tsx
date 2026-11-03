@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments, mockCourses } from '../../data/mockData';
+import { mockCourses } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   UserPlus, GraduationCap, Shield, Users, ArrowLeft,
@@ -15,6 +16,11 @@ export const PersonCreatePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { addUser, isEmailTaken } = usePeopleStore();
   const { cohorts } = useCohortStore();
+  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   // Role Type from Query or Default
   const initialRole = searchParams.get('role');
@@ -32,7 +38,15 @@ export const PersonCreatePage: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [departmentId, setDepartmentId] = useState(mockDepartments[0]?.id || 'dep-001');
+  const [departmentId, setDepartmentId] = useState('');
+
+  useEffect(() => {
+    if (departments.length > 0) {
+      if (!departmentId || !departments.some((d) => d.id === departmentId)) {
+        setDepartmentId(departments[0].id);
+      }
+    }
+  }, [departments, departmentId]);
   const [status, setStatus] = useState<UserAccountStatus>('active');
 
   // Student specific
@@ -85,7 +99,7 @@ export const PersonCreatePage: React.FC = () => {
     setLastName('');
     setEmail('');
     setPhone('');
-    setDepartmentId(mockDepartments[0]?.id || 'dep-001');
+    setDepartmentId(departments[0]?.id || '');
     setStatus('active');
 
     setRollNo('');
@@ -459,13 +473,25 @@ export const PersonCreatePage: React.FC = () => {
                 className="form-select"
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
+                disabled={isDeptsLoading}
               >
-                {mockDepartments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} &bull; {dept.memberCount} active members
-                  </option>
-                ))}
+                {isDeptsLoading ? (
+                  <option value="">Loading departments...</option>
+                ) : departments.length === 0 ? (
+                  <option value="">No departments available</option>
+                ) : (
+                  departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code}){dept.parentId ? ' [Sub-Unit]' : ''} &bull; {dept._count?.users ?? dept.memberCount ?? 0} active members
+                    </option>
+                  ))
+                )}
               </select>
+              {departments.length === 0 && !isDeptsLoading && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  No departments found. Go to <Link to="/organisation/departments-designations" style={{ color: 'var(--brand-blue)', fontWeight: 600 }}>Departments & Hierarchy</Link> to create one.
+                </span>
+              )}
             </div>
 
             <div className="form-group">
