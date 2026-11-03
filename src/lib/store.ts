@@ -289,6 +289,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string, tenantId?: string) => {
     set({ isLoading: true, error: null });
 
+    const isDemoLogin = email.toLowerCase().trim().endsWith('@lms.demo');
+    if (isDemoLogin) {
+      let normalizedEmail = email.toLowerCase().trim();
+      if (normalizedEmail === 'instructor@lms.demo' || normalizedEmail === 'author@lms.demo' || normalizedEmail === 'grader@lms.demo') {
+        normalizedEmail = 'trainer@lms.demo';
+      } else if (normalizedEmail === 'learner@lms.demo' || normalizedEmail === 'alex@lms.demo') {
+        normalizedEmail = 'student@lms.demo';
+      } else if (normalizedEmail === 'marcus@lms.demo' || normalizedEmail === 'lmsadmin@lms.demo') {
+        normalizedEmail = 'orgadmin@lms.demo';
+      }
+
+      const foundUser = mockUsers.find(
+        (u) => u.email.toLowerCase() === normalizedEmail
+      );
+
+      if (foundUser) {
+        const permissions = getPermissionsForRole(foundUser.activeRole);
+        const navigation = getNavigationForRole(foundUser.activeRole);
+        persistSession(foundUser, foundUser.activeRole);
+        const notifications = getUserNotifications(foundUser);
+        set({
+          user: foundUser,
+          permissions,
+          navigation,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+          notifications,
+          unreadNotifications: notifications.filter((n) => !n.isRead).length,
+        });
+        return;
+      }
+    }
+
     const isSeededStudentDemoLogin =
       email.toLowerCase().trim() === 'student@lms.demo' && password === 'demoPass123';
     const backendEmail = isSeededStudentDemoLogin ? 'student@acuity.com' : email;

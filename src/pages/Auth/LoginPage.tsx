@@ -790,6 +790,62 @@ export const LoginPage: React.FC = () => {
             </a>
           </div>
 
+          {/* 1-Click Demo Role Switcher */}
+          <div style={{
+            marginTop: '20px',
+            paddingTop: '16px',
+            borderTop: '1px solid rgba(129, 140, 248, 0.2)'
+          }}>
+            <div
+              onClick={() => setShowDemoRoles(!showDemoRoles)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.75rem',
+                color: '#818CF8',
+                cursor: 'pointer',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                marginBottom: showDemoRoles ? '10px' : '0'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={13} color="#818CF8" />
+                <span>Instant Demo Role Login</span>
+              </div>
+              <span style={{ fontSize: '0.7rem' }}>{showDemoRoles ? '▲' : '▼'}</span>
+            </div>
+
+            {showDemoRoles && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                {[
+                  { label: 'Platform Admin', email: 'admin@lms.demo', color: '#ef4444' },
+                  { label: 'Org Admin', email: 'orgadmin@lms.demo', color: '#3b82f6' },
+                  { label: 'Trainer / Lead', email: 'trainer@lms.demo', color: '#06b6d4' },
+                  { label: 'Student Learner', email: 'student@lms.demo', color: '#a855f7' },
+                ].map((item) => (
+                  <button
+                    key={item.email}
+                    type="button"
+                    onClick={() => handleQuickLogin(item.email)}
+                    className="demo-role-btn"
+                  >
+                    <span style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: item.color,
+                      flexShrink: 0
+                    }} />
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           </div>
       </div>
 
