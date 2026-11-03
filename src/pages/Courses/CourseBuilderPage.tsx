@@ -7,12 +7,14 @@ import { useCohortStore } from '../../lib/cohortStore';
 import { mockDepartments } from '../../data/mockData';
 import {
   Course, CourseModule, Lesson, EntityStatus,
-  QuizAssessmentConfig, UploadedDocumentInfo, QuizQuestionItem
+  QuizAssessmentConfig, UploadedDocumentInfo, QuizQuestionItem, VideoLessonInfo
 } from '../../types';
 import { BackToCoursesButton } from '../../components/BackToCoursesButton';
 import { AssessmentConfigModal } from './components/AssessmentConfigModal';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { DocumentUploadCard } from './components/DocumentUploadCard';
+import { VideoLessonCard } from './components/VideoLessonCard';
+import { VideoUploadModal } from './components/VideoUploadModal';
 import { FinalAssessmentCard } from './components/FinalAssessmentCard';
 import {
   BookOpen, Plus, Trash2, ArrowLeft, ArrowRight, Save, CheckCircle2,
@@ -23,6 +25,8 @@ import {
   Calendar, PenTool, Upload
 } from 'lucide-react';
 import { useSignatureStore } from '../../lib/signatureStore';
+import { listAssessmentsApi, mapBackendResponseToConfig } from '../../api/assessment.api';
+import { migrateLocalStorageAssessmentsToPostgres, isAssessmentMigrationCompleted } from '../../lib/assessmentMigration';
 
 export const CourseBuilderPage: React.FC = () => {
   const navigate = useNavigate();
@@ -186,6 +190,22 @@ export const CourseBuilderPage: React.FC = () => {
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
   const [step2Error, setStep2Error] = useState<string | null>(null);
 
+  // Video Configuration Modal State
+  const [videoModalState, setVideoModalState] = useState<{
+    isOpen: boolean;
+    modIndex: number;
+    lessonIndex: number;
+    lessonId: string;
+    title: string;
+    videoInfo?: VideoLessonInfo;
+  }>({
+    isOpen: false,
+    modIndex: 0,
+    lessonIndex: 0,
+    lessonId: '',
+    title: '',
+  });
+
   // Assessment Config Modal State
   const [assessmentModalState, setAssessmentModalState] = useState<{
     isOpen: boolean;
@@ -205,6 +225,8 @@ export const CourseBuilderPage: React.FC = () => {
     isOpen: boolean;
     title: string;
     message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
     onConfirm: () => void;
   }>({
     isOpen: false,
@@ -346,6 +368,64 @@ export const CourseBuilderPage: React.FC = () => {
     }
     prevEditingIdRef.current = editingCourseId;
   }, [editingCourseId, courses, loadCourseIntoForm, resetToEmptyForm]);
+
+  // Synchronize PostgreSQL-persisted assessments and trigger background migration
+  useEffect(() => {
+    // 1. Safe idempotent migration of legacy localStorage assessments
+    if (!isAssessmentMigrationCompleted()) {
+      migrateLocalStorageAssessmentsToPostgres().catch((err) => {
+        console.warn('Background assessment migration notice:', err);
+      });
+    }
+
+    // 2. Sync PostgreSQL assessments for this course if editing
+    if (editingCourseId) {
+      listAssessmentsApi({ courseId: editingCourseId })
+        .then((pgAssessments) => {
+          if (pgAssessments && pgAssessments.length > 0) {
+            setModules((prevModules) => {
+              let changed = false;
+              const next = prevModules.map((mod) => {
+                let modChanged = false;
+                let modAssessment = mod.assessment;
+                const matchingModAsm = pgAssessments.find((a: any) => a.moduleId === mod.id && a.scope === 'module_assessment');
+                if (matchingModAsm) {
+                  modAssessment = mapBackendResponseToConfig(matchingModAsm);
+                  modChanged = true;
+                }
+
+                const updatedLessons = mod.lessons.map((lesson) => {
+                  const matchingLessonAsm = pgAssessments.find((a: any) => a.lessonId === lesson.id && a.scope === 'lesson_quiz');
+                  if (matchingLessonAsm) {
+                    modChanged = true;
+                    return {
+                      ...lesson,
+                      quizConfig: mapBackendResponseToConfig(matchingLessonAsm),
+                    };
+                  }
+                  return lesson;
+                });
+
+                if (modChanged) {
+                  changed = true;
+                  return { ...mod, assessment: modAssessment, lessons: updatedLessons };
+                }
+                return mod;
+              });
+              return changed ? next : prevModules;
+            });
+
+            const matchingFinal = pgAssessments.find((a: any) => a.scope === 'final_assessment');
+            if (matchingFinal) {
+              setFinalAssessment(mapBackendResponseToConfig(matchingFinal));
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Notice: Could not sync course assessments from PostgreSQL:', err);
+        });
+    }
+  }, [editingCourseId]);
 
   // -------------------------------------------------------------
   // STEP 3: Assign Faculty & Students
@@ -699,14 +779,15 @@ export const CourseBuilderPage: React.FC = () => {
 
   const handleAddLesson = (modIndex: number, type: 'video' | 'document' | 'quiz') => {
     const targetMod = modules[modIndex];
+    const newLessonIndex = targetMod.lessons.length;
     const newLesson: Lesson = {
-      id: `les-${Date.now()}-${targetMod.lessons.length + 1}`,
-      title: `Lesson ${targetMod.lessons.length + 1}: ${type === 'video' ? 'Video Lecture' : type === 'document' ? 'Reading Material' : 'Knowledge Check'
+      id: `les-${Date.now()}-${newLessonIndex + 1}`,
+      title: `Lesson ${newLessonIndex + 1}: ${type === 'video' ? 'Video Lecture' : type === 'document' ? 'Reading Material' : 'Knowledge Check'
         }`,
       type,
       durationMinutes: type === 'quiz' ? 15 : 20,
       isCompleted: false,
-      order: targetMod.lessons.length + 1
+      order: newLessonIndex + 1
     };
     const updated = [...modules];
     updated[modIndex] = {
@@ -714,6 +795,17 @@ export const CourseBuilderPage: React.FC = () => {
       lessons: [...updated[modIndex].lessons, newLesson]
     };
     setModules(updated);
+
+    if (type === 'video') {
+      setVideoModalState({
+        isOpen: true,
+        modIndex,
+        lessonIndex: newLessonIndex,
+        lessonId: newLesson.id,
+        title: newLesson.title,
+        videoInfo: undefined,
+      });
+    }
   };
 
   const requestDeleteLesson = (modIndex: number, lessonIdx: number) => {
@@ -723,6 +815,8 @@ export const CourseBuilderPage: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Delete Lesson',
+      confirmLabel: 'Delete Lesson',
+      cancelLabel: 'Cancel',
       message: `Are you sure you want to remove "${targetLesson.title}" from this module? Any uploaded document or quiz configuration will be discarded.`,
       onConfirm: () => {
         const updated = [...modules];
@@ -753,6 +847,44 @@ export const CourseBuilderPage: React.FC = () => {
       uploadedDocument: undefined
     };
     setModules(updated);
+  };
+
+  // Video modal triggers and handlers
+  const handleOpenVideoModal = (modIndex: number, lessonIndex: number) => {
+    const targetLesson = modules[modIndex]?.lessons[lessonIndex];
+    if (!targetLesson) return;
+    setVideoModalState({
+      isOpen: true,
+      modIndex,
+      lessonIndex,
+      lessonId: targetLesson.id,
+      title: targetLesson.title,
+      videoInfo: targetLesson.videoInfo,
+    });
+  };
+
+  const handleSaveLessonVideo = (videoInfo: VideoLessonInfo, updatedTitle?: string) => {
+    const { modIndex, lessonIndex } = videoModalState;
+    if (modules[modIndex]?.lessons[lessonIndex]) {
+      const updated = [...modules];
+      const targetLesson = updated[modIndex].lessons[lessonIndex];
+      targetLesson.videoInfo = videoInfo;
+      if (updatedTitle) targetLesson.title = updatedTitle;
+      if (videoInfo.durationSeconds) {
+        targetLesson.durationMinutes = Math.max(1, Math.ceil(videoInfo.durationSeconds / 60));
+      }
+      targetLesson.contentUrl = videoInfo.url || videoInfo.embedUrl;
+      setModules(updated);
+    }
+  };
+
+  const handleRemoveLessonVideo = (modIndex: number, lessonIndex: number) => {
+    const updated = [...modules];
+    if (updated[modIndex]?.lessons[lessonIndex]) {
+      updated[modIndex].lessons[lessonIndex].videoInfo = undefined;
+      updated[modIndex].lessons[lessonIndex].contentUrl = undefined;
+      setModules(updated);
+    }
   };
 
   // Assessment modal triggers
@@ -2611,6 +2743,18 @@ export const CourseBuilderPage: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Video Configuration Area when type === 'video' */}
+                        {lesson.type === 'video' && (
+                          <div style={{ paddingLeft: '44px' }}>
+                            <VideoLessonCard
+                              videoInfo={lesson.videoInfo}
+                              durationMinutes={lesson.durationMinutes}
+                              onEdit={() => handleOpenVideoModal(activeModuleIndex, lIdx)}
+                              onRemove={() => handleRemoveLessonVideo(activeModuleIndex, lIdx)}
+                            />
+                          </div>
+                        )}
+
                         {/* Document Upload Area when type === 'document' */}
                         {lesson.type === 'document' && (
                           <div style={{ paddingLeft: '44px' }}>
@@ -4431,6 +4575,13 @@ export const CourseBuilderPage: React.FC = () => {
             onClose={() => setAssessmentModalState((prev) => ({ ...prev, isOpen: false }))}
             scope={assessmentModalState.scope}
             courseTitle={title}
+            courseId={editingCourseId || undefined}
+            moduleId={assessmentModalState.modIndex !== null ? modules[assessmentModalState.modIndex]?.id : undefined}
+            lessonId={
+              assessmentModalState.modIndex !== null && assessmentModalState.lessonIndex !== null
+                ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.id
+                : undefined
+            }
             moduleTitle={
               assessmentModalState.modIndex !== null ? modules[assessmentModalState.modIndex]?.title : ''
             }
@@ -4462,10 +4613,23 @@ export const CourseBuilderPage: React.FC = () => {
       {/* ========================================================= */}
       {/* REUSABLE DELETION & RESET CONFIRMATION MODAL              */}
       {/* ========================================================= */}
+      {/* Video Configuration Modal */}
+      <VideoUploadModal
+        isOpen={videoModalState.isOpen}
+        onClose={() => setVideoModalState((prev) => ({ ...prev, isOpen: false }))}
+        onSave={handleSaveLessonVideo}
+        courseId={editingCourseId || 'course-default'}
+        lessonId={videoModalState.lessonId}
+        initialTitle={videoModalState.title}
+        initialVideo={videoModalState.videoInfo}
+      />
+
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel || (confirmModal.title.includes('Lesson') ? 'Delete Lesson' : 'Delete')}
+        cancelLabel={confirmModal.cancelLabel || 'Cancel'}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
         isDestructive={true}

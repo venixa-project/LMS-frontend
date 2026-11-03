@@ -102,7 +102,19 @@ export const ConfirmationModal: React.FC<Props> = ({
             type="button"
             className="btn btn-secondary"
             onClick={onCancel}
-            style={{ fontSize: '0.85rem' }}
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              padding: '8px 18px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-medium, #cbd5e1)',
+              background: 'var(--bg-surface, #ffffff)',
+              color: 'var(--text-primary, #0f172a)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             {cancelLabel}
           </button>
@@ -110,7 +122,20 @@ export const ConfirmationModal: React.FC<Props> = ({
             type="button"
             className={isDestructive ? 'btn btn-danger' : 'btn btn-primary'}
             onClick={onConfirm}
-            style={{ fontSize: '0.85rem', fontWeight: 600 }}
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              padding: '8px 20px',
+              borderRadius: '6px',
+              border: isDestructive ? '1px solid #dc2626' : '1px solid var(--primary, #4f46e5)',
+              background: isDestructive ? '#ef4444' : 'var(--primary, #4f46e5)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: isDestructive ? '0 2px 4px rgba(239, 68, 68, 0.25)' : '0 2px 4px rgba(79, 70, 229, 0.25)',
+            }}
           >
             {confirmLabel}
           </button>

@@ -5,6 +5,7 @@ import { mockAssessments, mockQuestions } from '../../data/mockData';
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
+import { getAssessmentApi, startAttemptApi, saveAnswerApi, submitAttemptApi } from '../../api/assessment.api';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
@@ -40,7 +41,46 @@ export const ExamPlayerPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { getAssessmentById, getQuestionsForAssessment } = useAssessmentStore();
   const storeAssessment = id ? getAssessmentById(id) : undefined;
-  const assessment = storeAssessment || mockAssessments.find((a) => a.id === id) || mockAssessments[0];
+  const [pgAssessment, setPgAssessment] = useState<any | null>(null);
+  const [pgQuestions, setPgQuestions] = useState<any[] | null>(null);
+  const [pgAttemptId, setPgAttemptId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (id && id.length === 36) {
+      getAssessmentApi(id)
+        .then((data) => {
+          setPgAssessment(data);
+          if (data.questions && data.questions.length > 0) {
+            setPgQuestions(
+              data.questions.map((q: any) => ({
+                id: q.id,
+                assessmentId: data.id,
+                prompt: q.prompt,
+                type: q.type,
+                points: q.points || 1,
+                options: (q.options || []).map((o: any) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+                explanation: q.explanation,
+              }))
+            );
+          }
+        })
+        .catch((err) => {
+          console.warn('Notice: Could not load assessment from PostgreSQL API:', err);
+        });
+    }
+  }, [id]);
+
+  const baseAssessment = storeAssessment || mockAssessments.find((a) => a.id === id) || mockAssessments[0];
+  const assessment = pgAssessment
+    ? {
+        ...baseAssessment,
+        ...pgAssessment,
+        id: pgAssessment.id,
+        title: pgAssessment.title,
+        durationMinutes: pgAssessment.durationMinutes,
+        passingMarks: pgAssessment.passingPercentage,
+      }
+    : baseAssessment;
   const navigate = useNavigate();
 
   const [quizReward, setQuizReward] = useState<QuizRewardResult | null>(null);
@@ -56,8 +96,8 @@ export const ExamPlayerPage: React.FC = () => {
   } = useProctoringStore();
 
   // Resolve monitoring policy (Ensure all 4 permissions: Screen, Mic, Webcam, Fullscreen are required)
-  const policyLevel = assessment.proctoringPolicyLevel || 'monitored';
-  const basePolicy: ProctoringPolicy = policies[policyLevel] || DEFAULT_PROCTORING_POLICIES.monitored;
+  const policyLevel: any = assessment.proctoringPolicyLevel || 'monitored';
+  const basePolicy: ProctoringPolicy = (policies as Record<string, ProctoringPolicy>)[policyLevel] || DEFAULT_PROCTORING_POLICIES.monitored;
   const policy: ProctoringPolicy = {
     ...basePolicy,
     requireScreenShare: true,
@@ -103,7 +143,9 @@ export const ExamPlayerPage: React.FC = () => {
 
   // Exam questions & answer state
   const loadedQuestions = id ? getQuestionsForAssessment(assessment.id) : [];
-  const questions = loadedQuestions.length > 0 ? loadedQuestions : mockQuestions.slice(0, 5);
+  const questions = (pgQuestions && pgQuestions.length > 0)
+    ? pgQuestions
+    : (loadedQuestions.length > 0 ? loadedQuestions : mockQuestions.slice(0, 5));
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [flaggedQIds, setFlaggedQIds] = useState<string[]>([]);
@@ -448,6 +490,17 @@ export const ExamPlayerPage: React.FC = () => {
     });
     setCurrentSessionId(session.id);
     setSessionStatus(session.id, 'in_progress');
+
+    // Initialize attempt in PostgreSQL if assessment exists in backend
+    if (assessment.id && assessment.id.length === 36) {
+      startAttemptApi(assessment.id)
+        .then((res) => {
+          setPgAttemptId(res.attemptId);
+        })
+        .catch((err) => {
+          console.warn('Notice: Backend start attempt error:', err);
+        });
+    }
     updateChecklistState(session.id, {
       activeScreenShare: !!streams.screenStream,
       activeMic: policy.requireMicrophone && !!streams.userMediaStream,
@@ -527,6 +580,16 @@ export const ExamPlayerPage: React.FC = () => {
         recordingUrl: `https://storage.venilearn.org/recordings/${currentSessionId}.webm`,
         duration: recordingSeconds,
         isSimulated: true,
+      });
+    }
+
+    // Persist attempt & answers in PostgreSQL if active
+    if (pgAttemptId) {
+      for (const [qId, ansVal] of Object.entries(selectedAnswers)) {
+        saveAnswerApi(pgAttemptId, qId, String(ansVal)).catch(() => {});
+      }
+      submitAttemptApi(pgAttemptId).catch((err) => {
+        console.warn('Backend attempt submit warning:', err);
       });
     }
 
@@ -710,7 +773,7 @@ export const ExamPlayerPage: React.FC = () => {
                 className="btn btn-secondary"
                 onClick={() => {
                   const textContent = `VENILEARN ASSESSMENT QUESTION PAPER\nAssessment: ${assessment.title}\nCourse: ${assessment.courseId || 'General'}\nTotal Marks: ${assessment.totalMarks || 100}\nDuration: ${assessment.durationMinutes || 45} mins\n========================================\n\n` +
-                    questions.map((q, idx) => `Q${idx + 1}. [${q.points || 1} mark(s)] ${q.prompt}\n${(q.options || []).map((o, oidx) => `   (${String.fromCharCode(65 + oidx)}) ${o.text}`).join('\n')}\n`).join('\n');
+                    questions.map((q: any, idx: number) => `Q${idx + 1}. [${q.points || 1} mark(s)] ${q.prompt}\n${(q.options || []).map((o: any, oidx: number) => `   (${String.fromCharCode(65 + oidx)}) ${o.text}`).join('\n')}\n`).join('\n');
                   const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
                   const url = URL.createObjectURL(blob);
                   const link = document.createElement('a');
@@ -913,7 +976,7 @@ export const ExamPlayerPage: React.FC = () => {
 
               {/* Answer options */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {currentQ.options?.map((opt) => {
+                {currentQ.options?.map((opt: any) => {
                   const isChecked = selectedAnswers[currentQ.id] === opt.id;
 
                   return (
