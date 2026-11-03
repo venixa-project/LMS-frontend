@@ -3,6 +3,7 @@ import { useAuthStore } from '../../lib/store';
 import { useAnnouncementStore } from '../../lib/announcementStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
+import { apiClient } from '../../lib/apiClient';
 import {
   mockNotificationTemplates,
   mockDepartments,
@@ -51,7 +52,154 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-export const NotificationsCenterPage: React.FC = () => {
+interface StudentNotification {
+  id: string;
+  title: string;
+  message: string;
+  category: string;
+  linkUrl: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+const StudentNotificationsInbox: React.FC = () => {
+  const [notifications, setNotifications] = useState<StudentNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+    setError(null);
+    apiClient.get<StudentNotification[]>('/notifications').then(({ data }) => {
+      if (active) setNotifications(data);
+    }).catch((loadError: unknown) => {
+      if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load notifications.');
+    }).finally(() => {
+      if (active) setIsLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const markRead = async (notificationId: string) => {
+    setError(null);
+    try {
+      await apiClient.patch(`/notifications/${encodeURIComponent(notificationId)}/read`);
+      setNotifications((current) => current.map((notification) =>
+        notification.id === notificationId ? { ...notification, isRead: true } : notification
+      ));
+    } catch (markError) {
+      setError(markError instanceof Error ? markError.message : 'Unable to mark this notification as read.');
+    }
+  };
+
+  const markAllRead = async () => {
+    setIsMarkingAllRead(true);
+    setError(null);
+    try {
+      await apiClient.post('/notifications/mark-all-read');
+      setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
+    } catch (markError) {
+      setError(markError instanceof Error ? markError.message : 'Unable to mark notifications as read.');
+    } finally {
+      setIsMarkingAllRead(false);
+    }
+  };
+
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  return (
+    <section>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ marginBottom: '4px' }}>Campus Announcements &amp; Reminders</h1>
+          <p className="text-secondary text-sm">Your recent account and learning notifications.</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={unreadCount === 0 || isMarkingAllRead}
+          onClick={markAllRead}
+        >
+          <CheckCheck size={16} />
+          {isMarkingAllRead ? 'Updating…' : 'Mark all read'}
+        </button>
+      </header>
+
+      {error && (
+        <div role="alert" className="card" style={{ color: 'var(--danger)', marginBottom: '16px' }}>
+          <p>{error}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            <RefreshCw size={15} /> Retry
+          </button>
+        </div>
+      )}
+
+      <div className="card">
+        {isLoading ? (
+          <p role="status" className="text-secondary">Loading notifications…</p>
+        ) : notifications.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+            <Bell size={28} className="text-secondary" />
+            <h2 className="text-lg" style={{ marginTop: '12px' }}>You’re all caught up</h2>
+            <p className="text-secondary text-sm">New learning and account updates will appear here.</p>
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {notifications.map((notification) => (
+              <li
+                key={notification.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: '16px',
+                  padding: '16px 0',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  opacity: notification.isRead ? 0.72 : 1,
+                }}
+              >
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <Bell size={18} aria-hidden="true" />
+                  <div>
+                    <h2 className="text-sm" style={{ margin: 0, fontWeight: notification.isRead ? 500 : 700 }}>
+                      {notification.title}
+                    </h2>
+                    <p className="text-sm" style={{ margin: '6px 0' }}>{notification.message}</p>
+                    <time className="text-secondary text-xs" dateTime={notification.createdAt}>
+                      {new Date(notification.createdAt).toLocaleString()}
+                    </time>
+                    {notification.linkUrl?.startsWith('/') && !notification.linkUrl.startsWith('//') && (
+                      <p style={{ margin: '8px 0 0' }}>
+                        <a href={notification.linkUrl}>Open related item</a>
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!notification.isRead && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => markRead(notification.id)}
+                  >
+                    Mark read
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+};
+
+const NotificationsManagementPage: React.FC = () => {
   const { user, notifications, markNotificationRead, markAllNotificationsRead } = useAuthStore();
   const {
     announcements,
@@ -2555,4 +2703,10 @@ export const NotificationsCenterPage: React.FC = () => {
       )}
     </div>
   );
+};
+
+export const NotificationsCenterPage: React.FC = () => {
+  const user = useAuthStore((state) => state.user);
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
+  return isLearner ? <StudentNotificationsInbox /> : <NotificationsManagementPage />;
 };

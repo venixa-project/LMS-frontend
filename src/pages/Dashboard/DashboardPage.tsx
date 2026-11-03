@@ -20,6 +20,7 @@ import { PlatformDashboardPage } from '../../platform-admin/pages/PlatformDashbo
 import { InstitutionDashboardPage } from '../../admin/pages/InstitutionDashboardPage';
 import { TrainerDashboardPage } from './TrainerDashboardPage';
 import { GoogleMeetIcon, MeetingProviderBadge, GoogleMeetJoinButton } from '../../components/GoogleMeet';
+import { StudentDashboard } from './StudentDashboard';
 
 export const DashboardPage: React.FC = () => {
   const { user, isLoading, notifications, markNotificationRead } = useAuthStore();
@@ -87,12 +88,13 @@ export const DashboardPage: React.FC = () => {
   // 1. STUDENT DASHBOARD VIEW
   // -------------------------------------------------------------
   if (role === 'student') {
+    return <StudentDashboard />;
     const activeCourse = mockCourses[0];
     const nextSession = mockLiveSessions.find((s) => s.status === 'scheduled');
     const dueAssessment = mockAssessments[0];
 
     // Helper to format live session date and time cleanly
-    const formatLiveSessionTime = (session: typeof mockLiveSessions[0]) => {
+    const formatLiveSessionTime = (session?: typeof mockLiveSessions[number]) => {
       if (!session) return '';
       try {
         const dateStr = session.date || '2026-10-17';
@@ -567,9 +569,9 @@ export const DashboardPage: React.FC = () => {
                       Upcoming Live Class
                     </span>
                   </div>
-                  <MeetingProviderBadge provider={nextSession.provider || 'Google Meet'} size="sm" />
+                  <MeetingProviderBadge provider={nextSession?.provider || 'Google Meet'} size="sm" />
                 </div>
-                <h3 style={{ fontSize: '1rem', margin: '0 0 6px 0', lineHeight: 1.35 }}>{nextSession.title}</h3>
+                <h3 style={{ fontSize: '1rem', margin: '0 0 6px 0', lineHeight: 1.35 }}>{nextSession?.title}</h3>
                 <p className="text-secondary text-xs" style={{ margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Calendar size={13} className="text-muted" />
                   <span>{formatLiveSessionTime(nextSession)}</span>
@@ -582,7 +584,7 @@ export const DashboardPage: React.FC = () => {
                     <Link to="/my-sessions" className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem' }}>
                       Timetable
                     </Link>
-                    <GoogleMeetJoinButton meetingUrl={nextSession.meetingUrl} size="sm" />
+                    <GoogleMeetJoinButton meetingUrl={nextSession?.meetingUrl} size="sm" />
                   </div>
                 </div>
               </div>
@@ -866,7 +868,7 @@ export const DashboardPage: React.FC = () => {
 
           {/* Carousel Slide Helper Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap', gap: '8px' }}>
-            <span>Horizontal slider &bull; Slide with arrows, touch swipe, or shift+wheel</span>
+            <span />
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 type="button"

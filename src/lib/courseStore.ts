@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
 import { mockCourses, mockEnrollments } from '../data/mockData';
+import { apiClient } from './apiClient';
 
 interface CourseState {
   courses: Course[];
@@ -413,6 +414,10 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
       localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
+      apiClient.post(`/courses/${courseId}/assign-students`, {
+        studentIds: eligibleIdsToEnroll,
+        cohortId
+      }).catch((syncErr) => console.warn('Background course sync note:', syncErr));
     } catch (e) { }
 
     return {

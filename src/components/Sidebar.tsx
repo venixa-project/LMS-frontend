@@ -110,7 +110,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     { id: 'guest-join', label: 'Join with Link', path: '/join-course', icon: 'Link2', group: 'Explore Courses' },
   ];
 
-  const activeNav: NavItem[] = user ? navigation : guestNav;
+  const rawNav: NavItem[] = user ? navigation : guestNav;
+  const isStudentUser = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
+  const activeNav: NavItem[] = rawNav.filter((item) => {
+    if (isStudentUser && (item.id === 'cohorts' || item.path === '/cohorts' || (item.label && item.label.toLowerCase().includes('cohort')))) {
+      return false;
+    }
+    return true;
+  });
 
   // Active route matching helper
   const isItemActive = (item: NavItem): boolean => {

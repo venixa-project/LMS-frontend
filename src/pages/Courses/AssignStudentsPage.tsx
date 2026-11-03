@@ -5,6 +5,7 @@ import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { mockDepartments } from '../../data/mockData';
+import { apiClient } from '../../lib/apiClient';
 import {
   ArrowLeft,
   Users,
@@ -271,12 +272,21 @@ export const AssignStudentsPage: React.FC = () => {
   };
 
   // Execute Assignment
-  const handleConfirmAssignment = () => {
+  const handleConfirmAssignment = async () => {
     if (!course || selectedStudentIds.size === 0) return;
     setIsSubmitting(true);
 
     const idsToAssign = Array.from(selectedStudentIds);
     const cohortToAttach = selectedCohortId !== 'all' ? selectedCohortId : undefined;
+
+    try {
+      await apiClient.post(`/courses/${course.id}/assign-students`, {
+        studentIds: idsToAssign,
+        cohortId: cohortToAttach,
+      });
+    } catch (apiErr) {
+      console.warn('Backend course assignment notice:', apiErr);
+    }
 
     const res = assignStudentsToCourse(course.id, idsToAssign, cohortToAttach);
 

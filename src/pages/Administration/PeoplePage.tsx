@@ -6,15 +6,10 @@ import { mockDepartments, mockCohorts, mockCourses } from '../../data/mockData';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
   Users, UserPlus, Upload, Search, Filter, Mail, CheckCircle2,
-  Clock, AlertCircle, X, Download, Shield, Eye, MoreHorizontal,
+  Clock, AlertCircle, X, Download, Shield, Eye, MoreHorizontal, MoreVertical,
   GraduationCap, Edit2, UserMinus, UserCheck, BookOpen, Award,
-  Calendar, Activity, ArrowRight, Check, Flame, Zap, Trophy, Sparkles
+  Calendar, Activity, ArrowRight, Check, Key
 } from 'lucide-react';
-import { useGamificationStore } from '../../lib/gamificationStore';
-import { RANK_TIERS, getRankForPoints, getRankProgress, getNextRank, PointAwardEvent } from '../../lib/gamificationConfig';
-import { RankBadge } from '../../components/Gamification/RankBadge';
-import { AwardPointsModal } from '../../components/Gamification/AwardPointsModal';
-import { AdminRankOverview } from '../../components/Gamification/AdminRankOverview';
 
 interface Props {
   initialMode?: 'all' | 'students' | 'faculty' | 'staff';
@@ -27,14 +22,49 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const isFacultyViewer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { users, toggleUserStatus } = usePeopleStore();
-  const { profiles } = useGamificationStore();
+  const { users, toggleUserStatus, fetchPeople, isLoading, deleteUser, inviteUser, resetPassword } = usePeopleStore();
 
-  const [isAwardModalOpen, setIsAwardModalOpen] = useState(false);
-  const [awardTargetStudentId, setAwardTargetStudentId] = useState<string>('u-007');
-  const [awardTargetStudentName, setAwardTargetStudentName] = useState<string>('');
-  const [rankFilter, setRankFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'default' | 'points' | 'streak'>('default');
+  useEffect(() => {
+    fetchPeople();
+  }, [fetchPeople]);
+
+  const [resetConfirmation, setResetConfirmation] = useState<{ user: User; temporaryPassword: string } | null>(null);
+  const [copiedReset, setCopiedReset] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest('.action-menu-container')) {
+        setActiveActionMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleResetPassword = async (targetUser: User) => {
+    setIsResetting(true);
+    const res = await resetPassword(targetUser.id);
+    setIsResetting(false);
+    if (res.success && res.temporaryPassword) {
+      setResetConfirmation({
+        user: targetUser,
+        temporaryPassword: res.temporaryPassword,
+      });
+    } else {
+      showNotice(res.message || 'Failed to reset password.');
+    }
+  };
 
   // Determine active tab from search params, location, or initial mode (defaults to students)
   const resolveTab = (): 'students' | 'faculty' | 'staff' => {
@@ -67,6 +97,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   }, [searchParams, location.pathname, isFacultyViewer]);
 
   const handleTabChange = (newTab: 'students' | 'faculty' | 'staff') => {
+    setActiveActionMenuId(null);
     setActiveTabState(newTab);
     setSearchParams({ tab: newTab });
   };
@@ -132,7 +163,8 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
     // Search query
     const matchesSearch =
       u.displayName.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      (u.rollNo && u.rollNo.toLowerCase().includes(search.toLowerCase()));
 
     // Role filter
     const matchesRole = roleFilter === 'all' || u.activeRole === roleFilter;
@@ -143,39 +175,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
     // Status filter
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
-    // Rank Tier filter (students tab)
-    if (activeTab === 'students' && rankFilter !== 'all') {
-      const p = profiles[u.id] || { totalPoints: 0 };
-      const tier = getRankForPoints(p.totalPoints);
-      if (tier.id !== rankFilter) return false;
-    }
-
     return matchesSearch && matchesRole && matchesDept && matchesStatus;
   });
 
-  // Apply sorting for students
-  if (activeTab === 'students' && sortBy !== 'default') {
-    filteredUsers.sort((a, b) => {
-      const profA = profiles[a.id];
-      const profB = profiles[b.id];
-      const pointsA = profA ? profA.totalPoints : 0;
-      const pointsB = profB ? profB.totalPoints : 0;
-      if (sortBy === 'points') {
-        return pointsB - pointsA;
-      }
-      if (sortBy === 'streak') {
-        const streakA = profA ? (profA.streakData?.currentStreak ?? profA.currentStreak) : 0;
-        const streakB = profB ? (profB.streakData?.currentStreak ?? profB.currentStreak) : 0;
-        return streakB - streakA;
-      }
-      return 0;
-    });
-  }
-
   // Handle Status Toggle (Activate / Deactivate) via Store
-  const handleConfirmStatusChange = () => {
+  const handleConfirmStatusChange = async () => {
     if (!statusChangeUser) return;
-    const res = toggleUserStatus(statusChangeUser.id);
+    const res = await toggleUserStatus(statusChangeUser.id);
     if (res.success) {
       showNotice(res.message);
       if (selectedUserDetail?.id === statusChangeUser.id) {
@@ -356,26 +362,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </div>
       )}
 
-      {/* Gamification & Learning Points Overview (When viewing students) */}
-      {activeTab === 'students' && (
-        <div style={{ marginBottom: '20px' }}>
-          <AdminRankOverview
-            onOpenAwardModal={(studentId) => {
-              if (studentId) {
-                setAwardTargetStudentId(studentId);
-                const found = users.find((u) => u.id === studentId);
-                if (found) setAwardTargetStudentName(found.displayName);
-              }
-              setIsAwardModalOpen(true);
-            }}
-            onViewStudent={(studentId) => {
-              const found = users.find((u) => u.id === studentId);
-              if (found) setSelectedUserDetail(found);
-            }}
-          />
-        </div>
-      )}
-
       {/* Filter toolbar */}
       <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -392,34 +378,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           </div>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {/* Rank Filter (for students tab) */}
-            {activeTab === 'students' && (
-              <>
-                <select
-                  className="form-select"
-                  value={rankFilter}
-                  onChange={(e) => setRankFilter(e.target.value)}
-                  style={{ width: 'auto' }}
-                >
-                  <option value="all">All Ranks</option>
-                  {RANK_TIERS.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} Rank</option>
-                  ))}
-                </select>
-
-                <select
-                  className="form-select"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  style={{ width: 'auto' }}
-                >
-                  <option value="default">Sort: Default</option>
-                  <option value="points">Sort: XP (High to Low)</option>
-                  <option value="streak">Sort: Streak (High to Low)</option>
-                </select>
-              </>
-            )}
-
             {/* Department Filter */}
             <select
               className="form-select"
@@ -453,19 +411,17 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
       </div>
 
       {/* Users Table */}
-      <div className="table-container">
-        <table className="table">
+      <div className={`table-container people-table-container ${activeTab === 'students' ? 'people-student-table-container' : ''}`}>
+        <table className={`table ${activeTab === 'students' ? 'people-student-table' : ''}`}>
           <thead>
             {activeTab === 'students' ? (
               <tr>
-                <th>Scholar Name</th>
-                <th>Current Rank</th>
-                <th>Learning Points</th>
-                <th>Login Streak</th>
-                <th>Rank Progress</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Roll / Scholar ID</th>
                 <th>Department</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'center', width: '60px' }}>Actions</th>
               </tr>
             ) : (
               <tr>
@@ -474,23 +430,18 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 <th>Role</th>
                 <th>Department</th>
                 <th>Status</th>
-                <th>Last Active</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'center', width: '60px' }}>Actions</th>
               </tr>
             )}
           </thead>
           <tbody>
-            {filteredUsers.map((u) => {
+            {filteredUsers.map((u, index) => {
               const dept = mockDepartments.find((d) => d.id === u.departmentId);
               const isStudent = u.activeRole === 'student' || u.activeRole === 'learner';
               const isFaculty = u.activeRole === 'trainer' || u.activeRole === 'instructor';
+              const isNearBottom = filteredUsers.length > 2 && index >= filteredUsers.length - 2;
 
               if (activeTab === 'students') {
-                const prof = profiles[u.id] || profiles['u-007'] || { totalPoints: 0, currentStreak: 0, streakData: { currentStreak: 0 } };
-                const tier = getRankForPoints(prof.totalPoints);
-                const nxt = getNextRank(tier.tier);
-                const prog = getRankProgress(prof.totalPoints);
-
                 return (
                   <tr key={u.id}>
                     <td>
@@ -505,48 +456,21 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 700,
-                          fontSize: '0.8rem'
+                          fontSize: '0.8rem',
+                          flexShrink: 0
                         }}>
                           {u.firstName?.[0]}{u.lastName?.[0]}
                         </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>{u.displayName}</span>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Roll: STU-2026-0{u.id.slice(-2)} &bull; {u.email}</div>
-                        </div>
+                        <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{u.displayName}</span>
                       </div>
                     </td>
 
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <RankBadge tier={tier} size="xs" />
-                        <span style={{ fontWeight: 800, color: tier.color, fontSize: '0.82rem' }}>
-                          {tier.name}
-                        </span>
-                      </div>
-                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{u.email}</td>
 
                     <td>
-                      <div style={{ fontWeight: 800, color: '#ffd700', fontSize: '0.88rem' }}>
-                        {prof.totalPoints.toLocaleString()} XP
-                      </div>
-                    </td>
-
-                    <td>
-                      <span style={{ color: '#f97316', fontWeight: 700, fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                        <Flame size={13} /> {prof.streakData?.currentStreak ?? prof.currentStreak ?? 0}d
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-main)', fontSize: '0.82rem' }}>
+                        {u.rollNo || `STU-2026-${u.id.slice(-4)}`}
                       </span>
-                    </td>
-
-                    <td>
-                      <div style={{ minWidth: '95px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: '2px' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>{nxt ? nxt.name : 'MAX'}</span>
-                          <span style={{ fontWeight: 700, color: tier.color }}>{prog.progressPercent}%</span>
-                        </div>
-                        <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '999px', overflow: 'hidden' }}>
-                          <div style={{ width: `${prog.progressPercent}%`, height: '100%', background: tier.color, borderRadius: '999px' }} />
-                        </div>
-                      </div>
                     </td>
 
                     <td>{dept ? dept.name : 'Engineering & Technology'}</td>
@@ -557,35 +481,75 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       </span>
                     </td>
 
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
+                    <td style={{ textAlign: 'center', position: 'relative' }}>
+                      <div className="action-menu-container">
                         <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedUserDetail(u)}
-                          title="View profile and gamification standing"
+                          type="button"
+                          className={`action-menu-trigger ${activeActionMenuId === u.id ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveActionMenuId(activeActionMenuId === u.id ? null : u.id);
+                          }}
+                          title="Actions"
                         >
-                          <Eye size={13} /> View
+                          <MoreVertical size={16} />
                         </button>
 
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => {
-                            setAwardTargetStudentId(u.id);
-                            setAwardTargetStudentName(u.displayName);
-                            setIsAwardModalOpen(true);
-                          }}
-                          title="Award Learning Points"
-                          style={{
-                            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontWeight: 700,
-                            padding: '4px 8px',
-                          }}
-                        >
-                          <Award size={13} /> Award
-                        </button>
+                        {activeActionMenuId === u.id && (
+                          <div
+                            className={`action-menu-dropdown ${isNearBottom ? 'position-top' : 'position-bottom'}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="action-menu-item"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                setSelectedUserDetail(u);
+                              }}
+                            >
+                              <Eye size={14} />
+                              <span>View Details</span>
+                            </button>
+
+                            {!isFacultyViewer && (
+                              <>
+                                <Link
+                                  to={`/people/${u.id}/edit`}
+                                  className="action-menu-item"
+                                  onClick={() => setActiveActionMenuId(null)}
+                                >
+                                  <Edit2 size={14} />
+                                  <span>Edit Details</span>
+                                </Link>
+
+                                <button
+                                  type="button"
+                                  className="action-menu-item action-menu-item-warning"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    handleResetPassword(u);
+                                  }}
+                                >
+                                  <Key size={14} />
+                                  <span>Reset Password</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={`action-menu-item ${u.status === 'active' ? 'action-menu-item-danger' : 'action-menu-item-success'}`}
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setStatusChangeUser(u);
+                                  }}
+                                >
+                                  {u.status === 'active' ? <UserMinus size={14} /> : <UserCheck size={14} />}
+                                  <span>{u.status === 'active' ? 'Suspend Account' : 'Activate Account'}</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -608,19 +572,15 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 700,
-                        fontSize: '0.8rem'
+                        fontSize: '0.8rem',
+                        flexShrink: 0
                       }}>
                         {u.firstName?.[0]}{u.lastName?.[0]}
                       </div>
-                      <div>
-                        <span style={{ fontWeight: 600 }}>{u.displayName}</span>
-                        {isFaculty && (
-                          <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)' }}>Lead Trainer</div>
-                        )}
-                      </div>
+                      <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{u.displayName}</span>
                     </div>
                   </td>
-                  <td>{u.email}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{u.email}</td>
                   <td>
                     <span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>
                       {isFaculty ? 'Trainer' : 'Platform Admin'}
@@ -632,50 +592,89 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                       {u.status}
                     </span>
                   </td>
-                  <td className="text-muted text-xs">
-                    {u.lastLogin ? new Date(u.lastLogin).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Never'}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                  <td style={{ textAlign: 'center', position: 'relative' }}>
+                    <div className="action-menu-container">
                       <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setSelectedUserDetail(u)}
-                        title="View profile and teaching details"
+                        type="button"
+                        className={`action-menu-trigger ${activeActionMenuId === u.id ? 'active' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveActionMenuId(activeActionMenuId === u.id ? null : u.id);
+                        }}
+                        title="Actions"
                       >
-                        <Eye size={13} /> {isFacultyViewer ? 'View Progress' : 'View'}
+                        <MoreVertical size={16} />
                       </button>
 
-                      {!isFacultyViewer && (
-                        <>
-                          <Link
-                            to={`/people/${u.id}/edit`}
-                            className="btn btn-secondary btn-sm"
-                            title="Edit profile"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <Edit2 size={13} /> Edit
-                          </Link>
-
-                          {isFaculty && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => setFacultyAssignUser(u)}
-                              title="Assign Course"
-                              style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}
-                            >
-                              <BookOpen size={13} /> Assign Course
-                            </button>
-                          )}
-
+                      {activeActionMenuId === u.id && (
+                        <div
+                          className={`action-menu-dropdown ${isNearBottom ? 'position-top' : 'position-bottom'}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => setStatusChangeUser(u)}
-                            title={u.status === 'active' ? 'Suspend / Deactivate' : 'Reactivate'}
-                            style={{ color: u.status === 'active' ? 'var(--danger)' : 'var(--success)' }}
+                            type="button"
+                            className="action-menu-item"
+                            onClick={() => {
+                              setActiveActionMenuId(null);
+                              setSelectedUserDetail(u);
+                            }}
                           >
-                            {u.status === 'active' ? <UserMinus size={13} /> : <UserCheck size={13} />}
+                            <Eye size={14} />
+                            <span>{isFacultyViewer ? 'View Progress' : 'View Details'}</span>
                           </button>
-                        </>
+
+                          {!isFacultyViewer && (
+                            <>
+                              <Link
+                                to={`/people/${u.id}/edit`}
+                                className="action-menu-item"
+                                onClick={() => setActiveActionMenuId(null)}
+                              >
+                                <Edit2 size={14} />
+                                <span>Edit Profile</span>
+                              </Link>
+
+                              {isFaculty && (
+                                <button
+                                  type="button"
+                                  className="action-menu-item"
+                                  style={{ color: 'var(--primary)' }}
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setFacultyAssignUser(u);
+                                  }}
+                                >
+                                  <BookOpen size={14} />
+                                  <span>Assign Course</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="action-menu-item action-menu-item-warning"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  handleResetPassword(u);
+                                }}
+                              >
+                                <Key size={14} />
+                                <span>Reset Password</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                className={`action-menu-item ${u.status === 'active' ? 'action-menu-item-danger' : 'action-menu-item-success'}`}
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  setStatusChangeUser(u);
+                                }}
+                              >
+                                {u.status === 'active' ? <UserMinus size={14} /> : <UserCheck size={14} />}
+                                <span>{u.status === 'active' ? 'Suspend Account' : 'Activate Account'}</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -685,8 +684,6 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
           </tbody>
         </table>
       </div>
-
-
 
       {/* Confirmation Modal for Activation / Deactivation */}
       {statusChangeUser && (
@@ -703,7 +700,13 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
 
             <div className="modal-body">
               <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-                Are you sure you want to <strong>{statusChangeUser.status === 'active' ? 'suspend' : 'reactivate'}</strong> the account for <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?
+                {statusChangeUser.status === 'active'
+                  ? <>Are you sure you want to <strong>suspend</strong> <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>
+                  : statusChangeUser.status === 'pending_approval'
+                    ? <>Approve <strong>{statusChangeUser.displayName}</strong>? We will email their student login email and a temporary password. They must replace it at first sign-in.</>
+                    : statusChangeUser.status === 'invited'
+                      ? <>Resend temporary login credentials to <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>
+                    : <>Reactivate <strong>{statusChangeUser.displayName}</strong> ({statusChangeUser.email})?</>}
               </p>
               {statusChangeUser.status === 'active' ? (
                 <div style={{
@@ -737,7 +740,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                 style={statusChangeUser.status === 'active' ? { background: 'var(--danger)', color: '#fff' } : undefined}
                 onClick={handleConfirmStatusChange}
               >
-                Confirm {statusChangeUser.status === 'active' ? 'Suspension' : 'Reactivation'}
+                {statusChangeUser.status === 'active' ? 'Confirm Suspension' : statusChangeUser.status === 'pending_approval' ? 'Approve & Email Login' : statusChangeUser.status === 'invited' ? 'Resend Login Credentials' : 'Confirm Reactivation'}
               </button>
             </div>
           </div>
@@ -858,113 +861,49 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                     </div>
                   </div>
 
-                  {/* Gamification Standing & Audit Trail */}
-                  {(() => {
-                    const prof = profiles[selectedUserDetail.id] || profiles['u-007'] || {
-                      totalPoints: 0,
-                      currentStreak: 0,
-                      bestStreak: 0,
-                      streakData: { currentStreak: 0, bestStreak: 0 },
-                      events: [] as PointAwardEvent[],
-                      history: [] as PointAwardEvent[],
-                    };
-                    const tier = getRankForPoints(prof.totalPoints);
-                    const nxt = getNextRank(tier.tier);
-                    const prog = getRankProgress(prof.totalPoints);
-                    const pointEvents: PointAwardEvent[] = prof.events || prof.history || [];
+                  {/* Account & Enrollment Details */}
+                  <div
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '14px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                        Academic Enrollment & Account Status
+                      </span>
+                      <span className={`badge badge-${selectedUserDetail.status}`}>
+                        {selectedUserDetail.status}
+                      </span>
+                    </div>
 
-                    return (
-                      <div
-                        style={{
-                          background: 'rgba(15, 23, 42, 0.75)',
-                          border: `1.5px solid ${tier.color}40`,
-                          borderRadius: 'var(--radius-md)',
-                          padding: '14px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <RankBadge tier={tier} size="xs" />
-                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: tier.color }}>
-                              {tier.name.toUpperCase()} RANK
-                            </span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#ffd700' }}>
-                              &bull; {prof.totalPoints.toLocaleString()} Points
-                            </span>
-                          </div>
-
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => {
-                              setAwardTargetStudentId(selectedUserDetail.id);
-                              setAwardTargetStudentName(selectedUserDetail.displayName);
-                              setIsAwardModalOpen(true);
-                            }}
-                            style={{ padding: '4px 10px', fontSize: '0.72rem', borderRadius: '8px' }}
-                          >
-                            <Award size={12} /> Award Points
-                          </button>
-                        </div>
-
-                        {/* Streak & Next Tier Grid */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.75rem', marginBottom: '8px' }}>
-                          <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '6px 8px', borderRadius: '6px' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Streak: </span>
-                            <strong style={{ color: '#f97316' }}>🔥 {prof.streakData?.currentStreak ?? prof.currentStreak ?? 0}d</strong>
-                            <span style={{ color: 'var(--text-muted)' }}> (Best: {prof.streakData?.bestStreak ?? prof.bestStreak ?? 0}d)</span>
-                          </div>
-                          <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '6px 8px', borderRadius: '6px' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Next Rank: </span>
-                            <strong style={{ color: nxt ? nxt.color : '#ffd700' }}>
-                              {nxt ? `${nxt.name} (${prog.pointsToNextRank} pts)` : 'MAX RANK (Legend)'}
-                            </strong>
-                          </div>
-                        </div>
-
-                        {/* Next Rank Progress */}
-                        {nxt && (
-                          <div style={{ marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: '3px' }}>
-                              <span style={{ color: 'var(--text-secondary)' }}>Progress to {nxt.name}</span>
-                              <span style={{ color: tier.color, fontWeight: 700 }}>{prog.progressPercent}%</span>
-                            </div>
-                            <div style={{ height: '5px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden' }}>
-                              <div style={{ width: `${prog.progressPercent}%`, height: '100%', background: tier.color, borderRadius: '999px' }} />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Recent Points Events History */}
-                        <div>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                            Recent Point-Award History
-                          </span>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                            {pointEvents.length === 0 ? (
-                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>No point awards recorded yet.</div>
-                            ) : (
-                              pointEvents.slice(-3).reverse().map((ev: PointAwardEvent) => (
-                                <div
-                                  key={ev.id}
-                                  style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    fontSize: '0.7rem',
-                                    background: 'rgba(0, 0, 0, 0.25)',
-                                    padding: '4px 8px',
-                                    borderRadius: '6px',
-                                  }}
-                                >
-                                  <span>{ev.reason || ev.description} ({ev.awardingSource || ev.source || ev.category})</span>
-                                  <strong style={{ color: '#10b981' }}>+{ev.points} pts</strong>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.8rem' }}>
+                      <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '6px' }}>
+                        <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>Roll Number</span>
+                        <strong style={{ color: 'var(--text-main)', fontFamily: 'monospace' }}>
+                          {selectedUserDetail.rollNo || `STU-2026-${selectedUserDetail.id.slice(-4)}`}
+                        </strong>
                       </div>
-                    );
-                  })()}
+                      <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '6px' }}>
+                        <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>Academic Batch</span>
+                        <strong style={{ color: 'var(--primary)' }}>Spring 2026 Engineering</strong>
+                      </div>
+                      <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '6px' }}>
+                        <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>Authentication</span>
+                        <strong style={{ color: selectedUserDetail.status === 'active' ? 'var(--success)' : 'var(--warning)' }}>
+                          {selectedUserDetail.status === 'active' ? 'Login Enabled' : 'Access Suspended'}
+                        </strong>
+                      </div>
+                      <div style={{ background: 'var(--bg-input)', padding: '8px 10px', borderRadius: '6px' }}>
+                        <span className="text-muted" style={{ display: 'block', fontSize: '0.72rem' }}>Last Login</span>
+                        <strong style={{ color: 'var(--text-main)' }}>
+                          {selectedUserDetail.lastLogin ? new Date(selectedUserDetail.lastLogin).toLocaleDateString() : 'Never'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Course Progress breakdown */}
                   <div>
@@ -1056,13 +995,25 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
             </div>
 
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-              <Link
-                to={`/people/${selectedUserDetail.id}/edit`}
-                className="btn btn-secondary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Edit2 size={14} /> Edit Profile
-              </Link>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Link
+                  to={`/people/${selectedUserDetail.id}/edit`}
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Edit2 size={14} /> Edit Profile
+                </Link>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--warning, #f59e0b)' }}
+                  onClick={() => handleResetPassword(selectedUserDetail)}
+                  disabled={isResetting}
+                >
+                  <Key size={14} /> Reset Password
+                </button>
+              </div>
 
               <button
                 className="btn btn-secondary btn-sm"
@@ -1225,22 +1176,141 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
         </div>
       )}
 
-      {/* Trainer & Admin Award Learning Points Modal */}
-      <AwardPointsModal
-        isOpen={isAwardModalOpen}
-        onClose={() => setIsAwardModalOpen(false)}
-        preselectedStudentId={awardTargetStudentId}
-        preselectedStudentName={awardTargetStudentName}
-        authorizedStudents={users
-          .filter((u) => u.activeRole === 'student' || u.activeRole === 'learner')
-          .map((u) => ({ id: u.id, name: u.displayName, email: u.email }))}
-        awardingRole={user?.activeRole === 'trainer' || user?.activeRole === 'instructor' ? 'trainer' : 'admin'}
-        awardingUserId={user?.id || 'staff-01'}
-        awardingUserName={user?.displayName || 'Faculty Member'}
-        onAwardSuccess={(sId, pts) => {
-          showNotice(`Successfully recorded +${pts} learning points for scholar.`);
-        }}
-      />
+      {/* Reset Password Confirmation Modal */}
+      {resetConfirmation && (
+        <div className="modal-overlay" style={{ zIndex: 1200, backdropFilter: 'blur(6px)', background: 'rgba(5, 7, 18, 0.8)' }}>
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '520px',
+              border: '1px solid var(--border-accent)',
+              boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  color: 'var(--warning, #f59e0b)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <Shield size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>Temporary Password Reset</h3>
+                  <span className="text-muted text-xs">New credentials generated for {resetConfirmation.user.displayName}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 0' }}>
+              <div style={{
+                background: 'var(--bg-input)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                border: '1px solid var(--border-subtle)',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', rowGap: '10px', fontSize: '0.875rem' }}>
+                  <span className="text-muted">Member Name:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{resetConfirmation.user.displayName}</span>
+
+                  <span className="text-muted">Login Email:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)', wordBreak: 'break-all' }}>{resetConfirmation.user.email}</span>
+
+                  <span className="text-muted">Assigned Role:</span>
+                  <span><span className="badge badge-primary" style={{ textTransform: 'capitalize' }}>{resetConfirmation.user.activeRole}</span></span>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(99, 102, 241, 0.08)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  New Temporary Password
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={resetConfirmation.temporaryPassword}
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '10px 12px',
+                      fontFamily: 'monospace',
+                      fontSize: '1.05rem',
+                      fontWeight: 700,
+                      color: 'var(--text-main)',
+                      letterSpacing: '0.05em'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(resetConfirmation.temporaryPassword);
+                      setCopiedReset(true);
+                      setTimeout(() => setCopiedReset(false), 2500);
+                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '10px 16px' }}
+                  >
+                    {copiedReset ? (
+                      <>
+                        <Check size={16} /> Copied!
+                      </>
+                    ) : (
+                      <>
+                        Copy Password
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '12px 14px',
+                display: 'flex',
+                gap: '10px',
+                fontSize: '0.8rem',
+                color: '#fbbf24'
+              }}>
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong>Mandatory Password Change Enforced:</strong> The member will be required to change this password on their next sign-in. This temporary password cannot be viewed again once this modal is closed.
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setResetConfirmation(null)}
+                style={{ minWidth: '140px' }}
+              >
+                Close & Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

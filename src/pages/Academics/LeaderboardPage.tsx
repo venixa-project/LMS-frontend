@@ -266,10 +266,10 @@ export const LeaderboardPage: React.FC = () => {
               Live Ranks Active
             </span>
           </div>
-          <h1 style={{ fontSize: '1.5rem', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.5rem', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', fontWeight: 800 }}>
             Academic Leaderboard & Top Achievers
           </h1>
-          <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '750px', color: '#94a3b8', fontSize: '0.825rem' }}>
+          <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '750px', color: 'var(--text-muted)', fontSize: '0.825rem' }}>
             Compete, track syllabus velocity, maintain study streaks, and celebrate your journey to the top of the academy.
           </p>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { mockDepartments, mockCohorts } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
@@ -26,7 +27,7 @@ export interface RosterMember {
   enrolledAt: string;
 }
 
-export const CoursesPage: React.FC = () => {
+const CoursesManagementPage: React.FC = () => {
   const { user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -44,9 +45,50 @@ export const CoursesPage: React.FC = () => {
   const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
 
   const { courses, enrolledCourseIds, enrollments, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
+  const { cohorts, fetchCohorts } = useCohortStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const allFaculty = getFaculty();
   const allStudents = useMemo(() => getStudents(), [getStudents]);
+
+  useEffect(() => {
+    fetchCohorts();
+  }, [fetchCohorts]);
+
+  // Derive courses associated with the user's assigned cohorts (for both students and trainers)
+  const cohortLinkedCourseIds = useMemo(() => {
+    if (!user) return new Set<string>();
+    const ids = new Set<string>();
+    const uid = user.id;
+    const uemail = user.email?.toLowerCase();
+    const uroll = user.rollNo?.toLowerCase();
+
+    cohorts.forEach((c) => {
+      const isStudentInCohort = (c.studentIds && (
+        c.studentIds.includes(uid) ||
+        (uemail && c.studentIds.some(sid => sid.toLowerCase() === uemail)) ||
+        (uroll && c.studentIds.includes(uroll)) ||
+        ((uid === 'u-001' || uemail === 'student@lms.demo') && (c.studentIds.includes('u-001') || c.id === 'coh-001'))
+      ));
+
+      const isTrainerInCohort = (
+        (c.instructors && (c.instructors.includes(uid) || (uemail && c.instructors.some(inst => inst.toLowerCase() === uemail)))) ||
+        (c.instructorIds && (c.instructorIds.includes(uid) || (uemail && c.instructorIds.some(inst => inst.toLowerCase() === uemail)))) ||
+        ((uid === 'u-004' || uemail === 'trainer@lms.demo') && (c.id === 'coh-001' || c.id === 'coh-002'))
+      );
+
+      if ((isStudentInCohort || isTrainerInCohort) && c.courseId) {
+        ids.add(c.courseId);
+      }
+    });
+
+    return ids;
+  }, [cohorts, user]);
+
+  const effectiveEnrolledIds = useMemo(() => {
+    const isDemoStudent = user?.id === 'u-001' || user?.email === 'student@lms.demo' || (isLearner && enrolledCourseIds.length === 0);
+    const demoIds = isDemoStudent ? ['crs-001', 'crs-002', 'crs-004'] : [];
+    return new Set([...enrolledCourseIds, ...cohortLinkedCourseIds, ...demoIds]);
+  }, [enrolledCourseIds, cohortLinkedCourseIds, user, isLearner]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -90,6 +132,7 @@ export const CoursesPage: React.FC = () => {
         setActiveManageMenuCourseId(null);
       }
     };
+
     document.addEventListener('mousedown', handleGlobalClick);
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
@@ -233,12 +276,15 @@ export const CoursesPage: React.FC = () => {
 
   // Courses scoped to active organization
   const orgScopedCourses = useMemo(() => {
-    return courses.filter((c) => (c.organizationId || 'org-001') === activeOrgId);
-  }, [courses, activeOrgId]);
+    return courses.filter((c) => {
+      if (isMyLearning && effectiveEnrolledIds.has(c.id)) return true;
+      return (c.organizationId || 'org-001') === activeOrgId;
+    });
+  }, [courses, activeOrgId, isMyLearning, effectiveEnrolledIds]);
 
   // Dynamic counts for learner tabs
   const nonArchivedCourses = orgScopedCourses.filter((c) => c.status !== 'archived');
-  const enrolledCourses = nonArchivedCourses.filter((c) => enrolledCourseIds.includes(c.id));
+  const enrolledCourses = nonArchivedCourses.filter((c) => effectiveEnrolledIds.has(c.id));
   const inProgressCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'in_progress');
   const completedCourses = enrolledCourses.filter((c) => getCourseProgress(c.id).status === 'completed');
 
@@ -259,7 +305,7 @@ export const CoursesPage: React.FC = () => {
 
       // On /my-learning: only show enrolled courses and respect learnerTab
       if (isMyLearning) {
-        if (!enrolledCourseIds.includes(c.id)) return false;
+        if (!effectiveEnrolledIds.has(c.id)) return false;
         const prog = getCourseProgress(c.id);
         if (learnerTab === 'in_progress' && prog.status !== 'in_progress') return false;
         if (learnerTab === 'completed' && prog.status !== 'completed') return false;
@@ -273,7 +319,9 @@ export const CoursesPage: React.FC = () => {
       c.status === 'published' ||
       c.createdBy === user?.id ||
       c.instructors?.includes(user?.id || '') ||
-      (user?.id === 'u-004' && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(c.id)) ||
+      (user?.email && c.instructors?.some((inst: string) => inst.toLowerCase() === user.email.toLowerCase())) ||
+      cohortLinkedCourseIds.has(c.id) ||
+      ((user?.id === 'u-004' || user?.email === 'trainer@lms.demo') && ['crs-001', 'crs-002', 'crs-004', 'crs-006'].includes(c.id)) ||
       (user?.id === 'u-003' && ['crs-003'].includes(c.id)) ||
       (user?.id === 'u-005' && ['crs-005'].includes(c.id))
     );
@@ -297,8 +345,13 @@ export const CoursesPage: React.FC = () => {
     }
 
     const userId = user?.id || '';
+    const userEmail = user?.email?.toLowerCase();
     const isCreator = Boolean(userId && course.createdBy === userId);
-    const isAssignedInstructor = Boolean(userId && course.instructors && course.instructors.includes(userId));
+    const isAssignedInstructor = Boolean(
+      (userId && course.instructors && course.instructors.includes(userId)) ||
+      (userEmail && course.instructors?.some((inst: string) => inst.toLowerCase() === userEmail))
+    );
+    const isCohortTrainer = isFaculty && cohortLinkedCourseIds.has(course.id);
 
     const isWilson = userId === 'u-004' || user?.email === 'trainer@lms.demo';
     const isSharma = userId === 'u-003' || user?.email === 'priya.sharma@lms.demo';
@@ -309,8 +362,8 @@ export const CoursesPage: React.FC = () => {
       (isSharma && ['crs-003'].includes(course.id)) ||
       (isRodriguez && ['crs-005'].includes(course.id));
 
-    const isOwner = isCreator || (isAssignedInstructor && (!course.createdBy || course.instructors?.[0] === userId)) || isDemoOwner;
-    const isAuthorizedTrainer = isCreator || isAssignedInstructor || isDemoOwner;
+    const isOwner = isCreator || isCohortTrainer || (isAssignedInstructor && (!course.createdBy || course.instructors?.[0] === userId)) || isDemoOwner;
+    const isAuthorizedTrainer = isCreator || isAssignedInstructor || isCohortTrainer || isDemoOwner;
 
     return {
       canEdit: isAuthorizedTrainer,
@@ -512,7 +565,12 @@ export const CoursesPage: React.FC = () => {
                     : 'Academic Offerings'}
             </span>
             {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
-            {isLearner && <span className="badge badge-active">Alex Thompson</span>}
+            {isLearner && (
+              <>
+                <span className="badge badge-draft">Acme Learning Corp &bull; AY 2026&ndash;2027</span>
+                <span className="badge badge-active">{user?.displayName || 'Alex Thompson'}</span>
+              </>
+            )}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {isCatalog
@@ -989,7 +1047,7 @@ export const CoursesPage: React.FC = () => {
                   </div>
 
                   {/* Learner Progress Bar for student mode */}
-                  {isLearner && enrolledCourseIds.includes(c.id) && (
+                  {isLearner && effectiveEnrolledIds.has(c.id) && (
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
                         <span className="text-muted">Curriculum Progress:</span>
@@ -1002,7 +1060,7 @@ export const CoursesPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  {isLearner && !enrolledCourseIds.includes(c.id) && (
+                  {isLearner && !effectiveEnrolledIds.has(c.id) && (
                     <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', padding: '6px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
                       <span className="text-muted">Enrollment Status:</span>
                       <span className="badge badge-draft" style={{ fontSize: '0.7rem' }}>Open for Enrollment</span>
@@ -1044,8 +1102,8 @@ export const CoursesPage: React.FC = () => {
                       </Link>
                     ) : (
                       <span className="text-muted text-xs">
-                        Enrollment: <strong style={{ color: !enrolledCourseIds.includes(c.id) ? 'var(--text-muted)' : progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
-                          {!enrolledCourseIds.includes(c.id) ? 'Not Enrolled' : progressData[c.id]?.status === 'completed' ? 'Completed' : 'Active Student'}
+                        Enrollment: <strong style={{ color: !effectiveEnrolledIds.has(c.id) ? 'var(--text-muted)' : progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
+                          {!effectiveEnrolledIds.has(c.id) ? 'Not Enrolled' : progressData[c.id]?.status === 'completed' ? 'Completed' : 'Active Student'}
                         </strong>
                       </span>
                     )}
@@ -1059,7 +1117,7 @@ export const CoursesPage: React.FC = () => {
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     {isLearner || !isAuth ? (
                       // Student or Public Guest Experience
-                      !enrolledCourseIds.includes(c.id) ? (
+                      !effectiveEnrolledIds.has(c.id) ? (
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                           <button
                             type="button"
@@ -2307,4 +2365,8 @@ export const CoursesPage: React.FC = () => {
       )}
     </div>
   );
+};
+
+export const CoursesPage: React.FC = () => {
+  return <CoursesManagementPage />;
 };

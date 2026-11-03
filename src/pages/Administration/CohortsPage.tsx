@@ -1,29 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCohortStore } from '../../lib/cohortStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { mockCourses } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
-import { Cohort } from '../../types';
+import { Cohort, User } from '../../types';
 import {
-  UsersRound, Plus, Search, Calendar, BookOpen, User,
-  CheckCircle2, X, Edit2, Users, Clock, Eye, Sparkles
+  UsersRound, Plus, Search, Calendar, BookOpen, User as UserIcon,
+  CheckCircle2, X, Edit2, Users, Clock, Eye, Sparkles,
+  MoreVertical, Trash2, ShieldCheck, GraduationCap, AlertTriangle
 } from 'lucide-react';
 import { CohortDetailsView } from './CohortDetailsView';
 
 export const CohortsPage: React.FC = () => {
   const { user } = useAuthStore();
   const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.activeRole === 'guest';
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Cohorts State from Centralized Store
-  const { cohorts, updateCohort } = useCohortStore();
+  const { cohorts, updateCohort, fetchCohorts, isLoading, deleteCohort } = useCohortStore();
+
+  // Live Database People Store
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    fetchCohorts();
+    fetchPeople();
+  }, [fetchCohorts, fetchPeople]);
+
+  // Combine live database users with mock users
+  const allUsers = useMemo(() => {
+    const live = peopleUsers || [];
+    const liveIds = new Set(live.map(u => u.id));
+    const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
+    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
+    return [...live, ...remainingMock];
+  }, [peopleUsers]);
+
   const [search, setSearch] = useState('');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
   // Active Cohort Details View
   const [viewingCohort, setViewingCohort] = useState<Cohort | null>(null);
+
+  // 3-Dots Action Menu State
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Edit Single Cohort Modal
   const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
@@ -34,6 +58,9 @@ export const CohortsPage: React.FC = () => {
   const [editStartDate, setEditStartDate] = useState('2026-03-01');
   const [editEndDate, setEditEndDate] = useState('2026-06-30');
   const [editCapacity, setEditCapacity] = useState(60);
+
+  // Delete / Archive Confirmation Modal
+  const [cohortToDelete, setCohortToDelete] = useState<Cohort | null>(null);
 
   // Professional Toast Notification
   const [toastNotification, setToastNotification] = useState<{
@@ -49,6 +76,15 @@ export const CohortsPage: React.FC = () => {
     return timer;
   };
 
+  // Close action menus when clicking outside
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setActiveActionMenuId(null);
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
+  }, []);
+
   // Check URL query param: Handle creation toast notification without opening details view
   useEffect(() => {
     const createdParam = searchParams.get('created');
@@ -56,9 +92,8 @@ export const CohortsPage: React.FC = () => {
     if (createdParam === 'true') {
       showSuccessToast(
         'Cohort Created Successfully!',
-        'The new cohort has been created successfully.'
+        'The new cohort has been saved and is ready for instruction.'
       );
-      // Clean query params so refresh doesn't keep showing the toast or retain created/cohortId params
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('created');
       nextParams.delete('cohortId');
@@ -66,7 +101,6 @@ export const CohortsPage: React.FC = () => {
       return;
     }
 
-    // Only restore viewing cohort if intentionally navigating via cohortId (and not currently viewing)
     const cohortIdParam = searchParams.get('cohortId');
     if (cohortIdParam && !viewingCohort) {
       const found = cohorts.find(c => c.id === cohortIdParam);
@@ -76,22 +110,53 @@ export const CohortsPage: React.FC = () => {
     }
   }, [searchParams, cohorts, viewingCohort, setSearchParams]);
 
-  const filteredCohorts = cohorts.filter((c) => {
-    const matchesSearch =
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.code.toLowerCase().includes(search.toLowerCase());
+  const filteredCohorts = useMemo(() => {
+    return cohorts.filter((c) => {
+      const matchesSearch =
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.code.toLowerCase().includes(search.toLowerCase());
 
-    const matchesCourse = filterCourse === 'all' || c.courseId === filterCourse;
-    const matchesStatus = filterStatus === 'all' || c.status === filterStatus;
+      const matchesCourse = filterCourse === 'all' || c.courseId === filterCourse;
+      const matchesStatus = filterStatus === 'all' || c.status === filterStatus;
 
-    const matchesFaculty = !isFaculty || (
-      c.instructors?.includes('u-004') ||
-      c.instructors?.includes(user?.id || '') ||
-      c.id === 'coh-001' || c.id === 'coh-002' || c.id === 'coh-004'
-    );
+      // Faculty filter: show cohorts assigned to this trainer
+      const matchesFaculty = !isFaculty || Boolean(
+        user && (
+          (user.id && (c.instructorIds?.includes(user.id) || c.instructors?.includes(user.id))) ||
+          (user.email && (
+            (c.instructors && c.instructors.some((i: string) => i.toLowerCase() === user.email.toLowerCase())) ||
+            (c.instructorIds && c.instructorIds.some((i: string) => i.toLowerCase() === user.email.toLowerCase()))
+          )) ||
+          ((user.id === 'u-004' || user.email === 'trainer@lms.demo') && (c.id === 'coh-001' || c.id === 'coh-002' || c.id === 'coh-004'))
+        )
+      );
 
-    return matchesSearch && matchesCourse && matchesStatus && matchesFaculty;
-  });
+      // Student filter: show cohorts this student is enrolled in
+      const matchesStudent = !isStudent || Boolean(
+        user && (
+          (user.id && c.studentIds?.includes(user.id)) ||
+          (user.email && c.studentIds?.some(sid => sid.toLowerCase() === user.email.toLowerCase())) ||
+          (user.rollNo && c.studentIds?.includes(user.rollNo)) ||
+          ((user.id === 'u-001' || user.email === 'student@lms.demo') && (c.studentIds?.includes('u-001') || c.id === 'coh-001'))
+        )
+      );
+
+      return matchesSearch && matchesCourse && matchesStatus && matchesFaculty && matchesStudent;
+    });
+  }, [cohorts, search, filterCourse, filterStatus, isFaculty, isStudent, user]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = cohorts.length;
+    const active = cohorts.filter(c => c.status === 'active').length;
+    const totalEnrolled = cohorts.reduce((acc, c) => acc + (c.studentIds ? c.studentIds.length : (c.learnerCount || 0)), 0);
+    const withFaculty = cohorts.filter(c => {
+      const trainerId = c.instructorIds?.[0] || c.instructors?.[0];
+      return Boolean(trainerId);
+    }).length;
+
+    return { total, active, totalEnrolled, withFaculty };
+  }, [cohorts]);
 
   // Handle Updates from Cohort Details View
   const handleUpdateCohort = (updated: Cohort) => {
@@ -102,6 +167,7 @@ export const CohortsPage: React.FC = () => {
   };
 
   const handleOpenEdit = (c: Cohort) => {
+    setActiveActionMenuId(null);
     setEditingCohort(c);
     setEditName(c.name);
     setEditCode(c.code);
@@ -133,6 +199,14 @@ export const CohortsPage: React.FC = () => {
     );
   };
 
+  const handleConfirmDelete = async () => {
+    if (!cohortToDelete) return;
+    const code = cohortToDelete.code;
+    await deleteCohort(cohortToDelete.id);
+    setCohortToDelete(null);
+    showSuccessToast('Cohort Archived', `Cohort ${code} has been archived successfully.`);
+  };
+
   const handleCloseCohortDetails = () => {
     setViewingCohort(null);
     setSearchParams({});
@@ -146,7 +220,7 @@ export const CohortsPage: React.FC = () => {
           cohort={viewingCohort}
           onBack={handleCloseCohortDetails}
           onUpdateCohort={handleUpdateCohort}
-          isFacultyViewer={isFaculty}
+          isFacultyViewer={isFaculty || isStudent}
         />
       </div>
     );
@@ -165,8 +239,8 @@ export const CohortsPage: React.FC = () => {
             borderLeft: '5px solid #10b981',
             borderRadius: '10px',
             padding: '14px 20px',
-            marginBottom: '24px',
-            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            marginBottom: '20px',
+            boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -177,8 +251,8 @@ export const CohortsPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
+                width: '38px',
+                height: '38px',
                 borderRadius: '50%',
                 background: 'rgba(16, 185, 129, 0.12)',
                 display: 'flex',
@@ -188,14 +262,14 @@ export const CohortsPage: React.FC = () => {
                 flexShrink: 0
               }}
             >
-              <CheckCircle2 size={24} strokeWidth={2.5} />
+              <CheckCircle2 size={22} strokeWidth={2.5} />
             </div>
             <div>
-              <div style={{ fontSize: '0.975rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
                 {toastNotification.title}
               </div>
               {toastNotification.subtext && (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {toastNotification.subtext}
                 </div>
               )}
@@ -204,45 +278,34 @@ export const CohortsPage: React.FC = () => {
           <button
             onClick={() => setToastNotification(null)}
             className="btn btn-ghost btn-sm"
-            style={{
-              padding: '6px',
-              borderRadius: '6px',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
+            style={{ padding: '6px', color: 'var(--text-muted)' }}
             title="Dismiss notification"
-            aria-label="Dismiss notification"
           >
             <X size={16} />
           </button>
         </div>
       )}
 
-      {/* Header and Action Button */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+      {/* Clean Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="badge badge-primary">{isFaculty ? 'Faculty Teaching Scope' : 'Organisation Management'}</span>
-            {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
-          </div>
-          <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
-            {isFaculty ? 'My Assigned Classes & Batches' : 'Classes, Sections & Cohort Batches'}
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
+            {isFaculty ? 'Assigned Classes & Cohorts' : isStudent ? 'My Enrolled Classes & Cohorts' : 'Classes & Cohorts'}
           </h1>
           <p className="text-secondary text-sm" style={{ margin: '4px 0 0 0' }}>
             {isFaculty
-              ? 'View class schedules, student rosters, and attendance records for batches under your instruction'
-              : 'Organize student cohorts, allocate section capacity, assign certified faculty, and manage cross-department enrollment rosters'}
+              ? 'View class schedules, student rosters, and instruction details for your batches'
+              : isStudent
+              ? 'View your enrolled academic batches, class schedules, and faculty leads'
+              : 'Manage student cohorts, faculty leads, and enrollment capacity'}
           </p>
         </div>
 
         {isFaculty ? (
           <Link to="/attendance" className="btn btn-secondary">
-            <Calendar size={16} /> View Teaching Timetable
+            <Calendar size={16} /> View Timetable
           </Link>
-        ) : (
+        ) : isStudent ? null : (
           <Link
             to="/cohorts/new"
             className="btn btn-primary"
@@ -253,19 +316,103 @@ export const CohortsPage: React.FC = () => {
               boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)'
             }}
           >
-            <Plus size={16} /> Create Class / Cohort
+            <Plus size={16} /> New Cohort
           </Link>
         )}
       </div>
 
+      {/* Overview Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '22px' }}>
+        <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '12px',
+            background: 'var(--primary-light)',
+            color: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <UsersRound size={22} />
+          </div>
+          <div>
+            <div className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Total Cohorts
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.2 }}>
+              {stats.total}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--success)', marginTop: '2px' }}>
+              {stats.active} Active Batches
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '12px',
+            background: 'rgba(16, 185, 129, 0.12)',
+            color: '#10b981',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <GraduationCap size={22} />
+          </div>
+          <div>
+            <div className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Enrolled Students
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.2 }}>
+              {stats.totalEnrolled}
+            </div>
+            <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+              Across all cohorts
+            </div>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '12px',
+            background: 'rgba(99, 102, 241, 0.12)',
+            color: '#6366f1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <ShieldCheck size={22} />
+          </div>
+          <div>
+            <div className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Faculty Assigned
+            </div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: 1.2 }}>
+              {stats.withFaculty} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>/ {stats.total}</span>
+            </div>
+            <div className="text-xs" style={{ color: stats.withFaculty === stats.total ? 'var(--success)' : 'var(--warning)', marginTop: '2px' }}>
+              {stats.total > 0 ? Math.round((stats.withFaculty / stats.total) * 100) : 0}% Assigned
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Filter and Search Bar */}
-      <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
+      <div className="card" style={{ padding: '14px 18px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Search cohorts by name or batch code..."
+              placeholder="Search by cohort name or batch code..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="form-input"
@@ -279,7 +426,7 @@ export const CohortsPage: React.FC = () => {
               value={filterCourse}
               onChange={(e) => setFilterCourse(e.target.value)}
             >
-              <option value="all">All Curriculum Courses</option>
+              <option value="all">All Courses</option>
               {mockCourses.map(c => (
                 <option key={c.id} value={c.id}>{c.title}</option>
               ))}
@@ -299,7 +446,9 @@ export const CohortsPage: React.FC = () => {
             </select>
           </div>
 
-          <span className="text-muted text-xs font-semibold">{filteredCohorts.length} Cohorts Active</span>
+          <span className="badge badge-draft" style={{ fontWeight: 600, padding: '6px 12px' }}>
+            {filteredCohorts.length} {filteredCohorts.length === 1 ? 'Cohort' : 'Cohorts'}
+          </span>
         </div>
       </div>
 
@@ -308,43 +457,44 @@ export const CohortsPage: React.FC = () => {
         <table className="table">
           <thead>
             <tr>
-              <th>Class / Cohort Batch</th>
-              <th>Curriculum Track</th>
-              <th>Assigned Faculty</th>
+              <th>Cohort Batch</th>
+              <th>Course Track</th>
+              <th>Lead Faculty</th>
               <th>Academic Period</th>
-              <th>Enrollment & Capacity</th>
+              <th>Enrollment</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th style={{ textAlign: 'center', width: '80px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredCohorts.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)' }}>
-                  <UsersRound size={32} style={{ margin: '0 auto 8px auto', display: 'block' }} />
-                  <p style={{ fontWeight: 600, margin: '0 0 4px 0' }}>No cohorts found</p>
-                  <p style={{ margin: 0, fontSize: '0.8rem' }}>Adjust your search terms or create a new class cohort.</p>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
+                  <UsersRound size={36} style={{ margin: '0 auto 10px auto', display: 'block', opacity: 0.5 }} />
+                  <p style={{ fontWeight: 700, margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-main)' }}>No cohorts found</p>
+                  <p style={{ margin: 0, fontSize: '0.85rem' }}>Try adjusting your search criteria or create a new cohort batch.</p>
                 </td>
               </tr>
             ) : (
-              filteredCohorts.map((c) => {
+              filteredCohorts.map((c, index) => {
                 const course = mockCourses.find((co) => co.id === c.courseId);
                 const trainerId = c.instructorIds?.[0] || c.instructors?.[0];
-                const trainer = trainerId ? mockUsers.find(u => u.id === trainerId) : null;
+                const trainer = trainerId ? allUsers.find(u => u.id === trainerId) : null;
                 const currentEnrolled = c.studentIds ? c.studentIds.length : (c.learnerCount || 0);
                 const maxCap = c.capacity || 30;
                 const percent = Math.min(100, Math.round((currentEnrolled / maxCap) * 100));
+                const isNearBottom = index >= filteredCohorts.length - 2;
 
                 return (
                   <tr key={c.id}>
                     <td>
                       <div
-                        style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
                         onClick={() => {
                           setViewingCohort(c);
                           setSearchParams({ cohortId: c.id });
                         }}
-                        title="Click to view cohort details and student roster"
+                        title="Click to view full cohort details"
                       >
                         <div style={{
                           width: '38px',
@@ -355,15 +505,18 @@ export const CohortsPage: React.FC = () => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          flexShrink: 0
+                          flexShrink: 0,
+                          fontWeight: 700
                         }}>
                           <UsersRound size={18} />
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.925rem' }}>
                             {c.name}
                           </div>
-                          <code style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>{c.code}</code>
+                          <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--primary)', fontWeight: 600 }}>
+                            {c.code}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -377,18 +530,35 @@ export const CohortsPage: React.FC = () => {
 
                     <td>
                       {trainer ? (
-                        <span className="badge badge-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <User size={12} /> {trainer.displayName}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: '50%',
+                            background: 'var(--primary)',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            flexShrink: 0
+                          }}>
+                            {trainer.firstName?.[0] || 'T'}
+                          </div>
+                          <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                            {trainer.displayName}
+                          </span>
+                        </div>
                       ) : (
                         <span className="badge badge-draft" style={{ color: 'var(--danger)', borderColor: 'var(--danger-border)' }}>
-                          No Trainer Assigned
+                          No Faculty Lead
                         </span>
                       )}
                     </td>
 
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.825rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
                         <Calendar size={13} color="var(--text-muted)" />
                         <span>
                           {new Date(c.startDate).toLocaleDateString([], { month: 'short', year: 'numeric' })} &ndash;{' '}
@@ -399,15 +569,16 @@ export const CohortsPage: React.FC = () => {
 
                     <td style={{ minWidth: '150px' }}>
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px', fontWeight: 600 }}>
                           <span>{currentEnrolled} / {maxCap}</span>
                           <span className="text-muted text-xs">{percent}%</span>
                         </div>
-                        <div className="progress-bar-bg" style={{ height: '6px' }}>
+                        <div className="progress-bar-bg" style={{ height: '6px', borderRadius: '3px' }}>
                           <div
                             className="progress-bar-fill"
                             style={{
                               width: `${percent}%`,
+                              borderRadius: '3px',
                               background: percent >= 100
                                 ? 'var(--danger)'
                                 : percent >= 80
@@ -420,35 +591,80 @@ export const CohortsPage: React.FC = () => {
                     </td>
 
                     <td>
-                      <span className={`badge badge-${c.status}`}>{c.status}</span>
+                      <span className={`badge badge-${c.status === 'active' ? 'active' : 'draft'}`}>
+                        {c.status}
+                      </span>
                     </td>
 
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
+                    <td style={{ textAlign: 'center' }}>
+                      <div className="action-menu-container" style={{ display: 'inline-block' }}>
                         <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => {
-                            setViewingCohort(c);
-                            setSearchParams({ cohortId: c.id });
+                          type="button"
+                          className={`action-menu-trigger ${activeActionMenuId === c.id ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveActionMenuId(activeActionMenuId === c.id ? null : c.id);
                           }}
-                          title="View complete cohort details, trainer, and student roster"
-                          style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}
+                          title="Actions"
                         >
-                          <Eye size={13} /> View Details
+                          <MoreVertical size={16} />
                         </button>
 
-                        {isFaculty ? (
-                          <Link to="/attendance" className="btn btn-secondary btn-sm">
-                            <Clock size={13} /> Timetable
-                          </Link>
-                        ) : (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleOpenEdit(c)}
-                            title="Quick edit cohort info"
+                        {activeActionMenuId === c.id && (
+                          <div
+                            className={`action-menu-dropdown ${isNearBottom ? 'position-top' : 'position-bottom'}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ minWidth: '160px' }}
                           >
-                            <Edit2 size={13} /> Edit
-                          </button>
+                            <button
+                              type="button"
+                              className="action-menu-item"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                setViewingCohort(c);
+                                setSearchParams({ cohortId: c.id });
+                              }}
+                            >
+                              <Eye size={14} />
+                              <span>View Details</span>
+                            </button>
+
+                            {!isFaculty && !isStudent && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="action-menu-item"
+                                  onClick={() => handleOpenEdit(c)}
+                                >
+                                  <Edit2 size={14} />
+                                  <span>Edit Cohort</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="action-menu-item action-menu-item-danger"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setCohortToDelete(c);
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                  <span>Archive Cohort</span>
+                                </button>
+                              </>
+                            )}
+
+                            {isFaculty && (
+                              <Link
+                                to="/attendance"
+                                className="action-menu-item"
+                                onClick={() => setActiveActionMenuId(null)}
+                              >
+                                <Clock size={14} />
+                                <span>Timetable</span>
+                              </Link>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -460,15 +676,13 @@ export const CohortsPage: React.FC = () => {
         </table>
       </div>
 
-
-
       {/* Quick Edit Single Cohort Modal */}
       {isEditingModalOpen && editingCohort && (
         <div className="modal-overlay" onClick={() => setIsEditingModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>
-                Edit Cohort Details &bull; {editingCohort.code}
+              <h3 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 700 }}>
+                Edit Cohort &bull; {editingCohort.code}
               </h3>
               <button onClick={() => setIsEditingModalOpen(false)} style={{ color: 'var(--text-muted)' }}>
                 <X size={18} />
@@ -501,7 +715,7 @@ export const CohortsPage: React.FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Associated Course Program</label>
+                  <label className="form-label">Associated Course Track</label>
                   <select
                     className="form-select"
                     value={editCourseId}
@@ -557,6 +771,52 @@ export const CohortsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Archive / Delete Confirmation Modal */}
+      {cohortToDelete && (
+        <div className="modal-overlay" onClick={() => setCohortToDelete(null)}>
+          <div className="modal-card" style={{ maxWidth: '440px', padding: '24px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              background: 'var(--danger-bg)',
+              color: 'var(--danger)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto'
+            }}>
+              <AlertTriangle size={24} />
+            </div>
+
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 8px 0' }}>
+              Archive Cohort {cohortToDelete.code}?
+            </h3>
+
+            <p className="text-secondary text-sm" style={{ margin: '0 0 24px 0' }}>
+              Are you sure you want to archive <strong>{cohortToDelete.name}</strong>? Students and faculty records will remain preserved in historical academic archives.
+            </p>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setCohortToDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmDelete}
+              >
+                Archive Cohort
+              </button>
+            </div>
           </div>
         </div>
       )}

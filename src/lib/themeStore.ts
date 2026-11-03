@@ -15,9 +15,9 @@ export const THEME_STORAGE_KEY = 'venilearn_theme_preference';
 // Helper to detect device/OS color scheme preference
 export const getSystemTheme = (): ResolvedTheme => {
   if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
-  return 'light'; // Default fallback
+  return 'dark'; // Default fallback: Dark Theme first
 };
 
 // Helper to resolve the effective theme given a preference
@@ -35,9 +35,9 @@ export const applyThemeToDOM = (theme: ResolvedTheme): void => {
   root.setAttribute('data-theme', theme);
 };
 
-// Get stored preference or default to 'light'
+// Get stored preference or default to 'dark'
 export const getStoredThemePreference = (): ThemePreference => {
-  if (typeof window === 'undefined') return 'light';
+  if (typeof window === 'undefined') return 'dark';
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
@@ -46,7 +46,7 @@ export const getStoredThemePreference = (): ThemePreference => {
   } catch (err) {
     console.warn('Failed to read theme preference from localStorage:', err);
   }
-  return 'light';
+  return 'dark';
 };
 
 interface ThemeState {

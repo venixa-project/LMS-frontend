@@ -67,8 +67,8 @@ export const Breadcrumbs: React.FC = () => {
       color: 'var(--text-muted)',
       marginBottom: '16px'
     }}>
-      <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)' }}>
-        <Home size={14} />
+      <Link to="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+        <Home size={14} style={{ flexShrink: 0 }} />
         <span>Home</span>
       </Link>
 

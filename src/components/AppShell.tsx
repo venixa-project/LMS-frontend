@@ -164,7 +164,8 @@ export const AppShell: React.FC = () => {
         <Navbar
           onToggleSidebar={handleToggleSidebar}
           onOpenRoleSwitcher={() => setRoleSwitcherOpen(true)}
-          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen((prev) => !prev)}
+          isNotificationsOpen={notificationsOpen}
           onOpenSearch={() => setSearchOpen(true)}
         />
 

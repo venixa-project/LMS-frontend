@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -16,14 +16,16 @@
     <script>
       (function() {
         try {
-          var saved = localStorage.getItem('venilearn_theme_preference') || 'system';
-          var resolved = saved;
+          var saved = localStorage.getItem('venilearn_theme_preference');
+          var resolved = saved || 'dark';
           if (saved === 'system') {
             var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             resolved = isDark ? 'dark' : 'light';
           }
           document.documentElement.setAttribute('data-theme', resolved);
-        } catch (e) {}
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
       })();
     </script>
   </head>

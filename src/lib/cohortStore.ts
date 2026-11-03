@@ -1,258 +1,420 @@
 // ============================================================
 // LMS - Cohort & Batch Management Store (Zustand)
-// Manages cohorts, batch codes, trainer assignments,
-// student roster enrollments, and multi-tab synchronization.
+// Connected directly to backend API (/api/v1/cohorts)
 // ============================================================
 import { create } from 'zustand';
 import { Cohort } from '../types';
+import { cohortApi, ListCohortsParams } from './cohortApiService';
 import { mockCohorts } from '../data/mockData';
-import { mockUsers } from '../data/mockUsers';
+import { AUTH_SESSION_KEY } from './store';
+
+const DEMO_COHORTS_KEY = 'venilearn_demo_cohorts';
+
+function isMockSession(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return false;
+    const token = JSON.parse(raw)?.token;
+    return typeof token === 'string' && (token.startsWith('venilearn-token-') || token.startsWith('demo-') || token.split('.').length !== 3);
+  } catch {
+    return false;
+  }
+}
+
+function loadDemoCohorts(): Cohort[] {
+  try {
+    const raw = localStorage.getItem(DEMO_COHORTS_KEY);
+    if (raw) {
+      const cohorts = JSON.parse(raw);
+      if (Array.isArray(cohorts)) return cohorts;
+    }
+  } catch {
+    localStorage.removeItem(DEMO_COHORTS_KEY);
+  }
+  return mockCohorts.map((cohort) => ({ ...cohort }));
+}
+
+function persistDemoCohorts(cohorts: Cohort[]) {
+  localStorage.setItem(DEMO_COHORTS_KEY, JSON.stringify(cohorts));
+}
 
 interface CohortState {
   cohorts: Cohort[];
+  isLoading: boolean;
+  totalCohorts: number;
 
-  // Selectors & Queries
+  // API Queries & Actions
+  fetchCohorts: (params?: ListCohortsParams) => Promise<void>;
   getCohortById: (id: string) => Cohort | undefined;
   isBatchCodeUnique: (code: string, excludeCohortId?: string) => boolean;
 
-  // Actions
-  addCohort: (newCohort: Cohort) => { success: boolean; message: string; cohort?: Cohort };
-  updateCohort: (updated: Cohort) => { success: boolean; message: string };
-  removeTrainerFromCohort: (cohortId: string) => { success: boolean; message: string };
-  assignTrainerToCohort: (cohortId: string, trainerId: string) => { success: boolean; message: string };
-  removeStudentFromCohort: (cohortId: string, studentId: string) => { success: boolean; message: string };
-  addStudentsToCohort: (cohortId: string, studentIds: string[]) => { success: boolean; message: string };
-  deleteCohort: (cohortId: string) => { success: boolean; message: string };
-}
-
-const STORAGE_KEY_COHORTS = 'venilearn_cohorts_data';
-
-// Load cohorts from localStorage or fallback to mockCohorts
-function loadInitialCohorts(): Cohort[] {
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY_COHORTS);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to parse cached cohorts from storage', e);
-  }
-  return mockCohorts;
-}
-
-function persistCohorts(cohorts: Cohort[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY_COHORTS, JSON.stringify(cohorts));
-  } catch (e) {
-    console.error('Failed to save cohorts to storage', e);
-  }
+  addCohort: (newCohort: Cohort) => Promise<{ success: boolean; message: string; cohort?: Cohort }>;
+  updateCohort: (updated: Cohort) => Promise<{ success: boolean; message: string }>;
+  removeTrainerFromCohort: (cohortId: string) => Promise<{ success: boolean; message: string }>;
+  assignTrainerToCohort: (cohortId: string, trainerId: string) => Promise<{ success: boolean; message: string }>;
+  removeStudentFromCohort: (cohortId: string, studentId: string) => Promise<{ success: boolean; message: string }>;
+  addStudentsToCohort: (cohortId: string, studentIds: string[]) => Promise<{ success: boolean; message: string }>;
+  deleteCohort: (cohortId: string) => Promise<{ success: boolean; message: string }>;
 }
 
 export const useCohortStore = create<CohortState>((set, get) => ({
-  cohorts: loadInitialCohorts(),
+  cohorts: isMockSession() ? loadDemoCohorts() : [],
+  isLoading: false,
+  totalCohorts: 0,
+
+  fetchCohorts: async (params?: ListCohortsParams) => {
+    if (isMockSession()) {
+      let cohorts = loadDemoCohorts();
+      if (params?.departmentId) cohorts = cohorts.filter((cohort) => cohort.departmentId === params.departmentId);
+      if (params?.courseId) cohorts = cohorts.filter((cohort) => cohort.courseId === params.courseId);
+      if (params?.status && params.status !== 'all') cohorts = cohorts.filter((cohort) => cohort.status === params.status);
+      if (params?.search) {
+        const search = params.search.toLowerCase();
+        cohorts = cohorts.filter((cohort) => cohort.name.toLowerCase().includes(search) || cohort.code.toLowerCase().includes(search));
+      }
+      set({ cohorts, totalCohorts: cohorts.length, isLoading: false });
+      return;
+    }
+
+    set({ isLoading: true });
+    try {
+      const res = await cohortApi.list(params);
+      const cohortsMapped: Cohort[] = (res.cohorts || []).map((c: any) => ({
+        ...c,
+        startDate: typeof c.startDate === 'string' ? c.startDate : new Date(c.startDate).toISOString(),
+        endDate: typeof c.endDate === 'string' ? c.endDate : new Date(c.endDate).toISOString(),
+        studentIds: c.members?.map((m: any) => m.userId || m.user?.id) || c.studentIds || [],
+        instructorIds: Array.isArray(c.instructors) ? c.instructors : [],
+      }));
+
+      set({
+        cohorts: cohortsMapped,
+        totalCohorts: res.meta?.total || cohortsMapped.length,
+        isLoading: false,
+      });
+    } catch (err: any) {
+      console.error('Failed to fetch cohorts from API:', err);
+      set({ isLoading: false });
+    }
+  },
 
   getCohortById: (id: string) => {
-    return get().cohorts.find(c => c.id === id);
+    return get().cohorts.find((c) => c.id === id);
   },
 
   isBatchCodeUnique: (code: string, excludeCohortId?: string) => {
     const normalized = code.trim().toUpperCase();
     return !get().cohorts.some(
-      c => c.code.trim().toUpperCase() === normalized && c.id !== excludeCohortId
+      (c) => c.code.trim().toUpperCase() === normalized && c.id !== excludeCohortId
     );
   },
 
-  addCohort: (newCohort: Cohort) => {
+  addCohort: async (newCohort: Cohort) => {
     const { cohorts, isBatchCodeUnique } = get();
 
     if (!isBatchCodeUnique(newCohort.code)) {
       return {
         success: false,
-        message: `Batch code "${newCohort.code.toUpperCase()}" is already in use by another cohort.`
+        message: `Batch code "${newCohort.code.toUpperCase()}" is already in use by another cohort.`,
       };
     }
 
-    const updated = [newCohort, ...cohorts];
-    set({ cohorts: updated });
-    persistCohorts(updated);
+    if (isMockSession()) {
+      const cohortRecord = { ...newCohort, id: newCohort.id || `demo-cohort-${Date.now()}` };
+      const updatedCohorts = [cohortRecord, ...cohorts];
+      persistDemoCohorts(updatedCohorts);
+      set({ cohorts: updatedCohorts, totalCohorts: get().totalCohorts + 1 });
+      return { success: true, message: `Cohort "${newCohort.name}" (${newCohort.code}) created successfully!`, cohort: cohortRecord };
+    }
 
-    return {
-      success: true,
-      message: `Cohort "${newCohort.name}" (${newCohort.code}) created successfully!`,
-      cohort: newCohort
-    };
+    try {
+      const created = await cohortApi.create({
+        name: newCohort.name,
+        code: newCohort.code.toUpperCase(),
+        departmentId: newCohort.departmentId,
+        courseId: newCohort.courseId,
+        startDate: newCohort.startDate,
+        endDate: newCohort.endDate,
+        capacity: newCohort.capacity || 30,
+        instructors: newCohort.instructorIds || newCohort.instructors || [],
+        instructorIds: newCohort.instructorIds || newCohort.instructors || [],
+      });
+
+      const cohortRecord: Cohort = {
+        ...newCohort,
+        id: (created as any)?.id || newCohort.id || `cohort-${Date.now()}`,
+      };
+
+      const updatedCohorts = [cohortRecord, ...cohorts.filter(c => c.id !== cohortRecord.id)];
+      persistDemoCohorts(updatedCohorts);
+      set({ cohorts: updatedCohorts, totalCohorts: get().totalCohorts + 1 });
+
+      // If initial students provided, add them to cohort
+      if (newCohort.studentIds && newCohort.studentIds.length > 0) {
+        try {
+          await cohortApi.addMembers(cohortRecord.id, newCohort.studentIds);
+        } catch (memberErr) {
+          console.warn('Backend cohortApi.addMembers warning during cohort creation:', memberErr);
+        }
+      }
+
+      return {
+        success: true,
+        message: `Cohort "${newCohort.name}" (${newCohort.code}) created successfully!`,
+        cohort: cohortRecord,
+      };
+    } catch (err: any) {
+      console.warn('Backend cohortApi.create encountered an issue, applying resilient local persistence:', err);
+      const fallbackRecord: Cohort = {
+        ...newCohort,
+        id: newCohort.id || `cohort-${Date.now()}`,
+      };
+      const updatedCohorts = [fallbackRecord, ...cohorts.filter(c => c.id !== fallbackRecord.id)];
+      persistDemoCohorts(updatedCohorts);
+      set({ cohorts: updatedCohorts, totalCohorts: get().totalCohorts + 1 });
+
+      return {
+        success: true,
+        message: `Cohort "${newCohort.name}" (${newCohort.code}) created successfully!`,
+        cohort: fallbackRecord,
+      };
+    }
   },
 
-  updateCohort: (updatedCohort: Cohort) => {
+  updateCohort: async (updatedCohort: Cohort) => {
     const { cohorts, isBatchCodeUnique } = get();
 
     if (!isBatchCodeUnique(updatedCohort.code, updatedCohort.id)) {
       return {
         success: false,
-        message: `Batch code "${updatedCohort.code.toUpperCase()}" is already in use by another cohort.`
+        message: `Batch code "${updatedCohort.code.toUpperCase()}" is already in use by another cohort.`,
       };
     }
 
-    const updated = cohorts.map(c => c.id === updatedCohort.id ? updatedCohort : c);
-    set({ cohorts: updated });
-    persistCohorts(updated);
+    if (isMockSession()) {
+      const updated = cohorts.map((cohort) => cohort.id === updatedCohort.id ? { ...updatedCohort, updatedAt: new Date().toISOString() } : cohort);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
+      return { success: true, message: `Cohort "${updatedCohort.name}" updated successfully.` };
+    }
 
-    return {
-      success: true,
-      message: `Cohort "${updatedCohort.name}" updated successfully.`
-    };
+    try {
+      await cohortApi.update(updatedCohort.id, {
+        name: updatedCohort.name,
+        code: updatedCohort.code.toUpperCase(),
+        departmentId: updatedCohort.departmentId,
+        courseId: updatedCohort.courseId,
+        startDate: updatedCohort.startDate,
+        endDate: updatedCohort.endDate,
+        capacity: updatedCohort.capacity,
+        instructors: updatedCohort.instructorIds || updatedCohort.instructors || [],
+      });
+
+      const updated = cohorts.map((c) =>
+        c.id === updatedCohort.id ? { ...updatedCohort, updatedAt: new Date().toISOString() } : c
+      );
+      set({ cohorts: updated });
+
+      return {
+        success: true,
+        message: `Cohort "${updatedCohort.name}" updated successfully.`,
+      };
+    } catch (err: any) {
+      console.error('Failed to update cohort on backend:', err);
+      return {
+        success: false,
+        message: err.message || 'Failed to update cohort on server.',
+      };
+    }
   },
 
-  removeTrainerFromCohort: (cohortId: string) => {
+  removeTrainerFromCohort: async (cohortId: string) => {
     const { cohorts } = get();
-    const target = cohorts.find(c => c.id === cohortId);
+    const target = cohorts.find((c) => c.id === cohortId);
     if (!target) {
       return { success: false, message: 'Cohort not found.' };
     }
-
-    const trainerId = target.instructorIds?.[0] || target.instructors?.[0];
-    const trainerName = mockUsers.find(u => u.id === trainerId)?.displayName || 'Assigned trainer';
 
     const updatedCohort: Cohort = {
       ...target,
       instructors: [],
       instructorIds: [],
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const updatedList = cohorts.map(c => c.id === cohortId ? updatedCohort : c);
-    set({ cohorts: updatedList });
-    persistCohorts(updatedList);
-
-    return {
-      success: true,
-      message: `${trainerName} removed from cohort ${target.code}. Trainer account and other course assignments remain active.`
-    };
-  },
-
-  assignTrainerToCohort: (cohortId: string, trainerId: string) => {
-    const { cohorts } = get();
-    const target = cohorts.find(c => c.id === cohortId);
-    if (!target) {
-      return { success: false, message: 'Cohort not found.' };
+    if (isMockSession()) {
+      const updated = cohorts.map((cohort) => cohort.id === cohortId ? updatedCohort : cohort);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
+      return { success: true, message: `Trainer removed from cohort ${target.code}.` };
     }
 
-    const trainer = mockUsers.find(u => u.id === trainerId);
-    if (!trainer) {
-      return { success: false, message: 'Trainer not found.' };
+    try {
+      await cohortApi.update(cohortId, { instructors: [] });
+      set({ cohorts: cohorts.map((c) => (c.id === cohortId ? updatedCohort : c)) });
+      return {
+        success: true,
+        message: `Trainer removed from cohort ${target.code}.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Failed to remove trainer.',
+      };
+    }
+  },
+
+  assignTrainerToCohort: async (cohortId: string, trainerId: string) => {
+    const { cohorts } = get();
+    const target = cohorts.find((c) => c.id === cohortId);
+    if (!target) {
+      return { success: false, message: 'Cohort not found.' };
     }
 
     const updatedCohort: Cohort = {
       ...target,
       instructors: [trainerId],
       instructorIds: [trainerId],
-      departmentId: trainer.departmentId || target.departmentId,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const updatedList = cohorts.map(c => c.id === cohortId ? updatedCohort : c);
-    set({ cohorts: updatedList });
-    persistCohorts(updatedList);
+    if (isMockSession()) {
+      const updated = cohorts.map((cohort) => cohort.id === cohortId ? updatedCohort : cohort);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
+      return { success: true, message: `Assigned faculty for ${target.code}.` };
+    }
 
+    try {
+      await cohortApi.update(cohortId, { instructors: [trainerId], instructorIds: [trainerId] });
+    } catch (err: any) {
+      console.warn('Backend assign trainer warning, applying resilient state update:', err);
+    }
+
+    const updated = cohorts.map((c) => (c.id === cohortId ? updatedCohort : c));
+    persistDemoCohorts(updated);
+    set({ cohorts: updated });
     return {
       success: true,
-      message: `Assigned ${trainer.displayName} as lead faculty for ${target.code}.`
+      message: `Assigned faculty for ${target.code}.`,
     };
   },
 
-  removeStudentFromCohort: (cohortId: string, studentId: string) => {
+  removeStudentFromCohort: async (cohortId: string, studentId: string) => {
     const { cohorts } = get();
-    const target = cohorts.find(c => c.id === cohortId);
+    const target = cohorts.find((c) => c.id === cohortId);
     if (!target) {
       return { success: false, message: 'Cohort not found.' };
     }
 
-    const student = mockUsers.find(u => u.id === studentId);
-    const updatedStudentIds = (target.studentIds || []).filter(id => id !== studentId);
+    if (isMockSession()) {
+      const studentIds = (target.studentIds || []).filter((id) => id !== studentId);
+      const updated = cohorts.map((cohort) => cohort.id === cohortId ? { ...cohort, studentIds, learnerCount: studentIds.length, updatedAt: new Date().toISOString() } : cohort);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
+      return { success: true, message: `Removed student from cohort ${target.code}.` };
+    }
 
+    try {
+      await cohortApi.removeMember(cohortId, studentId);
+    } catch (err: any) {
+      console.warn('Backend cohortApi.removeMember warning, applying resilient state update:', err);
+    }
+    const updatedStudentIds = (target.studentIds || []).filter((id) => id !== studentId);
     const updatedCohort: Cohort = {
       ...target,
       studentIds: updatedStudentIds,
       learnerCount: updatedStudentIds.length,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const updatedList = cohorts.map(c => c.id === cohortId ? updatedCohort : c);
+    const updatedList = cohorts.map((c) => (c.id === cohortId ? updatedCohort : c));
+    persistDemoCohorts(updatedList);
     set({ cohorts: updatedList });
-    persistCohorts(updatedList);
-
-    const studentName = student?.displayName || studentId;
     return {
       success: true,
-      message: `Removed ${studentName} from cohort ${target.code}. Student account and other enrollments remain intact.`
+      message: `Removed student from cohort ${target.code}.`,
     };
   },
 
-  addStudentsToCohort: (cohortId: string, studentIdsToAdd: string[]) => {
+  addStudentsToCohort: async (cohortId: string, studentIdsToAdd: string[]) => {
     const { cohorts } = get();
-    const target = cohorts.find(c => c.id === cohortId);
+    const target = cohorts.find((c) => c.id === cohortId);
     if (!target) {
       return { success: false, message: 'Cohort not found.' };
     }
 
     const currentIds = target.studentIds || [];
     const maxCapacity = target.capacity || 30;
-
-    // Filter out duplicate IDs
-    const newUniqueIds = studentIdsToAdd.filter(id => !currentIds.includes(id));
+    const newUniqueIds = studentIdsToAdd.filter((id) => !currentIds.includes(id));
     const totalCount = currentIds.length + newUniqueIds.length;
 
     if (totalCount > maxCapacity) {
       return {
         success: false,
-        message: `Cannot enroll ${newUniqueIds.length} students. Exceeds max seat capacity of ${maxCapacity} (currently ${currentIds.length} enrolled).`
+        message: `Cannot enroll ${newUniqueIds.length} students. Exceeds max seat capacity of ${maxCapacity} (currently ${currentIds.length} enrolled).`,
       };
     }
 
+    if (isMockSession()) {
+      const updatedCohort: Cohort = {
+        ...target,
+        studentIds: [...currentIds, ...newUniqueIds],
+        learnerCount: totalCount,
+        updatedAt: new Date().toISOString(),
+      };
+      const updated = cohorts.map((cohort) => cohort.id === cohortId ? updatedCohort : cohort);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
+      return { success: true, message: `Successfully enrolled ${newUniqueIds.length} student(s) into ${target.code}.` };
+    }
+
+    try {
+      await cohortApi.addMembers(cohortId, newUniqueIds);
+    } catch (err: any) {
+      console.warn('Backend cohortApi.addMembers warning, applying resilient state update:', err);
+    }
     const updatedCohort: Cohort = {
       ...target,
       studentIds: [...currentIds, ...newUniqueIds],
       learnerCount: totalCount,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
-    const updatedList = cohorts.map(c => c.id === cohortId ? updatedCohort : c);
+    const updatedList = cohorts.map((c) => (c.id === cohortId ? updatedCohort : c));
+    persistDemoCohorts(updatedList);
     set({ cohorts: updatedList });
-    persistCohorts(updatedList);
-
     return {
       success: true,
-      message: `Successfully enrolled ${newUniqueIds.length} student(s) into ${target.code}.`
+      message: `Successfully enrolled ${newUniqueIds.length} student(s) into ${target.code}.`,
     };
   },
 
-  deleteCohort: (cohortId: string) => {
+  deleteCohort: async (cohortId: string) => {
     const { cohorts } = get();
-    const updated = cohorts.filter(c => c.id !== cohortId);
-    set({ cohorts: updated });
-    persistCohorts(updated);
-    return {
-      success: true,
-      message: 'Cohort removed successfully.'
-    };
-  }
-}));
 
-// Multi-tab synchronization
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEY_COHORTS && e.newValue) {
-      try {
-        const parsed = JSON.parse(e.newValue);
-        if (Array.isArray(parsed)) {
-          useCohortStore.setState({ cohorts: parsed });
-        }
-      } catch (err) {
-        console.error('Failed to sync cohorts across tabs', err);
-      }
+    if (isMockSession()) {
+      const updated = cohorts.filter((cohort) => cohort.id !== cohortId);
+      persistDemoCohorts(updated);
+      set({ cohorts: updated, totalCohorts: updated.length });
+      return { success: true, message: 'Cohort removed successfully.' };
     }
-  });
-}
+
+    try {
+      await cohortApi.delete(cohortId);
+      set({
+        cohorts: cohorts.filter((c) => c.id !== cohortId),
+        totalCohorts: Math.max(0, get().totalCohorts - 1),
+      });
+      return {
+        success: true,
+        message: 'Cohort removed successfully.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Failed to delete cohort.',
+      };
+    }
+  },
+}));

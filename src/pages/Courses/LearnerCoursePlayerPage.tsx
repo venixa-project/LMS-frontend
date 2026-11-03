@@ -458,23 +458,13 @@ export const LearnerCoursePlayerPage: React.FC = () => {
               <ChevronLeft size={16} /> Previous Lesson
             </button>
 
-            {isAfterEnd ? (
-              <button
-                className="btn btn-secondary"
-                disabled
-                title="Course access period has ended"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.8, cursor: 'not-allowed' }}
+            {isAfterEnd && (
+              <span
+                className="badge badge-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.75rem' }}
               >
-                <Lock size={16} /> Course Ended &bull; Read-Only
-              </button>
-            ) : (
-              <button
-                className={`btn ${isCompleted ? 'btn-success' : 'btn-primary'}`}
-                onClick={toggleComplete}
-              >
-                <CheckCircle2 size={16} />
-                {isCompleted ? 'Completed' : 'Mark as Complete'}
-              </button>
+                <Lock size={14} /> Course Ended &bull; Read-Only
+              </span>
             )}
 
             {currentLessonIndex < allLessons.length - 1 ? (

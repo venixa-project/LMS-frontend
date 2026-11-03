@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
+import { peopleApi } from '../../lib/peopleApiService';
 import { mockDepartments, mockCourses } from '../../data/mockData';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
@@ -45,8 +46,22 @@ export const PersonEditPage: React.FC = () => {
       setRollNo(existingPerson.rollNo || '');
       setSpecialization(existingPerson.specialization || '');
       setSelectedCourses(existingPerson.eligibleCourseIds || [mockCourses[0]?.id || 'crs-001']);
+    } else if (id) {
+      peopleApi.get(id).then((p) => {
+        if (p) {
+          setFirstName(p.firstName || '');
+          setLastName(p.lastName || '');
+          setEmail(p.email || '');
+          setPhone(p.phone || '');
+          setDepartmentId(p.departmentId || 'dep-001');
+          setActiveRole(p.activeRole);
+          setStatus(p.status);
+          setRollNo(p.rollNo || '');
+          setSpecialization(p.specialization || '');
+        }
+      }).catch((e) => console.error(e));
     }
-  }, [existingPerson]);
+  }, [existingPerson, id]);
 
   const isStudent = activeRole === 'student' || activeRole === 'learner';
   const isFaculty = activeRole === 'trainer' || activeRole === 'instructor';
@@ -99,7 +114,7 @@ export const PersonEditPage: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !existingPerson) return;
 
@@ -120,7 +135,7 @@ export const PersonEditPage: React.FC = () => {
       updatedAt: new Date().toISOString()
     };
 
-    const res = updateUser(updatedUser);
+    const res = await updateUser(updatedUser);
 
     setTimeout(() => {
       setIsSubmitting(false);

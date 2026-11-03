@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Cohort, User } from '../../types';
 import { mockDepartments, mockCourses } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
 import { useCohortStore } from '../../lib/cohortStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import {
   ArrowLeft, BookOpen, Calendar, UsersRound, User as UserIcon,
   ShieldCheck, Plus, Trash2, Search, Filter, Edit2, AlertCircle,
@@ -31,6 +32,21 @@ export const CohortDetailsView: React.FC<Props> = ({
     updateCohort
   } = useCohortStore();
 
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    fetchPeople();
+  }, [fetchPeople]);
+
+  // Combine live database users with mock users seamlessly
+  const allUsers = useMemo(() => {
+    const live = peopleUsers || [];
+    const liveIds = new Set(live.map(u => u.id));
+    const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
+    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
+    return [...live, ...remainingMock];
+  }, [peopleUsers]);
+
   // Modals inside details view
   const [isChangeTrainerModalOpen, setIsChangeTrainerModalOpen] = useState(false);
   const [isAddStudentsModalOpen, setIsAddStudentsModalOpen] = useState(false);
@@ -49,7 +65,7 @@ export const CohortDetailsView: React.FC<Props> = ({
   const [selectedTrainerIdToAssign, setSelectedTrainerIdToAssign] = useState<string | null>(null);
 
   // Add Students Modal States
-  const [addStudentDeptFilter, setAddStudentDeptFilter] = useState(mockDepartments[0]?.id || 'dep-001');
+  const [addStudentDeptFilter, setAddStudentDeptFilter] = useState('all');
   const [addStudentSearch, setAddStudentSearch] = useState('');
   const [newlySelectedStudentIds, setNewlySelectedStudentIds] = useState<string[]>([]);
   const [addStudentError, setAddStudentError] = useState<string | null>(null);
@@ -75,16 +91,16 @@ export const CohortDetailsView: React.FC<Props> = ({
   const assignedTrainer = useMemo(() => {
     const trainerId = cohort.instructorIds?.[0] || cohort.instructors?.[0];
     if (!trainerId) return null;
-    return mockUsers.find(u => u.id === trainerId) || null;
-  }, [cohort.instructorIds, cohort.instructors]);
+    return allUsers.find(u => u.id === trainerId) || null;
+  }, [cohort.instructorIds, cohort.instructors, allUsers]);
 
   // All faculty members for reassignment
   const allFaculty = useMemo(() => {
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'trainer' || u.activeRole === 'instructor') &&
       u.status !== 'suspended'
     );
-  }, []);
+  }, [allUsers]);
 
   // Filtered faculty for Change Trainer modal
   const candidateTrainers = useMemo(() => {
@@ -104,9 +120,9 @@ export const CohortDetailsView: React.FC<Props> = ({
   const enrolledStudents = useMemo(() => {
     const ids = cohort.studentIds || [];
     return ids
-      .map(id => mockUsers.find(u => u.id === id))
+      .map(id => allUsers.find(u => u.id === id))
       .filter((u): u is User => Boolean(u));
-  }, [cohort.studentIds]);
+  }, [cohort.studentIds, allUsers]);
 
   // Filtered enrolled students for the main table
   const displayedEnrolledStudents = useMemo(() => {
@@ -126,11 +142,11 @@ export const CohortDetailsView: React.FC<Props> = ({
   // Non-enrolled students available for the "Add Students" modal
   const eligibleNonEnrolledStudents = useMemo(() => {
     const currentEnrolledIds = new Set(cohort.studentIds || []);
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'student' || u.activeRole === 'learner') &&
       !currentEnrolledIds.has(u.id)
     );
-  }, [cohort.studentIds]);
+  }, [cohort.studentIds, allUsers]);
 
   const candidateStudentsForAdd = useMemo(() => {
     return eligibleNonEnrolledStudents.filter(student => {
@@ -165,11 +181,11 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Trainer Management Handlers
   // --------------------------------------------------------------------------
-  const handleConfirmRemoveTrainer = () => {
+  const handleConfirmRemoveTrainer = async () => {
     if (!assignedTrainer) return;
     const trainerName = assignedTrainer.displayName;
 
-    const res = removeTrainerFromCohort(cohort.id);
+    const res = await removeTrainerFromCohort(cohort.id);
     if (res.success) {
       const updatedCohort: Cohort = {
         ...cohort,
@@ -183,18 +199,17 @@ export const CohortDetailsView: React.FC<Props> = ({
     setShowRemoveTrainerConfirm(false);
   };
 
-  const handleConfirmChangeTrainer = () => {
+  const handleConfirmChangeTrainer = async () => {
     if (!selectedTrainerIdToAssign) return;
-    const newTrainer = mockUsers.find(u => u.id === selectedTrainerIdToAssign);
-    if (!newTrainer) return;
+    const newTrainer = allUsers.find(u => u.id === selectedTrainerIdToAssign);
 
-    const res = assignTrainerToCohort(cohort.id, selectedTrainerIdToAssign);
+    const res = await assignTrainerToCohort(cohort.id, selectedTrainerIdToAssign);
     if (res.success) {
       const updatedCohort: Cohort = {
         ...cohort,
         instructors: [selectedTrainerIdToAssign],
         instructorIds: [selectedTrainerIdToAssign],
-        departmentId: newTrainer.departmentId || cohort.departmentId,
+        departmentId: newTrainer?.departmentId || cohort.departmentId,
         updatedAt: new Date().toISOString()
       };
       onUpdateCohort(updatedCohort);
@@ -207,11 +222,11 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Student Management Handlers
   // --------------------------------------------------------------------------
-  const handleConfirmRemoveStudent = () => {
+  const handleConfirmRemoveStudent = async () => {
     if (!studentToRemove) return;
     const studentName = studentToRemove.displayName;
 
-    const res = removeStudentFromCohort(cohort.id, studentToRemove.id);
+    const res = await removeStudentFromCohort(cohort.id, studentToRemove.id);
     if (res.success) {
       const updatedStudentIds = (cohort.studentIds || []).filter(id => id !== studentToRemove.id);
       const updatedCohort: Cohort = {
@@ -243,10 +258,10 @@ export const CohortDetailsView: React.FC<Props> = ({
     }
   };
 
-  const handleConfirmAddStudents = () => {
+  const handleConfirmAddStudents = async () => {
     if (newlySelectedStudentIds.length === 0) return;
 
-    const res = addStudentsToCohort(cohort.id, newlySelectedStudentIds);
+    const res = await addStudentsToCohort(cohort.id, newlySelectedStudentIds);
     if (res.success) {
       const updatedStudentIds = [...(cohort.studentIds || []), ...newlySelectedStudentIds];
       const updatedCohort: Cohort = {
@@ -268,7 +283,7 @@ export const CohortDetailsView: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Basic Cohort Details Edit
   // --------------------------------------------------------------------------
-  const handleSaveEditInfo = (e: React.FormEvent) => {
+  const handleSaveEditInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName.trim()) {
       setEditError('Cohort name cannot be empty.');
@@ -297,7 +312,7 @@ export const CohortDetailsView: React.FC<Props> = ({
       updatedAt: new Date().toISOString()
     };
 
-    const res = updateCohort(updatedCohort);
+    const res = await updateCohort(updatedCohort);
     if (res.success) {
       onUpdateCohort(updatedCohort);
       showNotice(res.message);
@@ -626,8 +641,8 @@ export const CohortDetailsView: React.FC<Props> = ({
               <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
                 {assignedTrainer ? (
                   <>
-                    {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'Department'} &bull;{' '}
-                    <code>{assignedTrainer.id}</code> &bull; {assignedTrainer.email}
+                    {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull;{' '}
+                    {assignedTrainer.email}
                   </>
                 ) : (
                   'Assign a certified trainer to conduct lectures and manage course grading for this cohort.'
@@ -903,7 +918,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{trainer.displayName}</span>
-                            <code>{trainer.id}</code>
+                            <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>{trainer.activeRole || 'Faculty'}</span>
                             {isCurrent && <span className="badge badge-draft">Current Lead</span>}
                           </div>
                           <div className="text-muted text-xs">
@@ -1088,7 +1103,9 @@ export const CohortDetailsView: React.FC<Props> = ({
                               <div className="text-muted text-xs">{st.email}</div>
                             </td>
                             <td>
-                              <code>{st.rollNo || st.id}</code>
+                              <span style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                                {st.rollNo || (st.id?.startsWith('u-') || st.id?.startsWith('stu-') ? st.id : st.id?.slice(0, 8))}
+                              </span>
                             </td>
                             <td>
                               <span className="badge badge-draft">{dept?.name || 'General'}</span>
