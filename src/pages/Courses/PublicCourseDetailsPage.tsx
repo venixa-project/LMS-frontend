@@ -25,15 +25,32 @@ export const PublicCourseDetailsPage: React.FC = () => {
     isEnrolled,
     hasRequested,
     enrollInCourse,
-    requestToJoinCourse
+    requestToJoinCourse,
+    fetchCourses
   } = useCourseStore();
 
   const [enrollmentNotice, setEnrollmentNotice] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [loadingCourse, setLoadingCourse] = useState(true);
+
+  React.useEffect(() => {
+    fetchCourses().finally(() => setLoadingCourse(false));
+  }, [fetchCourses]);
 
   // Normalize course id lookup
   const course = id ? getCourseById(id) : undefined;
+
+  if (loadingCourse && !course) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="pulse-indicator" style={{ width: '14px', height: '14px', margin: '0 auto 12px' }} />
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Loading course curriculum...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!course) {
     return (

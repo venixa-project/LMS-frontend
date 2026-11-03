@@ -15,6 +15,7 @@ export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { courses } = useCourseStore();
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
     return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
@@ -35,8 +36,6 @@ export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
   }, [isPlatformAdmin, user?.organizationId]);
 
   if (!isOpen) return null;
-
-  const { courses } = useCourseStore();
 
   const filteredCourses = courses.filter((c) => {
     const matchesOrg = (c.organizationId || 'org-001') === activeOrgId;

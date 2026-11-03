@@ -42,9 +42,9 @@ const CoursesManagementPage: React.FC = () => {
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isAdmin = isPlatformAdmin || isOrgAdmin || (isAuth && !isFaculty && !isLearner);
   const isCatalog = location.pathname === '/catalog';
-  const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
+  const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning' || location.pathname === '/my_learning';
 
-  const { courses, enrolledCourseIds, enrollments, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
+  const { courses, enrolledCourseIds, enrollments, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse, fetchCourses, isCoursesLoading } = useCourseStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const allFaculty = getFaculty();
@@ -52,7 +52,8 @@ const CoursesManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchCohorts();
-  }, [fetchCohorts]);
+    fetchCourses();
+  }, [fetchCohorts, fetchCourses]);
 
   // Derive courses associated with the user's assigned cohorts (for both students and trainers)
   const cohortLinkedCourseIds = useMemo(() => {
@@ -99,6 +100,12 @@ const CoursesManagementPage: React.FC = () => {
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
     return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
   });
+
+  useEffect(() => {
+    if (user?.organizationId && !isPlatformAdmin) {
+      setActiveOrgId(user.organizationId);
+    }
+  }, [user?.organizationId, isPlatformAdmin]);
 
   useEffect(() => {
     const handleOrgSwitch = (e: Event) => {
@@ -274,11 +281,20 @@ const CoursesManagementPage: React.FC = () => {
     showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
   };
 
+  // Primary tenant equivalence helper: 'org-001' is the canonical mock/seed alias for tenant '871abf8a-e563-4d0f-afc7-416d8da3df14'
+  const isMatchingOrg = (courseOrgId: string | undefined, currentOrgId: string) => {
+    if (!courseOrgId) return true;
+    if (courseOrgId === currentOrgId) return true;
+    const isPrimaryTenant = (id?: string) => !id || id === 'org-001' || id === '871abf8a-e563-4d0f-afc7-416d8da3df14';
+    if (isPrimaryTenant(courseOrgId) && isPrimaryTenant(currentOrgId)) return true;
+    return false;
+  };
+
   // Courses scoped to active organization
   const orgScopedCourses = useMemo(() => {
     return courses.filter((c) => {
       if (isMyLearning && effectiveEnrolledIds.has(c.id)) return true;
-      return (c.organizationId || 'org-001') === activeOrgId;
+      return isMatchingOrg(c.organizationId, activeOrgId);
     });
   }, [courses, activeOrgId, isMyLearning, effectiveEnrolledIds]);
 
@@ -592,7 +608,7 @@ const CoursesManagementPage: React.FC = () => {
           </p>
         </div>
 
-        {isCatalog ? (
+        {isCatalog || isMyLearning ? (
           <div style={{ display: 'flex', gap: '10px' }}>
             <Link to="/join-course" className="btn btn-primary">
               <Link2 size={16} /> Join with Link
@@ -770,7 +786,14 @@ const CoursesManagementPage: React.FC = () => {
       </div>
 
       {/* Courses Grid or Empty State */}
-      {filteredCourses.length === 0 ? (
+      {isCoursesLoading && courses.length === 0 ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="pulse-indicator" style={{ width: '16px', height: '16px', margin: '0 auto 12px' }} />
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Loading course catalogue...</div>
+          </div>
+        </div>
+      ) : filteredCourses.length === 0 ? (
         <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <div style={{
             width: '56px',

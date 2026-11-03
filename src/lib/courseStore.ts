@@ -13,6 +13,7 @@ interface CourseState {
   enrolledCourseIds: string[];
   requestedCourseIds: string[];
   enrollments: Enrollment[];
+  isCoursesLoading: boolean;
 
   // Actions
   getCourseById: (id: string) => Course | undefined;
@@ -49,7 +50,8 @@ interface CourseState {
     alreadyEnrolledCount: number;
     message: string;
   };
-  addCourse: (course: Course) => void;
+  fetchCourses: () => Promise<void>;
+  addCourse: (course: Course) => Promise<Course>;
   deleteCourse: (courseId: string) => void;
 }
 
@@ -157,10 +159,12 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   enrolledCourseIds: loadInitialEnrolled(),
   requestedCourseIds: loadInitialRequested(),
   enrollments: loadInitialEnrollments(),
+  isCoursesLoading: false,
 
   getCourseById: (id: string) => {
     const { courses } = get();
     return courses.find((c) => c.id.toLowerCase() === id.toLowerCase());
+    return courses.find((c) => c.id.toLowerCase() === id.toLowerCase() || (c.slug && c.slug.toLowerCase() === id.toLowerCase()));
   },
 
   isEnrolled: (courseId: string) => {
@@ -299,6 +303,9 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(nextEnrolled));
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+      apiClient.post(`/courses/${courseId}/enroll`, {}).catch((err) => {
+        console.warn('Backend enrollment sync note:', err);
+      });
     } catch (e) { }
 
     return {
@@ -428,19 +435,198 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     };
   },
 
-  addCourse: (course: Course) => {
-    set((state) => {
-      const fallbackOrg = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
-        : 'org-001';
-      const courseWithOrg: Course = {
-        ...course,
-        organizationId: course.organizationId || fallbackOrg,
+  fetchCourses: async () => {
+    set({ isCoursesLoading: true });
+    try {
+      const [coursesRes, enrollmentsRes] = await Promise.all([
+        apiClient.get('/courses?limit=100').catch(() => null),
+        apiClient.get('/courses/my-enrollments').catch(() => null),
+      ]);
+
+      if (coursesRes && coursesRes.data && Array.isArray(coursesRes.data)) {
+        const backendCourses: Course[] = (coursesRes.data as any[]).map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          slug: c.slug,
+          shortDescription: c.shortDescription || c.description?.slice(0, 120),
+          description: c.description || '',
+          thumbnail: c.thumbnailUrl || c.thumbnail,
+          category: c.category || 'General',
+          departmentId: c.departmentId,
+          level: c.level || 'Beginner',
+          durationHours: c.durationHours || Math.round((c.estimatedDuration || 60) / 60) || 10,
+          status: c.status || 'draft',
+          version: c.version || 1,
+          instructors: Array.isArray(c.instructors) ? c.instructors : [],
+          modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
+            id: m.id,
+            title: m.title || `Module ${mIdx + 1}`,
+            description: m.description,
+            order: m.order || mIdx + 1,
+            lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
+              id: l.id,
+              title: l.title || `Lesson ${lIdx + 1}`,
+              description: l.description,
+              type: l.type || 'rich_text',
+              content: l.content,
+              videoUrl: l.contentUrl,
+              durationMinutes: l.durationMinutes || 15,
+              order: l.order || lIdx + 1,
+              isRequired: l.isRequired ?? true,
+              isPreview: l.isPreview ?? false,
+              status: l.status || 'published',
+              quizConfig: l.quizConfig,
+              uploadedDocument: l.uploadedDocument,
+            })) : [],
+          })) : [],
+          enrolledLearners: c.learnerCount || (c._count?.enrollments) || 0,
+          learnerCount: c.learnerCount || (c._count?.enrollments) || 0,
+          organizationId: c.tenantId || 'org-001',
+          shareableLinkEnabled: c.shareableLinkEnabled ?? true,
+          enrollmentCapacity: c.enrollmentCapacity,
+          enrollmentDeadline: c.enrollmentDeadline,
+          enrollmentApprovalRequired: c.enrollmentApprovalRequired,
+          completionPercentageRequired: c.completionPercentageRequired || 80,
+          finalAssessmentConfig: c.finalAssessmentConfig,
+          certificateConfig: c.certificateConfig,
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+        }));
+
+        set((state) => {
+          const existingMap = new Map(state.courses.map((c) => [c.id, c]));
+          backendCourses.forEach((bc) => existingMap.set(bc.id, bc));
+          const merged = Array.from(existingMap.values());
+          try {
+            localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(merged));
+            localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+          } catch (e) { }
+          return { courses: merged };
+        });
+      }
+
+      if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
+        const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
+        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => ({
+          id: e.id,
+          userId: e.userId,
+          courseId: e.courseId,
+          cohortId: e.cohortId,
+          status: e.status || 'active',
+          progress: e.progressPercentage || 0,
+          enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
+        }));
+
+        set((state) => {
+          const uniqueIds = Array.from(new Set([...state.enrolledCourseIds, ...backendEnrolledIds]));
+          try {
+            localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(uniqueIds));
+            localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
+          } catch (e) { }
+          return {
+            enrolledCourseIds: uniqueIds,
+            enrollments: mappedEnrollments,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch courses from backend API:', err);
+    } finally {
+      set({ isCoursesLoading: false });
+    }
+  },
+
+  addCourse: async (course: Course): Promise<Course> => {
+    const fallbackOrg = typeof window !== 'undefined'
+      ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
+      : 'org-001';
+
+    let persistedCourse: Course = {
+      ...course,
+      organizationId: course.organizationId || fallbackOrg,
+    };
+
+    try {
+      const payload = {
+        title: course.title,
+        slug: course.slug || course.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+        description: course.description || 'Comprehensive course syllabus and curriculum modules.',
+        shortDescription: course.shortDescription,
+        category: course.category || 'General',
+        level: course.level || 'Beginner',
+        durationHours: course.durationHours || 10,
+        status: course.status || 'draft',
+        thumbnailUrl: course.thumbnail,
+        shareableLinkEnabled: course.shareableLinkEnabled ?? true,
+        enrollmentCapacity: course.enrollmentCapacity,
+        enrollmentDeadline: course.enrollmentDeadline,
+        enrollmentApprovalRequired: course.enrollmentApprovalRequired,
+        completionPercentageRequired: course.completionPercentageRequired || 80,
+        instructors: course.instructors || [],
+        modules: (course.modules || []).map((m, mIdx) => ({
+          title: m.title || `Module ${mIdx + 1}`,
+          description: m.description,
+          order: m.order || mIdx + 1,
+          lessons: (m.lessons || []).map((l, lIdx) => ({
+            title: l.title || `Lesson ${lIdx + 1}`,
+            description: l.description,
+            type: l.type || 'rich_text',
+            content: l.content,
+            contentUrl: l.videoUrl || (l as any).contentUrl,
+            durationMinutes: l.durationMinutes || 15,
+            order: l.order || lIdx + 1,
+            isRequired: l.isRequired ?? true,
+            isPreview: l.isPreview ?? false,
+            status: l.status || 'published',
+            quizConfig: (l as any).quizConfig || {},
+            uploadedDocument: (l as any).uploadedDocument || {},
+          })),
+        })),
+        finalAssessmentConfig: course.finalAssessmentConfig,
+        certificateConfig: course.certificateConfig,
+        evaluationCriteria: (course as any).evaluationCriteria,
       };
-      const exists = state.courses.some((c) => c.id === courseWithOrg.id);
+
+      const res = await apiClient.post<any>('/courses', payload);
+      if (res && res.data) {
+        const c = res.data;
+        persistedCourse = {
+          ...persistedCourse,
+          id: c.id,
+          slug: c.slug,
+          status: c.status || persistedCourse.status,
+          modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
+            id: m.id,
+            title: m.title || `Module ${mIdx + 1}`,
+            description: m.description,
+            order: m.order || mIdx + 1,
+            lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
+              id: l.id,
+              title: l.title || `Lesson ${lIdx + 1}`,
+              description: l.description,
+              type: l.type || 'rich_text',
+              content: l.content,
+              videoUrl: l.contentUrl,
+              durationMinutes: l.durationMinutes || 15,
+              order: l.order || lIdx + 1,
+              isRequired: l.isRequired ?? true,
+              isPreview: l.isPreview ?? false,
+              status: l.status || 'published',
+              quizConfig: l.quizConfig,
+              uploadedDocument: l.uploadedDocument,
+            })) : [],
+          })) : persistedCourse.modules,
+        };
+      }
+    } catch (apiErr) {
+      console.warn('Backend API course creation note (storing in client state):', apiErr);
+    }
+
+    set((state) => {
+      const exists = state.courses.some((c) => c.id === persistedCourse.id);
       const updatedCourses = exists
-        ? state.courses.map((c) => (c.id === courseWithOrg.id ? courseWithOrg : c))
-        : [courseWithOrg, ...state.courses];
+        ? state.courses.map((c) => (c.id === persistedCourse.id ? persistedCourse : c))
+        : [persistedCourse, ...state.courses];
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
         localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
@@ -449,6 +635,8 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       }
       return { courses: updatedCourses };
     });
+
+    return persistedCourse;
   },
 
   deleteCourse: (courseId: string) => {

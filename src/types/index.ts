@@ -22,6 +22,7 @@ export type PermissionScope = 'global' | 'organization' | 'department' | 'cohort
 
 export interface Permission {
   id: string;
+  slug?: string;
   resource: PermissionResource;
   action: PermissionAction;
   scope: PermissionScope;
@@ -31,6 +32,7 @@ export interface Permission {
 
 export interface Role {
   id: string;
+  slug?: string;
   name: string;
   displayName: string;
   description: string;
@@ -56,6 +58,7 @@ export interface UserSignatureSettings {
 // --- User & Profile ---
 export interface User {
   id: string;
+  slug?: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -100,6 +103,7 @@ export interface Organization {
 // --- Department ---
 export interface Department {
   id: string;
+  slug?: string;
   name: string;
   organizationId: string;
   parentId?: string;
@@ -113,6 +117,7 @@ export interface Department {
 // --- Cohort ---
 export interface Cohort {
   id: string;
+  slug?: string;
   name: string;
   code: string;
   organizationId: string;
@@ -134,6 +139,7 @@ export interface Cohort {
 // --- Course ---
 export interface Course {
   id: string;
+  slug?: string;
   title: string;
   shortDescription?: string;
   description: string;
@@ -168,6 +174,7 @@ export interface Course {
   completionPoints?: number;
   createdAt: string;
   finalAssessment?: QuizAssessmentConfig;
+  finalAssessmentConfig?: QuizAssessmentConfig;
   certificateConfig?: CourseCertificateConfig;
   updatedAt: string;
   organizationId?: string;
@@ -216,12 +223,14 @@ export interface AssessmentCertificateConfig {
 // --- Assessment & Quiz Configuration Types for Course Builder ---
 export interface QuizOption {
   id: string;
+  slug?: string;
   text: string;
   isCorrect: boolean;
 }
 
 export interface QuizQuestionItem {
   id: string;
+  slug?: string;
   prompt: string;
   type: 'single_choice' | 'multiple_choice' | 'true_false' | 'short_answer';
   options: QuizOption[];
@@ -236,6 +245,7 @@ export interface QuizQuestionItem {
 
 export interface VideoLessonInfo {
   id: string;
+  slug?: string;
   sourceType: 'upload' | 'youtube' | 'vimeo' | 'external';
   title?: string;
   description?: string;
@@ -254,6 +264,7 @@ export interface VideoLessonInfo {
 
 export interface UploadedDocumentInfo {
   id: string;
+  slug?: string;
   name: string;
   size: number;
   type: string;
@@ -268,6 +279,7 @@ export interface UploadedDocumentInfo {
 
 export interface QuizAssessmentConfig {
   id: string;
+  slug?: string;
   title: string;
   description?: string;
   scope: 'lesson_quiz' | 'module_assessment' | 'final_assessment';
@@ -290,6 +302,7 @@ export interface QuizAssessmentConfig {
 
 export interface CourseModule {
   id: string;
+  slug?: string;
   title: string;
   description?: string;
   order: number;
@@ -299,6 +312,10 @@ export interface CourseModule {
 
 export interface Lesson {
   id: string;
+  description?: string;
+  videoUrl?: string;
+  isPreview?: boolean;
+  slug?: string;
   title: string;
   type: 'video' | 'document' | 'rich_text' | 'external_link' | 'quiz' | 'assignment' | 'live_session' | 'downloadable';
   content?: string;
@@ -320,6 +337,7 @@ export type LearningPathDifficulty = 'Beginner' | 'Intermediate' | 'Advanced';
 
 export interface LearningPath {
   id: string;
+  slug?: string;
   title: string;
   objective?: string;
   description?: string;
@@ -374,6 +392,7 @@ export interface LearningPathCourse {
 // --- Enrollment ---
 export interface Enrollment {
   id: string;
+  slug?: string;
   userId: string;
   courseId?: string;
   pathId?: string;
@@ -388,6 +407,7 @@ export interface Enrollment {
 // --- Live Session ---
 export interface LiveSession {
   id: string;
+  slug?: string;
   title: string;
   courseId?: string;
   cohortId?: string;
@@ -446,6 +466,7 @@ export interface AttendanceRecord {
 // --- Employee Attendance (Faculty, Administrative Staff, Non-Teaching Staff) ---
 export interface EmployeeAttendanceRecord {
   id: string;
+  slug?: string;
   employeeId: string;
   employeeName: string;
   employeeEmail: string;
@@ -474,6 +495,7 @@ export interface EmployeeAttendanceSummary {
 // --- Student Attendance (Enrolled Learners, Cohorts & Batches) ---
 export interface StudentSessionAttendanceRecord {
   id: string;
+  slug?: string;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -516,6 +538,7 @@ export interface CohortAttendanceSummary {
 // --- Question Bank ---
 export interface QuestionBank {
   id: string;
+  slug?: string;
   name: string;
   owner?: string;
   subject: string;
@@ -532,6 +555,7 @@ export type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 
 
 export interface Question {
   id: string;
+  slug?: string;
   bankId?: string;
   assessmentId?: string;
   type: QuestionType;
@@ -558,6 +582,7 @@ export interface Question {
 
 export interface QuestionOption {
   id: string;
+  slug?: string;
   text: string;
   isCorrect: boolean;
   order?: number;
@@ -566,6 +591,7 @@ export interface QuestionOption {
 // --- Assessment ---
 export interface Assessment {
   id: string;
+  slug?: string;
   title: string;
   instructions?: string;
   courseId?: string;
@@ -641,6 +667,7 @@ export interface AIGenerationConfig {
 
 export interface Accommodation {
   id: string;
+  slug?: string;
   learnerId: string;
   type: 'extra_time' | 'breaks' | 'large_text' | 'screen_reader' | 'alternative_proctoring';
   value: string;
@@ -651,6 +678,7 @@ export interface Accommodation {
 // --- Rubric ---
 export interface Rubric {
   id: string;
+  slug?: string;
   name: string;
   title?: string;
   criteria: RubricCriterion[];
@@ -662,6 +690,7 @@ export interface Rubric {
 
 export interface RubricCriterion {
   id: string;
+  slug?: string;
   name: string;
   title?: string;
   description: string;
@@ -689,6 +718,7 @@ export type StudentEvaluationStatus =
 
 export interface AssessmentAttempt {
   id: string;
+  slug?: string;
   assessmentId: string;
   assessmentTitle?: string;
   courseId?: string;
@@ -735,6 +765,7 @@ export interface AttemptAnswer {
 // --- Grading ---
 export interface GradingTask {
   id: string;
+  slug?: string;
   attemptId?: string;
   submissionId?: string;
   assessmentId: string;
@@ -771,6 +802,7 @@ export interface GradingTask {
 
 export interface AISuggestion {
   id: string;
+  slug?: string;
   score: number;
   confidence: number;
   evidence: string[];
@@ -800,6 +832,7 @@ export interface ProctoringSettings {
 
 export interface ProctorWarning {
   id: string;
+  slug?: string;
   assessmentId: string;
   learnerId: string;
   learnerName: string;
@@ -813,6 +846,7 @@ export interface ProctorWarning {
 
 export interface ProctoringIncident {
   id: string;
+  slug?: string;
   attemptId: string;
   learnerId: string;
   learnerName: string;
@@ -838,6 +872,7 @@ export type ProctoringPolicyLevel = 'basic' | 'monitored' | 'strict';
 
 export interface ProctoringPolicy {
   id: string;
+  slug?: string;
   name: string;
   level: ProctoringPolicyLevel;
   description: string;
@@ -867,6 +902,7 @@ export type ProctoringSeverity = 'informational' | 'warning' | 'critical' | 'rev
 
 export interface ProctoringEvent {
   id: string;
+  slug?: string;
   sessionId: string;
   assessmentId: string;
   learnerId: string;
@@ -898,6 +934,7 @@ export type ProctoringSessionStatus =
 
 export interface ProctoringSession {
   id: string;
+  slug?: string;
   attemptId: string;
   assessmentId: string;
   assessmentTitle: string;
@@ -943,6 +980,7 @@ export interface ProctoringSession {
 // --- Certificate ---
 export interface Certificate {
   id: string;
+  slug?: string;
   learnerId: string;
   learnerName: string;
   learnerEmail?: string;
@@ -980,6 +1018,7 @@ export interface Certificate {
 // --- Notification ---
 export interface Notification {
   id: string;
+  slug?: string;
   userId: string;
   title: string;
   message: string;
@@ -991,6 +1030,7 @@ export interface Notification {
 
 export interface NotificationTemplate {
   id: string;
+  slug?: string;
   name: string;
   eventTrigger: string;
   channel: 'in_app' | 'email' | 'sms';
@@ -1028,6 +1068,7 @@ export type AnnouncementScope = 'institution' | 'course' | 'cohort' | 'departmen
 
 export interface Announcement {
   id: string;
+  slug?: string;
   organizationId: string;
   title: string;
   content: string;
@@ -1062,6 +1103,7 @@ export interface Announcement {
 // --- Integration ---
 export interface Integration {
   id: string;
+  slug?: string;
   name: string;
   type: 'identity_sso' | 'video' | 'email_sms' | 'ai' | 'storage' | 'hris_sis' | 'webhook';
   status: 'configured' | 'not_configured' | 'error' | 'healthy' | 'degraded';
@@ -1079,6 +1121,7 @@ export interface Integration {
 // --- Audit ---
 export interface AuditEntry {
   id: string;
+  slug?: string;
   actor: string;
   actorName: string;
   actorEmail?: string;
@@ -1107,6 +1150,7 @@ export interface GamificationProfile {
 
 export interface Badge {
   id: string;
+  slug?: string;
   name: string;
   description: string;
   icon: string;
@@ -1115,6 +1159,7 @@ export interface Badge {
 
 export interface PointsEvent {
   id: string;
+  slug?: string;
   activity: string;
   points: number;
   earnedAt: string;
@@ -1134,6 +1179,7 @@ export interface DashboardMetric {
 // --- Report ---
 export interface Report {
   id: string;
+  slug?: string;
   name: string;
   title?: string;
   category?: string;

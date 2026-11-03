@@ -12,7 +12,10 @@ export const JoinCourseWithLinkPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { courses, isEnrolled } = useCourseStore();
+  const { courses, isEnrolled, fetchCourses } = useCourseStore();
+  React.useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
   const { user } = useAuthStore();
 
   // Published courses open for enrollment

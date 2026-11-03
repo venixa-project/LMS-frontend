@@ -1368,6 +1368,18 @@ select.form-select option {
   gap: 20px;
 }
 
+.student-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .student-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .grid-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

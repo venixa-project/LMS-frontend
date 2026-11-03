@@ -421,9 +421,10 @@ function getDemoDashboardData(
 
 export const StudentDashboard: React.FC = () => {
   const user = useAuthStore((state) => state.user);
+  const fetchNotifications = useAuthStore((state) => state.fetchNotifications);
   const courses = useCourseStore((state) => state.courses);
   const enrollments = useCourseStore((state) => state.enrollments);
-  const { enrollCourse } = useCourseStore();
+  const { enrollCourse, fetchCourses } = useCourseStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { users: peopleUsers, fetchPeople } = usePeopleStore();
 
@@ -475,7 +476,11 @@ export const StudentDashboard: React.FC = () => {
   useEffect(() => {
     fetchCohorts();
     fetchPeople();
-  }, [fetchCohorts, fetchPeople]);
+    fetchCourses();
+    if (fetchNotifications) {
+      fetchNotifications();
+    }
+  }, [fetchCohorts, fetchPeople, fetchCourses, fetchNotifications]);
 
   // Derive cohorts this student is enrolled in
   const studentCohorts = useMemo(() => {
@@ -680,7 +685,7 @@ export const StudentDashboard: React.FC = () => {
       {/* 3. Balanced 2x2 Main Grid (All cards identical height & symmetric) */}
       <div className="student-dashboard-grid">
         {/* ROW 1 - LEFT: My Enrolled Cohorts & Classes */}
-        <article className="card" style={{ borderLeft: '4px solid var(--primary)', padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--primary)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -777,7 +782,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 1 - RIGHT: Upcoming Assessment & Live Schedule */}
-        <article className="card" style={{ borderLeft: '4px solid var(--accent-cyan)', padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--accent-cyan)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -889,7 +894,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 2 - LEFT: Continue Learning (Active Syllabus Track) */}
-        <article className="card" style={{ padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid #6366f1', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -954,7 +959,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 2 - RIGHT: My Enrolled Courses Overview */}
-        <article className="card" style={{ padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--accent-purple)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

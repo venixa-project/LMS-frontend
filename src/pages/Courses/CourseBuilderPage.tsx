@@ -1104,7 +1104,7 @@ export const CourseBuilderPage: React.FC = () => {
   };
 
   // Final Publish Handler
-  const handleConfirmPublish = () => {
+  const handleConfirmPublish = async () => {
     const preCheck = validateForPublish();
     if (!preCheck.isValid) {
       setPublishError(preCheck.errors.join(' '));
@@ -1119,9 +1119,9 @@ export const CourseBuilderPage: React.FC = () => {
       const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
       const enrolledCount = selectedStudentIds.size;
 
-      const activeOrgId = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || user?.organizationId || 'org-001')
-        : (user?.organizationId || 'org-001');
+      const activeOrgId = user?.organizationId || (typeof window !== 'undefined'
+        ? (sessionStorage.getItem('venilearn_active_org_id') || '871abf8a-e563-4d0f-afc7-416d8da3df14')
+        : '871abf8a-e563-4d0f-afc7-416d8da3df14');
 
       const newCourse: Course = {
         createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
@@ -1170,15 +1170,25 @@ export const CourseBuilderPage: React.FC = () => {
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Persist new course in store
-      addCourse(newCourse);
+      // 1. Persist new course in backend PostgreSQL and client store
+      const courseSlug = (courseCode || title)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') || `course-${Date.now()}`;
+
+      const courseToPersist: Course = {
+        ...newCourse,
+        slug: courseSlug,
+      };
+
+      const savedCourse = await addCourse(courseToPersist);
 
       // 2. If students selected, register enrollments
       if (selectedStudentIds.size > 0) {
-        assignStudentsToCourse(newCourse.id, Array.from(selectedStudentIds));
+        await assignStudentsToCourse(savedCourse.id, Array.from(selectedStudentIds));
       }
 
-      setPublishedCourse(newCourse);
+      setPublishedCourse(savedCourse);
       setIsConfirmModalOpen(false);
       setIsPublishing(false);
     } catch (err: any) {

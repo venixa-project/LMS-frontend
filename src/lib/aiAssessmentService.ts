@@ -463,11 +463,11 @@ function generateViaLocalGroundedEngine(
       const isReverse = i % 2 === 1 && allTerms.length >= 4;
 
       if (isReverse) {
-        const prompt = `Which of the following biological or technical components ${prop.predicate}?`;
+        const prompt = `Based on the provided text, which of the following is associated with: "${prop.predicate}"?`;
         const otherTerms = allTerms.filter((t) => t.toLowerCase() !== prop.term.toLowerCase());
-        const d1 = otherTerms[0] || 'Secondary catalytic pathway';
-        const d2 = otherTerms[1] || 'Auxiliary transport mechanism';
-        const d3 = otherTerms[2] || 'Unrelated metabolic substrate';
+        const d1 = otherTerms[0] || 'An external unmanaged process';
+        const d2 = otherTerms[1] || 'A deprecated legacy configuration';
+        const d3 = otherTerms[2] || 'An optional peripheral component';
 
         const rawOpts = [
           { id: `opt-${i}-1`, text: formatOptText(prop.term), isCorrect: true },
@@ -489,9 +489,9 @@ function generateViaLocalGroundedEngine(
       } else {
         const prompt = `According to the curriculum text, which of the following accurately describes "${prop.term}"?`;
         const otherPreds = allPredicates.filter((p) => p !== prop.predicate);
-        const d1 = otherPreds[0] || `Regulates intracellular or structural states independent of ${prop.term}`;
-        const d2 = otherPreds[1] || 'Inactivates standard functional mechanisms during baseline operation';
-        const d3 = otherPreds[2] || `Directly bypasses ${prop.term} processes without state transitions`;
+        const d1 = otherPreds[0] || `Operates only as an unverified secondary process`;
+        const d2 = otherPreds[1] || 'Is explicitly disabled under standard configuration';
+        const d3 = otherPreds[2] || `Executes independently without interacting with ${prop.term}`;
 
         const rawOpts = [
           { id: `opt-${i}-1`, text: formatOptText(prop.predicate), isCorrect: true },
