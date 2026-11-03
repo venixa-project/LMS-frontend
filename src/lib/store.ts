@@ -54,23 +54,29 @@ function restoreSessionFromStorage(): {
 
     // Demo personas come from the trusted local directory; backend users retain
     // the profile returned with their server-issued JWT for session restoration.
-    const trustedUser = mockUsers.find(
-      (u) => u.id === session.userId || u.email.toLowerCase() === session.email?.toLowerCase()
-    );
-
     const isServerSession = typeof session.token === 'string' && session.token.split('.').length === 3;
-    const restoredBackendUser = isServerSession && session.userSnapshot?.id === session.userId &&
-      session.userSnapshot.email.toLowerCase() === session.email?.toLowerCase()
-      ? session.userSnapshot
+    const restoredBackendUser = isServerSession
+      ? (session.userSnapshot || {
+          id: session.userId,
+          email: session.email,
+          displayName: session.email?.split('@')[0] || 'User',
+          activeRole: session.activeRole,
+          status: 'active',
+          organizationId: '',
+          roles: [],
+          mfaEnabled: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as unknown as User)
       : null;
 
-    if (!trustedUser && !restoredBackendUser) {
+    if (!restoredBackendUser) {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
     }
 
     // Validate account status
-    const sessionUser = restoredBackendUser || trustedUser!;
+    const sessionUser = restoredBackendUser;
     if (sessionUser.status === 'suspended' || sessionUser.status === 'deactivated' || sessionUser.status !== 'active') {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
@@ -86,14 +92,7 @@ function restoreSessionFromStorage(): {
       targetRole = 'org_admin';
     }
 
-    // Ensure authorized canonical user persona matching the active role
-    const canonicalUser = mockUsers.find((u) => u.activeRole === targetRole);
-    const verifiedUser: User = restoredBackendUser
-      ? { ...restoredBackendUser, activeRole: targetRole }
-      : canonicalUser
-        ? { ...canonicalUser, activeRole: targetRole }
-        : { ...sessionUser, activeRole: targetRole };
-
+    const verifiedUser: User = { ...sessionUser, activeRole: targetRole };
     const permissions = getPermissionsForRole(targetRole);
     const navigation = getNavigationForRole(targetRole);
 
@@ -353,72 +352,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return;
     } catch (authError: any) {
-      const isDemoLogin = email.toLowerCase().trim().endsWith('@lms.demo');
-      if (!isDemoLogin) {
-        set({ isLoading: false, error: authError.message || 'Unable to sign in. Check your email and password.' });
-        return;
-      }
-    }
-
-    // Simulate network authentication
-    await new Promise((resolve) => setTimeout(resolve, 350));
-
-    // Support legacy and alias emails
-    let normalizedEmail = email.toLowerCase().trim();
-    if (normalizedEmail === 'instructor@lms.demo' || normalizedEmail === 'author@lms.demo' || normalizedEmail === 'grader@lms.demo') {
-      normalizedEmail = 'trainer@lms.demo';
-    } else if (normalizedEmail === 'learner@lms.demo' || normalizedEmail === 'alex@lms.demo' || normalizedEmail === 'alex.rivera@lms.demo') {
-      normalizedEmail = 'student@lms.demo';
-    } else if (normalizedEmail === 'marcus@lms.demo' || normalizedEmail === 'lmsadmin@lms.demo') {
-      normalizedEmail = 'orgadmin@lms.demo';
-    }
-
-    const foundUser = mockUsers.find(
-      (u) => u.email.toLowerCase() === normalizedEmail
-    );
-
-    if (!foundUser || password.length < 3) {
       set({
         isLoading: false,
-        error: 'Invalid email or password. Please check your credentials and try again.',
+        error: authError.response?.data?.message || authError.message || 'Unable to sign in. Check your email and password.',
       });
       return;
     }
-
-    if (foundUser.status === 'suspended') {
-      set({
-        isLoading: false,
-        error: 'Your account has been suspended. Please contact your administrator.',
-      });
-      return;
-    }
-
-    if (foundUser.status === 'deactivated') {
-      set({
-        isLoading: false,
-        error: 'Your account has been deactivated. Please contact support.',
-      });
-      return;
-    }
-
-    const permissions = getPermissionsForRole(foundUser.activeRole);
-    const navigation = getNavigationForRole(foundUser.activeRole);
-
-    // Save session to localStorage
-    persistSession(foundUser, foundUser.activeRole);
-
-    const notifications = getUserNotifications(foundUser);
-
-    set({
-      user: foundUser,
-      permissions,
-      navigation,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-      notifications,
-      unreadNotifications: notifications.filter((n) => !n.isRead).length,
-    });
   },
 
   logout: () => {
@@ -465,12 +404,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       targetRole = 'org_admin';
     }
 
-    // Load canonical persona from mockUsers if available for the role
-    const canonicalUser = mockUsers.find((u) => u.activeRole === targetRole);
-    const updatedUser = canonicalUser
-      ? { ...canonicalUser, activeRole: targetRole }
-      : { ...user, activeRole: targetRole };
-
+    const updatedUser = { ...user, activeRole: targetRole };
     // Persist verified switched role session
     persistSession(updatedUser, targetRole);
 

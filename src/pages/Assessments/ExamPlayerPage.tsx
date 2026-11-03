@@ -70,7 +70,7 @@ export const ExamPlayerPage: React.FC = () => {
     }
   }, [id]);
 
-  const baseAssessment = storeAssessment || mockAssessments.find((a) => a.id === id) || mockAssessments[0];
+  const baseAssessment = storeAssessment || mockAssessments.find((a) => a.id === id);
   const assessment = pgAssessment
     ? {
         ...baseAssessment,
@@ -96,7 +96,7 @@ export const ExamPlayerPage: React.FC = () => {
   } = useProctoringStore();
 
   // Resolve monitoring policy (Ensure all 4 permissions: Screen, Mic, Webcam, Fullscreen are required)
-  const policyLevel: any = assessment.proctoringPolicyLevel || 'monitored';
+  const policyLevel: any = assessment?.proctoringPolicyLevel || 'monitored';
   const basePolicy: ProctoringPolicy = (policies as Record<string, ProctoringPolicy>)[policyLevel] || DEFAULT_PROCTORING_POLICIES.monitored;
   const policy: ProctoringPolicy = {
     ...basePolicy,
@@ -117,7 +117,7 @@ export const ExamPlayerPage: React.FC = () => {
   // Jitsi Meet endpoints and pre-configured proctoring room
   const jitsiEndpoints = useMemo(() => {
     return buildJitsiUrls({
-      assessmentId: assessment.id,
+      assessmentId: assessment?.id || "",
       assessmentTitle: assessment.title,
       candidateId,
       candidateName,
@@ -139,17 +139,17 @@ export const ExamPlayerPage: React.FC = () => {
   const isPrivileged = !isStudent;
 
   // Check if learner already earned an assessment certificate
-  const existingAssessmentCert = user ? useCertificateStore.getState().getCertificatesByLearner(user.id).find((c) => c.assessmentId === assessment.id) : undefined;
+  const existingAssessmentCert = user ? useCertificateStore.getState().getCertificatesByLearner(user.id).find((c) => c.assessmentId === assessment?.id) : undefined;
 
   // Exam questions & answer state
-  const loadedQuestions = id ? getQuestionsForAssessment(assessment.id) : [];
+  const loadedQuestions = (id && assessment) ? getQuestionsForAssessment(assessment.id) : [];
   const questions = (pgQuestions && pgQuestions.length > 0)
     ? pgQuestions
-    : (loadedQuestions.length > 0 ? loadedQuestions : mockQuestions.slice(0, 5));
+    : loadedQuestions;
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [flaggedQIds, setFlaggedQIds] = useState<string[]>([]);
-  const [timeLeftSeconds, setTimeLeftSeconds] = useState((assessment.durationMinutes || assessment.duration || 45) * 60);
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState((assessment?.durationMinutes || assessment?.duration || 45) * 60);
   const [saveStatus, setSaveStatus] = useState<'Saved' | 'Saving...'>('Saved');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [forcedSubmissionReason, setForcedSubmissionReason] = useState<string | null>(null);
@@ -655,6 +655,22 @@ export const ExamPlayerPage: React.FC = () => {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (!assessment) {
+    return (
+      <div style={{ maxWidth: '680px', margin: '40px auto', padding: '0 16px', textAlign: 'center' }}>
+        <div className="card" style={{ padding: '36px' }}>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>Assessment Not Found</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+            The assessment you are trying to access does not exist or has not been published yet.
+          </p>
+          <button onClick={() => navigate('/assessments')} className="btn btn-primary">
+            Return to Assessments
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // -------------------------------------------------------------
   // SCHEDULED OPENING (BEFORE START DATE) RESTRICTION

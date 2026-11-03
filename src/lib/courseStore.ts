@@ -71,7 +71,7 @@ function loadInitialCourses(): Course[] {
         if (!isInitialized && typeof window !== 'undefined') {
           localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
         }
-        return parsed.map((c: Course) => ({
+        return parsed.filter((c: Course) => !c.id.startsWith("crs-00")).map((c: Course) => ({
           ...c,
           organizationId: c.organizationId || 'org-001',
         }));
@@ -106,7 +106,7 @@ function loadInitialEnrolled(): string[] {
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter((e: any) => !e.courseId?.startsWith("crs-00"));
       }
     }
     if (isInitialized) {
@@ -115,7 +115,7 @@ function loadInitialEnrolled(): string[] {
   } catch (e) {
     console.error('Failed to parse enrolled courses from storage', e);
   }
-  return ['crs-001', 'crs-002', 'crs-004'];
+  return [];
 }
 
 function loadInitialRequested(): string[] {
@@ -149,7 +149,7 @@ function loadInitialEnrollments(): Enrollment[] {
   } catch (e) {
     console.error('Failed to parse enrollments from storage', e);
   }
-  return mockEnrollments;
+  return [];
 }
 
 export const useCourseStore = create<CourseState>((set, get) => ({

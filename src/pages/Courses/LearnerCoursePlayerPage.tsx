@@ -4,7 +4,6 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCertificateStore } from '../../lib/certificateStore';
 import { generateCertificatePdf } from '../../lib/certificatePdf';
-import { mockCourses } from '../../data/mockData';
 import { Certificate, QuizAssessmentConfig } from '../../types';
 import { LearnerVideoPlayer } from './components/LearnerVideoPlayer';
 import { LearnerQuizRunner } from './components/LearnerQuizRunner';
@@ -21,9 +20,9 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
   const { id } = useParams<{ id: string }>();
 
-  // Resolve course from store first, fallback to mockCourses
-  const course = courses.find((c) => c.id === id) || mockCourses.find((c) => c.id === id) || mockCourses[0];
-  const allLessons = useMemo(() => course.modules?.flatMap((m) => m.lessons) || [], [course]);
+  // Resolve course from store
+  const course = courses.find((c) => c.id === id);
+  const allLessons = useMemo(() => course?.modules?.flatMap((m) => m.lessons) || [], [course]);
 
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [selectedAssessment, setSelectedAssessment] = useState<{
@@ -33,20 +32,16 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   } | null>(null);
 
   // Lesson completions state keyed by course
-  const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>({
-    'crs-001': ['mod-001-les-1', 'mod-001-les-2'],
-    'crs-002': ['mod-004-les-1'],
-    'crs-004': ['mod-009-les-1', 'mod-009-les-2', 'mod-009-les-3', 'mod-009-les-4']
-  });
+  const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>({});
 
-  const completedLessonIds = courseCompletionMap[course.id] || (allLessons[0] ? [allLessons[0].id] : []);
+  const completedLessonIds = course ? (courseCompletionMap[course.id] || (allLessons[0] ? [allLessons[0].id] : [])) : [];
 
   // Reset lesson index and playback state when course changes
   useEffect(() => {
     setCurrentLessonIndex(0);
     setIsPlaying(false);
     setSelectedAssessment(null);
-  }, [course.id]);
+  }, [course?.id]);
 
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -57,6 +52,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
 
   // Persistent notes per lesson
   const [lessonNotes, setLessonNotes] = useState<Record<string, string>>(() => {
+    if (!course) return {};
     try {
       const saved = localStorage.getItem(`venilearn_notes_${course.id}`);
       return saved ? JSON.parse(saved) : {};
@@ -66,6 +62,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   });
 
   const handleSaveNote = (text: string) => {
+    if (!course) return;
     const activeLessonId = allLessons[currentLessonIndex]?.id || 'les-default';
     const updated = { ...lessonNotes, [activeLessonId]: text };
     setLessonNotes(updated);
@@ -73,6 +70,35 @@ export const LearnerCoursePlayerPage: React.FC = () => {
       localStorage.setItem(`venilearn_notes_${course.id}`, JSON.stringify(updated));
     } catch { }
   };
+
+  if (!course) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+        padding: '40px',
+        textAlign: 'center',
+        background: 'var(--bg-surface)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-subtle)',
+        marginTop: '24px'
+      }}>
+        <HelpCircle size={48} color="var(--primary)" style={{ marginBottom: '16px' }} />
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>
+          Course Not Found
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', maxWidth: '420px' }}>
+          This course could not be found or has not been loaded. Please select an available course.
+        </p>
+        <Link to="/courses" className="btn btn-primary">
+          Return to Courses
+        </Link>
+      </div>
+    );
+  }
 
   // Check if learner already earned a certificate for this course
   const existingCert = user ? getCertificatesByLearner(user.id).find((c) => c.courseId === course.id) : undefined;

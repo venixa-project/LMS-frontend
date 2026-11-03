@@ -18,8 +18,8 @@ export function getStoredQuestionBanks(): QuestionBank[] {
       return mockQuestionBanks;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((b) => !b.id?.startsWith("qb-00"));
     }
     return mockQuestionBanks;
   } catch (err) {
@@ -44,8 +44,8 @@ export function getStoredQuestions(): Question[] {
       return mockQuestions;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((q) => !q.id?.startsWith("q-00"));
     }
     return mockQuestions;
   } catch (err) {
