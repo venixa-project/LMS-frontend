@@ -54,6 +54,10 @@ function restoreSessionFromStorage(): {
 
     // Demo personas come from the trusted local directory; backend users retain
     // the profile returned with their server-issued JWT for session restoration.
+    const trustedUser = mockUsers.find(
+      (u) => u.id === session.userId || u.email.toLowerCase() === session.email?.toLowerCase()
+    );
+
     const isServerSession = typeof session.token === 'string' && session.token.split('.').length === 3;
     const restoredBackendUser = isServerSession
       ? (session.userSnapshot || {
@@ -70,13 +74,14 @@ function restoreSessionFromStorage(): {
         } as unknown as User)
       : null;
 
-    if (!restoredBackendUser) {
+    if (!trustedUser && !restoredBackendUser) {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
     }
 
+    const sessionUser = restoredBackendUser || trustedUser!;
+
     // Validate account status
-    const sessionUser = restoredBackendUser;
     if (sessionUser.status === 'suspended' || sessionUser.status === 'deactivated' || sessionUser.status !== 'active') {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;

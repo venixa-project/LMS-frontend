@@ -20,11 +20,11 @@ import {
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@lms.demo');
+  const [password, setPassword] = useState('demoPass123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [showDemoRoles, setShowDemoRoles] = useState(false);
+  const [showDemoRoles, setShowDemoRoles] = useState(true);
   const [mfaModal, setMfaModal] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
 
