@@ -3,7 +3,8 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { mockCohorts } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
 import { Course, EntityStatus } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -28,6 +29,11 @@ export interface RosterMember {
 }
 
 const CoursesManagementPage: React.FC = () => {
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
   const { user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -169,7 +175,7 @@ const CoursesManagementPage: React.FC = () => {
 
     if (found) {
       const deptName =
-        mockDepartments.find((d) => d.id === found.departmentId)?.name ||
+        departments.find((d) => d.id === found.departmentId)?.name ||
         found.specialization ||
         'Engineering';
       return {
@@ -821,7 +827,7 @@ const CoursesManagementPage: React.FC = () => {
         <div className="grid-3">
           {filteredCourses.map((c) => {
             const leadFacultyInfo = getLeadFacultyInfo(c);
-            const courseDeptName = mockDepartments.find((d) => d.id === c.departmentId)?.name || c.category;
+            const courseDeptName = departments.find((d) => d.id === c.departmentId)?.name || c.category;
             const totalLessons = c.modules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
             const isManageMenuOpen = activeManageMenuCourseId === c.id;
             const coursePerms = getCoursePermissions(c);
@@ -1481,7 +1487,7 @@ const CoursesManagementPage: React.FC = () => {
       {/* Searchable Lead Faculty Assignment Modal */}
       {assignFacultyCourse && (() => {
         const currentLead = getLeadFacultyInfo(assignFacultyCourse);
-        const courseDept = mockDepartments.find((d) => d.id === assignFacultyCourse.departmentId);
+        const courseDept = departments.find((d) => d.id === assignFacultyCourse.departmentId);
         const isSelectedSameAsCurrent = selectedFacultyId === (assignFacultyCourse.instructors?.[0] || 'u-004');
         const selectedFacultyObj = allFaculty.find((f) => f.id === selectedFacultyId) || mockUsers.find((u) => u.id === selectedFacultyId);
         const isSelectedInactive = selectedFacultyObj?.status !== 'active';
@@ -1638,7 +1644,7 @@ const CoursesManagementPage: React.FC = () => {
                       style={{ fontSize: '0.8rem' }}
                     >
                       <option value="all">All Departments ({allFaculty.length} Faculty)</option>
-                      {mockDepartments.map((d) => (
+                      {departments.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}
                         </option>
@@ -1704,7 +1710,7 @@ const CoursesManagementPage: React.FC = () => {
                           const isDeptMatch = assignFacultyCourse.departmentId === fac.departmentId;
                           const isInactive = fac.status !== 'active';
                           const facCode = fac.rollNo || `FAC-${fac.id.toUpperCase()}`;
-                          const deptName = mockDepartments.find((d) => d.id === fac.departmentId)?.name || 'Academic Division';
+                          const deptName = departments.find((d) => d.id === fac.departmentId)?.name || 'Academic Division';
 
                           return (
                             <div

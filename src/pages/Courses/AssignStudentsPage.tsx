@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { apiClient } from '../../lib/apiClient';
 import {
   ArrowLeft,
@@ -28,6 +28,11 @@ import {
 } from 'lucide-react';
 
 export const AssignStudentsPage: React.FC = () => {
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -152,7 +157,7 @@ export const AssignStudentsPage: React.FC = () => {
   // Department lookup helper
   const getDepartmentName = (deptId?: string) => {
     if (!deptId) return 'General';
-    const found = mockDepartments.find((d) => d.id === deptId);
+    const found = departments.find((d) => d.id === deptId);
     return found ? found.name : deptId;
   };
 
@@ -173,13 +178,13 @@ export const AssignStudentsPage: React.FC = () => {
 
   // Filtered departments for trainers
   const availableDepartments = useMemo(() => {
-    if (!isFaculty) return mockDepartments;
+    if (!isFaculty) return departments;
     const deptIds = new Set<string>();
     if (user?.departmentId) deptIds.add(user.departmentId);
     effectiveCohorts.forEach((c) => {
       if (c.departmentId) deptIds.add(c.departmentId);
     });
-    return mockDepartments.filter((d) => deptIds.has(d.id));
+    return departments.filter((d) => deptIds.has(d.id));
   }, [isFaculty, effectiveCohorts, user]);
 
   // Filtered students list

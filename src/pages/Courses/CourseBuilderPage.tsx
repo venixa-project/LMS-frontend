@@ -4,7 +4,7 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import {
   Course, CourseModule, Lesson, EntityStatus,
   QuizAssessmentConfig, UploadedDocumentInfo, QuizQuestionItem, VideoLessonInfo
@@ -38,6 +38,11 @@ export const CourseBuilderPage: React.FC = () => {
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
+  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const isOrgAdmin =
@@ -478,12 +483,13 @@ export const CourseBuilderPage: React.FC = () => {
     return allFaculty.find((f) => f.id === selectedLeadFacultyId);
   }, [allFaculty, selectedLeadFacultyId]);
 
-    // Trainer authorized academic departments
+  // Trainer authorized academic departments
   const trainerAuthorizedDepartments = useMemo(() => {
-    if (!isFaculty) return mockDepartments;
-    const userDeptId = user?.departmentId || (user?.id === 'u-004' ? 'dep-001' : user?.id === 'u-003' ? 'dep-002' : 'dep-001');
-    return mockDepartments.filter((d) => d.id === userDeptId);
-  }, [isFaculty, user]);
+    if (!isFaculty) return departments;
+    const userDeptId = user?.departmentId;
+    if (!userDeptId) return departments;
+    return departments.filter((d) => d.id === userDeptId || d.parentId === userDeptId);
+  }, [isFaculty, user, departments]);
 
   // Trainer authorized cohorts/batches
   const trainerAuthorizedCohorts = useMemo(() => {
@@ -603,8 +609,13 @@ export const CourseBuilderPage: React.FC = () => {
   // Helper: Department Name
   const getDepartmentName = (deptId?: string) => {
     if (!deptId) return 'General';
-    const dept = mockDepartments.find((d) => d.id === deptId);
-    return dept ? dept.name : deptId;
+    const dept = departments.find((d) => d.id === deptId);
+    if (!dept) return deptId;
+    if (dept.parentId) {
+      const parent = departments.find((p) => p.id === dept.parentId);
+      return `${parent ? parent.name + ' → ' : ''}${dept.name}`;
+    }
+    return dept.name;
   };
 
   // Helper: Cohort Name
@@ -1568,7 +1579,7 @@ export const CourseBuilderPage: React.FC = () => {
             {/* Department Selection - Critical for Step 3 filtering */}
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontWeight: 600 }}>
-                Department <span className="required" style={{ color: 'var(--danger)' }}>*</span>
+                Department / Academic Division <span className="required" style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <select
                 className="form-select"
@@ -1578,13 +1589,40 @@ export const CourseBuilderPage: React.FC = () => {
                   if (step1Error) setStep1Error(null);
                 }}
                 style={{ fontWeight: 600 }}
+                disabled={isDeptsLoading}
               >
-                <option value="">Select Department...</option>
-                {trainerAuthorizedDepartments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} ({dept.id})
-                  </option>
-                ))}
+                <option value="">
+                  {isDeptsLoading ? 'Loading departments...' : 'Select Department / Academic Division...'}
+                </option>
+                {(() => {
+                  const mainDepts = trainerAuthorizedDepartments.filter((d) => !d.parentId);
+                  return (
+                    <>
+                      {mainDepts.map((main) => {
+                        const children = trainerAuthorizedDepartments.filter((d) => d.parentId === main.id);
+                        return (
+                          <React.Fragment key={main.id}>
+                            <option value={main.id} style={{ fontWeight: 700 }}>
+                              {main.name} ({main.code}) {children.length > 0 ? '[Division]' : ''}
+                            </option>
+                            {children.map((sub) => (
+                              <option key={sub.id} value={sub.id}>
+                                &nbsp;&nbsp;&nbsp;&nbsp;↳ {sub.name} ({sub.code}) [Branch]
+                              </option>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                      {trainerAuthorizedDepartments
+                        .filter((d) => d.parentId && !mainDepts.some((m) => m.id === d.parentId))
+                        .map((orphan) => (
+                          <option key={orphan.id} value={orphan.id}>
+                            {orphan.name} ({orphan.code})
+                          </option>
+                        ))}
+                    </>
+                  );
+                })()}
               </select>
               <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                 Used to filter and prioritize faculty & students in Step 3
@@ -3100,10 +3138,10 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setFacultyDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 10px', minWidth: '180px' }}
                   >
-                    {!isFaculty && <option value="all">All Departments ({mockDepartments.length})</option>}
+                    {!isFaculty && <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>}
                     {trainerAuthorizedDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
+                        {d.name} ({d.code}) {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
                     ))}
                   </select>
@@ -3375,10 +3413,10 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setStudentDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
-                    <option value="all">All Departments ({mockDepartments.length})</option>
-                    {mockDepartments.map((d) => (
+                    <option value="all">All Departments ({departments.length})</option>
+                    {departments.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
+                        {d.name} ({d.code}) {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
                     ))}
                   </select>
