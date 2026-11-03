@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import {
   BarChart3, Download, Calendar, Filter, Clock, CheckCircle2,
@@ -43,8 +43,34 @@ export const ReportsPage: React.FC = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // Load available entities from stores
-  const { users, courses, cohorts, departments } = useMemo(() => getReportEntities(), []);
+  // Active Organization Resolution & Reactive Org Switching Listener
+  const isPlatformAdmin = user?.activeRole === 'platform_admin';
+  const [activeOrgId, setActiveOrgId] = useState<string>(() => {
+    return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+  });
+
+  useEffect(() => {
+    const handleOrgSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent<{ orgId: string }>;
+      if (customEvent.detail?.orgId) {
+        setActiveOrgId(customEvent.detail.orgId);
+      } else {
+        const next = (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+        setActiveOrgId(next);
+      }
+    };
+    window.addEventListener('venilearn_org_switched', handleOrgSwitch);
+    return () => window.removeEventListener('venilearn_org_switched', handleOrgSwitch);
+  }, [isPlatformAdmin, user?.organizationId]);
+
+  // Reset course & cohort filters when switching organizations to prevent cross-org filter conflicts
+  useEffect(() => {
+    setSelectedCourse('all');
+    setSelectedCohort('all');
+  }, [activeOrgId]);
+
+  // Load available entities from stores scoped to active organization
+  const { users, courses, cohorts, departments } = useMemo(() => getReportEntities(activeOrgId), [activeOrgId]);
 
   // Filter available options based on user role (Security & Scope enforcement)
   const trainerAssignedCourseIds = useMemo(() => {
@@ -90,12 +116,12 @@ export const ReportsPage: React.FC = () => {
     searchQuery,
   }), [dateRange, customStart, customEnd, selectedDept, selectedCourse, selectedTrainer, selectedCohort, selectedAssessment, searchQuery]);
 
-  // Compute records for all report types backed strictly by real LMS data
-  const completionRows = useMemo(() => getCourseCompletionSummaryRecords(user, filterState), [user, filterState]);
-  const progressRows = useMemo(() => getLearnerProgressRecords(user, filterState), [user, filterState]);
-  const assessmentRows = useMemo(() => getAssessmentPerformanceRecords(user, filterState), [user, filterState]);
-  const enrollmentRows = useMemo(() => getCourseEnrollmentRecords(user, filterState), [user, filterState]);
-  const pendingRows = useMemo(() => getPendingSubmissionsRecords(user, filterState), [user, filterState]);
+  // Compute records for all report types backed strictly by real LMS data scoped to active organization
+  const completionRows = useMemo(() => getCourseCompletionSummaryRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const progressRows = useMemo(() => getLearnerProgressRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const assessmentRows = useMemo(() => getAssessmentPerformanceRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const enrollmentRows = useMemo(() => getCourseEnrollmentRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const pendingRows = useMemo(() => getPendingSubmissionsRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
 
   // Summary KPI Metrics
   const metrics = useMemo(() => {

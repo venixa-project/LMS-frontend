@@ -868,7 +868,7 @@ export const DashboardPage: React.FC = () => {
 
           {/* Carousel Slide Helper Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap', gap: '8px' }}>
-            <span>Horizontal slider &bull; Slide with arrows, touch swipe, or shift+wheel</span>
+            <span />
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 type="button"

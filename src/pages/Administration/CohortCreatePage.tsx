@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Cohort, User } from '../../types';
 import { mockDepartments, mockCourses } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
 import { useCohortStore } from '../../lib/cohortStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import {
   ArrowLeft, Check, ChevronRight, ChevronLeft, Calendar, BookOpen,
   User as UserIcon, UsersRound, Search, AlertCircle, Plus,
@@ -35,10 +36,26 @@ export const CohortCreatePage: React.FC = () => {
   const [assignedTrainerId, setAssignedTrainerId] = useState<string | null>(null);
 
   // Step 3: Student Enrollment
-  const [studentDeptFilter, setStudentDeptFilter] = useState<string>(mockDepartments[0]?.id || 'dep-001');
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('all');
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentCapacityNotice, setStudentCapacityNotice] = useState<string | null>(null);
+
+  // Live database people store integration
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    fetchPeople();
+  }, [fetchPeople]);
+
+  // Combine live database users with mock users seamlessly
+  const allUsers = useMemo(() => {
+    const live = peopleUsers || [];
+    const liveIds = new Set(live.map(u => u.id));
+    const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
+    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
+    return [...live, ...remainingMock];
+  }, [peopleUsers]);
 
   // Submission error
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -46,17 +63,17 @@ export const CohortCreatePage: React.FC = () => {
 
   // Filtered Faculty & Students
   const allFaculty = useMemo(() => {
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'trainer' || u.activeRole === 'instructor') &&
       u.status !== 'suspended'
     );
-  }, []);
+  }, [allUsers]);
 
   const allStudents = useMemo(() => {
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'student' || u.activeRole === 'learner')
     );
-  }, []);
+  }, [allUsers]);
 
   const selectedCourse = useMemo(() => {
     return mockCourses.find(c => c.id === courseId);
@@ -785,7 +802,7 @@ export const CohortCreatePage: React.FC = () => {
                       )}
                     </div>
                     <div className="text-muted text-xs" style={{ margin: '2px 0' }}>
-                      {dept?.name || 'Computer Science'} &bull; <code>{faculty.id}</code>
+                      {dept?.name || 'General Department'} &bull; {faculty.email}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                       {faculty.specialization || 'Certified Academic Faculty'}
@@ -1147,7 +1164,7 @@ export const CohortCreatePage: React.FC = () => {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '1rem' }}>{assignedTrainer.displayName}</div>
                     <div className="text-muted text-xs">
-                      {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'Engineering'} &bull; <code>{assignedTrainer.id}</code>
+                      {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull; {assignedTrainer.email}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       {assignedTrainer.specialization || 'Lead Instructor'}

@@ -32,7 +32,8 @@ interface PeopleState {
   getStaff: () => User[];
   isEmailTaken: (email: string, excludeUserId?: string) => boolean;
 
-  addUser: (newUser: User) => Promise<{ success: boolean; message: string; user?: User }>;
+  addUser: (newUser: User) => Promise<{ success: boolean; message: string; user?: User; temporaryPassword?: string }>;
+  resetPassword: (id: string) => Promise<{ success: boolean; message: string; temporaryPassword?: string }>;
   updateUser: (updatedUser: User) => Promise<{ success: boolean; message: string; user?: User }>;
   toggleUserStatus: (id: string) => Promise<{ success: boolean; message: string; newStatus?: UserAccountStatus }>;
   deleteUser: (id: string) => Promise<{ success: boolean; message: string }>;
@@ -99,7 +100,7 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
     }
 
     try {
-      const created = await peopleApi.create({
+      const createdRes: any = await peopleApi.create({
         email: newUser.email,
         firstName: newUser.firstName,
         lastName: newUser.lastName,
@@ -112,16 +113,20 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
         status: newUser.status,
       });
 
+      const returnedUser = createdRes?.user || createdRes;
+      const temporaryPassword = createdRes?.temporaryPassword;
       const fallbackId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `member-${Date.now()}`;
+
       const userRecord: User = {
         ...newUser,
-        id: created?.id || newUser.id || fallbackId,
-        organizationId: newUser.organizationId || 'demo-org',
-        status: created?.status || newUser.status || 'pending_approval',
-        roles: newUser.roles || [],
-        mfaEnabled: newUser.mfaEnabled ?? false,
-        createdAt: newUser.createdAt || new Date().toISOString(),
-        updatedAt: newUser.updatedAt || new Date().toISOString(),
+        ...returnedUser,
+        id: returnedUser?.id || newUser.id || fallbackId,
+        organizationId: returnedUser?.organizationId || newUser.organizationId || 'demo-org',
+        status: returnedUser?.status || newUser.status || 'active',
+        roles: returnedUser?.roles || newUser.roles || [],
+        mfaEnabled: returnedUser?.mfaEnabled ?? newUser.mfaEnabled ?? false,
+        createdAt: returnedUser?.createdAt || newUser.createdAt || new Date().toISOString(),
+        updatedAt: returnedUser?.updatedAt || newUser.updatedAt || new Date().toISOString(),
       };
 
       set({ users: [userRecord, ...users], totalUsers: get().totalUsers + 1 });
@@ -129,6 +134,7 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
         success: true,
         message: `Member "${newUser.displayName}" added successfully.`,
         user: userRecord,
+        temporaryPassword,
       };
     } catch (err: any) {
       if (isMockSessionToken()) {
@@ -147,8 +153,9 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
         set({ users: [mockedUser, ...users], totalUsers: get().totalUsers + 1 });
         return {
           success: true,
-          message: `Member "${newUser.displayName}" added successfully.`,
+          message: `Member "${newUser.displayName}" added successfully (Offline mode).`,
           user: mockedUser,
+          temporaryPassword: 'Veni#' + Math.random().toString(36).slice(-6) + '9!',
         };
       }
 
@@ -156,6 +163,23 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
       return {
         success: false,
         message: err.message || 'Failed to add user to server.',
+      };
+    }
+  },
+
+  resetPassword: async (id: string) => {
+    try {
+      const res = await peopleApi.resetPassword(id);
+      return {
+        success: true,
+        message: res.message || 'Temporary password reset successfully.',
+        temporaryPassword: res.temporaryPassword,
+      };
+    } catch (err: any) {
+      console.error('Failed to reset user password on backend:', err);
+      return {
+        success: false,
+        message: err.message || 'Failed to reset password.',
       };
     }
   },

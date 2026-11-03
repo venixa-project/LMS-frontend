@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // Organisation Management Types
 // Extracted from HRMS Super Admin for LMS Industrial Admin
 // ============================================================
@@ -28,6 +28,7 @@ export interface Company {
   workWeek?: string;
   officialEmail?: string;
   phone?: string;
+  hrEmail?: string;
   website?: string;
 }
 

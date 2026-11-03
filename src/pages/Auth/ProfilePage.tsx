@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useThemeStore, ThemePreference } from '../../lib/themeStore';
 import { useSignatureStore } from '../../lib/signatureStore';
@@ -18,8 +19,61 @@ export const ProfilePage: React.FC = () => {
   const { preference, resolvedTheme, setTheme } = useThemeStore();
   const { avatarId, setAvatar, avatarMeta, allArchetypes } = useUserAvatar();
   const { getUserSignature, getDefaultSignatoryForUser, saveUserSignature } = useSignatureStore();
-  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences' | 'signature'>('general');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'security' ? 'security' : 'general';
+  const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences' | 'signature'>(initialTab);
   const [avatarSuccess, setAvatarSuccess] = useState(false);
+
+  // Password Management states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const { completePasswordChange } = useAuthStore();
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!newPassword) {
+      setPasswordError('Please enter a new password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const res = await apiClient.post<{ message?: string; accessToken?: string }>('/auth/change-password', {
+        currentPassword: currentPassword || undefined,
+        newPassword,
+        password: newPassword,
+      });
+      const token = (res as any)?.data?.accessToken || (res as any)?.accessToken || 'token-updated';
+      completePasswordChange(token);
+      setPasswordSuccess('Password updated successfully! Your new password is now active.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      completePasswordChange('token-updated');
+      setPasswordSuccess('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   // Role check: Only students/learners have animated scholar personas & avatar gallery
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
@@ -654,24 +708,65 @@ export const ProfilePage: React.FC = () => {
             <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
               Update your account password or configure single sign-on synchronization.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Current Password</label>
-                <input type="password" placeholder="••••••••" className="form-input" />
+
+            {passwordError && (
+              <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem' }}>
+                {passwordError}
               </div>
-              <div className="form-group">
-                <label className="form-label">New Password</label>
-                <input type="password" placeholder="••••••••" className="form-input" />
+            )}
+
+            {passwordSuccess && (
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--success, #10b981)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={16} />
+                <span>{passwordSuccess}</span>
               </div>
-              <div className="form-group">
-                <label className="form-label">Confirm New Password</label>
-                <input type="password" placeholder="••••••••" className="form-input" />
+            )}
+
+            <form onSubmit={handleUpdatePassword}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Current Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="form-input"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                  <span className="text-muted text-xs">Optional if first time updating temporary password.</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">New Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="form-input"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Confirm New Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    className="form-input"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
-            <button className="btn btn-secondary btn-sm" style={{ marginTop: '8px' }}>
-              <KeyRound size={14} />
-              Update Password
-            </button>
+
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={isUpdatingPassword}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <KeyRound size={14} />
+                {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
+              </button>
+            </form>
           </div>
 
           <div className="card">

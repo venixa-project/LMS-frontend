@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import {
   mockCohorts,
   mockAssessments,
@@ -113,6 +114,11 @@ export const TrainerDashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const allCourses = useCourseStore((s) => s.courses);
   const storeSessions = useLiveSessionStore((s) => s.sessions);
+  const { cohorts, fetchCohorts } = useCohortStore();
+
+  useEffect(() => {
+    fetchCohorts();
+  }, [fetchCohorts]);
 
   const trainerId = user?.id || 'u-004';
   const trainerName = user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Dr. James Wilson');
@@ -139,29 +145,52 @@ export const TrainerDashboardPage: React.FC = () => {
     setCustomEndDate('');
   };
 
-  // --- 1. Authorized Courses for this Trainer ---
-  const assignedCourses = useMemo(() => {
-    return allCourses.filter((c) =>
-      c.instructors?.includes(trainerId) ||
-      c.createdBy === trainerId ||
-      user?.eligibleCourseIds?.includes(c.id) ||
-      ['crs-001', 'crs-002', 'crs-004'].includes(c.id)
-    );
-  }, [allCourses, trainerId, user]);
-
-  const assignedCourseIds = useMemo(() => new Set(assignedCourses.map((c) => c.id)), [assignedCourses]);
-
-  // --- 2. Authorized Cohorts / Classes for this Trainer ---
+  // --- 1. Authorized Cohorts / Classes for this Trainer ---
   const assignedCohorts = useMemo(() => {
-    return mockCohorts.filter((c) =>
-      c.instructors?.includes(trainerId) ||
-      c.instructorIds?.includes(trainerId) ||
-      (c.courseId && assignedCourseIds.has(c.courseId)) ||
-      ['coh-001', 'coh-002'].includes(c.id)
-    );
-  }, [trainerId, assignedCourseIds]);
+    const tId = user?.id || 'u-004';
+    const tEmail = user?.email?.toLowerCase() || '';
+    const tName = user?.displayName?.toLowerCase() || '';
+
+    return cohorts.filter((c) => {
+      const hasTrainerId = Boolean((c.instructors && c.instructors.includes(tId)) ||
+                           (c.instructorIds && c.instructorIds.includes(tId)));
+      const hasTrainerEmail = Boolean(tEmail && (
+        (c.instructors && c.instructors.some((i: string) => i.toLowerCase() === tEmail)) ||
+        (c.instructorIds && c.instructorIds.some((i: string) => i.toLowerCase() === tEmail))
+      ));
+      const hasTrainerName = Boolean(tName && (
+        (c.instructors && c.instructors.some((i: string) => i.toLowerCase() === tName)) ||
+        (c.instructorIds && c.instructorIds.some((i: string) => i.toLowerCase() === tName))
+      ));
+      const isDefaultDemo = (!user?.id || user?.id === 'u-004' || tEmail === 'trainer@lms.demo') &&
+                            (c.id === 'coh-001' || c.id === 'coh-002');
+
+      return hasTrainerId || hasTrainerEmail || hasTrainerName || isDefaultDemo;
+    });
+  }, [cohorts, user]);
 
   const assignedCohortIds = useMemo(() => new Set(assignedCohorts.map((c) => c.id)), [assignedCohorts]);
+
+  // --- 2. Authorized Courses for this Trainer ---
+  const assignedCourses = useMemo(() => {
+    const tId = user?.id || 'u-004';
+    const tEmail = user?.email?.toLowerCase() || '';
+    const cohortCourseIds = new Set(assignedCohorts.map(c => c.courseId).filter(Boolean));
+
+    return allCourses.filter((c) => {
+      const isInstructor = (c.instructors && c.instructors.includes(tId)) ||
+                           (tEmail && c.instructors?.some((i: string) => i.toLowerCase() === tEmail));
+      const isCreator = c.createdBy === tId;
+      const isEligible = user?.eligibleCourseIds?.includes(c.id);
+      const isFromCohort = cohortCourseIds.has(c.id);
+      const isDefaultDemo = (!user?.id || user?.id === 'u-004' || tEmail === 'trainer@lms.demo') &&
+                            ['crs-001', 'crs-002', 'crs-004'].includes(c.id);
+
+      return isInstructor || isCreator || isEligible || isFromCohort || isDefaultDemo;
+    });
+  }, [allCourses, assignedCohorts, user]);
+
+  const assignedCourseIds = useMemo(() => new Set(assignedCourses.map((c) => c.id)), [assignedCourses]);
 
   // --- 3. Filtered Courses ---
   const filteredCourses = useMemo(() => {

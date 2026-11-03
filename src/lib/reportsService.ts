@@ -8,7 +8,7 @@
 // ============================================================
 import * as XLSX from 'xlsx';
 import { User, Course, Cohort, Department, Enrollment, AssessmentAttempt, GradingTask } from '../types';
-import { mockDepartments, mockCourses, mockCohorts, mockEnrollments, mockAssessments, mockAttempts, mockGradingTasks } from '../data/mockData';
+import { mockDepartments, mockCohorts, mockEnrollments, mockAssessments, mockAttempts, mockGradingTasks } from '../data/mockData';
 import { mockUsers } from '../data/mockUsers';
 import { useCourseStore } from './courseStore';
 import { useCohortStore } from './cohortStore';
@@ -192,12 +192,18 @@ function isDateInRange(dateStr: string | undefined, start: Date, end: Date): boo
   return d >= start && d <= end;
 }
 
-// Retrieve fresh snapshot of system entities
-export function getReportEntities() {
+// Retrieve fresh snapshot of system entities scoped to active organization
+export function getReportEntities(orgId?: string) {
+  const effectiveOrgId = orgId || (typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
+    : 'org-001');
+
+  const allCourses = useCourseStore.getState().courses ?? [];
+  const courses = allCourses.filter(c => (c.organizationId || 'org-001') === effectiveOrgId);
+
   const users = usePeopleStore.getState().users?.length ? usePeopleStore.getState().users : mockUsers;
-  const courses = useCourseStore.getState().courses?.length ? useCourseStore.getState().courses : mockCourses;
   const cohorts = useCohortStore.getState().cohorts?.length ? useCohortStore.getState().cohorts : mockCohorts;
-  const enrollments = useCourseStore.getState().enrollments?.length ? useCourseStore.getState().enrollments : mockEnrollments;
+  const enrollments = useCourseStore.getState().enrollments ?? [];
   const attempts = useGradingStore.getState().attempts?.length ? useGradingStore.getState().attempts : mockAttempts;
   const gradingTasks = useGradingStore.getState().tasks?.length ? useGradingStore.getState().tasks : mockGradingTasks;
   const departments = mockDepartments;
@@ -208,9 +214,13 @@ export function getReportEntities() {
 // 1. Build Course Completion Summary Records
 export function getCourseCompletionSummaryRecords(
   currentUser: User | null,
-  filters: ReportFilterState
+  filters: ReportFilterState,
+  orgId?: string
 ): CourseCompletionRow[] {
-  const { users, courses, cohorts, enrollments, attempts, gradingTasks, departments } = getReportEntities();
+  const effectiveOrgId = orgId || (typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || currentUser?.organizationId || 'org-001')
+    : (currentUser?.organizationId || 'org-001'));
+  const { users, courses, cohorts, enrollments, attempts, gradingTasks, departments } = getReportEntities(effectiveOrgId);
   const { start, end } = getDateRangeBounds(filters.dateRange, filters.startDate, filters.endDate);
 
   const isTrainer = currentUser?.activeRole === 'trainer' || currentUser?.activeRole === 'instructor';
@@ -373,9 +383,10 @@ export function getCourseCompletionSummaryRecords(
 // 2. Build Learner Progress Report
 export function getLearnerProgressRecords(
   currentUser: User | null,
-  filters: ReportFilterState
+  filters: ReportFilterState,
+  orgId?: string
 ): LearnerProgressRow[] {
-  const completionRows = getCourseCompletionSummaryRecords(currentUser, filters);
+  const completionRows = getCourseCompletionSummaryRecords(currentUser, filters, orgId);
   const studentMap = new Map<string, LearnerProgressRow>();
 
   completionRows.forEach(row => {
@@ -420,9 +431,13 @@ export function getLearnerProgressRecords(
 // 3. Build Assessment Performance Report
 export function getAssessmentPerformanceRecords(
   currentUser: User | null,
-  filters: ReportFilterState
+  filters: ReportFilterState,
+  orgId?: string
 ): AssessmentPerformanceRow[] {
-  const { courses, cohorts, attempts, users, departments } = getReportEntities();
+  const effectiveOrgId = orgId || (typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || currentUser?.organizationId || 'org-001')
+    : (currentUser?.organizationId || 'org-001'));
+  const { courses, cohorts, attempts, users, departments } = getReportEntities(effectiveOrgId);
   const { start, end } = getDateRangeBounds(filters.dateRange, filters.startDate, filters.endDate);
 
   const isTrainer = currentUser?.activeRole === 'trainer' || currentUser?.activeRole === 'instructor';
@@ -431,7 +446,7 @@ export function getAssessmentPerformanceRecords(
     : [];
 
   const rows: AssessmentPerformanceRow[] = attempts.map(att => {
-    const course = courses.find(c => c.id === att.courseId) || { id: att.courseId || 'crs-001', title: att.courseTitle || 'JavaScript Fundamentals' };
+    const course = courses.find(c => c.id === att.courseId) || { id: att.courseId || 'unknown', title: att.courseTitle || 'Course Assessment' };
     const student = users.find(u => u.id === att.learnerId) || { id: att.learnerId, displayName: att.learnerName, rollNo: att.learnerRollNo || 'STU-2026-001', departmentId: 'dep-001' };
     const cohort = cohorts.find(ch => ch.courseId === course.id && ch.studentIds?.includes(student.id)) || cohorts[0] || { name: 'Batch Spring 2026' };
     const dept = departments.find(d => d.id === ('departmentId' in student ? student.departmentId : 'dep-001')) || departments[0];
@@ -483,9 +498,13 @@ export function getAssessmentPerformanceRecords(
 // 4. Build Pending Submissions Report
 export function getPendingSubmissionsRecords(
   currentUser: User | null,
-  filters: ReportFilterState
+  filters: ReportFilterState,
+  orgId?: string
 ): PendingSubmissionRow[] {
-  const { gradingTasks, courses, cohorts, users } = getReportEntities();
+  const effectiveOrgId = orgId || (typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || currentUser?.organizationId || 'org-001')
+    : (currentUser?.organizationId || 'org-001'));
+  const { gradingTasks, courses, cohorts, users } = getReportEntities(effectiveOrgId);
   const isTrainer = currentUser?.activeRole === 'trainer' || currentUser?.activeRole === 'instructor';
   const trainerAssignedCourseIds = isTrainer
     ? courses.filter(c => c.instructors?.includes(currentUser?.id || '') || currentUser?.eligibleCourseIds?.includes(c.id)).map(c => c.id)
@@ -494,7 +513,7 @@ export function getPendingSubmissionsRecords(
   const pendingTasks = gradingTasks.filter(t => t.status !== 'completed');
 
   const rows: PendingSubmissionRow[] = pendingTasks.map(task => {
-    const course = courses[0] || { id: 'crs-001', title: 'JavaScript Fundamentals' };
+    const course = courses.find(c => c.id === task.courseId) || courses[0] || { id: task.courseId || 'unknown', title: task.assessmentTitle ? `${task.assessmentTitle} Course` : 'Course' };
     const student = users.find(u => u.id === task.learnerId) || { id: task.learnerId, displayName: task.learnerName, rollNo: 'STU-2026-001' };
     const cohort = cohorts[0] || { name: 'Spring 2026 Cohort' };
 
@@ -540,9 +559,13 @@ export function getPendingSubmissionsRecords(
 // 5. Build Course Enrollment Summary Report (Existing LMS Data)
 export function getCourseEnrollmentRecords(
   currentUser: User | null,
-  filters: ReportFilterState
+  filters: ReportFilterState,
+  orgId?: string
 ): CourseEnrollmentRow[] {
-  const { enrollments, courses, cohorts, users, departments } = getReportEntities();
+  const effectiveOrgId = orgId || (typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || currentUser?.organizationId || 'org-001')
+    : (currentUser?.organizationId || 'org-001'));
+  const { enrollments, courses, cohorts, users, departments } = getReportEntities(effectiveOrgId);
   const { start, end } = getDateRangeBounds(filters.dateRange, filters.startDate, filters.endDate);
 
   const isTrainer = currentUser?.activeRole === 'trainer' || currentUser?.activeRole === 'instructor';

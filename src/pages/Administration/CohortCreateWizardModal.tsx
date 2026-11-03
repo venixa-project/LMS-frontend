@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Cohort, Course, Department, User } from '../../types';
 import { mockDepartments, mockCourses } from '../../data/mockData';
 import { mockUsers } from '../../data/mockUsers';
+import { usePeopleStore } from '../../lib/peopleStore';
 import {
   X, Check, ChevronRight, ChevronLeft, Calendar, BookOpen,
   User as UserIcon, UsersRound, Search, AlertCircle, Plus,
@@ -46,10 +47,26 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
   const [trainerError, setTrainerError] = useState<string | null>(null);
 
   // Step 3: Student Enrollment
-  const [studentDeptFilter, setStudentDeptFilter] = useState<string>(mockDepartments[0]?.id || 'dep-001');
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('all');
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentCapacityNotice, setStudentCapacityNotice] = useState<string | null>(null);
+
+  // Live database people store integration
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    fetchPeople();
+  }, [fetchPeople]);
+
+  // Combine live database users with mock users seamlessly
+  const allUsers = useMemo(() => {
+    const live = peopleUsers || [];
+    const liveIds = new Set(live.map(u => u.id));
+    const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
+    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
+    return [...live, ...remainingMock];
+  }, [peopleUsers]);
 
   // Institution Departments & All Users
   const institutionDepartments = useMemo(() => {
@@ -57,19 +74,19 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
   }, [currentOrganizationId]);
 
   const allFaculty = useMemo(() => {
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'trainer' || u.activeRole === 'instructor') &&
       (!u.organizationId || u.organizationId === currentOrganizationId) &&
       u.status !== 'suspended'
     );
-  }, [currentOrganizationId]);
+  }, [allUsers, currentOrganizationId]);
 
   const allStudents = useMemo(() => {
-    return mockUsers.filter(u =>
+    return allUsers.filter(u =>
       (u.activeRole === 'student' || u.activeRole === 'learner') &&
       (!u.organizationId || u.organizationId === currentOrganizationId)
     );
-  }, [currentOrganizationId]);
+  }, [allUsers, currentOrganizationId]);
 
   const selectedCourse = useMemo(() => {
     return mockCourses.find(c => c.id === courseId);
@@ -146,7 +163,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
     setTrainerSearch('');
     setAssignedTrainerId(null);
     setTrainerError(null);
-    setStudentDeptFilter(mockDepartments[0]?.id || 'dep-001');
+    setStudentDeptFilter('all');
     setStudentSearch('');
     setSelectedStudentIds([]);
     setStudentCapacityNotice(null);
@@ -1393,7 +1410,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
                     {assignedTrainer?.displayName || 'No trainer assigned'}
                   </div>
                   <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-                    ID: <code>{assignedTrainer?.id}</code> &bull; Department:{' '}
+                    {assignedTrainer?.email ? `${assignedTrainer.email} • ` : ''}Department:{' '}
                     {institutionDepartments.find(d => d.id === assignedTrainer?.departmentId)?.name || 'General'}
                   </div>
                 </div>

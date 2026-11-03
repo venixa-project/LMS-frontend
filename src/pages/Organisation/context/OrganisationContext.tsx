@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Company,
   Branch,
@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { organisationApi } from '../../../lib/organisationApiService';
 import { peopleApi } from '../../../lib/peopleApiService';
+import { saveCompanyBranding } from '../../../lib/useOrganisationBranding';
 
 const initialCompany: Company = {
   id: '',
@@ -27,7 +28,7 @@ const initialCompany: Company = {
   state: '',
   postalCode: '',
   country: 'India',
-  currency: 'INR (₹)',
+  currency: 'INR (â‚¹)',
   timezone: 'Asia/Kolkata (IST, UTC+5:30)',
   fiscalYear: 'April 1 - March 31',
   workWeek: 'Monday - Friday (5 Days)',
@@ -120,7 +121,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           state: p.state || '',
           postalCode: p.postalCode || '',
           country: p.country || 'India',
-          currency: p.currency || 'INR (₹)',
+          currency: p.currency || 'INR (â‚¹)',
           timezone: p.timezone || 'Asia/Kolkata (IST, UTC+5:30)',
           fiscalYear: p.fiscalYearStart || p.fiscalYear || 'April 1 - March 31',
           workWeek: p.workWeekPattern || p.workWeek || 'Monday - Friday (5 Days)',
@@ -249,13 +250,17 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         workWeekPattern: updates.workWeek,
       };
 
-      const updated = await organisationApi.updateCompanyProfile(payload);
-      if (updated) {
-        showToast('Company profile saved successfully', 'success');
+      try {
+        const updated = await organisationApi.updateCompanyProfile(payload);
+        if (updated) {
+          saveCompanyBranding({ name: updates.name, tradeName: updates.tradeName, code: updates.code, logo: updates.logo, website: updates.website });
+        }
+      } catch (err: any) {
+        saveCompanyBranding({ name: updates.name, tradeName: updates.tradeName, code: updates.code, logo: updates.logo, website: updates.website });
+        throw err;
       }
     } catch (err: any) {
       console.error('Failed to save company profile:', err);
-      showToast(err.message || 'Error saving company profile', 'error');
       throw err;
     }
   };

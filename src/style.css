@@ -1195,45 +1195,144 @@ select.form-select option {
   background: var(--text-muted);
 }
 
+ .people-table-container,
  .people-student-table-container {
-   overflow-x: hidden;
+   overflow: visible;
+   min-height: 280px;
  }
 
  .people-student-table {
    width: 100%;
    min-width: 0;
-   table-layout: fixed;
+   table-layout: auto;
  }
 
  .people-student-table th,
  .people-student-table td {
-   padding: 0.7rem 0.55rem;
-   overflow-wrap: anywhere;
+   padding: 0.85rem 1.25rem;
+   vertical-align: middle;
  }
 
  .people-student-table th {
-   white-space: normal;
+   white-space: nowrap;
  }
 
- .people-student-table th:nth-child(1) { width: 20%; }
- .people-student-table th:nth-child(2) { width: 13%; }
- .people-student-table th:nth-child(3) { width: 11%; }
- .people-student-table th:nth-child(4) { width: 9%; }
- .people-student-table th:nth-child(5) { width: 14%; }
- .people-student-table th:nth-child(6) { width: 12%; }
- .people-student-table th:nth-child(7) { width: 9%; }
- .people-student-table th:nth-child(8) { width: 12%; }
+ .people-student-table th:nth-child(1) { width: 22%; }
+ .people-student-table th:nth-child(2) { width: 28%; }
+ .people-student-table th:nth-child(3) { width: 16%; }
+ .people-student-table th:nth-child(4) { width: 18%; }
+ .people-student-table th:nth-child(5) { width: 10%; }
+ .people-student-table th:nth-child(6) { width: 6%; text-align: center; }
 
- .people-student-table tbody td:first-child > div,
- .people-student-table tbody td:last-child > div {
+ .people-student-table tbody td:first-child > div {
    min-width: 0;
-   flex-wrap: wrap;
  }
 
- .people-student-table tbody td:first-child > div > div:last-child {
-   min-width: 0;
-   overflow-wrap: anywhere;
- }
+/* Three-dots Action Menu Styles */
+.action-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+.action-menu-trigger {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-menu-trigger:hover,
+.action-menu-trigger.active {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-main, #ffffff);
+  border-color: var(--border-main, rgba(255, 255, 255, 0.2));
+}
+
+.action-menu-dropdown {
+  position: absolute;
+  right: 0;
+  z-index: 1000;
+  min-width: 190px;
+  background-color: var(--bg-surface, #0d1124);
+  border-radius: 10px;
+  border: 1px solid var(--border-main, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-menu-dropdown.position-top {
+  bottom: calc(100% + 4px);
+  top: auto;
+}
+
+.action-menu-dropdown.position-bottom {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+
+.action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-main, #e2e8f0);
+  text-decoration: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.action-menu-item:hover {
+  background: rgba(99, 102, 241, 0.12);
+  color: #fff;
+}
+
+.action-menu-item-warning {
+  color: #f59e0b;
+}
+
+.action-menu-item-warning:hover {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #f59e0b !important;
+}
+
+.action-menu-item-danger {
+  color: #ef4444;
+}
+
+.action-menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #ef4444 !important;
+}
+
+.action-menu-item-success {
+  color: #10b981;
+}
+
+.action-menu-item-success:hover {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #10b981 !important;
+}
+
 
  .table tbody tr:last-child td,
  .dept-table tbody tr:last-child td {
@@ -1574,6 +1673,34 @@ select.form-select option {
   .dashboard-main-grid {
     grid-template-columns: 1fr;
     gap: 24px;
+  }
+}
+
+/* Symmetrical Balanced Student Dashboard 2x2 Grid */
+.student-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.student-dashboard-grid > .card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-height: 290px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .student-dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
 

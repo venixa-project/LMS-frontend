@@ -33,7 +33,7 @@ export const PersonCreatePage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [departmentId, setDepartmentId] = useState(mockDepartments[0]?.id || 'dep-001');
-  const [status, setStatus] = useState<UserAccountStatus>('pending_approval');
+  const [status, setStatus] = useState<UserAccountStatus>('active');
 
   // Student specific
   const [rollNo, setRollNo] = useState('');
@@ -57,6 +57,14 @@ export const PersonCreatePage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDiscardPrompt, setShowDiscardPrompt] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string;
+    email: string;
+    role: string;
+    temporaryPassword?: string;
+    targetTab: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Sync role type if query param changes
   useEffect(() => {
@@ -78,7 +86,7 @@ export const PersonCreatePage: React.FC = () => {
     setEmail('');
     setPhone('');
     setDepartmentId(mockDepartments[0]?.id || 'dep-001');
-    setStatus(nextRoleType === 'student' ? 'pending_approval' : 'invited');
+    setStatus('active');
 
     setRollNo('');
     setCohortName(cohorts[0]?.name || 'Spring 2026 Engineering');
@@ -194,16 +202,25 @@ export const PersonCreatePage: React.FC = () => {
     };
 
     const res = await addUser(newUser);
+    setIsSubmitting(false);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      if (res.success) {
-        const targetTab = activeRoleType === 'student' ? 'students' : activeRoleType === 'faculty' ? 'faculty' : 'staff';
-        navigate(`/people?tab=${targetTab}&created=true&name=${encodeURIComponent(newUser.displayName)}`);
+    if (res.success) {
+      const targetTab = activeRoleType === 'student' ? 'students' : activeRoleType === 'faculty' ? 'faculty' : 'staff';
+      const roleLabel = activeRoleType === 'student' ? 'Student / Scholar' : activeRoleType === 'faculty' ? 'Faculty / Trainer' : 'Administrative Staff';
+      if (res.temporaryPassword) {
+        setCreatedCredentials({
+          name: newUser.displayName,
+          email: newUser.email,
+          role: roleLabel,
+          temporaryPassword: res.temporaryPassword,
+          targetTab,
+        });
       } else {
-        setErrors({ form: res.message });
+        navigate(`/people?tab=${targetTab}&created=true&name=${encodeURIComponent(newUser.displayName)}`);
       }
-    }, 400);
+    } else {
+      setErrors({ form: res.message });
+    }
   };
 
   const roleMeta = {
@@ -746,6 +763,151 @@ export const PersonCreatePage: React.FC = () => {
               </button>
               <button className="btn btn-danger" style={{ background: 'var(--danger)', color: '#fff' }} onClick={navigateBackToPeople}>
                 Discard & Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account Created Successfully - Admin Credential Confirmation Modal */}
+      {createdCredentials && (
+        <div className="modal-overlay" style={{ zIndex: 1200, backdropFilter: 'blur(6px)', background: 'rgba(5, 7, 18, 0.8)' }}>
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '520px',
+              border: '1px solid var(--border-accent)',
+              boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: 'var(--success, #10b981)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>Account Created Successfully</h3>
+                  <span className="text-muted text-xs">Persistent login credentials provisioned in database</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px 0' }}>
+              <div style={{
+                background: 'var(--bg-input)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px',
+                border: '1px solid var(--border-subtle)',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', rowGap: '10px', fontSize: '0.875rem' }}>
+                  <span className="text-muted">Member Name:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{createdCredentials.name}</span>
+
+                  <span className="text-muted">Login Email:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)', wordBreak: 'break-all' }}>{createdCredentials.email}</span>
+
+                  <span className="text-muted">Assigned Role:</span>
+                  <span><span className="badge badge-primary">{createdCredentials.role}</span></span>
+                </div>
+              </div>
+
+              {createdCredentials.temporaryPassword && (
+                <div style={{
+                  background: 'rgba(99, 102, 241, 0.08)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '16px',
+                  marginBottom: '16px'
+                }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Temporary Initial Password
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={createdCredentials.temporaryPassword}
+                      style={{
+                        flex: 1,
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '10px 12px',
+                        fontFamily: 'monospace',
+                        fontSize: '1.05rem',
+                        fontWeight: 700,
+                        color: 'var(--text-main)',
+                        letterSpacing: '0.05em'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        if (createdCredentials.temporaryPassword) {
+                          navigator.clipboard.writeText(createdCredentials.temporaryPassword);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2500);
+                        }
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '10px 16px' }}
+                    >
+                      {copied ? (
+                        <>
+                          <Check size={16} /> Copied!
+                        </>
+                      ) : (
+                        <>
+                          Copy Password
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '12px 14px',
+                display: 'flex',
+                gap: '10px',
+                fontSize: '0.8rem',
+                color: '#fbbf24'
+              }}>
+                <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong>Mandatory First-Login Password Change:</strong> The member will be required to set a permanent password upon first sign-in. This temporary password is only visible once and cannot be viewed again after closing this window.
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const targetTab = createdCredentials.targetTab;
+                  const name = createdCredentials.name;
+                  setCreatedCredentials(null);
+                  navigate(`/people?tab=${targetTab}&created=true&name=${encodeURIComponent(name)}`);
+                }}
+                style={{ minWidth: '180px' }}
+              >
+                Done & View in Directory
               </button>
             </div>
           </div>

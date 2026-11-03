@@ -35,7 +35,12 @@ export const peopleApi = {
   },
 
   create: async (userData: Partial<User> & { activeRole: RoleName }) => {
-    const res = await apiClient.post<User>('/people', userData);
+    const res = await apiClient.post<{ user?: User; temporaryPassword?: string } | User>('/people', userData);
+    return res.data;
+  },
+
+  resetPassword: async (id: string) => {
+    const res = await apiClient.post<{ success: boolean; user?: User; temporaryPassword: string; message: string }>(`/people/${id}/reset-password`);
     return res.data;
   },
 

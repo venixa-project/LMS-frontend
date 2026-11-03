@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { KeyRound, X } from 'lucide-react';
 import { AppShell } from './components/AppShell';
 import { RoleGuard } from './components/RoleGuard';
 
@@ -75,13 +76,110 @@ const IndexRouteRedirect: React.FC = () => {
   return <Navigate to="/dashboard" replace />;
 };
 
+const TemporaryPasswordNoticeModal: React.FC = () => {
+  const { user } = useAuthStore();
+  const [dismissed, setDismissed] = React.useState(false);
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (sessionStorage.getItem('venilearn_dismissed_pwd_notice') === 'true') {
+      setDismissed(true);
+    }
+  }, []);
+
+  if (!user?.mustChangePassword || dismissed) return null;
+
+  const handleDismiss = () => {
+    sessionStorage.setItem('venilearn_dismissed_pwd_notice', 'true');
+    setDismissed(true);
+  };
+
+  const handleGoToProfile = () => {
+    handleDismiss();
+    navigate('/profile?tab=security');
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(5, 7, 18, 0.75)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+      }}
+      onClick={handleDismiss}
+    >
+      <div
+        className="card"
+        style={{
+          maxWidth: '460px',
+          width: '100%',
+          padding: '24px',
+          border: '1px solid var(--border-accent)',
+          boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              background: 'rgba(99, 102, 241, 0.15)',
+              color: 'var(--primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <KeyRound size={20} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>
+              Welcome to VeniLearn!
+            </h3>
+            <span className="text-muted text-xs">Account security recommendation</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-secondary text-sm" style={{ lineHeight: 1.5, marginBottom: '20px' }}>
+          You logged in with an initial password. You can easily change your password anytime in your Profile.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleDismiss}>
+            Got it, Continue
+          </button>
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleGoToProfile}>
+            Change in Profile
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const FirstLoginPasswordGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAuthenticated } = useAuthStore();
-  const location = useLocation();
-  if (isAuthenticated && user?.mustChangePassword && location.pathname !== '/change-password') {
-    return <Navigate to="/change-password" replace />;
-  }
-  return <>{children}</>;
+  return (
+    <>
+      <TemporaryPasswordNoticeModal />
+      {children}
+    </>
+  );
 };
 
 export const App: React.FC = () => {
@@ -133,10 +231,12 @@ export const App: React.FC = () => {
             <Route path="enrollments" element={<EnrollmentsPage />} />
           </Route>
 
+          {/* Cohorts & Batches (Admin, Trainer & Enrolled Student View) */}
+          <Route path="cohorts" element={<CohortsPage />} />
+
           {/* Academic Operations & Teaching (Platform Admin, Org Admin, Trainer) */}
           <Route element={<RoleGuard allowedRoles={['platform_admin', 'org_admin', 'trainer']} />}>
             <Route path="students" element={<PeoplePage initialMode="students" />} />
-            <Route path="cohorts" element={<CohortsPage />} />
             <Route path="courses/:id/share" element={<ShareCoursePage />} />
             <Route path="course/:id/share" element={<ShareCoursePage />} />
             <Route path="courses/share" element={<ShareCoursePage />} />
