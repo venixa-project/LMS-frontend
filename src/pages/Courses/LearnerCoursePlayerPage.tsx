@@ -11,7 +11,7 @@ import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
   ChevronRight, ChevronLeft, Bookmark, Share2, Sparkles, Award,
   ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye,
-  Pause, Video, HelpCircle
+  Pause, Video, HelpCircle, BookOpen, Check, Layers, Code
 } from 'lucide-react';
 
 export const LearnerCoursePlayerPage: React.FC = () => {
@@ -433,41 +433,261 @@ export const LearnerCoursePlayerPage: React.FC = () => {
             />
           ) : (
             <div style={{
-              background: '#040711',
+              background: 'var(--bg-card)',
               borderRadius: 'var(--radius-xl)',
               overflow: 'hidden',
               border: '1px solid var(--border-subtle)',
               position: 'relative'
             }}>
-              <div style={{ padding: '36px', minHeight: '360px', background: 'var(--bg-card)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <FileText size={24} color="var(--accent-cyan)" />
-                  <h2 style={{ fontSize: '1.4rem', margin: 0 }}>{currentLesson.title}</h2>
-                </div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.7, display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <p>
-                    In this lesson, we explore the core curriculum concepts of <strong>{course.title}</strong>. When building modern enterprise software, proper architecture and execution discipline are essential.
-                  </p>
-                  <div style={{
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.85rem'
-                  }}>
-                    // Course Context: {course.title}<br />
-                    const courseMeta = &#123;<br />
-                    &nbsp;&nbsp;courseId: &quot;{course.id}&quot;,<br />
-                    &nbsp;&nbsp;title: &quot;{course.title}&quot;,<br />
-                    &nbsp;&nbsp;category: &quot;{course.category}&quot;,<br />
-                    &nbsp;&nbsp;activeModule: &quot;{currentModule?.title}&quot;,<br />
-                    &nbsp;&nbsp;lesson: &quot;{currentLesson.title}&quot;<br />
-                    &#125;;
+              <div style={{ padding: '32px 36px', minHeight: '420px', background: 'var(--bg-card)' }}>
+                {/* Header & Meta Bar */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <span className="badge badge-primary" style={{ fontSize: '0.72rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <BookOpen size={12} /> Reading Material &bull; {currentModule?.title || 'Core Curriculum'}
+                      </span>
+                      <span className="text-muted text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} /> {currentLesson.durationMinutes || 20} mins reading
+                      </span>
+                    </div>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                      {currentLesson.title}
+                    </h2>
                   </div>
-                  <p>
-                    Review the downloadable code exercises and supplementary notes below before proceeding to the next lesson.
-                  </p>
+
+                  {!isCompleted && !isAfterEnd && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={toggleComplete}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderColor: 'var(--accent-cyan)' }}
+                    >
+                      <Check size={14} color="var(--accent-cyan)" /> Mark Reading as Completed
+                    </button>
+                  )}
+                  {isCompleted && (
+                    <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.78rem' }}>
+                      <CheckCircle2 size={14} /> Completed
+                    </span>
+                  )}
+                </div>
+
+                {/* Attached Document Card (if uploaded by Admin / Trainer) */}
+                {currentLesson.uploadedDocument && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      borderRadius: 'var(--radius-lg)',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      marginBottom: '24px',
+                      flexWrap: 'wrap',
+                      gap: '14px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '10px',
+                          background: 'rgba(6, 182, 212, 0.12)',
+                          color: 'var(--accent-cyan)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FileText size={22} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)', wordBreak: 'break-all' }}>
+                          {currentLesson.uploadedDocument.name}
+                        </div>
+                        <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+                          <span>
+                            {currentLesson.uploadedDocument.size
+                              ? currentLesson.uploadedDocument.size < 1024 * 1024
+                                ? `${(currentLesson.uploadedDocument.size / 1024).toFixed(1)} KB`
+                                : `${(currentLesson.uploadedDocument.size / (1024 * 1024)).toFixed(1)} MB`
+                              : '1.4 MB'}
+                          </span>
+                          <span>&bull;</span>
+                          <span>Uploaded Document &bull; Verified Curriculum Source</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {currentLesson.uploadedDocument.url && (
+                        <a
+                          href={currentLesson.uploadedDocument.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                        >
+                          <ExternalLink size={13} /> View Full
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                        onClick={() => {
+                          if (currentLesson.uploadedDocument?.url) {
+                            const a = document.createElement('a');
+                            a.href = currentLesson.uploadedDocument.url;
+                            a.download = currentLesson.uploadedDocument.name;
+                            a.click();
+                          } else {
+                            const blob = new Blob([
+                              `# ${currentLesson.uploadedDocument?.name || currentLesson.title}\n` +
+                              `Course: ${course.title}\n` +
+                              `Module: ${currentModule?.title || 'Core Concepts'}\n\n` +
+                              `Official Curriculum Reading Notes & Study Reference.`
+                            ], { type: 'text/markdown' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = currentLesson.uploadedDocument?.name || `${currentLesson.title.replace(/\s+/g, '_')}.md`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }
+                        }}
+                      >
+                        <Download size={13} /> Download Document
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Embedded Document Viewer if URL is available */}
+                {currentLesson.uploadedDocument?.url && currentLesson.uploadedDocument.url.startsWith('data:application/pdf') && (
+                  <div style={{ marginBottom: '24px', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                    <iframe
+                      src={currentLesson.uploadedDocument.url}
+                      title={currentLesson.uploadedDocument.name}
+                      style={{ width: '100%', height: '480px', border: 'none', background: '#ffffff' }}
+                    />
+                  </div>
+                )}
+
+                {/* Document Body Content */}
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.8, display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                  {currentLesson.uploadedDocument?.text ? (
+                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                      {currentLesson.uploadedDocument.text}
+                    </div>
+                  ) : currentLesson.content ? (
+                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                      {currentLesson.content}
+                    </div>
+                  ) : course.title.toLowerCase().includes('java') ? (
+                    /* Deep-dive Enterprise Java Curriculum Notes */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <p>
+                        Welcome to <strong>{currentLesson.title}</strong> for the <strong>{course.title}</strong> curriculum. This reading unit covers the foundational architecture, object-oriented paradigms, memory lifecycle, and clean code conventions required to architect robust, scalable enterprise Java applications.
+                      </p>
+
+                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 12px', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Layers size={18} /> 1. JVM Architecture & Runtime Memory Model
+                        </h3>
+                        <p style={{ margin: '0 0 12px' }}>
+                          The Java Virtual Machine (JVM) abstracts underlying hardware architectures through bytecode execution, providing cross-platform portability (&ldquo;Write Once, Run Anywhere&rdquo;). Key memory segments include:
+                        </p>
+                        <ul style={{ margin: '0 0 10px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <li><strong>Heap Memory:</strong> Shared runtime data area where all class instances and arrays are allocated. Partitioned into the Young Generation (Eden and Survivor spaces) and Old/Tenured Generation.</li>
+                          <li><strong>JVM Stack:</strong> Thread-isolated memory holding stack frames for active method invocations, primitive local variables, and object references.</li>
+                          <li><strong>Metaspace:</strong> Off-heap native memory containing class metadata, static variables, and runtime constant pools (replacing the legacy PermGen in Java 8+).</li>
+                          <li><strong>Garbage Collection (GC):</strong> Generational automated memory reclamation (e.g., G1 GC, ZGC) identifying unreachable objects via root set traversal.</li>
+                        </ul>
+                      </div>
+
+                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 12px', color: 'var(--accent-purple)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Code size={18} /> 2. Object-Oriented Principles & Modern Syntax
+                        </h3>
+                        <p style={{ margin: '0 0 12px' }}>
+                          Enterprise Java enforces strict type safety and object-oriented encapsulation. Core architectural pillars include:
+                        </p>
+                        <ul style={{ margin: '0 0 12px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <li><strong>Dynamic Method Dispatch:</strong> Runtime polymorphism where overridden method resolution occurs dynamically according to the actual runtime instance type.</li>
+                          <li><strong>Interfaces vs Abstract Classes:</strong> Interfaces define contracts with support for <code>default</code> and <code>static</code> methods since Java 8, enabling flexible multiple-interface composition without class hierarchy coupling.</li>
+                          <li><strong>Resource Management:</strong> Always employ <code>try-with-resources</code> with objects implementing <code>AutoCloseable</code> to prevent resource and socket leaks.</li>
+                        </ul>
+
+                        <div style={{
+                          background: '#040711',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '16px',
+                          fontFamily: 'var(--font-mono, monospace)',
+                          fontSize: '0.85rem',
+                          color: '#e2e8f0',
+                          lineHeight: 1.6,
+                          overflowX: 'auto',
+                        }}>
+                          <span style={{ color: '#818cf8' }}>// Enterprise Java Pattern: Safe Resource Management & Streams</span><br />
+                          <span style={{ color: '#ec4899' }}>public</span> <span style={{ color: '#ec4899' }}>final</span> <span style={{ color: '#ec4899' }}>class</span> <span style={{ color: '#38bdf8' }}>DataPipelineService</span> &#123;<br />
+                          &nbsp;&nbsp;<span style={{ color: '#ec4899' }}>public</span> List&lt;String&gt; <span style={{ color: '#34d399' }}>processValidRecords</span>(Path path) <span style={{ color: '#ec4899' }}>throws</span> IOException &#123;<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#94a3b8' }}>// Deterministic automatic resource cleanup via try-with-resources</span><br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#ec4899' }}>try</span> (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) &#123;<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#ec4899' }}>return</span> reader.lines()<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.filter(line -&gt; !line.isBlank() &amp;&amp; !line.startsWith(<span style={{ color: '#f59e0b' }}>&quot;#&quot;</span>))<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.map(String::trim)<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.distinct()<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.collect(Collectors.toUnmodifiableList());<br />
+                          &nbsp;&nbsp;&nbsp;&nbsp;&#125;<br />
+                          &nbsp;&nbsp;&#125;<br />
+                          &#125;
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 10px', color: 'var(--text-main)' }}>
+                          3. Study Checkpoints & Assessment Preparation
+                        </h3>
+                        <p style={{ margin: '0 0 10px' }}>
+                          Ensure you have mastered these concepts prior to launching the module assessment:
+                        </p>
+                        <ol style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <li>Distinguish clearly between Checked exceptions (compile-time enforced) and Unchecked RuntimeExceptions.</li>
+                          <li>Understand how <code>HashMap</code> resolves hash collisions via bucket linked lists and treeification to red-black trees when threshold &gt; 8.</li>
+                          <li>Understand the <code>volatile</code> keyword ensuring CPU cache coherency and preventing instruction reordering in multithreaded environments.</li>
+                        </ol>
+                      </div>
+                    </div>
+                  ) : (
+                    /* General Curriculum Reading Notes */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                      <p>
+                        In this lesson, we study the core curriculum guidelines and operational standards for <strong>{course.title}</strong> &mdash; <em>{currentLesson.title}</em>.
+                      </p>
+                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 10px', color: 'var(--text-main)' }}>
+                          Curriculum Foundations & Objectives
+                        </h3>
+                        <p style={{ margin: '0 0 10px' }}>
+                          Mastery of this module requires deep conceptual understanding and practical implementation rigor:
+                        </p>
+                        <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <li>Systematic adherence to architectural design specifications and enterprise patterns.</li>
+                          <li>Implementation of comprehensive error handling, input validation, and boundary verification.</li>
+                          <li>Reproducible testing methodologies and observability instrumentation.</li>
+                        </ul>
+                      </div>
+                      <p>
+                        Review the supplementary downloadable materials below before taking the module knowledge assessment.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -531,7 +751,68 @@ export const LearnerCoursePlayerPage: React.FC = () => {
               <span className="text-muted text-xs">Synchronized with course progress</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+              {/* Actual Uploaded Document if present */}
+              {currentLesson.uploadedDocument && (
+                <div
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--accent-cyan, #06b6d4)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                    <FileText size={18} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                        {currentLesson.uploadedDocument.name}
+                      </div>
+                      <div className="text-muted text-xs">
+                        {currentLesson.uploadedDocument.size
+                          ? currentLesson.uploadedDocument.size < 1024 * 1024
+                            ? `${(currentLesson.uploadedDocument.size / 1024).toFixed(1)} KB`
+                            : `${(currentLesson.uploadedDocument.size / (1024 * 1024)).toFixed(1)} MB`
+                          : '1.4 MB'} &bull; Uploaded Curriculum Doc
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', flexShrink: 0 }}
+                    onClick={() => {
+                      if (currentLesson.uploadedDocument?.url) {
+                        const a = document.createElement('a');
+                        a.href = currentLesson.uploadedDocument.url;
+                        a.download = currentLesson.uploadedDocument.name;
+                        a.click();
+                      } else {
+                        const blob = new Blob([
+                          `# ${currentLesson.uploadedDocument?.name || currentLesson.title}\n` +
+                          `Course: ${course.title}\n` +
+                          `Module: ${currentModule?.title || 'Core Concepts'}\n\n` +
+                          `Official Course Curriculum Documentation.`
+                        ], { type: 'text/markdown' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = currentLesson.uploadedDocument?.name || `${currentLesson.title.replace(/\s+/g, '_')}.md`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                  >
+                    Download
+                  </button>
+                </div>
+              )}
+
               <div
                 style={{
                   background: 'var(--bg-input)',
@@ -548,8 +829,8 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Download size={18} color="var(--primary)" />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{currentLesson.title.slice(0, 24)}-Guide.pdf</div>
-                    <div className="text-muted text-xs">2.4 MB &bull; Lecture Document</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{currentLesson.title.slice(0, 24)}-StudyGuide.pdf</div>
+                    <div className="text-muted text-xs">1.8 MB &bull; Lecture Guide</div>
                   </div>
                 </div>
                 <button
@@ -557,7 +838,16 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                   className="btn btn-secondary btn-sm"
                   style={{ fontSize: '0.75rem', padding: '4px 10px' }}
                   onClick={() => {
-                    const blob = new Blob([`# VeniLearn LMS\nCourse: ${course.title}\nLesson: ${currentLesson.title}\nDuration: ${currentLesson.durationMinutes || 30} mins\n\nOfficial Course Study Guide & Materials.`], { type: 'text/markdown' });
+                    const blob = new Blob([
+                      `# ${course.title} - ${currentLesson.title}\n\n` +
+                      `## Module: ${currentModule?.title || 'Core Concepts'}\n` +
+                      `Estimated Study Duration: ${currentLesson.durationMinutes || 20} minutes\n\n` +
+                      `### Core Curriculum Principles\n` +
+                      `1. Architectural integrity and enterprise software standards.\n` +
+                      `2. Rigorous object-oriented patterns, type safety, and encapsulation.\n` +
+                      `3. Automated deterministic resource management and exception boundaries.\n\n` +
+                      `Official Study Material for ${course.title}.`
+                    ], { type: 'text/markdown' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -586,8 +876,10 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <FileText size={18} color="var(--accent-purple)" />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Lesson-Starter-Code.zip</div>
-                    <div className="text-muted text-xs">850 KB &bull; Source Exercises</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                      {course.title.toLowerCase().includes('java') ? 'Java-Exercise-Template.java' : 'Lesson-Starter-Code.zip'}
+                    </div>
+                    <div className="text-muted text-xs">650 KB &bull; Source Exercises</div>
                   </div>
                 </div>
                 <button
@@ -595,11 +887,15 @@ export const LearnerCoursePlayerPage: React.FC = () => {
                   className="btn btn-secondary btn-sm"
                   style={{ fontSize: '0.75rem', padding: '4px 10px' }}
                   onClick={() => {
-                    const blob = new Blob([`// Starter exercises for ${currentLesson.title}\nconsole.log("Ready to practice!");\n`], { type: 'text/javascript' });
+                    const isJava = course.title.toLowerCase().includes('java');
+                    const code = isJava
+                      ? `// Practical Exercises for ${course.title}: ${currentLesson.title}\n\npublic class PracticeExercise {\n    public static void main(String[] args) {\n        System.out.println("Starting exercises for ${currentLesson.title}...");\n    }\n}\n`
+                      : `// Starter exercises for ${currentLesson.title}\nconsole.log("Ready to practice for ${course.title}!");\n`;
+                    const blob = new Blob([code], { type: isJava ? 'text/x-java-source' : 'text/javascript' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${currentLesson.title.replace(/\s+/g, '_')}_starter.js`;
+                    a.download = isJava ? 'PracticeExercise.java' : `${currentLesson.title.replace(/\s+/g, '_')}_starter.js`;
                     a.click();
                     URL.revokeObjectURL(url);
                   }}

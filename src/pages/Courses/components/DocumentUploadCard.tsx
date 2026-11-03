@@ -47,18 +47,69 @@ export const DocumentUploadCard: React.FC<Props> = ({
     }
 
     setIsUploading(true);
-    // Simulate parsing & local storage indexing
-    setTimeout(() => {
+
+    const isTextReadable =
+      fileName.endsWith('.txt') ||
+      fileName.endsWith('.md') ||
+      fileName.endsWith('.json') ||
+      fileName.endsWith('.java') ||
+      file.type.startsWith('text/');
+
+    const fallbackDoc = () => {
       const docInfo: UploadedDocumentInfo = {
         id: `doc-${Date.now()}`,
         name: file.name,
         size: file.size,
         type: file.type || 'application/pdf',
         uploadedAt: new Date().toISOString(),
+        pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
       };
       onUpload(docInfo);
       setIsUploading(false);
-    }, 400);
+    };
+
+    if (isTextReadable) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = (e.target?.result as string) || '';
+        const words = text.split(/\s+/).filter(Boolean).length;
+        const docInfo: UploadedDocumentInfo = {
+          id: `doc-${Date.now()}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || 'text/plain',
+          uploadedAt: new Date().toISOString(),
+          text,
+          wordCount: words,
+          charCount: text.length,
+          pageCount: Math.max(1, Math.ceil(words / 350)),
+        };
+        onUpload(docInfo);
+        setIsUploading(false);
+      };
+      reader.onerror = fallbackDoc;
+      reader.readAsText(file);
+    } else if (file.size <= 3 * 1024 * 1024) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = (e.target?.result as string) || '';
+        const docInfo: UploadedDocumentInfo = {
+          id: `doc-${Date.now()}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/pdf',
+          uploadedAt: new Date().toISOString(),
+          url: dataUrl,
+          pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
+        };
+        onUpload(docInfo);
+        setIsUploading(false);
+      };
+      reader.onerror = fallbackDoc;
+      reader.readAsDataURL(file);
+    } else {
+      setTimeout(fallbackDoc, 300);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

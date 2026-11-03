@@ -96,14 +96,11 @@ export const VideoUploadModal: React.FC<Props> = ({
     }
   }, [isOpen, initialTitle, initialVideo]);
 
-  // Clean up blob URL on unmount
+  // Retain blob URLs active across the session so learners and previewers can stream
+  const isSavedRef = useRef(false);
   useEffect(() => {
-    return () => {
-      if (previewBlobUrl && previewBlobUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewBlobUrl);
-      }
-    };
-  }, [previewBlobUrl]);
+    isSavedRef.current = false;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

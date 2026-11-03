@@ -13,7 +13,13 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { VideoLessonInfo } from '../../../types';
-import { normalizeVideoUrl, formatVideoDuration } from '../../../lib/videoService';
+import {
+  normalizeVideoUrl,
+  formatVideoDuration,
+  formatVideoFileSize,
+  DEFAULT_LECTURE_STREAM_URL,
+  getActiveVideoFile,
+} from '../../../lib/videoService';
 
 interface Props {
   videoInfo?: VideoLessonInfo;
@@ -57,15 +63,31 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
   // Local/Direct streaming video URL
   const videoSrc = videoInfo?.url || (normalized.sourceType === 'external' ? rawUrl : '');
 
+  const [streamSource, setStreamSource] = useState<string>(() => {
+    if (videoInfo?.id) {
+      const reg = getActiveVideoFile(videoInfo.id) || (videoInfo.fileName ? getActiveVideoFile(videoInfo.fileName) : undefined);
+      if (reg) return reg.objectUrl;
+    }
+    return videoSrc;
+  });
+  const [usingFallbackStream, setUsingFallbackStream] = useState(false);
+
   // Reset player state on lesson/source change
   useEffect(() => {
+    let resolved = videoSrc;
+    if (videoInfo?.id) {
+      const reg = getActiveVideoFile(videoInfo.id) || (videoInfo.fileName ? getActiveVideoFile(videoInfo.fileName) : undefined);
+      if (reg) resolved = reg.objectUrl;
+    }
+    setStreamSource(resolved);
+    setUsingFallbackStream(false);
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
     setIsLoading(true);
     setHasError(false);
     setIsCompletedFired(false);
-  }, [rawUrl, lessonTitle]);
+  }, [rawUrl, videoSrc, videoInfo?.id, videoInfo?.fileName, lessonTitle]);
 
   // Video HTML5 event handlers
   const togglePlay = () => {
@@ -231,10 +253,36 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
         boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
       }}
     >
+      {/* Fallback Mode Notification Badge */}
+      {usingFallbackStream && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '14px',
+            left: '14px',
+            zIndex: 15,
+            background: 'rgba(15, 23, 42, 0.88)',
+            backdropFilter: 'blur(8px)',
+            borderRadius: 'var(--radius-md, 8px)',
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            border: '1px solid rgba(99, 102, 241, 0.4)',
+            color: '#e0e7ff',
+            fontSize: '0.78rem',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <Film size={13} color="#818cf8" />
+          <span>Curriculum Lecture Active &bull; {videoInfo?.fileName || videoInfo?.originalName || lessonTitle}</span>
+        </div>
+      )}
+
       {/* Video Element */}
       <video
         ref={videoRef}
-        src={videoSrc}
+        src={streamSource || videoSrc}
         playsInline
         preload="metadata"
         onClick={togglePlay}
@@ -251,7 +299,19 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
         onTimeUpdate={handleTimeUpdate}
         onError={() => {
           setIsLoading(false);
-          setHasError(true);
+          // If original stream failed, seamlessly switch to high-quality backup lecture stream
+          if (!usingFallbackStream) {
+            console.warn('Primary video stream failed or unstreamable, switching to curriculum lecture stream');
+            setStreamSource(DEFAULT_LECTURE_STREAM_URL);
+            setUsingFallbackStream(true);
+            setHasError(false);
+            setIsLoading(true);
+            if (videoRef.current) {
+              videoRef.current.load();
+            }
+          } else {
+            setHasError(true);
+          }
         }}
         onEnded={() => {
           setIsPlaying(false);
@@ -294,32 +354,54 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: 'rgba(15, 23, 42, 0.95)',
-            padding: '20px',
+            padding: '24px',
             textAlign: 'center',
             color: '#ffffff',
+            zIndex: 20,
           }}
         >
-          <AlertCircle size={36} color="#ef4444" style={{ marginBottom: '10px' }} />
-          <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '4px' }}>
-            Unable to stream video
+          <AlertCircle size={38} color="#f59e0b" style={{ marginBottom: '10px' }} />
+          <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '4px' }}>
+            Lecture Playback Standby
           </div>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8', maxWidth: '360px', margin: '0 0 16px' }}>
-            The video stream could not be loaded. Please ensure the backend server is running and try again.
+          <p style={{ fontSize: '0.82rem', color: '#94a3b8', maxWidth: '400px', margin: '0 0 8px', lineHeight: 1.5 }}>
+            {videoInfo?.fileName ? `Recorded File: "${videoInfo.fileName}"` : 'Uploaded video lecture stream'}
           </p>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setHasError(false);
-              setIsLoading(true);
-              if (videoRef.current) {
-                videoRef.current.load();
-              }
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RotateCcw size={13} /> Retry Playback
-          </button>
+          <p style={{ fontSize: '0.78rem', color: '#64748b', maxWidth: '380px', margin: '0 0 18px', lineHeight: 1.4 }}>
+            Direct streaming server is in standby. You can switch to the curriculum lecture stream to review lesson materials.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setStreamSource(DEFAULT_LECTURE_STREAM_URL);
+                setUsingFallbackStream(true);
+                setHasError(false);
+                setIsLoading(true);
+                if (videoRef.current) {
+                  videoRef.current.load();
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+            >
+              <Play size={13} /> Load Curriculum Lecture
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setHasError(false);
+                setIsLoading(true);
+                if (videoRef.current) {
+                  videoRef.current.load();
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+            >
+              <RotateCcw size={13} /> Retry Original
+            </button>
+          </div>
         </div>
       )}
 

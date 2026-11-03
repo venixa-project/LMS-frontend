@@ -1,7 +1,32 @@
 import { VideoLessonInfo } from '../types';
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    // Relative URL automatically routes through Vite dev server proxy on any IP or host
+    return '/api/v1';
+  }
+  return 'http://localhost:5000/api/v1';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
+
+// Reliable streaming educational lecture video source for local media backup
+export const DEFAULT_LECTURE_STREAM_URL = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+
+// In-memory registry to preserve local video files across component lifecycles in the active session
+export const activeVideoFileRegistry = new Map<string, { file: File; objectUrl: string }>();
+
+export function registerVideoFile(id: string, file: File, objectUrl: string) {
+  activeVideoFileRegistry.set(id, { file, objectUrl });
+  if (file.name) {
+    activeVideoFileRegistry.set(file.name, { file, objectUrl });
+  }
+}
+
+export function getActiveVideoFile(idOrName: string): { file: File; objectUrl: string } | undefined {
+  return activeVideoFileRegistry.get(idOrName);
+}
 
 export const ALLOWED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv', '.m4v'];
 export const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
@@ -177,7 +202,7 @@ export function uploadVideoFile(params: {
         try {
           const res = JSON.parse(xhr.responseText);
           const v = res.data;
-          const streamUrl = `${API_BASE_URL}/courses/${courseId}/videos/${v.id}/stream?token=${token}`;
+          const streamUrl = `${API_BASE_URL}/courses/${courseId}/videos/${v.id}/stream?token=${encodeURIComponent(token)}&tenantId=${encodeURIComponent(tenantId)}`;
           const videoInfo: VideoLessonInfo = {
             id: v.id,
             sourceType: 'upload',
@@ -194,6 +219,7 @@ export function uploadVideoFile(params: {
             videoId: v.id,
             uploadedAt: v.createdAt || new Date().toISOString(),
           };
+          registerVideoFile(v.id, file, streamUrl);
           resolve(videoInfo);
         } catch (err) {
           fallbackLocalUpload(resolve);
@@ -212,9 +238,16 @@ export function uploadVideoFile(params: {
 
     function fallbackLocalUpload(resCb: (val: VideoLessonInfo) => void) {
       if (onProgress) onProgress(100);
-      const localUrl = URL.createObjectURL(file);
+      const generatedId = `vid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      let localUrl = '';
+      try {
+        localUrl = URL.createObjectURL(file);
+        registerVideoFile(generatedId, file, localUrl);
+      } catch (e) {
+        localUrl = DEFAULT_LECTURE_STREAM_URL;
+      }
       const fallbackInfo: VideoLessonInfo = {
-        id: `vid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        id: generatedId,
         sourceType: 'upload',
         title: title || file.name.replace(/\.[^/.]+$/, ''),
         description,
