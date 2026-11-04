@@ -204,9 +204,9 @@ export function hasBackendAccessToken(): boolean {
 function getStoredTenantId(): string | null {
   try {
     const raw = localStorage.getItem('venilearn_active_tenant_id');
-    return raw || null;
+    return raw || '871abf8a-e563-4d0f-afc7-416d8da3df14';
   } catch {
-    return null;
+    return '871abf8a-e563-4d0f-afc7-416d8da3df14';
   }
 }
 

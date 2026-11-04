@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { mockCourses, mockCohorts, mockDepartments, mockEnrollments } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
 import { useCourseStore } from '../../lib/courseStore';
+import { useCohortStore } from '../../lib/cohortStore';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { Enrollment } from '../../types';
 import { BackToCoursesButton } from '../../components/BackToCoursesButton';
@@ -24,6 +24,11 @@ interface ExtendedEnrollment extends Omit<Enrollment, 'progress'> {
 }
 
 export const EnrollmentsPage: React.FC = () => {
+  const { courses, fetchCourses } = useCourseStore();
+  const { cohorts, fetchCohorts } = useCohortStore();
+  const { departments } = useDepartmentStore();
+  const { users, fetchPeople } = usePeopleStore();
+  useEffect(() => { fetchCourses(); fetchCohorts(); fetchPeople(); }, []);
   // Synthesize rich mock enrollment records
   const initialEnrollments: ExtendedEnrollment[] = [
     {
@@ -147,9 +152,9 @@ export const EnrollmentsPage: React.FC = () => {
       .map((se) => {
         const student =
           allStudents.find((s) => s.id === se.userId) ||
-          mockUsers.find((u) => u.id === se.userId);
+          users.find((u) => u.id === se.userId);
         const course = storeCourses.find((c) => c.id === se.courseId);
-        const cohort = mockCohorts.find((c) => c.id === se.cohortId);
+        const cohort = cohorts.find((c) => c.id === se.cohortId);
 
         return {
           id: se.id,
@@ -172,8 +177,8 @@ export const EnrollmentsPage: React.FC = () => {
 
   // Form states
   const [selectedStudent, setSelectedStudent] = useState('Alex Rivera (alex@lms.demo)');
-  const [selectedCourse, setSelectedCourse] = useState(mockCourses[0]?.id || 'c-001');
-  const [selectedCohort, setSelectedCohort] = useState(mockCohorts[0]?.name || 'Spring 2026 Engineering');
+  const [selectedCourse, setSelectedCourse] = useState(courses[0]?.id || '');
+  const [selectedCohort, setSelectedCohort] = useState(cohorts[0]?.name || '');
   const [enrollSuccessMessage, setEnrollSuccessMessage] = useState<string | null>(null);
 
   const filteredEnrollments = enrollments.filter((e) => {
@@ -192,7 +197,7 @@ export const EnrollmentsPage: React.FC = () => {
 
   const handleEnrollStudent = (e: React.FormEvent) => {
     e.preventDefault();
-    const courseObj = mockCourses.find((c) => c.id === selectedCourse);
+    const courseObj = courses.find((c) => c.id === selectedCourse);
     const newEnr: ExtendedEnrollment = {
       id: `enr-${Date.now()}`,
       userId: `u-${Date.now()}`,
@@ -305,7 +310,7 @@ export const EnrollmentsPage: React.FC = () => {
               style={{ width: 'auto' }}
             >
               <option value="all">All Courses</option>
-              {mockCourses.map((c) => (
+              {courses.map((c) => (
                 <option key={c.id} value={c.id}>{c.title}</option>
               ))}
             </select>
@@ -442,7 +447,7 @@ export const EnrollmentsPage: React.FC = () => {
                     value={selectedCourse}
                     onChange={(e) => setSelectedCourse(e.target.value)}
                   >
-                    {mockCourses.map((c) => (
+                    {courses.map((c) => (
                       <option key={c.id} value={c.id}>{c.title} ({c.level})</option>
                     ))}
                   </select>
@@ -455,7 +460,7 @@ export const EnrollmentsPage: React.FC = () => {
                     value={selectedCohort}
                     onChange={(e) => setSelectedCohort(e.target.value)}
                   >
-                    {mockCohorts.map((co) => (
+                    {cohorts.map((co) => (
                       <option key={co.id} value={co.name}>{co.name} ({co.code})</option>
                     ))}
                   </select>

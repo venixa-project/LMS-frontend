@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { mockProctoringIncidents } from '../../data/mockData';
+
 import { ProctoringIncident } from '../../types';
 import {
   useProctoringStore,

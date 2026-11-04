@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Assessment, Question } from '../types';
-import { mockAssessments, mockQuestions } from '../data/mockData';
+
 
 const STORAGE_KEY_ASSESSMENTS = 'venilearn_assessments_store';
 const STORAGE_KEY_QUESTIONS = 'venilearn_questions_store';
@@ -58,8 +58,8 @@ interface AssessmentStoreState {
 }
 
 export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
-  assessments: loadFromStorage<Assessment[]>(STORAGE_KEY_ASSESSMENTS, mockAssessments),
-  questions: loadFromStorage<Question[]>(STORAGE_KEY_QUESTIONS, mockQuestions),
+  assessments: loadFromStorage<Assessment[]>(STORAGE_KEY_ASSESSMENTS, []),
+  questions: loadFromStorage<Question[]>(STORAGE_KEY_QUESTIONS, []),
   drafts: loadFromStorage<Assessment[]>(STORAGE_KEY_DRAFTS, []),
 
   getAssessmentById: (id: string) => {
@@ -291,8 +291,8 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
     localStorage.removeItem(STORAGE_KEY_QUESTIONS);
     localStorage.removeItem(STORAGE_KEY_DRAFTS);
     set({
-      assessments: mockAssessments,
-      questions: mockQuestions,
+      assessments: [],
+      questions: [],
       drafts: []
     });
   }

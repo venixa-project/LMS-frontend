@@ -8,8 +8,9 @@
 // ============================================================
 import * as XLSX from 'xlsx';
 import { User, Course, Cohort, Department, Enrollment, AssessmentAttempt, GradingTask } from '../types';
-import { mockDepartments, mockCohorts, mockEnrollments, mockAssessments, mockAttempts, mockGradingTasks } from '../data/mockData';
-import { mockUsers } from '../data/mockUsers';
+import { useDepartmentStore } from './departmentStore';
+import { useAssessmentStore } from './assessmentStore';
+
 import { useCourseStore } from './courseStore';
 import { useCohortStore } from './cohortStore';
 import { usePeopleStore } from './peopleStore';
@@ -201,12 +202,12 @@ export function getReportEntities(orgId?: string) {
   const allCourses = useCourseStore.getState().courses ?? [];
   const courses = allCourses.filter(c => (c.organizationId || 'org-001') === effectiveOrgId);
 
-  const users = usePeopleStore.getState().users?.length ? usePeopleStore.getState().users : mockUsers;
-  const cohorts = useCohortStore.getState().cohorts?.length ? useCohortStore.getState().cohorts : mockCohorts;
+  const users = usePeopleStore.getState().users || [];
+  const cohorts = useCohortStore.getState().cohorts || [];
   const enrollments = useCourseStore.getState().enrollments ?? [];
-  const attempts = useGradingStore.getState().attempts?.length ? useGradingStore.getState().attempts : mockAttempts;
-  const gradingTasks = useGradingStore.getState().tasks?.length ? useGradingStore.getState().tasks : mockGradingTasks;
-  const departments = mockDepartments;
+  const attempts = useGradingStore.getState().attempts || [];
+  const gradingTasks = useGradingStore.getState().tasks || [];
+  const departments = useDepartmentStore.getState().departments || [];
 
   return { users, courses, cohorts, enrollments, attempts, gradingTasks, departments };
 }

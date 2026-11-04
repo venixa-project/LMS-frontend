@@ -4,8 +4,7 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { Course, Department, User, Cohort } from '../../types';
 import {
   Share2, ArrowLeft, Link2, Copy, Check, ExternalLink, ShieldCheck,
@@ -51,7 +50,7 @@ export const ShareCoursePage: React.FC = () => {
   const assignedTrainer = useMemo(() => {
     if (!course) return null;
     const instructorId = course.instructors?.[0] || course.createdBy;
-    return mockUsers.find(u => u.id === instructorId) || mockUsers.find(u => u.activeRole === 'trainer');
+    return usePeopleStore.getState().users.find(u => u.id === instructorId) || usePeopleStore.getState().users.find(u => u.activeRole === 'trainer');
   }, [course]);
 
   // All active students from people store
@@ -75,7 +74,7 @@ export const ShareCoursePage: React.FC = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
 
   // Department Mode State
-  const [selectedDeptId, setSelectedDeptId] = useState<string>(mockDepartments[0]?.id || 'dep-001');
+  const [selectedDeptId, setSelectedDeptId] = useState<string>(useDepartmentStore.getState().departments[0]?.id || 'dep-001');
   const [deptSearch, setDeptSearch] = useState<string>('');
 
   // Cohort Mode State
@@ -146,7 +145,7 @@ export const ShareCoursePage: React.FC = () => {
 
   // 1. Department Filtered Students
   const selectedDepartment = useMemo(() => {
-    return mockDepartments.find(d => d.id === selectedDeptId) || mockDepartments[0];
+    return useDepartmentStore.getState().departments.find(d => d.id === selectedDeptId) || useDepartmentStore.getState().departments[0];
   }, [selectedDeptId]);
 
   const departmentStudents = useMemo(() => {
@@ -865,7 +864,7 @@ export const ShareCoursePage: React.FC = () => {
                     }}
                     style={{ fontSize: '0.875rem', fontWeight: 600 }}
                   >
-                    {mockDepartments.map((dept) => (
+                    {useDepartmentStore.getState().departments.map((dept) => (
                       <option key={dept.id} value={dept.id}>
                         {dept.name} ({dept.id}) &bull; {dept.memberCount || 50} members
                       </option>
@@ -1167,7 +1166,7 @@ export const ShareCoursePage: React.FC = () => {
                     ) : (
                       filteredCohortStudents.map((st) => {
                         const isSelected = selectedStudentIds.has(st.id);
-                        const deptName = mockDepartments.find(d => d.id === st.departmentId)?.name || 'General';
+                        const deptName = useDepartmentStore.getState().departments.find(d => d.id === st.departmentId)?.name || 'General';
                         return (
                           <tr
                             key={st.id}
@@ -1244,8 +1243,8 @@ export const ShareCoursePage: React.FC = () => {
                     onChange={(e) => setIndividualDeptFilter(e.target.value)}
                     style={{ fontSize: '0.825rem' }}
                   >
-                    <option value="all">All Departments ({mockDepartments.length})</option>
-                    {mockDepartments.map(d => (
+                    <option value="all">All Departments ({useDepartmentStore.getState().departments.length})</option>
+                    {useDepartmentStore.getState().departments.map(d => (
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </select>
@@ -1306,7 +1305,7 @@ export const ShareCoursePage: React.FC = () => {
                     ) : (
                       filteredIndividualStudents.map((st) => {
                         const isSelected = selectedStudentIds.has(st.id);
-                        const deptName = mockDepartments.find(d => d.id === st.departmentId)?.name || 'General';
+                        const deptName = useDepartmentStore.getState().departments.find(d => d.id === st.departmentId)?.name || 'General';
                         return (
                           <tr
                             key={st.id}
@@ -1432,7 +1431,7 @@ export const ShareCoursePage: React.FC = () => {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-                    {mockDepartments.map(d => {
+                    {useDepartmentStore.getState().departments.map(d => {
                       const count = allStudents.filter(s => s.departmentId === d.id).length;
                       return (
                         <div
@@ -1498,7 +1497,7 @@ export const ShareCoursePage: React.FC = () => {
                 }}
               >
                 {selectedStudentsList.map((st) => {
-                  const dept = mockDepartments.find(d => d.id === st.departmentId)?.name || 'General';
+                  const dept = useDepartmentStore.getState().departments.find(d => d.id === st.departmentId)?.name || 'General';
                   return (
                     <span
                       key={st.id}

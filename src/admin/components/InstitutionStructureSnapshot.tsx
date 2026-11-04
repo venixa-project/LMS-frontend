@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { UsersRound, Route, Shield } from 'lucide-react';
-import { mockDepartments } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 
 export const InstitutionStructureSnapshot: React.FC = () => {
+  const { departments } = useDepartmentStore();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Academic Departments Overview */}
@@ -14,7 +15,7 @@ export const InstitutionStructureSnapshot: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {mockDepartments.map((d) => (
+          {departments.map((d) => (
             <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{d.name}</div>

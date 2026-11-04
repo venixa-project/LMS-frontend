@@ -3,8 +3,7 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
 import { BackToCoursesButton } from '../../components/BackToCoursesButton';
 import {
@@ -166,8 +165,8 @@ export const PublicCourseDetailsPage: React.FC = () => {
 
   // Lead Trainer lookup
   const trainerId = course.instructors?.[0] || 'u-004';
-  const leadTrainer = mockUsers.find(u => u.id === trainerId);
-  const trainerDept = mockDepartments.find(d => d.id === leadTrainer?.departmentId);
+  const leadTrainer = usePeopleStore.getState().users.find(u => u.id === trainerId);
+  const trainerDept = useDepartmentStore.getState().departments.find(d => d.id === leadTrainer?.departmentId);
 
   const totalLessons = course.modules?.reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 0;
 

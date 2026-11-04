@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useProctoringStore, ProctorParticipant } from '../../../lib/proctoringStore';
-import { mockAssessments } from '../../../data/mockData';
+import { useAssessmentStore } from '../../../lib/assessmentStore';
 import {
   Shield, Eye, AlertTriangle, CheckCircle2, Clock, X,
   Filter, UserCheck, ShieldAlert, FileText, Camera, Video, Monitor,
@@ -50,7 +50,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const [isLocalCameraActive, setIsLocalCameraActive] = useState(false);
 
-  const selectedAssessment = mockAssessments.find((a) => a.id === selectedAssessmentId) || mockAssessments[0];
+  const selectedAssessment = useAssessmentStore.getState().assessments.find((a) => a.id === selectedAssessmentId) || useAssessmentStore.getState().assessments[0];
   const jitsiRoomId = selectedAssessment?.jitsiRoomId || `vl-exam-${selectedAssessmentId}-live`;
 
   const sessionParticipants = participants.filter(
@@ -189,7 +189,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             onChange={(e) => setSelectedAssessmentId(e.target.value)}
             style={{ fontSize: '0.825rem', height: '36px', minWidth: '220px' }}
           >
-            {mockAssessments.map((a) => (
+            {useAssessmentStore.getState().assessments.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.title} ({a.id})
               </option>

@@ -3,8 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
 import {
   Download, Users, Clock, AlertTriangle, ShieldCheck,
@@ -108,7 +108,7 @@ export const AttendanceLedgerPage: React.FC = () => {
 
     const targetStudentIds = activeSession.targetStudentIds || ['st-1', 'st-2', 'st-3', 'st-4', 'st-5', 'u-007', 'u-009', 'u-010'];
     const sessionAttendance = activeSession.attendance || [];
-    const courseObj = mockCourses.find((c) => c.id === activeSession.courseId);
+    const courseObj = useCourseStore.getState().courses.find((c) => c.id === activeSession.courseId);
     const cohortObj = cohorts.find((c) => c.id === activeSession.cohortId);
 
     const sessionDuration = activeSession.durationMinutes || activeSession.duration || 60;
@@ -124,7 +124,7 @@ export const AttendanceLedgerPage: React.FC = () => {
 
     return allParticipantIds.map((studentId) => {
       // Find matching mock user or synthesize consistent scholar details
-      const userObj = mockUsers.find((u) => u.id === studentId || u.rollNo === studentId);
+      const userObj = usePeopleStore.getState().users.find((u) => u.id === studentId || u.rollNo === studentId);
       const studentName = userObj?.displayName || (
         studentId === 'st-1' ? 'Alex Rivera' :
         studentId === 'st-2' ? 'Daniel Wu' :

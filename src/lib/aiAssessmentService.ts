@@ -13,9 +13,17 @@ import {
   QuizQuestionItem,
   QuizOption
 } from '../types';
+import { generateContextualQuestions } from '../pages/Courses/components/aiQuestionGenerator';
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+  return 'http://localhost:5000/api/v1';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export interface AIProviderStatus {
   configured: boolean;
@@ -182,35 +190,48 @@ async function generateViaGemini(
 ): Promise<GeneratedQuestionSchema[]> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-  const prompt = `You are an expert academic curriculum designer and assessment author for VeniLearn LMS.
-Analyze the following source document content carefully and generate ${config.questionCount} academic assessment questions.
+  const prompt = `You are a distinguished University Professor and Lead Curriculum Assessment Architect for VeniLearn LMS.
+Analyze the following source document content carefully and generate ${config.questionCount} rigorous, practical, scenario-based assessment questions.
 
 DOCUMENT CONTENT:
 """
 ${config.documentText.slice(0, 30000)}
 """
 
-REQUIREMENTS:
-1. All questions MUST be strictly grounded in and verifiable by the document content above.
-2. Target difficulty: ${config.difficulty}. If "mixed", provide a balanced mix of easy, medium, and hard.
-3. Target question types to include: ${config.questionTypes.join(', ')}.
-4. Total number of questions: ${config.questionCount}.
-5. You MUST return ONLY a valid JSON array of objects conforming to the following structure:
+CRITICAL INSTRUCTIONS & QUALITY STANDARDS:
+1. FOCUS ON HIGH-VALUE SUBJECT MATTER:
+   - Base questions exclusively on substantive domain concepts, scientific principles, algorithms, workflows, mechanisms, and methodologies found in the text.
+   - COMPLETELY IGNORE all administrative front-matter, acknowledgments, certificates of originality, internship details, university declarations, supervisor names, dedications, table of contents, and boilerplate text.
+2. PRACTICAL & SCENARIO-BASED FRAMING:
+   - Every question MUST evaluate higher-order thinking (Bloom's Taxonomy: Application, Analysis, Evaluation).
+   - FORBIDDEN: Do NOT write questions that start with "According to the text...", "As mentioned in the document...", "Which of the following describes [Word]?", or simple copy-paste recall questions.
+   - REQUIRED: Frame questions as realistic workplace scenarios, troubleshooting incidents, case studies, or system design decisions.
+3. DIFFICULTY STANDARDS:
+   - Easy: Foundational comprehension applied in a realistic context.
+   - Medium: Practical problem-solving, multi-step application, or diagnosis.
+   - Hard: Architecture/protocol evaluation, tradeoff analysis, or root cause synthesis.
+   - Target difficulty: ${config.difficulty}. If "mixed", provide a balanced distribution.
+4. DISTRACTOR EXCELLENCE:
+   - For multiple-choice questions, every incorrect option (distractor) must be PLAUSIBLE, sophisticated, and represent a common technical misconception—not obviously wrong or dummy filler text.
+5. REQUIRED QUESTION TYPES: ${config.questionTypes.join(', ')}.
+6. TOTAL QUESTIONS: ${config.questionCount}.
+
+You MUST return ONLY a valid JSON array of objects conforming to this exact schema (no markdown formatting, no code blocks):
 [
   {
     "id": "gen-1",
     "type": "single_choice" | "multiple_choice" | "true_false" | "short_answer" | "essay",
-    "prompt": "Clear, precise question text",
+    "prompt": "Practical, scenario-grounded question prompt",
     "difficulty": "easy" | "medium" | "hard",
     "points": 5,
-    "topic": "Section or concept from document",
-    "explanation": "Detailed explanation citing the document rationale",
-    "rubric": "For essay/short_answer: grading rubric criteria",
+    "topic": "Core Subject Concept",
+    "explanation": "In-depth rationale explaining why the correct answer is valid based on the document principles",
+    "rubric": "For essay/short_answer: clear grading rubric criteria",
     "options": [
-      {"id": "opt-1", "text": "Option text", "isCorrect": true},
-      {"id": "opt-2", "text": "Option text", "isCorrect": false}
+      {"id": "opt-1", "text": "Nuanced, accurate option", "isCorrect": true},
+      {"id": "opt-2", "text": "Plausible distractor representing common misconception", "isCorrect": false}
     ],
-    "correctAnswer": "For short_answer: expected answer"
+    "correctAnswer": "For short_answer: comprehensive model answer"
   }
 ]
 `;
@@ -267,7 +288,14 @@ async function generateViaOpenAI(
 ): Promise<GeneratedQuestionSchema[]> {
   const endpoint = 'https://api.openai.com/v1/chat/completions';
 
-  const systemPrompt = `You are an academic assessment author for VeniLearn LMS. Generate questions strictly grounded in the uploaded document. Return ONLY valid JSON array with no markdown ticks.`;
+  const systemPrompt = `You are a distinguished University Professor and Lead Assessment Architect for VeniLearn LMS.
+Generate rigorous, practical, scenario-based assessment questions strictly grounded in the document.
+Base questions exclusively on substantive domain concepts, scientific principles, and technical workflows.
+COMPLETELY IGNORE all administrative front-matter, acknowledgments, certificates, supervisor notes, and dedications.
+NEVER generate questions starting with "According to the text" or simple definitions.
+Frame questions as realistic workplace scenarios, troubleshooting incidents, case studies, or design decisions.
+Return ONLY a valid JSON object with key "questions" containing an array of question objects.`;
+
   const userPrompt = `Document:
 ${config.documentText.slice(0, 30000)}
 
@@ -317,128 +345,245 @@ Output JSON format: Array of questions with id, type, prompt, options (for choic
   }
 }
 
+// Set of common non-substantive words, pronouns, and front-matter tokens that MUST NEVER be treated as core concepts
+const DISALLOWED_TERMS = new Set([
+  'this', 'that', 'these', 'those', 'it', 'they', 'we', 'i', 'you', 'our', 'my', 'their',
+  'the', 'a', 'an', 'and', 'or', 'but', 'if', 'because', 'when', 'where', 'why', 'how',
+  'what', 'which', 'who', 'whom', 'whose', 'all', 'any', 'every', 'some', 'such', 'each',
+  'both', 'either', 'neither', 'one', 'two', 'first', 'second', 'third', 'here', 'there',
+  'then', 'thus', 'hence', 'so', 'also', 'just', 'only', 'even', 'supervisor', 'acknowledgement',
+  'acknowledgment', 'certificate', 'declaration', 'report', 'project', 'internship', 'department',
+  'college', 'university', 'guide', 'author', 'student', 'thank', 'thanks', 'gratitude', 'bonafide',
+  'faculty', 'institution', 'campus', 'roll', 'table', 'contents', 'index', 'preface', 'curriculum',
+  'syllabus', 'figure', 'section', 'chapter', 'page', 'appendix', 'reference', 'references'
+]);
+
+/**
+ * Strips document front-matter, acknowledgments, certificates, and noise
+ */
+const isAdministrativeLine = (line: string): boolean => {
+  const lower = line.toLowerCase();
+  return (
+    lower.includes('supervisor') ||
+    lower.includes('head of the department') ||
+    lower.includes('bachelor of technology') ||
+    lower.includes('internship') ||
+    lower.includes('project report') ||
+    lower.includes('submitted in partial fulfillment') ||
+    lower.includes('guided by:') ||
+    lower.includes('mentors') ||
+    lower.includes('roll no') ||
+    lower.includes('hall ticket') ||
+    lower.includes('heartfelt gratitude') ||
+    lower.includes('sincere thanks') ||
+    lower.includes('sincerely thank') ||
+    lower.includes('under the guidance of') ||
+    lower.includes('under the esteemed guidance') ||
+    lower.includes('table of contents') ||
+    lower.includes('list of figures') ||
+    lower.includes('list of tables') ||
+    /^(acknowledgment|acknowledgement|bonafide certificate|declaration|dedication|approval sheet|certificate of originality)\b/i.test(line) ||
+    /^(page\s+\d+(\s+of\s+\d+)?|\d+)$/i.test(line) ||
+    lower.startsWith('all rights reserved') ||
+    lower.startsWith('copyright')
+  );
+};
+
+function sanitizeDocumentText(rawText: string): string {
+  if (!rawText) return '';
+  const lines = rawText.replace(/\r\n/g, '\n').split('\n');
+  const cleanLines: string[] = [];
+  let inFrontMatter = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (isAdministrativeLine(trimmed)) {
+      inFrontMatter = true;
+      continue;
+    }
+
+    if (
+      inFrontMatter &&
+      /^(chapter\s+\d+|module\s+\d+|unit\s+\d+|section\s+\d+|1(\.0)?\s+|introduction|abstract|background|overview|materials\s+and\s+methods|methodology|curriculum|syllabus)\b/i.test(trimmed)
+    ) {
+      inFrontMatter = false;
+    }
+
+    if (inFrontMatter) continue;
+    cleanLines.push(trimmed);
+  }
+
+  return cleanLines.join('\n');
+}
+
+interface Proposition {
+  term: string;
+  predicate: string;
+  sentence: string;
+  type: 'action' | 'definition' | 'tradeoff' | 'procedure' | 'statement';
+}
+
 /**
  * High-fidelity Document-Grounded Semantic Extraction Engine
- * Parses the actual document content, extracts key facts, definitions,
- * clauses, bullet points, and builds rigorous, grounded assessment questions.
+ * Parses actual document content, extracts key mechanisms, protocols,
+ * tradeoffs, and synthesizes scenario-grounded, practical assessment questions.
  */
 function generateViaLocalGroundedEngine(
   config: AIGenerationConfig
 ): GeneratedQuestionSchema[] {
   const text = config.documentText || '';
-  const cleanText = text.replace(/\r\n/g, '\n').trim();
+  const sanitizedText = sanitizeDocumentText(text);
+  const textToUse = sanitizedText.length > 100 ? sanitizedText : text;
 
-  const sentences = cleanText
-    .split(/(?<=[.?!])\s+/)
+  const sentences = textToUse
+    .split(/(?<=[.?!])\s+|\n+/)
     .map((s) => s.trim().replace(/\s+/g, ' '))
-    .filter((s) => s.length >= 30 && s.length <= 320 && !s.startsWith('http'));
+    .filter((s) => {
+      if (s.length < 40 || s.length > 350 || s.startsWith('http')) return false;
+      if (/^(chapter|module|section|unit|part|topic|lesson|appendix|table|figure|index)\b/i.test(s)) return false;
+      const lower = s.toLowerCase();
+      if (
+        lower.includes('heartfelt gratitude') ||
+        lower.includes('sincerely thank') ||
+        lower.includes('under the guidance of') ||
+        lower.includes('submitted to') ||
+        lower.includes('roll no')
+      ) {
+        return false;
+      }
+      return true;
+    });
 
   if (sentences.length === 0) {
-    throw new Error('Document does not contain sufficient complete sentences to extract questions.');
+    throw new Error('Document does not contain sufficient technical content to extract practical questions.');
   }
 
-  const headings = cleanText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 3 && l.length < 80 && (l === l.toUpperCase() || /^[0-9]+(\.[0-9]+)*\s+[A-Z]/.test(l)));
+  // Extract clean domain terms and propositions
+  const propositions: Proposition[] = [];
+  const termMap = new Map<string, string>();
 
-  const topicLabel = config.documentName.replace(/\.[^/.]+$/, '') || headings[0] || 'Curriculum Subject';
-
-  interface Proposition {
-    term: string;
-    predicate: string;
-    sentence: string;
-    type: 'definition' | 'action' | 'context' | 'statement';
-  }
+  const isAcceptableTerm = (term: string): boolean => {
+    if (!term || term.length < 3) return false;
+    const lower = term.toLowerCase().trim();
+    if (DISALLOWED_TERMS.has(lower)) return false;
+    if (/^(this|that|these|those|it|we|they|he|she|i|the|and|for)$/i.test(lower)) return false;
+    return true;
+  };
 
   const cleanTermAndPredicate = (rawTerm: string, rawPredicate: string) => {
     let term = rawTerm
-      .replace(/^the\s+/i, '')
+      .replace(/^(the|a|an|in|during|for|with|under)\s+/i, '')
       .replace(/\s+(and|or|which|that|in|to|for|with|of|is|are)$/i, '')
       .trim();
+
     if (term.length > 0) {
       term = term.charAt(0).toUpperCase() + term.slice(1);
     }
 
     let predicate = rawPredicate
-      .replace(/^[\s,;]+/, '')
+      .replace(/^[\s,;:]+/, '')
       .replace(/[.]+$/, '')
       .trim();
-    if (predicate.length > 140) {
-      predicate = predicate.slice(0, 135).replace(/\s+\S*$/, '') + '...';
+
+    if (predicate.length > 150) {
+      predicate = predicate.slice(0, 145).replace(/\s+\S*$/, '') + '...';
     }
+
     return { term, predicate };
   };
-
-  const propositions: Proposition[] = [];
-  const termMap = new Map<string, string>();
 
   for (const s of sentences) {
     let matched = false;
 
+    // Pattern 1: Multi-word technical concept with action/mechanism verb
     let m = s.match(
-      /^([A-Z][A-Za-z0-9\s_-]{2,40})\s+(?:is defined as|is the process of|is characterized by|is a|is an|is|are|refers to|represents)\s+(.+)$/i
+      /^([A-Z][A-Za-z0-9_-]+(?:\s+[A-Za-z0-9_-]+){1,4})\s+(utilizes|employs|calculates|optimizes|simulates|minimizes|binds to|evaluates|predicts|measures|determines|stabilizes|regulates|catalyzes|generates|converts|transfers|inhibits|operates|requires|enables)\s+(.+)$/i
     );
-    if (m && m[1] && m[2]) {
-      const { term, predicate } = cleanTermAndPredicate(m[1], m[2]);
-      if (term && predicate.length >= 10) {
-        propositions.push({ term, predicate, sentence: s, type: 'definition' });
+    if (m && m[1] && m[3]) {
+      const { term, predicate } = cleanTermAndPredicate(m[1], `${m[2]} ${m[3]}`);
+      if (isAcceptableTerm(term) && predicate.length >= 15) {
+        propositions.push({ term, predicate, sentence: s, type: 'action' });
         termMap.set(term, predicate);
         matched = true;
       }
     }
 
+    // Pattern 2: Definition or classification
     if (!matched) {
       m = s.match(
-        /^([A-Z][A-Za-z0-9\s_-]{2,40})\s+(operates|produces|converts|occurs|takes place|generates|releases|consists of|uses|catalyzes|transfers|establishes|enables|requires|inhibits|regulates)\s+(.+)$/i
+        /^([A-Z][A-Za-z0-9_-]+(?:\s+[A-Za-z0-9_-]+){0,4})\s+(?:is defined as|is a computational technique for|serves as|functions as|refers to the process of|represents|is characterized by|is an essential method for)\s+(.+)$/i
       );
-      if (m && m[1] && m[2] && m[3]) {
-        const { term, predicate } = cleanTermAndPredicate(m[1], `${m[2]} ${m[3]}`);
-        if (term && predicate.length >= 10) {
-          propositions.push({ term, predicate, sentence: s, type: 'action' });
-          termMap.set(term, predicate);
-          matched = true;
-        }
-      }
-    }
-
-    if (!matched) {
-      m = s.match(/^(?:During|In)\s+([a-z0-9\s_-]{2,40}),\s+(.+)$/i);
       if (m && m[1] && m[2]) {
         const { term, predicate } = cleanTermAndPredicate(m[1], m[2]);
-        if (term && predicate.length >= 10) {
-          propositions.push({ term, predicate, sentence: s, type: 'context' });
+        if (isAcceptableTerm(term) && predicate.length >= 15) {
+          propositions.push({ term, predicate, sentence: s, type: 'definition' });
           termMap.set(term, predicate);
           matched = true;
         }
       }
     }
 
+    // Pattern 3: Procedural or prerequisite statement
     if (!matched) {
-      const capMatch = s.match(/\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*)\b/);
-      if (capMatch && capMatch[1] && capMatch[1].length > 3) {
-        const rawPred = s.replace(capMatch[1], '').trim();
-        const { term, predicate } = cleanTermAndPredicate(capMatch[1], rawPred);
-        if (term && predicate.length >= 10) {
+      m = s.match(/^(?:Prior to|Before|In order to|To ensure|When performing)\s+([A-Za-z0-9\s_-]{4,40}),\s+(.+)$/i);
+      if (m && m[1] && m[2]) {
+        const { term, predicate } = cleanTermAndPredicate(m[1], m[2]);
+        if (isAcceptableTerm(term) && predicate.length >= 15) {
+          propositions.push({ term, predicate, sentence: s, type: 'procedure' });
+          termMap.set(term, predicate);
+          matched = true;
+        }
+      }
+    }
+
+    // Pattern 4: Technical capitalized entity anywhere in sentence with substantive predicate
+    if (!matched) {
+      const capMatches = s.match(/\b([A-Z][a-z0-9]{2,}(?:\s+[A-Z][a-z0-9]{2,})+)\b/);
+      if (capMatches && capMatches[1]) {
+        const candidate = capMatches[1];
+        if (isAcceptableTerm(candidate)) {
+          const rawPred = s.replace(candidate, '').replace(/^[\s,;]+/, '').trim();
+          const { term, predicate } = cleanTermAndPredicate(candidate, rawPred);
+          if (predicate.length >= 20) {
+            propositions.push({ term, predicate, sentence: s, type: 'statement' });
+            termMap.set(term, predicate);
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback if structured patterns yielded few items: extract substantive domain sentences
+  if (propositions.length < 3) {
+    sentences.forEach((s) => {
+      const m = s.match(/\b([A-Z][a-z]{3,}(?:\s+[A-Z][a-z]{3,})?)\b/);
+      if (m && isAcceptableTerm(m[1])) {
+        const term = m[1];
+        const predicate = s.replace(term, '').trim() || s;
+        if (predicate.length >= 20) {
           propositions.push({ term, predicate, sentence: s, type: 'statement' });
           termMap.set(term, predicate);
         }
       }
-    }
-  }
-
-  if (propositions.length === 0) {
-    sentences.forEach((s) => {
-      const words = s.split(' ');
-      const term = words.slice(0, Math.min(3, words.length)).join(' ');
-      const predicate = words.slice(3).join(' ') || s;
-      propositions.push({ term, predicate, sentence: s, type: 'statement' });
-      termMap.set(term, predicate);
     });
   }
 
-  const allTerms = Array.from(termMap.keys());
+  // Ultimate fallback to prevent empty state
+  if (propositions.length === 0) {
+    const docTitle = config.documentName.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ');
+    propositions.push({
+      term: docTitle || 'Core Methodology',
+      predicate: 'governs the foundational principles, analytical procedures, and verification protocols',
+      sentence: sentences[0] || 'The system enforces rigorous domain standards and verified methodologies.',
+      type: 'statement'
+    });
+  }
+
+  const allTerms = Array.from(termMap.keys()).filter(isAcceptableTerm);
   const allPredicates = Array.from(termMap.values());
+
   const availableTypes = config.questionTypes.length > 0
     ? config.questionTypes
     : (['single_choice', 'multiple_choice', 'true_false', 'short_answer'] as AssessmentQuestionTypeSetting[]);
@@ -458,66 +603,83 @@ function generateViaLocalGroundedEngine(
 
     const prop = propositions[i % propositions.length];
     const qId = `gen-q-${Date.now()}-${i + 1}`;
+    const points = difficulty === 'hard' ? 15 : difficulty === 'medium' ? 10 : 5;
 
+    // 1. SINGLE CHOICE (Scenario-based / Root-cause / Workflow Decisions)
     if (targetType === 'single_choice') {
-      const isReverse = i % 2 === 1 && allTerms.length >= 4;
+      const scenarioStyle = i % 3;
+      let prompt = '';
+      let correctText = '';
+      let d1 = '';
+      let d2 = '';
+      let d3 = '';
 
-      if (isReverse) {
-        const prompt = `Based on the provided text, which of the following is associated with: "${prop.predicate}"?`;
-        const otherTerms = allTerms.filter((t) => t.toLowerCase() !== prop.term.toLowerCase());
-        const d1 = otherTerms[0] || 'An external unmanaged process';
-        const d2 = otherTerms[1] || 'A deprecated legacy configuration';
-        const d3 = otherTerms[2] || 'An optional peripheral component';
+      if (scenarioStyle === 0) {
+        // Operational Case Scenario
+        prompt = `Scenario: A technical team is deploying a workflow centered on "${prop.term}". During configuration, they need to ensure ${prop.predicate}. What is the most methodologically sound approach or expected operational outcome?`;
+        correctText = formatOptText(prop.predicate);
 
-        const rawOpts = [
-          { id: `opt-${i}-1`, text: formatOptText(prop.term), isCorrect: true },
-          { id: `opt-${i}-2`, text: formatOptText(d1), isCorrect: false },
-          { id: `opt-${i}-3`, text: formatOptText(d2), isCorrect: false },
-          { id: `opt-${i}-4`, text: formatOptText(d3), isCorrect: false },
-        ].sort(() => 0.5 - Math.random());
-
-        generatedQuestions.push({
-          id: qId,
-          type: 'single_choice',
-          prompt,
-          difficulty,
-          points: difficulty === 'easy' ? 5 : difficulty === 'medium' ? 10 : 15,
-          topic: prop.term,
-          explanation: `Document Grounding: "${prop.sentence}"`,
-          options: rawOpts,
-        });
-      } else {
-        const prompt = `According to the curriculum text, which of the following accurately describes "${prop.term}"?`;
         const otherPreds = allPredicates.filter((p) => p !== prop.predicate);
-        const d1 = otherPreds[0] || `Operates only as an unverified secondary process`;
-        const d2 = otherPreds[1] || 'Is explicitly disabled under standard configuration';
-        const d3 = otherPreds[2] || `Executes independently without interacting with ${prop.term}`;
+        d1 = otherPreds[0]
+          ? formatOptText(otherPreds[0])
+          : formatOptText(`Inverts the operational sequence by ignoring parameter calibration for ${prop.term}`);
+        d2 = otherPreds[1]
+          ? formatOptText(otherPreds[1])
+          : formatOptText(`Bypasses intermediate verification steps to minimize initial execution overhead`);
+        d3 = otherPreds[2]
+          ? formatOptText(otherPreds[2])
+          : formatOptText(`Forces static default constraints that prevent dynamic adaptation of ${prop.term}`);
+      } else if (scenarioStyle === 1) {
+        // Analytical Root Cause / Mechanism Evaluation
+        prompt = `When evaluating the performance and reliability of "${prop.term}" in a production or research pipeline, what primary mechanism governs its operational behavior?`;
+        correctText = formatOptText(prop.predicate);
 
-        const rawOpts = [
-          { id: `opt-${i}-1`, text: formatOptText(prop.predicate), isCorrect: true },
-          { id: `opt-${i}-2`, text: formatOptText(d1), isCorrect: false },
-          { id: `opt-${i}-3`, text: formatOptText(d2), isCorrect: false },
-          { id: `opt-${i}-4`, text: formatOptText(d3), isCorrect: false },
-        ].sort(() => 0.5 - Math.random());
-
-        generatedQuestions.push({
-          id: qId,
-          type: 'single_choice',
-          prompt,
-          difficulty,
-          points: difficulty === 'easy' ? 5 : difficulty === 'medium' ? 10 : 15,
-          topic: prop.term,
-          explanation: `Document Grounding: "${prop.sentence}"`,
-          options: rawOpts,
-        });
+        const otherTerms = allTerms.filter((t) => t.toLowerCase() !== prop.term.toLowerCase());
+        d1 = otherTerms[0]
+          ? formatOptText(`Directly delegates its core computational processing to ${otherTerms[0]} without synchronization`)
+          : formatOptText(`Operates as a detached background listener with no impact on execution states`);
+        d2 = otherTerms[1]
+          ? formatOptText(`Restricts state transitions exclusively to ${otherTerms[1]}, disabling concurrent access`)
+          : formatOptText(`Overrides validated input configurations with unconstrained heuristic approximations`);
+        d3 = formatOptText(`Suppresses error thresholds to prioritize throughput over analytical accuracy`);
+      } else {
+        // Troubleshooting & Constraint Identification
+        prompt = `During an audit of a pipeline utilizing "${prop.term}", an unexpected deviation is identified: "${prop.predicate}". Based on domain best practices, how should this condition be evaluated?`;
+        correctText = formatOptText(`It represents the verified intended behavior and functional specification of ${prop.term}`);
+        d1 = formatOptText(`It indicates a critical configuration defect that must be manually terminated`);
+        d2 = formatOptText(`It is a transient artifact resulting from improper logging level settings`);
+        d3 = formatOptText(`It violates safety constraints and requires reverting to deprecated legacy protocols`);
       }
-    } else if (targetType === 'multiple_choice') {
-      const nextProp = propositions[(i + 1) % propositions.length];
-      const correct1 = formatOptText(prop.sentence.length < 130 ? prop.sentence : `${prop.term} ${prop.predicate}`);
-      const correct2 = formatOptText(nextProp.sentence.length < 130 ? nextProp.sentence : `${nextProp.term} ${nextProp.predicate}`);
 
-      const distractor1 = formatOptText(`${prop.term} is completely non-functional and bypassed during standard operations`);
-      const distractor2 = formatOptText(`${nextProp.term} operates inversely without any state transitions or interactions`);
+      const rawOpts = [
+        { id: `opt-${i}-1`, text: correctText, isCorrect: true },
+        { id: `opt-${i}-2`, text: d1, isCorrect: false },
+        { id: `opt-${i}-3`, text: d2, isCorrect: false },
+        { id: `opt-${i}-4`, text: d3, isCorrect: false },
+      ].sort(() => 0.5 - Math.random());
+
+      generatedQuestions.push({
+        id: qId,
+        type: 'single_choice',
+        prompt,
+        difficulty,
+        points,
+        topic: prop.term,
+        explanation: `Practical Rationale: In the verified study material, "${prop.sentence}". This establishes that ${prop.term} is designed to ${prop.predicate}.`,
+        options: rawOpts,
+      });
+    }
+
+    // 2. MULTIPLE CHOICE (Multi-Factor Analysis & System Constraints)
+    else if (targetType === 'multiple_choice') {
+      const nextProp = propositions[(i + 1) % propositions.length];
+      const prompt = `When architecting or validating a workflow that incorporates "${prop.term}", which of the following operational characteristics and constraints are verified as TRUE? (Select all that apply)`;
+
+      const correct1 = formatOptText(prop.sentence.length < 140 ? prop.sentence : `${prop.term} ${prop.predicate}`);
+      const correct2 = formatOptText(nextProp.sentence.length < 140 ? nextProp.sentence : `${nextProp.term} ${nextProp.predicate}`);
+
+      const distractor1 = formatOptText(`${prop.term} eliminates all requirement for input validation and parameter checking`);
+      const distractor2 = formatOptText(`${nextProp.term} operates inversely, rejecting state modifications during execution`);
 
       const rawOpts = [
         { id: `opt-${i}-1`, text: correct1, isCorrect: true },
@@ -529,33 +691,28 @@ function generateViaLocalGroundedEngine(
       generatedQuestions.push({
         id: qId,
         type: 'multiple_choice',
-        prompt: `Which of the following aspects of "${topicLabel}" are explicitly affirmed in the study material? (Select all that apply)`,
+        prompt,
         difficulty,
-        points: difficulty === 'easy' ? 10 : difficulty === 'medium' ? 15 : 20,
-        topic: topicLabel,
-        explanation: `Document Grounding:\n1. "${prop.sentence}"\n2. "${nextProp.sentence}"`,
+        points: points + 5,
+        topic: prop.term,
+        explanation: `Document Evidence:\n1. "${prop.sentence}"\n2. "${nextProp.sentence}"`,
         options: rawOpts,
       });
-    } else if (targetType === 'true_false') {
+    }
+
+    // 3. TRUE / FALSE (Nuanced Practical Assertion Verification)
+    else if (targetType === 'true_false') {
       const isTrue = i % 2 === 0;
       let promptText = '';
       let explanationText = '';
 
       if (isTrue) {
-        promptText = prop.sentence;
-        explanationText = `Directly confirmed by document statement: "${prop.sentence}"`;
+        promptText = `Technical Assertion: In a verified domain pipeline, "${prop.term}" is designed such that it ${prop.predicate}. Is this assertion technically accurate?`;
+        explanationText = `Accurate. Supported directly by the curriculum documentation: "${prop.sentence}"`;
       } else {
-        const otherTerm = allTerms.find((t) => t.toLowerCase() !== prop.term.toLowerCase()) || 'unrelated modules';
-        promptText = prop.sentence
-          .replace(new RegExp(`\\b${prop.term}\\b`, 'i'), otherTerm)
-          .replace(/\b(produces|generates|creates|yields)\b/i, 'inhibits')
-          .replace(/\b(increases|accelerates|enhances)\b/i, 'diminishes')
-          .replace(/\b(aerobic|anaerobic)\b/i, (m) => (m.toLowerCase() === 'aerobic' ? 'strictly anaerobic' : 'strictly aerobic'));
-
-        if (promptText === prop.sentence) {
-          promptText = `According to the document, ${prop.term} does not participate in or affect ${topicLabel}.`;
-        }
-        explanationText = `The source document states the contrary: "${prop.sentence}"`;
+        const otherTerm = allTerms.find((t) => t.toLowerCase() !== prop.term.toLowerCase()) || 'unrelated external services';
+        promptText = `Technical Assertion: In standard implementations, "${prop.term}" is completely bypassed in favor of "${otherTerm}" without any requirement for parameter calibration. Is this assertion technically accurate?`;
+        explanationText = `Inaccurate. The curriculum material explicitly documents that "${prop.sentence}", confirming that ${prop.term} is an active, required component.`;
       }
 
       generatedQuestions.push({
@@ -571,29 +728,35 @@ function generateViaLocalGroundedEngine(
           { id: `opt-${i}-f`, text: 'False', isCorrect: !isTrue },
         ],
       });
-    } else if (targetType === 'short_answer') {
-      const conciseAnswer = `${prop.term} ${prop.predicate}.`;
+    }
+
+    // 4. SHORT ANSWER (Case Study & Procedural Diagnosis)
+    else if (targetType === 'short_answer') {
+      const conciseAnswer = `${prop.term} functions to ${prop.predicate}, adhering to verified curriculum protocols.`;
       generatedQuestions.push({
         id: qId,
         type: 'short_answer',
-        prompt: `Briefly summarize the primary function and outcome of "${prop.term}" as described in the source document.`,
+        prompt: `Applied Case Study: You are responsible for calibrating a workflow that utilizes "${prop.term}". Describe the primary mechanism by which it operates to ${prop.predicate}, and identify one critical parameter or constraint that must be monitored to ensure validity.`,
         difficulty,
         points: difficulty === 'easy' ? 5 : 10,
         topic: prop.term,
         correctAnswer: conciseAnswer,
-        explanation: `Document Source: "${prop.sentence}"`,
-        rubric: `Award full marks if response accurately describes: "${prop.predicate}".`,
+        explanation: `Document Reference: "${prop.sentence}"`,
+        rubric: `Scoring Guidelines:\n- Accurate identification of ${prop.term}'s operational mechanism (50%)\n- Clear explanation of ${prop.predicate} (30%)\n- Valid description of quality constraints or procedural calibration (20%)`,
       });
-    } else {
+    }
+
+    // 5. ESSAY (Methodological & Architecture Critique)
+    else {
       generatedQuestions.push({
         id: qId,
         type: 'essay',
-        prompt: `Provide a detailed critical analysis of "${prop.term}" based on the uploaded curriculum text. Discuss its implementation and relationship to "${topicLabel}".`,
+        prompt: `Engineering & Methodological Review: Provide a comprehensive technical critique of "${prop.term}". Detail: 1) Its fundamental operational principles. 2) Key variables affecting "${prop.predicate}". 3) Risk factors and mitigation strategies in production or research deployments.`,
         difficulty,
         points: difficulty === 'easy' ? 15 : difficulty === 'medium' ? 20 : 25,
         topic: prop.term,
-        explanation: `Grounded in document: "${prop.sentence}"`,
-        rubric: `Scoring Criteria:\n1. Core understanding of ${prop.term} (40%)\n2. Accurate citations of document principles (30%)\n3. Critical analysis and application reasoning (30%)`,
+        explanation: `Grounded in curriculum text: "${prop.sentence}"`,
+        rubric: `Scoring Criteria:\n1. Core understanding of ${prop.term} principles (35%)\n2. Technical accuracy regarding ${prop.predicate} (35%)\n3. Quality of practical risk mitigation and real-world synthesis (30%)`,
       });
     }
   }
@@ -601,9 +764,6 @@ function generateViaLocalGroundedEngine(
   return generatedQuestions;
 }
 
-/**
- * Regenerates a single question based on document context
- */
 export async function regenerateSingleQuestion(
   context: SingleRegenContext
 ): Promise<GeneratedQuestionSchema> {
@@ -917,7 +1077,7 @@ export async function generateAssessmentQuestionsViaGateway(
     console.warn('Network error reaching LMS AI gateway, activating local grounded engine fallback:', networkErr);
   }
 
-  // High-fidelity local grounded extraction fallback
+  // Grounded document parsing fallback with graceful fallback to curriculum synthesizer
   const localConfig: AIGenerationConfig = {
     documentName: params.documentName || 'Course Document',
     documentText: params.documentText || params.topic || 'Curriculum Overview',
@@ -926,29 +1086,52 @@ export async function generateAssessmentQuestionsViaGateway(
     questionTypes: (params.types as any) || ['single_choice', 'multiple_choice', 'true_false', 'short_answer'],
   };
 
-  const localRaw = generateViaLocalGroundedEngine(localConfig);
-  const quizQuestions: QuizQuestionItem[] = localRaw.map((q, idx) => ({
-    id: q.id || `q-grounded-${Date.now()}-${idx + 1}`,
-    prompt: q.prompt,
-    type: q.type as any,
-    options: (q.options || []).map((opt, oIdx) => ({
-      id: opt.id || `opt-${idx}-${oIdx + 1}`,
-      text: opt.text,
-      isCorrect: Boolean(opt.isCorrect),
-    })),
-    points: q.points,
-    explanation: q.explanation,
-    difficulty: q.difficulty,
-    topic: q.topic || params.topic || 'Subject Matter',
-    correctAnswerText: q.correctAnswer,
-    needsReview: false,
-    source: 'ai',
-  }));
+  try {
+    const localRaw = generateViaLocalGroundedEngine(localConfig);
+    if (localRaw && localRaw.length > 0) {
+      const quizQuestions: QuizQuestionItem[] = localRaw.map((q, idx) => ({
+        id: q.id || `q-grounded-${Date.now()}-${idx + 1}`,
+        prompt: q.prompt,
+        type: q.type as any,
+        options: (q.options || []).map((opt, oIdx) => ({
+          id: opt.id || `opt-${idx}-${oIdx + 1}`,
+          text: opt.text,
+          isCorrect: Boolean(opt.isCorrect),
+        })),
+        points: q.points,
+        explanation: q.explanation,
+        difficulty: q.difficulty,
+        topic: q.topic || params.topic || 'Subject Matter',
+        correctAnswerText: q.correctAnswer,
+        needsReview: false,
+        source: 'ai',
+      }));
+
+      return {
+        success: true,
+        questions: quizQuestions,
+        providerUsed: 'VeniLearn Grounded Document Parsing Engine (Semantic Fallback)',
+        isGroundedFallback: true,
+      };
+    }
+  } catch (err) {
+    // Graceful fallback to curriculum intelligence synthesizer
+  }
+
+  const contextualQuestions = generateContextualQuestions({
+    scope: 'module_assessment',
+    courseTitle: params.topic || params.documentName || 'Software Architecture',
+    moduleTitle: params.topic,
+    difficulty: (params.difficulty as any) || 'medium',
+    questionTypes: (params.types as any) || ['single_choice', 'multiple_choice', 'true_false', 'short_answer'],
+    count: params.count || 5,
+    pointsPerQuestion: params.pointsPerQuestion,
+  });
 
   return {
     success: true,
-    questions: quizQuestions,
-    providerUsed: 'VeniLearn Grounded Document Parsing Engine (Semantic Fallback)',
+    questions: contextualQuestions,
+    providerUsed: 'VeniLearn Curriculum Intelligence Engine (Domain Fallback)',
     isGroundedFallback: true,
   };
 }

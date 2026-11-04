@@ -414,15 +414,15 @@ export const ProfilePage: React.FC = () => {
                   </div>
 
                   <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#ffd700', lineHeight: 1.1, marginBottom: '4px' }}>
-                    Rank #4
+                    Learner
                   </div>
 
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>
-                    3,420 XP &bull; 12-Day Streak 🔥
+                    0 XP &bull; Active Scholar
                   </div>
 
                   <p className="text-muted text-xs" style={{ margin: '0 0 14px 0', lineHeight: 1.4 }}>
-                    Top 5% across Spring 2026 Cohort. Climbed 2 ranks this week!
+                    Complete assignments and lessons to earn badges and standing.
                   </p>
 
                   <button

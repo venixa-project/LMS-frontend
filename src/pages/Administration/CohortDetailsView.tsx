@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Cohort, User } from '../../types';
-import { mockDepartments, mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCourseStore } from '../../lib/courseStore';
+
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import {
@@ -43,8 +44,7 @@ export const CohortDetailsView: React.FC<Props> = ({
     const live = peopleUsers || [];
     const liveIds = new Set(live.map(u => u.id));
     const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
-    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
-    return [...live, ...remainingMock];
+    return live;
   }, [peopleUsers]);
 
   // Modals inside details view
@@ -84,7 +84,7 @@ export const CohortDetailsView: React.FC<Props> = ({
   };
 
   const associatedCourse = useMemo(() => {
-    return mockCourses.find(c => c.id === cohort.courseId);
+    return useCourseStore.getState().courses.find(c => c.id === cohort.courseId);
   }, [cohort.courseId]);
 
   // Properly check if a trainer is assigned - DO NOT fallback to u-004 when empty!
@@ -167,7 +167,7 @@ export const CohortDetailsView: React.FC<Props> = ({
     const map = new Map<string, number>();
     enrolledStudents.forEach(st => {
       const deptId = st.departmentId || 'unassigned';
-      const deptName = mockDepartments.find(d => d.id === deptId)?.name || 'General';
+      const deptName = useDepartmentStore.getState().departments.find(d => d.id === deptId)?.name || 'General';
       map.set(deptName, (map.get(deptName) || 0) + 1);
     });
     return Array.from(map.entries()).map(([deptName, count]) => ({ deptName, count }));
@@ -563,7 +563,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                 {assignedTrainer.displayName}
               </div>
               <div className="text-muted text-xs">
-                {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'Engineering'} &bull;{' '}
+                {useDepartmentStore.getState().departments.find(d => d.id === assignedTrainer.departmentId)?.name || 'Engineering'} &bull;{' '}
                 <code style={{ color: 'var(--text-main)' }}>{assignedTrainer.id}</code>
               </div>
             </>
@@ -641,7 +641,7 @@ export const CohortDetailsView: React.FC<Props> = ({
               <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
                 {assignedTrainer ? (
                   <>
-                    {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull;{' '}
+                    {useDepartmentStore.getState().departments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull;{' '}
                     {assignedTrainer.email}
                   </>
                 ) : (
@@ -736,7 +736,7 @@ export const CohortDetailsView: React.FC<Props> = ({
               onChange={(e) => setEnrolledDeptFilter(e.target.value)}
             >
               <option value="all">All Departments ({enrolledStudents.length})</option>
-              {mockDepartments.map(d => {
+              {useDepartmentStore.getState().departments.map(d => {
                 const count = enrolledStudents.filter(s => s.departmentId === d.id).length;
                 return (
                   <option key={d.id} value={d.id}>
@@ -778,7 +778,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                 </tr>
               ) : (
                 displayedEnrolledStudents.map((st) => {
-                  const dept = mockDepartments.find(d => d.id === st.departmentId);
+                  const dept = useDepartmentStore.getState().departments.find(d => d.id === st.departmentId);
                   return (
                     <tr key={st.id}>
                       <td>
@@ -866,7 +866,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                   onChange={(e) => setTrainerDeptFilter(e.target.value)}
                 >
                   <option value="all">All Departments</option>
-                  {mockDepartments.map(d => (
+                  {useDepartmentStore.getState().departments.map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
@@ -884,7 +884,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                 {candidateTrainers.map((trainer) => {
                   const isSelected = selectedTrainerIdToAssign === trainer.id;
                   const isCurrent = (cohort.instructorIds?.[0] || cohort.instructors?.[0]) === trainer.id;
-                  const dept = mockDepartments.find(d => d.id === trainer.departmentId);
+                  const dept = useDepartmentStore.getState().departments.find(d => d.id === trainer.departmentId);
 
                   return (
                     <div
@@ -1044,7 +1044,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                   onChange={(e) => setAddStudentDeptFilter(e.target.value)}
                 >
                   <option value="all">All Departments</option>
-                  {mockDepartments.map(d => (
+                  {useDepartmentStore.getState().departments.map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
@@ -1079,7 +1079,7 @@ export const CohortDetailsView: React.FC<Props> = ({
                     ) : (
                       candidateStudentsForAdd.map(st => {
                         const isSelected = newlySelectedStudentIds.includes(st.id);
-                        const dept = mockDepartments.find(d => d.id === st.departmentId);
+                        const dept = useDepartmentStore.getState().departments.find(d => d.id === st.departmentId);
 
                         return (
                           <tr

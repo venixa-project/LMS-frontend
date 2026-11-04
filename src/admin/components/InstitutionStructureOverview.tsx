@@ -1,10 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Network, UsersRound, ArrowUpRight, Building2 } from 'lucide-react';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCohortStore } from '../../lib/cohortStore';
 
 export const InstitutionStructureOverview: React.FC = () => {
-  const activeCohorts = mockCohorts.filter((c) => c.status === 'active');
+  const { departments } = useDepartmentStore();
+  const { cohorts } = useCohortStore();
+  const activeCohorts = cohorts.filter((c) => c.status === 'active');
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -40,7 +43,7 @@ export const InstitutionStructureOverview: React.FC = () => {
             <Building2 size={13} color="var(--primary)" />
           </div>
           <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            {mockDepartments.length}
+            {departments.length}
           </div>
           <span className="text-muted" style={{ fontSize: '0.675rem' }}>Active teaching faculties</span>
         </div>
@@ -62,7 +65,7 @@ export const InstitutionStructureOverview: React.FC = () => {
         <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
           Key Departments
         </div>
-        {mockDepartments.slice(0, 3).map((dept) => (
+        {departments.slice(0, 3).map((dept) => (
           <div
             key={dept.id}
             style={{

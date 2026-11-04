@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockIntegrations } from '../../data/mockData';
+
 import { Integration } from '../../types';
 import {
   Plug, CheckCircle2, AlertCircle, RefreshCw, KeyRound,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 export const IntegrationsPage: React.FC = () => {
-  const [integrations, setIntegrations] = useState<Integration[]>(mockIntegrations);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [activeTab, setActiveTab] = useState<'catalog' | 'webhooks' | 'apikeys'>('catalog');
   const [testingId, setTestingId] = useState<string | null>(null);
 

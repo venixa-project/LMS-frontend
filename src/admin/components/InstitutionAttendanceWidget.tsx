@@ -4,7 +4,8 @@ import {
   UserCheck, Users, Calendar, AlertCircle, Clock,
   Briefcase, CheckCircle2, XCircle, ArrowUpRight, Search
 } from 'lucide-react';
-import { mockLiveSessions, mockCohorts } from '../../data/mockData';
+import { useLiveSessionStore } from '../../lib/liveSessionStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import {
   mockEmployeeAttendanceRecords,
   getEmployeeAttendanceSummary,
@@ -12,6 +13,9 @@ import {
 } from '../../data/mockEmployeeAttendance';
 
 export const InstitutionAttendanceWidget: React.FC = () => {
+  const { sessions: liveSessions } = useLiveSessionStore();
+  const { cohorts } = useCohortStore();
+  
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [roleFilter, setRoleFilter] = useState<'all' | 'faculty' | 'admin_staff' | 'support_staff'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'on_leave'>('all');
@@ -361,27 +365,33 @@ export const InstitutionAttendanceWidget: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {mockLiveSessions.slice(0, 3).map((s, idx) => (
-                <tr key={s.id || idx}>
-                  <td style={{ fontWeight: 600 }}>
-                    {idx === 0 ? '10:00 AM' : idx === 1 ? '02:00 PM' : '04:30 PM'}
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{s.title}</div>
-                    <span className="text-muted text-xs">{s.durationMinutes} mins &bull; Lecture</span>
-                  </td>
-                  <td>
-                    <span className="badge badge-secondary">{mockCohorts[idx % mockCohorts.length]?.name || 'Batch A'}</span>
-                  </td>
-                  <td>Dr. James Wilson</td>
-                  <td>
-                    <span className="text-primary text-xs" style={{ fontWeight: 600 }}>Zoom Room 102</span>
-                  </td>
-                  <td>
-                    <span className={`badge badge-${s.status}`}>{s.status}</span>
+              {liveSessions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                    No live sessions scheduled for today
                   </td>
                 </tr>
-              ))}
+              ) : (
+                liveSessions.slice(0, 3).map((s, idx) => (
+                  <tr key={s.id || idx}>
+                    <td style={{ fontWeight: 600 }}>{s.startTime || '10:00 AM'}</td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{s.title}</div>
+                      <span className="text-muted text-xs">{s.durationMinutes || 60} mins &bull; Lecture</span>
+                    </td>
+                    <td>
+                      <span className="badge badge-secondary">{s.cohortName || cohorts[0]?.name || 'All Learners'}</span>
+                    </td>
+                    <td>{s.instructorName || 'Assigned Faculty'}</td>
+                    <td>
+                      <span className="text-primary text-xs" style={{ fontWeight: 600 }}>{s.meetingUrl ? 'Virtual Room' : 'Room 102'}</span>
+                    </td>
+                    <td>
+                      <span className={`badge badge-${s.status}`}>{s.status}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

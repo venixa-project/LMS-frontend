@@ -1,10 +1,11 @@
+import { apiClient } from '../../lib/apiClient';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import {
   Course, CourseModule, Lesson, EntityStatus,
   QuizAssessmentConfig, UploadedDocumentInfo, QuizQuestionItem, VideoLessonInfo
@@ -37,6 +38,11 @@ export const CourseBuilderPage: React.FC = () => {
   const { addCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
@@ -90,18 +96,28 @@ export const CourseBuilderPage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setThumbnailUrl(result);
-        setThumbnailError(null);
-      }
-    };
-    reader.onerror = () => {
-      setThumbnailError('Failed to read image file. Please try again.');
-    };
-    reader.readAsDataURL(file);
+    // 1. Physically upload to backend local storage (storage/thumbnails/)
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    apiClient.upload<any>('/courses/upload-thumbnail', formData)
+      .then((uploadRes) => {
+        if (uploadRes?.data?.url) {
+          setThumbnailUrl(uploadRes.data.url);
+          setThumbnailError(null);
+        }
+      })
+      .catch((uploadErr) => {
+        console.warn('Thumbnail upload note (falling back to preview):', uploadErr);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          if (result) {
+            setThumbnailUrl(result);
+            setThumbnailError(null);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
 
     if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
   };
@@ -179,7 +195,7 @@ export const CourseBuilderPage: React.FC = () => {
     }
   }, [selectedSignatoryOption, creatorDefaultSig]);
 
-    // -------------------------------------------------------------
+  // -------------------------------------------------------------
   // STEP 2: Curriculum & Lessons (Fresh Empty Outline in Create Mode)
   // -------------------------------------------------------------
   const [modules, setModules] = useState<CourseModule[]>([]);
@@ -235,7 +251,7 @@ export const CourseBuilderPage: React.FC = () => {
     onConfirm: () => { },
   });
 
-    // Resolved existing course for Edit Mode
+  // Resolved existing course for Edit Mode
   const editingCourse = useMemo(() => {
     if (!editingCourseId) return undefined;
     return courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
@@ -478,12 +494,15 @@ export const CourseBuilderPage: React.FC = () => {
     return allFaculty.find((f) => f.id === selectedLeadFacultyId);
   }, [allFaculty, selectedLeadFacultyId]);
 
-    // Trainer authorized academic departments
+  // Trainer authorized academic departments
   const trainerAuthorizedDepartments = useMemo(() => {
-    if (!isFaculty) return mockDepartments;
-    const userDeptId = user?.departmentId || (user?.id === 'u-004' ? 'dep-001' : user?.id === 'u-003' ? 'dep-002' : 'dep-001');
-    return mockDepartments.filter((d) => d.id === userDeptId);
-  }, [isFaculty, user]);
+    const list = departments && departments.length > 0 ? departments : [];
+    if (!isFaculty) return list;
+    const userDeptId = user?.departmentId;
+    if (!userDeptId) return list;
+    const filtered = list.filter((d) => d.id === userDeptId || (d as any).code === userDeptId);
+    return filtered.length > 0 ? filtered : list;
+  }, [isFaculty, user, departments]);
 
   // Trainer authorized cohorts/batches
   const trainerAuthorizedCohorts = useMemo(() => {
@@ -603,7 +622,7 @@ export const CourseBuilderPage: React.FC = () => {
   // Helper: Department Name
   const getDepartmentName = (deptId?: string) => {
     if (!deptId) return 'General';
-    const dept = mockDepartments.find((d) => d.id === deptId);
+    const dept = departments.find((d) => d.id === deptId || d.name.toLowerCase() === deptId.toLowerCase());
     return dept ? dept.name : deptId;
   };
 
@@ -1193,7 +1212,12 @@ export const CourseBuilderPage: React.FC = () => {
       setIsPublishing(false);
     } catch (err: any) {
       console.error('Publishing error:', err);
-      setPublishError(err?.message || 'An unexpected error occurred while publishing the course.');
+      let errorMsg = err?.message || 'An unexpected error occurred while publishing the course.';
+      if (err?.details && Array.isArray(err.details)) {
+        const issues = err.details.map((d: any) => `${d.field ? `${d.field}: ` : ''}${d.message}`).join(', ');
+        if (issues) errorMsg = `Validation error: ${issues}`;
+      }
+      setPublishError(errorMsg);
       setIsPublishing(false);
     }
   };
@@ -3110,7 +3134,7 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setFacultyDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 10px', minWidth: '180px' }}
                   >
-                    {!isFaculty && <option value="all">All Departments ({mockDepartments.length})</option>}
+                    {!isFaculty && <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>}
                     {trainerAuthorizedDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
@@ -3385,8 +3409,8 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setStudentDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
-                    <option value="all">All Departments ({mockDepartments.length})</option>
-                    {mockDepartments.map((d) => (
+                    <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>
+                    {trainerAuthorizedDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
@@ -3579,7 +3603,7 @@ export const CourseBuilderPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                                    {filteredStudents.map((st) => {
+                  {filteredStudents.map((st) => {
                     const isAlreadyEnrolled = alreadyEnrolledStudentIds.has(st.id);
                     const isChecked = selectedStudentIds.has(st.id);
                     const isInactive = st.status === 'suspended' || st.status === 'deactivated';

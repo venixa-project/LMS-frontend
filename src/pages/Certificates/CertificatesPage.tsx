@@ -12,7 +12,7 @@ import { useCertificateStore } from '../../lib/certificateStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { Certificate, Course } from '../../types';
 import { generateCertificatePdf, printCertificateDiploma } from '../../lib/certificatePdf';
 import {

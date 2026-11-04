@@ -16,7 +16,7 @@ import {
   ProctoringEventCategory,
   ProctoringSeverity,
 } from '../types';
-import { mockProctoringIncidents } from '../data/mockData';
+
 
 // Re-export proctoring types for convenience
 export type {
@@ -524,7 +524,7 @@ export interface ProctoringStoreState {
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   // Real-time Jitsi Initial State
-  incidents: mockProctoringIncidents,
+  incidents: [],
   warnings: initialWarnings,
   auditLogs: initialAuditLogs,
   participants: initialParticipants,
@@ -699,7 +699,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
 
   resetToDefaults: () => {
     set({
-      incidents: mockProctoringIncidents,
+      incidents: [],
       warnings: initialWarnings,
       auditLogs: initialAuditLogs,
       participants: initialParticipants,

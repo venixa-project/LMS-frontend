@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { mockAssessments, mockQuestions } from '../../data/mockData';
+
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
@@ -70,7 +70,7 @@ export const ExamPlayerPage: React.FC = () => {
     }
   }, [id]);
 
-  const baseAssessment = storeAssessment || mockAssessments.find((a) => a.id === id);
+  const baseAssessment = storeAssessment;
   const assessment = pgAssessment
     ? {
         ...baseAssessment,

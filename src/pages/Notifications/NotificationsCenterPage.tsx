@@ -4,12 +4,9 @@ import { useAnnouncementStore } from '../../lib/announcementStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { apiClient } from '../../lib/apiClient';
-import {
-  mockNotificationTemplates,
-  mockDepartments,
-  mockAssessments,
-  mockLiveSessions,
-} from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useAssessmentStore } from '../../lib/assessmentStore';
+import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import {
   NotificationTemplate,
   Announcement,
@@ -441,7 +438,7 @@ const NotificationsManagementPage: React.FC = () => {
   const [formAssociatedSessionId, setFormAssociatedSessionId] = useState<string>('');
 
   // Notification Templates (Admin)
-  const [templates] = useState<NotificationTemplate[]>(mockNotificationTemplates);
+  const [templates] = useState<NotificationTemplate[]>([]);
   const [previewTemplate, setPreviewTemplate] = useState<NotificationTemplate | null>(null);
 
   // Open Create Modal
@@ -492,7 +489,7 @@ const NotificationsManagementPage: React.FC = () => {
   const handleSelectAssociatedAssessment = (assessmentId: string) => {
     setFormAssociatedAssessmentId(assessmentId);
     if (!assessmentId) return;
-    const asm = mockAssessments.find((a) => a.id === assessmentId);
+    const asm = useAssessmentStore.getState().assessments.find((a) => a.id === assessmentId);
     if (asm) {
       if (!formTitle.trim()) {
         setFormTitle(`Assessment Notice: ${asm.title}`);
@@ -511,7 +508,7 @@ const NotificationsManagementPage: React.FC = () => {
   const handleSelectAssociatedSession = (sessionId: string) => {
     setFormAssociatedSessionId(sessionId);
     if (!sessionId) return;
-    const sess = mockLiveSessions.find((s) => s.id === sessionId);
+    const sess = useLiveSessionStore.getState().sessions.find((s) => s.id === sessionId);
     if (sess) {
       if (!formTitle.trim()) {
         setFormTitle(`Live Lecture Reminder: ${sess.title}`);
@@ -552,7 +549,7 @@ const NotificationsManagementPage: React.FC = () => {
       audienceLabel = 'All Faculty & Staff';
       scope = 'institution';
     } else if (formAudienceType === 'department') {
-      const dept = mockDepartments.find((d) => d.id === formTargetDepartmentId);
+      const dept = useDepartmentStore.getState().departments.find((d) => d.id === formTargetDepartmentId);
       audienceLabel = `${dept?.name || 'Department'} Department`;
       scope = 'department';
     } else if (formAudienceType === 'course') {
@@ -2075,7 +2072,7 @@ const NotificationsManagementPage: React.FC = () => {
                             style={{ fontSize: '0.825rem', height: '34px' }}
                           >
                             <option value="">None (Custom Notice)</option>
-                            {mockAssessments.map((a) => (
+                            {useAssessmentStore.getState().assessments.map((a) => (
                               <option key={a.id} value={a.id}>
                                 {a.title} ({a.duration || 45} mins)
                               </option>
@@ -2094,7 +2091,7 @@ const NotificationsManagementPage: React.FC = () => {
                             style={{ fontSize: '0.825rem', height: '34px' }}
                           >
                             <option value="">None (Custom Notice)</option>
-                            {mockLiveSessions.map((s) => (
+                            {useLiveSessionStore.getState().sessions.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.title} ({s.date || 'Upcoming'})
                               </option>
@@ -2212,7 +2209,7 @@ const NotificationsManagementPage: React.FC = () => {
                             onChange={(e) => setFormTargetDepartmentId(e.target.value)}
                             style={{ fontSize: '0.9rem' }}
                           >
-                            {mockDepartments.map((dept) => (
+                            {useDepartmentStore.getState().departments.map((dept) => (
                               <option key={dept.id} value={dept.id}>
                                 {dept.name}
                               </option>

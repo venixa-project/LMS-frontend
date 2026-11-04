@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useCohortStore } from '../../../lib/cohortStore';
-import { mockCourses } from '../../../data/mockData';
+import { useCourseStore } from '../../../lib/courseStore';
 import { LiveSession } from '../../../types';
 import {
   Calendar, Clock, Users, Video, Search, ChevronLeft, ChevronRight,
@@ -737,7 +737,7 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                               >
                                 <BookOpen size={11} color="var(--primary)" />
                                 <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                  {slot.rawSession.courseTitle || mockCourses.find((c) => c.id === slot.rawSession.courseId)?.title || 'Core Subject'}
+                                  {slot.rawSession.courseTitle || useCourseStore.getState().courses.find((c) => c.id === slot.rawSession.courseId)?.title || 'Core Subject'}
                                 </span>
                               </div>
 
@@ -880,7 +880,7 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                                 <span>
-                                  <strong>Course:</strong> {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
+                                  <strong>Course:</strong> {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
                                 </span>
                                 <span>•</span>
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -976,7 +976,7 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                             {s.title}
                           </td>
                           <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
-                            {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
+                            {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
                           </td>
                           <td style={{ padding: '14px 16px', color: 'var(--text-main)' }}>
                             {s.instructorName || 'Faculty Trainer'}

@@ -3,7 +3,8 @@ import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockDepartments, mockCourses } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCourseStore } from '../../lib/courseStore';
 import { LiveSession } from '../../types';
 import {
   Video, Plus, Calendar, Clock, Users, ExternalLink,
@@ -449,7 +450,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                 style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
               >
                 <option value="all">All Departments</option>
-                {mockDepartments.map((d) => (
+                {useDepartmentStore.getState().departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
                   </option>
@@ -464,7 +465,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                 style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
               >
                 <option value="all">All Courses</option>
-                {mockCourses.map((c) => (
+                {useCourseStore.getState().courses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
                   </option>
@@ -978,7 +979,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                 </h3>
                 <p className="text-secondary text-xs" style={{ margin: 0 }}>
                   {selectedDetailSession.courseTitle ||
-                    mockCourses.find((c) => c.id === selectedDetailSession.courseId)?.title ||
+                    useCourseStore.getState().courses.find((c) => c.id === selectedDetailSession.courseId)?.title ||
                     'General Curriculum'}
                 </p>
               </div>

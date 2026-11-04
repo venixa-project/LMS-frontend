@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+
 import { Cohort, User } from '../../types';
 import {
   UsersRound, Plus, Search, Calendar, BookOpen, User as UserIcon,
@@ -35,8 +35,7 @@ export const CohortsPage: React.FC = () => {
     const live = peopleUsers || [];
     const liveIds = new Set(live.map(u => u.id));
     const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
-    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
-    return [...live, ...remainingMock];
+    return live;
   }, [peopleUsers]);
 
   const [search, setSearch] = useState('');
@@ -487,7 +486,7 @@ export const CohortsPage: React.FC = () => {
               onChange={(e) => setFilterCourse(e.target.value)}
             >
               <option value="all">All Courses</option>
-              {mockCourses.map(c => (
+              {useCourseStore.getState().courses.map(c => (
                 <option key={c.id} value={c.id}>{c.title}</option>
               ))}
             </select>
@@ -557,7 +556,7 @@ export const CohortsPage: React.FC = () => {
               </tr>
             ) : (
               filteredCohorts.map((c, index) => {
-                const course = mockCourses.find((co) => co.id === c.courseId) || (c as any).course;
+                const course = useCourseStore.getState().courses.find((co) => co.id === c.courseId) || (c as any).course;
                 const trainerId = c.instructorIds?.[0] || c.instructors?.[0];
                 const trainer = trainerId
                   ? allUsers.find(u => u.id === trainerId || (u.email && u.email.toLowerCase() === String(trainerId).toLowerCase()))
@@ -803,7 +802,7 @@ export const CohortsPage: React.FC = () => {
                     value={editCourseId}
                     onChange={(e) => setEditCourseId(e.target.value)}
                   >
-                    {mockCourses.map((co) => (
+                    {useCourseStore.getState().courses.map((co) => (
                       <option key={co.id} value={co.id}>{co.title}</option>
                     ))}
                   </select>

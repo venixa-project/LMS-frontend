@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { Cohort } from '../types';
 import { cohortApi, ListCohortsParams } from './cohortApiService';
-import { mockCohorts } from '../data/mockData';
+
 import { AUTH_SESSION_KEY } from './store';
 
 const DEMO_COHORTS_KEY = 'venilearn_demo_cohorts';
@@ -22,16 +22,7 @@ function isMockSession(): boolean {
 }
 
 function loadDemoCohorts(): Cohort[] {
-  try {
-    const raw = localStorage.getItem(DEMO_COHORTS_KEY);
-    if (raw) {
-      const cohorts = JSON.parse(raw);
-      if (Array.isArray(cohorts)) return cohorts;
-    }
-  } catch {
-    localStorage.removeItem(DEMO_COHORTS_KEY);
-  }
-  return mockCohorts.map((cohort) => ({ ...cohort }));
+  return [];
 }
 
 function persistDemoCohorts(cohorts: Cohort[]) {
@@ -58,21 +49,18 @@ interface CohortState {
 }
 
 export const useCohortStore = create<CohortState>((set, get) => ({
-  cohorts: isMockSession() ? loadDemoCohorts() : [],
+  cohorts: [],
   isLoading: false,
   totalCohorts: 0,
 
   fetchCohorts: async (params?: ListCohortsParams) => {
-    if (isMockSession()) {
-      let cohorts = loadDemoCohorts();
-      if (params?.departmentId) cohorts = cohorts.filter((cohort) => cohort.departmentId === params.departmentId);
-      if (params?.courseId) cohorts = cohorts.filter((cohort) => cohort.courseId === params.courseId);
-      if (params?.status && params.status !== 'all') cohorts = cohorts.filter((cohort) => cohort.status === params.status);
-      if (params?.search) {
-        const search = params.search.toLowerCase();
-        cohorts = cohorts.filter((cohort) => cohort.name.toLowerCase().includes(search) || cohort.code.toLowerCase().includes(search));
-      }
-      set({ cohorts, totalCohorts: cohorts.length, isLoading: false });
+    // Always fetch real cohorts
+    try {
+      const res = await cohortApi.list();
+      set({ cohorts: res.cohorts || [], totalCohorts: res.meta?.total || 0, isLoading: false });
+      return;
+    } catch (e) {
+      set({ cohorts: [], isLoading: false });
       return;
     }
 

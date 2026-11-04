@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useLiveSessionStore } from '../../../lib/liveSessionStore';
-import { mockCourses } from '../../../data/mockData';
+import { useCourseStore } from '../../../lib/courseStore';
 import { LiveSession } from '../../../types';
 import {
   Play, Video, Search, Filter, BookOpen, Clock, Users,
@@ -53,7 +53,7 @@ export const RecordedClassesView: React.FC<Props> = ({
     const map = new Map<string, string>();
     recordedSessions.forEach((s) => {
       const courseId = s.courseId || 'general';
-      const courseTitle = s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'General Curriculum';
+      const courseTitle = s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'General Curriculum';
       map.set(courseId, courseTitle);
     });
     return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
@@ -555,7 +555,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                           maxWidth: '220px',
                         }}
                       >
-                        {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
+                        {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
                       </span>
 
                       <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -760,7 +760,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
-                        {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
+                        {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'General Curriculum'}
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-main)', fontWeight: 600 }}>
                         {s.instructorName || 'Faculty Trainer'}

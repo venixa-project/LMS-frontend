@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Certificate, Course, User, Assessment } from '../types';
-import { mockCertificates } from '../data/mockData';
+
 import { useAuthStore } from './store';
 import { useGamificationStore } from './gamificationStore';
 

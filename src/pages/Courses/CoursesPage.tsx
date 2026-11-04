@@ -3,8 +3,8 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
+
 import { Course, EntityStatus } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -28,6 +28,11 @@ export interface RosterMember {
 }
 
 const CoursesManagementPage: React.FC = () => {
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
   const { user } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -180,11 +185,11 @@ const CoursesManagementPage: React.FC = () => {
     const instructorId = c.instructors?.[0] || 'u-004';
     const found =
       allFaculty.find((f) => f.id === instructorId) ||
-      mockUsers.find((u) => u.id === instructorId);
+      allFaculty.find((u) => u.id === instructorId);
 
     if (found) {
       const deptName =
-        mockDepartments.find((d) => d.id === found.departmentId)?.name ||
+        departments.find((d) => d.id === found.departmentId)?.name ||
         found.specialization ||
         'Engineering';
       return {
@@ -263,7 +268,7 @@ const CoursesManagementPage: React.FC = () => {
 
     const chosenFaculty =
       allFaculty.find((f) => f.id === selectedFacultyId) ||
-      mockUsers.find((u) => u.id === selectedFacultyId);
+      allFaculty.find((u) => u.id === selectedFacultyId);
 
     if (!chosenFaculty) return;
 
@@ -519,7 +524,7 @@ const CoursesManagementPage: React.FC = () => {
     if (courseEnrollments.length > 0) {
       return courseEnrollments.map((enr, idx) => {
         const student = allStudents.find((s) => s.id === enr.userId);
-        const userCohort = mockCohorts.find((c) => c.studentIds?.includes(enr.userId));
+        const userCohort = useCohortStore.getState().cohorts.find((c) => c.studentIds?.includes(enr.userId));
         const cohortName = userCohort?.name || 'Spring 2026 Engineering';
         return {
           id: enr.id || `enr-${idx}`,
@@ -533,33 +538,7 @@ const CoursesManagementPage: React.FC = () => {
       });
     }
 
-    // 2. If course has enrolled learners count, generate mock entries for realistic preview
-    const learnerCount = rosterCourse.enrolledLearners ?? rosterCourse.learnerCount ?? 0;
-    if (learnerCount > 0) {
-      const count = Math.min(learnerCount, allStudents.length);
-      if (count > 0) {
-        return allStudents.slice(0, count).map((st, idx) => {
-          const userCohort = mockCohorts.find((c) => c.studentIds?.includes(st.id));
-          const cohortName = userCohort?.name || 'Spring 2026 Engineering';
-          return {
-            id: st.id,
-            name: st.displayName || `${st.firstName} ${st.lastName}`,
-            email: st.email,
-            cohort: cohortName,
-            progress: Math.floor(45 + (idx * 13) % 50),
-            attendance: `${(93 + (idx * 1.5) % 6).toFixed(1)}%`,
-            enrolledAt: '2026-03-01',
-          };
-        });
-      }
-      return [
-        { id: '1', name: 'Alex Rivera', email: 'alex@lms.demo', cohort: 'Spring 2026 Engineering', progress: 68, attendance: '96.2%', enrolledAt: '2026-03-01' },
-        { id: '2', name: 'Daniel Wu', email: 'daniel.wu@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 92, attendance: '94.0%', enrolledAt: '2026-03-01' },
-        { id: '3', name: 'Sophia Patel', email: 'sophia.p@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 85, attendance: '98.0%', enrolledAt: '2026-03-05' },
-        { id: '4', name: 'Kwame Mensah', email: 'kwame.m@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 54, attendance: '91.5%', enrolledAt: '2026-03-10' },
-      ];
-    }
-
+    // No synthetic fallback entries
     return [];
   }, [rosterCourse, enrollments, allStudents]);
 
@@ -852,7 +831,7 @@ const CoursesManagementPage: React.FC = () => {
         <div className="grid-3">
           {filteredCourses.map((c) => {
             const leadFacultyInfo = getLeadFacultyInfo(c);
-            const courseDeptName = mockDepartments.find((d) => d.id === c.departmentId)?.name || c.category;
+            const courseDeptName = departments.find((d) => d.id === c.departmentId)?.name || c.category;
             const totalLessons = c.modules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
             const isManageMenuOpen = activeManageMenuCourseId === c.id;
             const coursePerms = getCoursePermissions(c);
@@ -1512,9 +1491,9 @@ const CoursesManagementPage: React.FC = () => {
       {/* Searchable Lead Faculty Assignment Modal */}
       {assignFacultyCourse && (() => {
         const currentLead = getLeadFacultyInfo(assignFacultyCourse);
-        const courseDept = mockDepartments.find((d) => d.id === assignFacultyCourse.departmentId);
+        const courseDept = departments.find((d) => d.id === assignFacultyCourse.departmentId);
         const isSelectedSameAsCurrent = selectedFacultyId === (assignFacultyCourse.instructors?.[0] || 'u-004');
-        const selectedFacultyObj = allFaculty.find((f) => f.id === selectedFacultyId) || mockUsers.find((u) => u.id === selectedFacultyId);
+        const selectedFacultyObj = allFaculty.find((f) => f.id === selectedFacultyId) || allFaculty.find((u) => u.id === selectedFacultyId);
         const isSelectedInactive = selectedFacultyObj?.status !== 'active';
 
         return (
@@ -1669,7 +1648,7 @@ const CoursesManagementPage: React.FC = () => {
                       style={{ fontSize: '0.8rem' }}
                     >
                       <option value="all">All Departments ({allFaculty.length} Faculty)</option>
-                      {mockDepartments.map((d) => (
+                      {departments.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}
                         </option>
@@ -1735,7 +1714,7 @@ const CoursesManagementPage: React.FC = () => {
                           const isDeptMatch = assignFacultyCourse.departmentId === fac.departmentId;
                           const isInactive = fac.status !== 'active';
                           const facCode = fac.rollNo || `FAC-${fac.id.toUpperCase()}`;
-                          const deptName = mockDepartments.find((d) => d.id === fac.departmentId)?.name || 'Academic Division';
+                          const deptName = departments.find((d) => d.id === fac.departmentId)?.name || 'Academic Division';
 
                           return (
                             <div

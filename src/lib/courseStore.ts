@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
-import { mockCourses, mockEnrollments } from '../data/mockData';
+
 import { apiClient } from './apiClient';
 
 interface CourseState {
@@ -141,8 +141,11 @@ export const useCourseStore = create<CourseState>((set, get) => ({
 
   getCourseById: (id: string) => {
     const { courses } = get();
-    return courses.find((c) => c.id.toLowerCase() === id.toLowerCase());
-    return courses.find((c) => c.id.toLowerCase() === id.toLowerCase() || (c.slug && c.slug.toLowerCase() === id.toLowerCase()));
+    return courses.find(
+      (c) =>
+        c.id.toLowerCase() === id.toLowerCase() ||
+        (c.slug && c.slug.toLowerCase() === id.toLowerCase())
+    );
   },
 
   isEnrolled: (courseId: string) => {
@@ -515,93 +518,101 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     }
   },
 
-  addCourse: async (course: Course): Promise<Course> => {
+    addCourse: async (course: Course): Promise<Course> => {
     const fallbackOrg = typeof window !== 'undefined'
-      ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
-      : 'org-001';
+      ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || '871abf8a-e563-4d0f-afc7-416d8da3df14')
+      : '871abf8a-e563-4d0f-afc7-416d8da3df14';
 
     let persistedCourse: Course = {
       ...course,
       organizationId: course.organizationId || fallbackOrg,
     };
 
-    try {
-      const payload = {
-        title: course.title,
-        slug: course.slug || course.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-        description: course.description || 'Comprehensive course syllabus and curriculum modules.',
-        shortDescription: course.shortDescription,
-        category: course.category || 'General',
-        level: course.level || 'Beginner',
-        durationHours: course.durationHours || 10,
-        status: course.status || 'draft',
-        thumbnailUrl: course.thumbnail,
-        shareableLinkEnabled: course.shareableLinkEnabled ?? true,
-        enrollmentCapacity: course.enrollmentCapacity,
-        enrollmentDeadline: course.enrollmentDeadline,
-        enrollmentApprovalRequired: course.enrollmentApprovalRequired,
-        completionPercentageRequired: course.completionPercentageRequired || 80,
-        instructors: course.instructors || [],
-        modules: (course.modules || []).map((m, mIdx) => ({
+    // Sanitize departmentId: only send if valid UUID
+    const sanitizedDeptId = course.departmentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.departmentId)
+      ? course.departmentId
+      : undefined;
+
+    const payload = {
+      title: course.title,
+      slug: course.slug || course.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      description: course.description || 'Comprehensive course syllabus and curriculum modules.',
+      shortDescription: course.shortDescription,
+      category: course.category || 'General',
+      departmentId: sanitizedDeptId,
+      level: course.level || 'Beginner',
+      durationHours: course.durationHours || 10,
+      status: course.status || 'draft',
+      thumbnailUrl: course.thumbnail || (course as any).thumbnailUrl,
+      shareableLinkEnabled: course.shareableLinkEnabled ?? true,
+      enrollmentCapacity: course.enrollmentCapacity,
+      enrollmentDeadline: course.enrollmentDeadline,
+      enrollmentApprovalRequired: course.enrollmentApprovalRequired,
+      completionPercentageRequired: course.completionPercentageRequired || 80,
+      instructors: course.instructors || [],
+      modules: (course.modules || []).map((m, mIdx) => ({
+        title: m.title || `Module ${mIdx + 1}`,
+        description: m.description,
+        order: m.order || mIdx + 1,
+        lessons: (m.lessons || []).map((l, lIdx) => ({
+          title: l.title || `Lesson ${lIdx + 1}`,
+          description: l.description,
+          type: l.type || 'rich_text',
+          content: l.content,
+          contentUrl: l.videoUrl || (l as any).contentUrl,
+          durationMinutes: l.durationMinutes || 15,
+          order: l.order || lIdx + 1,
+          isRequired: l.isRequired ?? true,
+          isPreview: l.isPreview ?? false,
+          status: l.status || 'published',
+          quizConfig: (l as any).quizConfig || {},
+          uploadedDocument: (l as any).uploadedDocument || {},
+        })),
+      })),
+      finalAssessmentConfig: course.finalAssessmentConfig,
+      certificateConfig: course.certificateConfig,
+      evaluationCriteria: (course as any).evaluationCriteria,
+    };
+
+    // 1. Authoritative write to PostgreSQL
+    const res = await apiClient.post<any>('/courses', payload);
+    if (res && res.data) {
+      const c = res.data;
+      persistedCourse = {
+        ...persistedCourse,
+        id: c.id,
+        slug: c.slug,
+        status: c.status || persistedCourse.status,
+        organizationId: c.tenantId || persistedCourse.organizationId,
+        departmentId: c.departmentId || persistedCourse.departmentId,
+        thumbnail: c.thumbnailUrl || persistedCourse.thumbnail,
+        modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
+          id: m.id,
           title: m.title || `Module ${mIdx + 1}`,
           description: m.description,
           order: m.order || mIdx + 1,
-          lessons: (m.lessons || []).map((l, lIdx) => ({
+          lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
+            id: l.id,
             title: l.title || `Lesson ${lIdx + 1}`,
             description: l.description,
             type: l.type || 'rich_text',
             content: l.content,
-            contentUrl: l.videoUrl || (l as any).contentUrl,
+            videoUrl: l.contentUrl,
             durationMinutes: l.durationMinutes || 15,
             order: l.order || lIdx + 1,
             isRequired: l.isRequired ?? true,
             isPreview: l.isPreview ?? false,
             status: l.status || 'published',
-            quizConfig: (l as any).quizConfig || {},
-            uploadedDocument: (l as any).uploadedDocument || {},
-          })),
-        })),
-        finalAssessmentConfig: course.finalAssessmentConfig,
-        certificateConfig: course.certificateConfig,
-        evaluationCriteria: (course as any).evaluationCriteria,
+            quizConfig: l.quizConfig,
+            uploadedDocument: l.uploadedDocument,
+          })) : [],
+        })) : persistedCourse.modules,
       };
-
-      const res = await apiClient.post<any>('/courses', payload);
-      if (res && res.data) {
-        const c = res.data;
-        persistedCourse = {
-          ...persistedCourse,
-          id: c.id,
-          slug: c.slug,
-          status: c.status || persistedCourse.status,
-          organizationId: c.tenantId || persistedCourse.organizationId,
-          modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
-            id: m.id,
-            title: m.title || `Module ${mIdx + 1}`,
-            description: m.description,
-            order: m.order || mIdx + 1,
-            lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
-              id: l.id,
-              title: l.title || `Lesson ${lIdx + 1}`,
-              description: l.description,
-              type: l.type || 'rich_text',
-              content: l.content,
-              videoUrl: l.contentUrl,
-              durationMinutes: l.durationMinutes || 15,
-              order: l.order || lIdx + 1,
-              isRequired: l.isRequired ?? true,
-              isPreview: l.isPreview ?? false,
-              status: l.status || 'published',
-              quizConfig: l.quizConfig,
-              uploadedDocument: l.uploadedDocument,
-            })) : [],
-          })) : persistedCourse.modules,
-        };
-      }
-    } catch (apiErr) {
-      console.warn('Backend API course creation note (storing in client state):', apiErr);
+    } else {
+      throw new Error('Course creation failed: empty response from backend database API');
     }
 
+    // 2. Synchronize store & local storage cache
     set((state) => {
       const exists = state.courses.some((c) => c.id === persistedCourse.id);
       const updatedCourses = exists

@@ -13,7 +13,9 @@ import {
   PlannerRecurrence,
   RelatedLMSType
 } from '../../types/planner';
-import { mockCohorts, mockCourses, mockAssessments } from '../../data/mockData';
+import { useCohortStore } from '../../lib/cohortStore';
+import { useCourseStore } from '../../lib/courseStore';
+import { useAssessmentStore } from '../../lib/assessmentStore';
 
 interface Props {
   isOpen: boolean;
@@ -125,21 +127,21 @@ export const AddEditActivityModal: React.FC<Props> = ({
       setRelatedLmsUrl('/departments');
     } else if (val.startsWith('cohort:')) {
       const cohId = val.replace('cohort:', '');
-      const coh = mockCohorts.find((c) => c.id === cohId);
+      const coh = useCohortStore.getState().cohorts.find((c) => c.id === cohId);
       setRelatedLmsType('cohort');
       setRelatedLmsId(cohId);
       setRelatedLmsTitle(coh ? `${coh.name} (${coh.code})` : 'Cohort View');
       setRelatedLmsUrl('/cohorts');
     } else if (val.startsWith('course:')) {
       const crsId = val.replace('course:', '');
-      const crs = mockCourses.find((c) => c.id === crsId);
+      const crs = useCourseStore.getState().courses.find((c) => c.id === crsId);
       setRelatedLmsType('course');
       setRelatedLmsId(crsId);
       setRelatedLmsTitle(crs ? crs.title : 'Course View');
       setRelatedLmsUrl('/courses');
     } else if (val.startsWith('assessment:')) {
       const asmId = val.replace('assessment:', '');
-      const asm = mockAssessments.find((a) => a.id === asmId);
+      const asm = useAssessmentStore.getState().assessments.find((a) => a.id === asmId);
       setRelatedLmsType('assessment');
       setRelatedLmsId(asmId);
       setRelatedLmsTitle(asm ? asm.title : 'Assessment Details');
@@ -481,21 +483,21 @@ export const AddEditActivityModal: React.FC<Props> = ({
                     <option value="departments">Academic Departments Hierarchy (/departments)</option>
                   </optgroup>
                   <optgroup label="Active Cohorts & Batches">
-                    {mockCohorts.map((c) => (
+                    {useCohortStore.getState().cohorts.map((c) => (
                       <option key={c.id} value={`cohort:${c.id}`}>
                         Cohort: {c.name} ({c.code})
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Courses & Programs">
-                    {mockCourses.map((c) => (
+                    {useCourseStore.getState().courses.map((c) => (
                       <option key={c.id} value={`course:${c.id}`}>
                         Course: {c.title}
                       </option>
                     ))}
                   </optgroup>
                   <optgroup label="Assessments & Exams">
-                    {mockAssessments.map((a) => (
+                    {useAssessmentStore.getState().assessments.map((a) => (
                       <option key={a.id} value={`assessment:${a.id}`}>
                         Assessment: {a.title}
                       </option>

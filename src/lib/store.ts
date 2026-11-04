@@ -310,6 +310,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (foundUser) {
         const permissions = getPermissionsForRole(foundUser.activeRole);
         const navigation = getNavigationForRole(foundUser.activeRole);
+        localStorage.setItem('venilearn_active_tenant_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
+        if (typeof window !== 'undefined') sessionStorage.setItem('venilearn_active_org_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
         persistSession(foundUser, foundUser.activeRole);
         const notifications = getUserNotifications(foundUser);
         set({

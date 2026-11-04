@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useAssessmentStore } from '../../lib/assessmentStore';
-import { mockCourses, mockCohorts } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import { Assessment } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CreateAssessmentModal } from './components/CreateAssessmentModal';
@@ -88,10 +89,10 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
   // Faculty & Learner course filter logic
   const assignedCourses = isFaculty
-    ? mockCourses.filter((c) => c.instructors?.includes('u-004') || c.createdBy === 'u-004' || c.id === 'crs-001' || c.id === 'crs-002')
+    ? useCourseStore.getState().courses.filter((c) => c.instructors?.includes('u-004') || c.createdBy === 'u-004' || c.id === 'crs-001' || c.id === 'crs-002')
     : isLearner
-      ? mockCourses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id))
-      : mockCourses;
+      ? useCourseStore.getState().courses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id))
+      : useCourseStore.getState().courses;
 
   // Assignments mock data
   const [assignments, setAssignments] = useState<CourseAssignment[]>([
@@ -371,8 +372,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="grid-3">
             {filteredAssignments.map((asg) => {
-              const course = mockCourses.find((c) => c.id === asg.courseId);
-              const cohort = mockCohorts.find((c) => c.id === asg.cohortId);
+              const course = useCourseStore.getState().courses.find((c) => c.id === asg.courseId);
+              const cohort = useCohortStore.getState().cohorts.find((c) => c.id === asg.cohortId);
 
               return (
                 <div key={asg.id} className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -521,7 +522,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             ) : (
               <div className="grid-3">
                 {filteredDrafts.map((d) => {
-                  const course = mockCourses.find((c) => c.id === d.courseId);
+                  const course = useCourseStore.getState().courses.find((c) => c.id === d.courseId);
                   const qCount = d.questionIds?.length || d.questionsData?.length || d.questions?.length || 0;
 
                   return (
@@ -628,7 +629,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             /* PUBLISHED ASSESSMENTS GRID */
             <div className="grid-3">
               {filteredAssessments.map((a) => {
-                const course = mockCourses.find((c) => c.id === a.courseId);
+                const course = useCourseStore.getState().courses.find((c) => c.id === a.courseId);
                 const isCompletedByLearner = a.id === 'a-001';
                 const qCount = a.questionIds?.length || a.questionsData?.length || a.questions?.length || 5;
 

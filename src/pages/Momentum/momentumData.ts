@@ -1,15 +1,16 @@
 // ============================================================
-// LMS - Momentum Study Analytics & Hybrid Calendar Data Engine
+// LMS - Momentum Study Analytics & Dynamic Calendar Engine
 // ============================================================
 
 export interface DayActivityItem {
   id: string;
-  type: 'lesson' | 'quiz' | 'assignment' | 'live_session';
+  type: 'lesson' | 'quiz' | 'assignment' | 'live_session' | 'reading' | 'study';
   title: string;
   courseTitle: string;
   durationMinutes: number;
   status: 'completed' | 'submitted' | 'attended';
   score?: string;
+  timestamp?: string;
 }
 
 export interface DayStudyRecord {
@@ -45,9 +46,6 @@ export interface MomentumMetrics {
   consistencyTotalTrackedDays: number;
 }
 
-// Fixed canonical anchor date for demo: 2026-10-27 (Tuesday)
-export const TODAY_DATE_STR = '2026-10-27';
-
 export function parseDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -60,6 +58,8 @@ export function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export const TODAY_DATE_STR = formatDate(new Date());
+
 export function formatDuration(minutes: number): string {
   if (minutes === 0) return '0m';
   const hrs = Math.floor(minutes / 60);
@@ -69,109 +69,20 @@ export function formatDuration(minutes: number): string {
   return `${mins}m`;
 }
 
-// Generate 90 days of consistent study history leading up to TODAY_DATE_STR
-export function generateInitialStudyDatabase(dailyGoal: number = 45): Record<string, DayStudyRecord> {
+// Generate empty default study database for seamless initial render
+export function generateInitialStudyDatabase(
+  dailyGoal: number = 45,
+  anchorDate: Date = new Date()
+): Record<string, DayStudyRecord> {
   const db: Record<string, DayStudyRecord> = {};
-  const anchor = parseDate(TODAY_DATE_STR);
+  const anchor = new Date(anchorDate);
+  anchor.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(anchor);
 
-  // Realistic historical study minutes and activities pattern for past 90 days
-  const sampleActivitiesPool: Record<number, DayActivityItem[]> = {
-    0: [],
-    15: [
-      { id: 'act-1', type: 'lesson', title: 'JavaScript Variables & Scope', courseTitle: 'JavaScript Fundamentals', durationMinutes: 15, status: 'completed' },
-    ],
-    25: [
-      { id: 'act-2', type: 'lesson', title: 'Arrow Functions & Closures', courseTitle: 'JavaScript Fundamentals', durationMinutes: 25, status: 'completed' },
-    ],
-    35: [
-      { id: 'act-3', type: 'lesson', title: 'Array Methods: map, filter, reduce', courseTitle: 'JavaScript Fundamentals', durationMinutes: 20, status: 'completed' },
-      { id: 'act-4', type: 'quiz', title: 'Array Methods Practice Quiz', courseTitle: 'JavaScript Fundamentals', durationMinutes: 15, status: 'submitted', score: '100%' },
-    ],
-    45: [
-      { id: 'act-5', type: 'lesson', title: 'Promises & Asynchronous Control Flow', courseTitle: 'JavaScript Fundamentals', durationMinutes: 25, status: 'completed' },
-      { id: 'act-6', type: 'assignment', title: 'Async Weather API Lab', courseTitle: 'JavaScript Fundamentals', durationMinutes: 20, status: 'submitted' },
-    ],
-    50: [
-      { id: 'act-7', type: 'lesson', title: 'React Hooks: useState & useEffect', courseTitle: 'Advanced React Patterns', durationMinutes: 30, status: 'completed' },
-      { id: 'act-8', type: 'quiz', title: 'React Hooks Knowledge Check', courseTitle: 'Advanced React Patterns', durationMinutes: 20, status: 'submitted', score: '92%' },
-    ],
-    60: [
-      { id: 'act-9', type: 'live_session', title: 'JavaScript Q&A with Dr. James Wilson', courseTitle: 'JavaScript Fundamentals', durationMinutes: 60, status: 'attended' },
-    ],
-    75: [
-      { id: 'act-10', type: 'lesson', title: 'Custom Hooks Architecture', courseTitle: 'Advanced React Patterns', durationMinutes: 35, status: 'completed' },
-      { id: 'act-11', type: 'assignment', title: 'Compound Components Lab', courseTitle: 'Advanced React Patterns', durationMinutes: 40, status: 'submitted' },
-    ],
-    90: [
-      { id: 'act-12', type: 'live_session', title: 'TypeScript Patterns Workshop', courseTitle: 'TypeScript Mastery', durationMinutes: 60, status: 'attended' },
-      { id: 'act-13', type: 'lesson', title: 'Generics & Conditional Types', courseTitle: 'TypeScript Mastery', durationMinutes: 30, status: 'completed' },
-    ],
-  };
-
-  // Preset minutes for days backwards from anchor (Index 0 = today, Index 1 = yesterday...)
-  // Days 0-11: 12 consecutive active days (>= 20m) -> 12-day active streak
-  // Day 12: 0m (Scheduled rest day)
-  // Days 13-33: 21 consecutive days of study -> 21-day Personal Best!
-  const minutePattern = [
-    35, 60, 45, 50, 75, 45, 90, // Week 0 (Days 0-6: today Oct 27 backwards)
-    60, 40, 75, 50, 65,         // Days 7-11: active study
-    0,                          // Day 12: Rest day (cleanly ends current streak at 12 days!)
-    85, 45, 50, 70, 60, 40, 75, // Days 13-19: historical run
-    50, 90, 60, 45, 55, 60, 75, // Days 20-26: continuing historical run
-    45, 80, 50, 65, 70, 60, 50, // Days 27-33: completing 21-day Personal Best!
-    0,                          // Day 34: Rest day
-    45, 60, 50, 75, 40, 50, 60,
-    30, 45, 55, 60, 70, 80, 40
-  ];
-
-  for (let i = 89; i >= 0; i--) {
+  // Default clean empty grid for 28 days around anchor
+  for (let i = 27; i >= 0; i--) {
     const d = new Date(anchor);
     d.setDate(anchor.getDate() - i);
-    const dateStr = formatDate(d);
-    const isToday = i === 0;
-
-    let minutes = 0;
-    if (i < minutePattern.length) {
-      minutes = minutePattern[i] ?? 45;
-    } else {
-      minutes = (i % 8 === 0) ? 0 : 45 + ((i * 11) % 35);
-    }
-
-    const goalReached = minutes >= dailyGoal;
-    const goalExceeded = minutes >= Math.round(dailyGoal * 1.5);
-
-    let level: 0 | 1 | 2 | 3 = 0;
-    if (minutes === 0) level = 0;
-    else if (goalExceeded) level = 3;
-    else if (goalReached) level = 2;
-    else level = 1;
-
-    // Nearest activities matching duration
-    const keys = Object.keys(sampleActivitiesPool).map(Number).sort((a, b) => Math.abs(a - minutes) - Math.abs(b - minutes));
-    const closestKey = keys[0] || 0;
-    const acts = sampleActivitiesPool[closestKey] || [];
-
-    db[dateStr] = {
-      date: dateStr,
-      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      dayNumber: d.getDate(),
-      minutes,
-      dailyGoalMinutes: dailyGoal,
-      goalReached,
-      goalExceeded,
-      level,
-      isToday,
-      isFuture: false,
-      activities: acts.length > 0 ? acts : (minutes > 0 ? [
-        { id: `gen-${i}`, type: 'lesson', title: `Technical Lab Session ${d.getDate()}`, courseTitle: 'Web Development Core', durationMinutes: minutes, status: 'completed' }
-      ] : [])
-    };
-  }
-
-  // Pre-generate the next 14 future days with zero activity (clearly marked future)
-  for (let f = 1; f <= 14; f++) {
-    const d = new Date(anchor);
-    d.setDate(anchor.getDate() + f);
     const dateStr = formatDate(d);
     db[dateStr] = {
       date: dateStr,
@@ -182,9 +93,9 @@ export function generateInitialStudyDatabase(dailyGoal: number = 45): Record<str
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: false,
-      isFuture: true,
-      activities: []
+      isToday: dateStr === todayStr,
+      isFuture: d > anchor,
+      activities: [],
     };
   }
 
@@ -194,13 +105,17 @@ export function generateInitialStudyDatabase(dailyGoal: number = 45): Record<str
 // Calculate streak: consecutive calendar days meeting minimum study requirement (>= 20m)
 export function calculateStreak(
   db: Record<string, DayStudyRecord>,
-  minMinutesForStreak: number = 20
+  minMinutesForStreak: number = 20,
+  referenceDate: Date = new Date()
 ): { currentStreak: number; personalBest: number } {
   let streak = 0;
-  const anchor = parseDate(TODAY_DATE_STR);
+  let best = 0;
+  const anchor = new Date(referenceDate);
+  anchor.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(anchor);
 
   // Check today first
-  const todayRecord = db[TODAY_DATE_STR];
+  const todayRecord = db[todayStr];
   const todayCounted = todayRecord && todayRecord.minutes >= minMinutesForStreak;
   if (todayCounted) {
     streak = 1;
@@ -219,9 +134,21 @@ export function calculateStreak(
     }
   }
 
+  // Calculate personal best across loaded keys
+  const sortedKeys = Object.keys(db).sort();
+  let tempStreak = 0;
+  for (const k of sortedKeys) {
+    if (db[k]?.minutes >= minMinutesForStreak) {
+      tempStreak++;
+      if (tempStreak > best) best = tempStreak;
+    } else {
+      tempStreak = 0;
+    }
+  }
+
   return {
     currentStreak: streak,
-    personalBest: Math.max(21, streak),
+    personalBest: Math.max(best, streak),
   };
 }
 
@@ -229,9 +156,13 @@ export function calculateStreak(
 // offset 0 = ending today; offset -1 = ending 28 days ago, etc.
 export function get28DayWindow(
   db: Record<string, DayStudyRecord>,
-  periodOffset: number = 0
+  periodOffset: number = 0,
+  referenceDate: Date = new Date()
 ): { days: DayStudyRecord[]; startDate: string; endDate: string } {
-  const anchor = parseDate(TODAY_DATE_STR);
+  const anchor = new Date(referenceDate);
+  anchor.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(anchor);
+
   // Shift anchor by periodOffset * 28 days
   const endAnchor = new Date(anchor);
   endAnchor.setDate(anchor.getDate() + periodOffset * 28);
@@ -250,9 +181,9 @@ export function get28DayWindow(
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: dateStr === TODAY_DATE_STR,
+      isToday: dateStr === todayStr,
       isFuture: d > anchor,
-      activities: []
+      activities: [],
     };
     days.push(rec);
   }
@@ -260,7 +191,7 @@ export function get28DayWindow(
   return {
     days,
     startDate: days[0]?.date || '',
-    endDate: days[days.length - 1]?.date || ''
+    endDate: days[days.length - 1]?.date || '',
   };
 }
 
@@ -275,8 +206,9 @@ export interface MonthCalendarCell {
 // Generate monthly calendar grid (Monday-Sunday columns with padding)
 export function getMonthCalendarGrid(
   year: number,
-  monthIndex: number, // 0 = Jan, 9 = Oct
-  db: Record<string, DayStudyRecord>
+  monthIndex: number, // 0 = Jan, 10 = Nov
+  db: Record<string, DayStudyRecord>,
+  referenceDate: Date = new Date()
 ): {
   cells: MonthCalendarCell[];
   monthName: string;
@@ -286,6 +218,9 @@ export function getMonthCalendarGrid(
   const lastDay = new Date(year, monthIndex + 1, 0);
   const monthName = firstDay.toLocaleDateString('en-US', { month: 'long' });
   const totalDays = lastDay.getDate();
+  const todayStr = formatDate(referenceDate);
+  const now = new Date(referenceDate);
+  now.setHours(0, 0, 0, 0);
 
   // Day of week: 0 = Sun, 1 = Mon, ..., 6 = Sat
   // Convert to Monday = 0, ..., Sunday = 6
@@ -309,16 +244,16 @@ export function getMonthCalendarGrid(
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: dateStr === TODAY_DATE_STR,
-      isFuture: d > parseDate(TODAY_DATE_STR),
-      activities: []
+      isToday: dateStr === todayStr,
+      isFuture: d > now,
+      activities: [],
     };
     cells.push({
       date: dateStr,
       dayNumber: dayNum,
       dayName: rec.dayName,
       isCurrentMonth: false,
-      record: rec
+      record: rec,
     });
   }
 
@@ -335,16 +270,16 @@ export function getMonthCalendarGrid(
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: dateStr === TODAY_DATE_STR,
-      isFuture: d > parseDate(TODAY_DATE_STR),
-      activities: []
+      isToday: dateStr === todayStr,
+      isFuture: d > now,
+      activities: [],
     };
     cells.push({
       date: dateStr,
       dayNumber: dayNum,
       dayName: rec.dayName,
       isCurrentMonth: true,
-      record: rec
+      record: rec,
     });
   }
 
@@ -362,23 +297,23 @@ export function getMonthCalendarGrid(
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: dateStr === TODAY_DATE_STR,
+      isToday: dateStr === todayStr,
       isFuture: true,
-      activities: []
+      activities: [],
     };
     cells.push({
       date: dateStr,
       dayNumber: n,
       dayName: rec.dayName,
       isCurrentMonth: false,
-      record: rec
+      record: rec,
     });
   }
 
   return {
     cells,
     monthName,
-    year
+    year,
   };
 }
 
@@ -386,7 +321,8 @@ export function getMonthCalendarGrid(
 export function getWeeklyLearningSummary(
   db: Record<string, DayStudyRecord>,
   dailyGoal: number = 45,
-  weeklyGoalHours: number = 10
+  weeklyGoalHours: number = 10,
+  referenceDate: Date = new Date()
 ): {
   days: DayStudyRecord[];
   totalMinutes: number;
@@ -396,7 +332,9 @@ export function getWeeklyLearningSummary(
   goalDaysCount: number;
   goalPercent: number;
 } {
-  const anchor = parseDate(TODAY_DATE_STR);
+  const anchor = new Date(referenceDate);
+  anchor.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(anchor);
   let dow = anchor.getDay() - 1; // 0 = Mon, 6 = Sun
   if (dow === -1) dow = 6;
 
@@ -424,9 +362,9 @@ export function getWeeklyLearningSummary(
       goalReached: false,
       goalExceeded: false,
       level: 0,
-      isToday: dateStr === TODAY_DATE_STR,
+      isToday: dateStr === todayStr,
       isFuture: d > anchor,
-      activities: []
+      activities: [],
     };
     days.push(rec);
 
@@ -441,15 +379,15 @@ export function getWeeklyLearningSummary(
   }
 
   const weeklyGoalMinutes = weeklyGoalHours * 60;
-  const goalPercent = Math.round((totalMinutes / weeklyGoalMinutes) * 100);
+  const goalPercent = Math.min(100, Math.round((totalMinutes / weeklyGoalMinutes) * 100));
 
   return {
     days,
     totalMinutes,
     activeDaysCount,
-    lessonsCount: Math.max(lessonsCount, 8),
-    quizzesCount: Math.max(quizzesCount, 2),
+    lessonsCount,
+    quizzesCount,
     goalDaysCount,
-    goalPercent
+    goalPercent,
   };
 }

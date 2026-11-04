@@ -19,8 +19,9 @@ import {
   computeMemberBadges,
   ACHIEVEMENT_DEFINITIONS,
 } from './leaderboardData';
-import { mockUsers } from '../../data/mockUsers';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
+import { usePeopleStore } from '../../lib/peopleStore';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import { Podium } from './components/Podium';
 import { PersonalRankCard } from './components/PersonalRankCard';
 import { VictoryCelebrationModal } from './components/VictoryCelebrationModal';
@@ -91,8 +92,8 @@ export const LeaderboardPage: React.FC = () => {
       authorized.add('Spring 2026 Engineering');
     }
 
-    // Dynamic mockCohorts inspection
-    mockCohorts.forEach((coh) => {
+    // Dynamic cohorts inspection
+    useCohortStore.getState().cohorts.forEach((coh) => {
       const teaches =
         (coh.instructors && coh.instructors.includes(currentUserId)) ||
         (coh.instructorIds && coh.instructorIds.includes(currentUserId));
@@ -110,7 +111,7 @@ export const LeaderboardPage: React.FC = () => {
     });
 
     if (authorized.size === 0) {
-      const userRec = mockUsers.find((u) => u.id === currentUserId || u.email === userEmail);
+      const userRec = usePeopleStore.getState().users.find((u) => u.id === currentUserId || u.email === userEmail);
       if (userRec?.departmentId === 'dep-003') {
         authorized.add('Fall 2026 Data Science');
       } else if (userRec?.departmentId === 'dep-005') {
@@ -138,13 +139,13 @@ export const LeaderboardPage: React.FC = () => {
     }
   }, [availableCohorts, selectedCohort]);
 
-  // Helper: Look up student department from mockUsers & mockDepartments
+  // Helper: Look up student department from users & departments
   const getStudentDepartment = (member: LeaderboardMember): string | undefined => {
-    const userRecord = mockUsers.find(
+    const userRecord = usePeopleStore.getState().users.find(
       (u) => u.id === member.id || u.rollNo === member.rollNo || u.email === member.email
     );
     if (userRecord?.departmentId) {
-      const dept = mockDepartments.find((d) => d.id === userRecord.departmentId);
+      const dept = useDepartmentStore.getState().departments.find((d) => d.id === userRecord.departmentId);
       if (dept) return dept.name;
     }
     if (member.cohort.includes('Engineering')) return 'Engineering';

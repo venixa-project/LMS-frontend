@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Cohort, User } from '../../types';
-import { mockDepartments, mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCourseStore } from '../../lib/courseStore';
+
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import {
@@ -15,6 +16,11 @@ import {
 type WizardStep = 'details' | 'trainer' | 'students' | 'review';
 
 export const CohortCreatePage: React.FC = () => {
+  const { departments, fetchDepartments } = useDepartmentStore();
+
+  useEffect(() => {
+    fetchDepartments();
+  }, [fetchDepartments]);
   const navigate = useNavigate();
   const { addCohort, isBatchCodeUnique } = useCohortStore();
 
@@ -24,7 +30,7 @@ export const CohortCreatePage: React.FC = () => {
   // Step 1: Basic Details
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [courseId, setCourseId] = useState<string>(mockCourses[0]?.id || 'crs-001');
+  const [courseId, setCourseId] = useState<string>(useCourseStore.getState().courses[0]?.id || '');
   const [startDate, setStartDate] = useState('2026-11-01');
   const [endDate, setEndDate] = useState('2027-02-28');
   const [capacity, setCapacity] = useState<number>(30);
@@ -53,8 +59,7 @@ export const CohortCreatePage: React.FC = () => {
     const live = peopleUsers || [];
     const liveIds = new Set(live.map(u => u.id));
     const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
-    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
-    return [...live, ...remainingMock];
+    return live;
   }, [peopleUsers]);
 
   // Submission error
@@ -76,7 +81,7 @@ export const CohortCreatePage: React.FC = () => {
   }, [allUsers]);
 
   const selectedCourse = useMemo(() => {
-    return mockCourses.find(c => c.id === courseId);
+    return useCourseStore.getState().courses.find(c => c.id === courseId);
   }, [courseId]);
 
   const assignedTrainer = useMemo(() => {
@@ -96,7 +101,7 @@ export const CohortCreatePage: React.FC = () => {
 
     selectedStudentsList.forEach(student => {
       const deptId = student.departmentId || 'unassigned';
-      const deptName = mockDepartments.find(d => d.id === deptId)?.name || 'General / Unassigned';
+      const deptName = departments.find(d => d.id === deptId)?.name || 'General / Unassigned';
 
       if (!map.has(deptId)) {
         map.set(deptId, { departmentName: deptName, students: [] });
@@ -583,7 +588,7 @@ export const CohortCreatePage: React.FC = () => {
                 value={courseId}
                 onChange={(e) => setCourseId(e.target.value)}
               >
-                {mockCourses.map((c) => (
+                {useCourseStore.getState().courses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title} &bull; {c.category} ({c.status.toUpperCase()})
                   </option>
@@ -731,7 +736,7 @@ export const CohortCreatePage: React.FC = () => {
                 onChange={(e) => setTrainerDeptFilter(e.target.value)}
               >
                 <option value="all">All Departments ({allFaculty.length} Instructors)</option>
-                {mockDepartments.map((d) => (
+                {departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
                   </option>
@@ -756,7 +761,7 @@ export const CohortCreatePage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
             {filteredFaculty.map((faculty) => {
               const isSelected = assignedTrainerId === faculty.id;
-              const dept = mockDepartments.find(d => d.id === faculty.departmentId);
+              const dept = departments.find(d => d.id === faculty.departmentId);
 
               return (
                 <div
@@ -925,7 +930,7 @@ export const CohortCreatePage: React.FC = () => {
                 onChange={(e) => setStudentDeptFilter(e.target.value)}
               >
                 <option value="all">All Departments ({allStudents.length} Scholars)</option>
-                {mockDepartments.map((d) => (
+                {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
@@ -983,7 +988,7 @@ export const CohortCreatePage: React.FC = () => {
                 ) : (
                   filteredStudents.map((st) => {
                     const isSelected = selectedStudentIds.includes(st.id);
-                    const dept = mockDepartments.find(d => d.id === st.departmentId);
+                    const dept = departments.find(d => d.id === st.departmentId);
 
                     return (
                       <tr
@@ -1164,7 +1169,7 @@ export const CohortCreatePage: React.FC = () => {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '1rem' }}>{assignedTrainer.displayName}</div>
                     <div className="text-muted text-xs">
-                      {mockDepartments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull; {assignedTrainer.email}
+                      {departments.find(d => d.id === assignedTrainer.departmentId)?.name || 'General Department'} &bull; {assignedTrainer.email}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       {assignedTrainer.specialization || 'Lead Instructor'}

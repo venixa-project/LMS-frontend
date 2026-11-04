@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockCourses } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
@@ -96,7 +96,7 @@ export const PersonCreatePage: React.FC = () => {
   const [facultyEmpId, setFacultyEmpId] = useState('');
   const [facultyTitle, setFacultyTitle] = useState('Lead Trainer / Professor');
   const [specialization, setSpecialization] = useState('Full-Stack Software Architecture');
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([mockCourses[0]?.id || 'crs-001']);
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([useCourseStore.getState().courses[0]?.id || '']);
 
   // Staff specific
   const [staffEmpId, setStaffEmpId] = useState('');
@@ -152,7 +152,7 @@ export const PersonCreatePage: React.FC = () => {
     setFacultyEmpId('');
     setFacultyTitle('Lead Trainer / Professor');
     setSpecialization('Full-Stack Software Architecture');
-    setSelectedCourses([mockCourses[0]?.id || 'crs-001']);
+    setSelectedCourses([useCourseStore.getState().courses[0]?.id || '']);
 
     setStaffEmpId('');
     setStaffRoleTitle('Academic Operations Coordinator');
@@ -780,7 +780,7 @@ export const PersonCreatePage: React.FC = () => {
                   Permitted Curriculum Teaching Scopes (Select all that apply)
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
-                  {mockCourses.map((crs) => {
+                  {useCourseStore.getState().courses.map((crs) => {
                     const isSelected = selectedCourses.includes(crs.id);
                     return (
                       <div

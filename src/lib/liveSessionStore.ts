@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { LiveSession } from '../types';
-import { mockLiveSessions } from '../data/mockData';
+
 import { useAuthStore } from './store';
 
 interface LiveSessionState {

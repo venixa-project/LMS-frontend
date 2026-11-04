@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
 import { useThemeStore, ThemePreference } from '../lib/themeStore';
-import { mockOrganizations } from '../data/mockData';
+
 import {
   Search, Bell, Sun, Moon, Monitor, Check, Shield, ChevronDown, User, LogOut,
   Settings, Menu, Building, HelpCircle
@@ -136,7 +136,7 @@ export const Navbar: React.FC<Props> = ({
                 border: '1px solid var(--border-subtle)'
               }}
             >
-              {(mockOrganizations.length > 0 ? mockOrganizations : (user?.organizationId ? [{ id: user.organizationId, name: "Active Organization", slug: "active" }] : [])).map((org) => (
+              {([].length > 0 ? [] : (user?.organizationId ? [{ id: user.organizationId, name: "Active Organization", slug: "active" }] : [])).map((org) => (
                 <option key={org.id} value={org.id}>
                   {org.name} ({org.slug})
                 </option>

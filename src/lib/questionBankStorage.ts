@@ -4,7 +4,7 @@
 // Shares persistent state with assessmentStore and QuestionBankSelectorTab.
 // ============================================================
 import { QuestionBank, Question } from '../types';
-import { mockQuestionBanks, mockQuestions } from '../data/mockData';
+
 import { normalizeQuestionText } from './bulkImportService';
 
 export const STORAGE_KEY_QUESTION_BANKS = 'venilearn_question_banks_store';
@@ -14,17 +14,17 @@ export function getStoredQuestionBanks(): QuestionBank[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_QUESTION_BANKS);
     if (!raw) {
-      saveStoredQuestionBanks(mockQuestionBanks);
-      return mockQuestionBanks;
+      saveStoredQuestionBanks([]);
+      return [];
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.filter((b) => !b.id?.startsWith("qb-00"));
     }
-    return mockQuestionBanks;
+    return [];
   } catch (err) {
     console.error('Failed to load question banks from localStorage:', err);
-    return mockQuestionBanks;
+    return [];
   }
 }
 
@@ -40,17 +40,17 @@ export function getStoredQuestions(): Question[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_QUESTIONS);
     if (!raw) {
-      saveStoredQuestions(mockQuestions);
-      return mockQuestions;
+      saveStoredQuestions([]);
+      return [];
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.filter((q) => !q.id?.startsWith("q-00"));
     }
-    return mockQuestions;
+    return [];
   } catch (err) {
     console.error('Failed to load questions from localStorage:', err);
-    return mockQuestions;
+    return [];
   }
 }
 
