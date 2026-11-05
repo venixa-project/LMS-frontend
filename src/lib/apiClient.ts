@@ -203,8 +203,8 @@ export function hasBackendAccessToken(): boolean {
 
 function getStoredTenantId(): string | null {
   try {
-    const raw = localStorage.getItem('venilearn_active_tenant_id');
-    return raw || '871abf8a-e563-4d0f-afc7-416d8da3df14';
+    const raw = localStorage.getItem('venilearn_active_tenant_id') || (typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null);
+    return raw || null;
   } catch {
     return '871abf8a-e563-4d0f-afc7-416d8da3df14';
   }

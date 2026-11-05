@@ -1,7 +1,7 @@
 // ============================================================
 // LMS - Course & Shareable Enrollment Store (Zustand)
-// Manages course sharing configuration, public link access,
-// and cross-role student enrollment state.
+// Manages course persistence, curriculum, and multi-tenant enrollments.
+// Synchronizes seamlessly with PostgreSQL backend API.
 // ============================================================
 import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
@@ -13,7 +13,9 @@ interface CourseState {
   enrolledCourseIds: string[];
   requestedCourseIds: string[];
   enrollments: Enrollment[];
+  isLoading: boolean;
   isCoursesLoading: boolean;
+  error: string | null;
 
   // Actions
   getCourseById: (id: string) => Course | undefined;
@@ -25,7 +27,7 @@ interface CourseState {
     enrollmentCapacity?: number;
     enrollmentApprovalRequired?: boolean;
   }) => void;
-  updateCourseStatus: (courseId: string, status: EntityStatus) => void;
+  updateCourseStatus: (courseId: string, status: EntityStatus) => Promise<boolean>;
   enrollInCourse: (courseId: string, userId?: string) => {
     success: boolean;
     message: string;
@@ -50,9 +52,14 @@ interface CourseState {
     alreadyEnrolledCount: number;
     message: string;
   };
-  fetchCourses: () => Promise<void>;
+  fetchCourses: (force?: boolean) => Promise<Course[]>;
+  saveCourse: (course: Course, studentIds?: string[]) => Promise<{
+    success: boolean;
+    course?: Course;
+    error?: string;
+  }>;
   addCourse: (course: Course) => Promise<Course>;
-  deleteCourse: (courseId: string) => void;
+  deleteCourse: (courseId: string) => Promise<boolean>;
   updateCourseProgress: (courseId: string, progress: number) => void;
   recordLessonProgress: (courseId: string, lessonId: string, timeSpentSeconds?: number) => Promise<any>;
 }
@@ -83,23 +90,94 @@ if (typeof window !== 'undefined') {
       });
       localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
     }
-  } catch {}
+  } catch { }
 }
 
-// Safely load cached state from localStorage with persistence of deletions and empty catalogues
+// Helper to normalize and map backend API course record into frontend Course object
+export function mapBackendCourseToFrontend(item: any): Course {
+  const fallbackOrg = typeof window !== 'undefined'
+    ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || 'org-001')
+    : 'org-001';
+
+  return {
+    id: item.id,
+    title: item.title,
+    shortDescription: item.shortDescription || (item.description ? item.description.slice(0, 140) + '...' : ''),
+    description: item.description || '',
+    thumbnail: item.thumbnailUrl || item.thumbnail || '',
+    category: item.category || 'General',
+    departmentId: item.departmentId || undefined,
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    language: item.language || 'English',
+    audience: item.audience || undefined,
+    estimatedDuration: item.estimatedDuration || (item.durationHours ? item.durationHours * 60 : 60),
+    durationHours: item.durationHours || 1,
+    instructors: Array.isArray(item.instructors) ? item.instructors : [],
+    status: (item.status as EntityStatus) || 'draft',
+    visibility: item.visibility || 'public',
+    version: item.version || 1,
+    completionPolicy: item.completionPolicy || undefined,
+    modules: Array.isArray(item.modules)
+      ? item.modules.map((m: any, mIdx: number) => ({
+        id: m.id || `mod-${mIdx + 1}`,
+        title: m.title || `Module ${mIdx + 1}`,
+        description: m.description || undefined,
+        order: m.order || mIdx + 1,
+        assessment: m.assessment || undefined,
+        lessons: Array.isArray(m.lessons)
+          ? m.lessons.map((l: any, lIdx: number) => ({
+            id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
+            title: l.title || `Lesson ${lIdx + 1}`,
+            type: l.type || 'video',
+            content: l.content || undefined,
+            contentUrl: l.contentUrl || undefined,
+            duration: l.durationMinutes || l.duration || 15,
+            durationMinutes: l.durationMinutes || l.duration || 15,
+            order: l.order || lIdx + 1,
+            isRequired: l.isRequired !== false,
+            isPreview: Boolean(l.isPreview),
+            status: l.status || 'published',
+            quizConfig: l.quizConfig || undefined,
+            uploadedDocument: l.uploadedDocument || undefined,
+            videoInfo: l.videoInfo || undefined,
+          }))
+          : [],
+      }))
+      : [],
+    learnerCount: item.learnerCount || item._count?.enrollments || 0,
+    enrolledLearners: item.learnerCount || item._count?.enrollments || 0,
+    completionRate: item.completionRate || 0,
+    level: item.level || 'Beginner',
+    learningOutcomes: Array.isArray(item.learningOutcomes) ? item.learningOutcomes : [],
+    prerequisites: Array.isArray(item.prerequisites) ? item.prerequisites : [],
+    shareableLinkEnabled: Boolean(item.shareableLinkEnabled),
+    enrollmentDeadline: item.enrollmentDeadline || undefined,
+    enrollmentCapacity: item.enrollmentCapacity || undefined,
+    enrollmentApprovalRequired: Boolean(item.enrollmentApprovalRequired),
+    createdBy: item.createdBy || undefined,
+    startDate: item.startDate || undefined,
+    endDate: item.endDate || undefined,
+    completionPercentageRequired: item.completionPercentageRequired || 80,
+    completionPoints: item.completionPoints || 100,
+    finalAssessment: item.finalAssessmentConfig || item.finalAssessment || undefined,
+    certificateConfig: item.certificateConfig || undefined,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    organizationId: item.tenantId || item.organizationId || fallbackOrg,
+  };
+}
+
+// Safely load cached state from localStorage
 function loadInitialCourses(): Course[] {
   try {
     const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_COURSES) : null;
-
     if (cached !== null) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((c: Course) => !c.id.startsWith('crs-00') && !c.title.toLowerCase().includes('kjl') && !c.title.includes('CS-401'))
-          .map((c: Course) => ({
-            ...c,
-            organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
-          }));
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((c: Course) => ({
+          ...c,
+          organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
+        }));
       }
     }
   } catch (e) {
@@ -116,7 +194,7 @@ function loadInitialEnrolled(): string[] {
       if (Array.isArray(parsed)) {
         return parsed
           .map((e: any) => (typeof e === 'string' ? e : e.courseId || e.id))
-          .filter((id: string) => typeof id === 'string' && !id.startsWith('crs-00'));
+          .filter((id: string) => typeof id === 'string');
       }
     }
   } catch (e) {
@@ -142,16 +220,12 @@ function loadInitialRequested(): string[] {
 
 function loadInitialEnrollments(): Enrollment[] {
   try {
-    const isInitialized = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY_INITIALIZED) === 'true';
     const cached = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ENROLLMENTS) : null;
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
         return parsed;
       }
-    }
-    if (isInitialized) {
-      return [];
     }
   } catch (e) {
     console.error('Failed to parse enrollments from storage', e);
@@ -164,14 +238,79 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   enrolledCourseIds: loadInitialEnrolled(),
   requestedCourseIds: loadInitialRequested(),
   enrollments: loadInitialEnrollments(),
+  isLoading: false,
   isCoursesLoading: false,
+  error: null,
+
+  fetchCourses: async (force = false) => {
+    set({ isLoading: true, isCoursesLoading: true, error: null });
+    try {
+      const [coursesRes, enrollmentsRes] = await Promise.all([
+        apiClient.get<any>('/courses?limit=200').catch(() => null),
+        apiClient.get<any>('/courses/my-enrollments').catch(() => null),
+      ]);
+
+      let backendCourses: Course[] = [];
+      if (coursesRes && coursesRes.data) {
+        const rawItems = Array.isArray(coursesRes.data)
+          ? coursesRes.data
+          : (coursesRes.data as any).items || [];
+        backendCourses = rawItems.map(mapBackendCourseToFrontend);
+
+        set({ courses: backendCourses, isLoading: false, isCoursesLoading: false });
+        try {
+          localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
+          localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+        } catch (e) { }
+      }
+
+      if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
+        const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
+        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
+          const completedLids: string[] = Array.isArray(e.lessonProgress)
+            ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
+            : [];
+          if (e.courseId && completedLids.length > 0) {
+            try {
+              localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
+            } catch { }
+          }
+          return {
+            id: e.id,
+            userId: e.userId,
+            courseId: e.courseId,
+            cohortId: e.cohortId,
+            status: e.status || 'active',
+            progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
+            enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
+            completedLessonIds: completedLids,
+          };
+        });
+
+        set({
+          enrolledCourseIds: backendEnrolledIds,
+          enrollments: mappedEnrollments,
+        });
+        try {
+          localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
+          localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
+        } catch (e) { }
+      }
+      return backendCourses;
+    } catch (err: any) {
+      console.warn('[CourseStore] Failed to fetch courses from backend API:', err);
+      set({ isLoading: false, isCoursesLoading: false, error: err.message || 'Failed to load courses' });
+      return get().courses;
+    }
+  },
 
   getCourseById: (id: string) => {
     const { courses } = get();
     return courses.find(
       (c) =>
         c.id.toLowerCase() === id.toLowerCase() ||
-        (c.slug && c.slug.toLowerCase() === id.toLowerCase())
+        (c.slug && c.slug.toLowerCase() === id.toLowerCase()) ||
+        ((c as any).code && (c as any).code.toLowerCase() === id.toLowerCase())
     );
   },
 
@@ -198,38 +337,37 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       );
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) {
-        // localStorage fallback
-      }
+      } catch (e) { }
       return { courses: updatedCourses };
     });
   },
 
-  updateCourseStatus: (courseId, status) => {
-    set((state) => {
-      const updatedCourses = state.courses.map((c) =>
-        c.id === courseId
-          ? {
-            ...c,
-            status,
-            // If unpublishing, optionally reflect link restriction
-            shareableLinkEnabled: status === 'published' ? (c.shareableLinkEnabled ?? true) : false,
-            updatedAt: new Date().toISOString(),
-          }
-          : c
-      );
-      try {
-        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) {
-        // storage fallback
-      }
-      return { courses: updatedCourses };
-    });
+  updateCourseStatus: async (courseId, status) => {
+    try {
+      await apiClient.patch(`/courses/${courseId}/status`, { status });
+    } catch (err) {
+      console.warn('Backend updateStatus note:', err);
+    }
+    const updatedCourses = get().courses.map((c) =>
+      c.id === courseId
+        ? {
+          ...c,
+          status,
+          shareableLinkEnabled: status === 'published' ? (c.shareableLinkEnabled ?? true) : false,
+          updatedAt: new Date().toISOString(),
+        }
+        : c
+    );
+    set({ courses: updatedCourses });
+    try {
+      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+    } catch (e) { }
+    return true;
   },
 
   enrollInCourse: (courseId, userId = 'u-007') => {
     const { courses, enrolledCourseIds } = get();
-    const course = courses.find((c) => c.id === courseId);
+    const course = courses.find((c) => c.id === courseId || (c as any).slug === courseId);
 
     if (!course) {
       return { success: false, message: 'Course not found.' };
@@ -243,11 +381,10 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       return { success: false, message: 'Course link has been deactivated by administrator.' };
     }
 
-    if (enrolledCourseIds.includes(courseId)) {
+    if (enrolledCourseIds.includes(course.id)) {
       return { success: false, message: 'You are already enrolled in this course.' };
     }
 
-    // Check enrollment deadline if set
     if (course.enrollmentDeadline) {
       const deadline = new Date(course.enrollmentDeadline);
       const today = new Date();
@@ -256,18 +393,16 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       }
     }
 
-    // Check capacity if set
     const currentEnrolled = course.enrolledLearners ?? course.learnerCount ?? 0;
     const capacityLimit = course.enrollmentCapacity ?? 100;
     if (currentEnrolled >= capacityLimit) {
       return { success: false, message: 'This course has reached its maximum seat capacity.' };
     }
 
-    // If requires approval, route to approval flow
     if (course.enrollmentApprovalRequired) {
       const { requestedCourseIds } = get();
-      if (!requestedCourseIds.includes(courseId)) {
-        const nextRequested = [...requestedCourseIds, courseId];
+      if (!requestedCourseIds.includes(course.id)) {
+        const nextRequested = [...requestedCourseIds, course.id];
         set({ requestedCourseIds: nextRequested });
         try {
           localStorage.setItem(STORAGE_KEY_REQUESTED, JSON.stringify(nextRequested));
@@ -280,19 +415,18 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       };
     }
 
-    // Instant successful enrollment
-    const nextEnrolled = [...enrolledCourseIds, courseId];
+    const nextEnrolled = [...enrolledCourseIds, course.id];
     const newEnrollment: Enrollment = {
       id: `enr-${Date.now()}`,
       userId,
-      courseId,
+      courseId: course.id,
       status: 'active',
       progress: 0,
       enrolledAt: new Date().toISOString(),
     };
 
     const updatedCourses = courses.map((c) =>
-      c.id === courseId
+      c.id === course.id
         ? {
           ...c,
           learnerCount: (c.learnerCount || 0) + 1,
@@ -311,7 +445,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(nextEnrolled));
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      apiClient.post(`/courses/${courseId}/enroll`, {}).catch((err) => {
+      apiClient.post(`/courses/${course.id}/enroll`, {}).catch((err) => {
         console.warn('Backend enrollment sync note:', err);
       });
     } catch (e) { }
@@ -340,13 +474,13 @@ export const useCourseStore = create<CourseState>((set, get) => ({
 
   assignLeadFaculty: (courseId, facultyId) => {
     const { courses } = get();
-    const target = courses.find((c) => c.id === courseId);
+    const target = courses.find((c) => c.id === courseId || (c as any).slug === courseId);
     if (!target) {
       return { success: false, message: 'Course not found.' };
     }
 
     const updatedCourses = courses.map((c) => {
-      if (c.id === courseId) {
+      if (c.id === target.id) {
         const existing = c.instructors || [];
         const nextInstructors = [facultyId, ...existing.filter((id) => id !== facultyId)];
         return {
@@ -368,7 +502,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
 
   assignStudentsToCourse: (courseId, studentIds, cohortId) => {
     const { courses, enrollments } = get();
-    const targetCourse = courses.find((c) => c.id === courseId);
+    const targetCourse = courses.find((c) => c.id === courseId || (c as any).slug === courseId);
     if (!targetCourse) {
       return {
         success: false,
@@ -378,9 +512,9 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       };
     }
 
-    // Existing enrolled user IDs for this course
+    const actualCourseId = targetCourse.id;
     const existingEnrolledIds = new Set(
-      enrollments.filter((e) => e.courseId === courseId).map((e) => e.userId)
+      enrollments.filter((e) => e.courseId === actualCourseId).map((e) => e.userId)
     );
 
     const eligibleIdsToEnroll = studentIds.filter((sId) => !existingEnrolledIds.has(sId));
@@ -398,7 +532,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     const newEnrollments: Enrollment[] = eligibleIdsToEnroll.map((sId, idx) => ({
       id: `enr-${Date.now()}-${idx}`,
       userId: sId,
-      courseId,
+      courseId: actualCourseId,
       cohortId: cohortId || undefined,
       status: 'active',
       progress: 0,
@@ -408,7 +542,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     const nextEnrollments = [...newEnrollments, ...enrollments];
 
     const updatedCourses = courses.map((c) => {
-      if (c.id === courseId) {
+      if (c.id === actualCourseId) {
         const currentCount = c.enrolledLearners ?? c.learnerCount ?? 0;
         const newTotal = currentCount + eligibleIdsToEnroll.length;
         return {
@@ -429,11 +563,13 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
       localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
-      apiClient.post(`/courses/${courseId}/assign-students`, {
+      apiClient.post(`/courses/${actualCourseId}/assign-students`, {
         studentIds: eligibleIdsToEnroll,
         cohortId
-      }).catch((syncErr) => console.warn('Background course sync note:', syncErr));
-    } catch (e) { }
+      }).catch((syncErr) => console.warn("Background course sync note:", syncErr));
+    } catch (syncErr) {
+      console.warn('Background course sync note:', syncErr);
+    }
 
     return {
       success: true,
@@ -443,122 +579,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     };
   },
 
-  fetchCourses: async () => {
-    set({ isCoursesLoading: true });
-    try {
-      const [coursesRes, enrollmentsRes] = await Promise.all([
-        apiClient.get('/courses?limit=100').catch(() => null),
-        apiClient.get('/courses/my-enrollments').catch(() => null),
-      ]);
-
-      if (coursesRes && coursesRes.data && Array.isArray(coursesRes.data)) {
-        const backendCourses: Course[] = (coursesRes.data as any[]).map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          slug: c.slug,
-          shortDescription: c.shortDescription || c.description?.slice(0, 120),
-          description: c.description || '',
-          thumbnail: c.thumbnailUrl || c.thumbnail,
-          category: c.category || 'General',
-          departmentId: c.departmentId,
-          level: c.level || 'Beginner',
-          durationHours: c.durationHours || Math.round((c.estimatedDuration || 60) / 60) || 10,
-          status: c.status || 'draft',
-          version: c.version || 1,
-          instructors: Array.isArray(c.instructors) ? c.instructors : [],
-          modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
-            id: m.id,
-            title: m.title || `Module ${mIdx + 1}`,
-            description: m.description,
-            order: m.order || mIdx + 1,
-            lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
-              id: l.id,
-              title: l.title || `Lesson ${lIdx + 1}`,
-              description: l.description,
-              type: l.type || 'rich_text',
-              content: l.content,
-              videoUrl: l.contentUrl,
-              durationMinutes: l.durationMinutes || 15,
-              order: l.order || lIdx + 1,
-              isRequired: l.isRequired ?? true,
-              isPreview: l.isPreview ?? false,
-              status: l.status || 'published',
-              quizConfig: l.quizConfig,
-              uploadedDocument: l.uploadedDocument,
-            })) : [],
-          })) : [],
-          enrolledLearners: c.learnerCount || (c._count?.enrollments) || 0,
-          learnerCount: c.learnerCount || (c._count?.enrollments) || 0,
-          organizationId: c.tenantId || 'org-001',
-          shareableLinkEnabled: c.shareableLinkEnabled ?? true,
-          enrollmentCapacity: c.enrollmentCapacity,
-          enrollmentDeadline: c.enrollmentDeadline,
-          enrollmentApprovalRequired: c.enrollmentApprovalRequired,
-          completionPercentageRequired: c.completionPercentageRequired || 80,
-          finalAssessmentConfig: c.finalAssessmentConfig,
-          certificateConfig: c.certificateConfig,
-          createdAt: c.createdAt,
-          updatedAt: c.updatedAt,
-        }));
-
-        set(() => {
-          try {
-            localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
-            localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-          } catch (e) { }
-          return { courses: backendCourses };
-        });
-      }
-
-      if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
-        const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
-        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
-          const completedLids: string[] = Array.isArray(e.lessonProgress)
-            ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
-            : [];
-
-          if (e.courseId && completedLids.length > 0) {
-            try {
-              localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
-              localStorage.setItem(`venilearn_completed_lessons_${e.courseId.toLowerCase()}`, JSON.stringify(completedLids));
-            } catch {}
-          }
-
-          const progressVal = typeof e.progressPercentage === 'number'
-            ? e.progressPercentage
-            : (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0);
-
-          return {
-            id: e.id,
-            userId: e.userId,
-            courseId: e.courseId,
-            cohortId: e.cohortId,
-            status: e.status || 'active',
-            progress: progressVal,
-            enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
-            completedLessonIds: completedLids,
-          };
-        });
-
-        set(() => {
-          try {
-            localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
-            localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
-          } catch (e) { }
-          return {
-            enrolledCourseIds: backendEnrolledIds,
-            enrollments: mappedEnrollments,
-          };
-        });
-      }
-    } catch (err) {
-      console.warn('Failed to fetch courses from backend API:', err);
-    } finally {
-      set({ isCoursesLoading: false });
-    }
-  },
-
-    addCourse: async (course: Course): Promise<Course> => {
+  addCourse: async (course: Course): Promise<Course> => {
     const fallbackOrg = typeof window !== 'undefined'
       ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || '871abf8a-e563-4d0f-afc7-416d8da3df14')
       : '871abf8a-e563-4d0f-afc7-416d8da3df14';
@@ -589,6 +610,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       enrollmentDeadline: course.enrollmentDeadline,
       enrollmentApprovalRequired: course.enrollmentApprovalRequired,
       completionPercentageRequired: course.completionPercentageRequired || 80,
+      completionPoints: course.completionPoints || 100,
       instructors: course.instructors || [],
       modules: (course.modules || []).map((m, mIdx) => ({
         title: m.title || `Module ${mIdx + 1}`,
@@ -609,7 +631,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           uploadedDocument: (l as any).uploadedDocument || {},
         })),
       })),
-      finalAssessmentConfig: course.finalAssessmentConfig,
+      finalAssessmentConfig: course.finalAssessmentConfig || course.finalAssessment,
       certificateConfig: course.certificateConfig,
       evaluationCriteria: (course as any).evaluationCriteria,
     };
@@ -618,36 +640,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     const res = await apiClient.post<any>('/courses', payload);
     if (res && res.data) {
       const c = res.data;
-      persistedCourse = {
-        ...persistedCourse,
-        id: c.id,
-        slug: c.slug,
-        status: c.status || persistedCourse.status,
-        organizationId: c.tenantId || persistedCourse.organizationId,
-        departmentId: c.departmentId || persistedCourse.departmentId,
-        thumbnail: c.thumbnailUrl || persistedCourse.thumbnail,
-        modules: Array.isArray(c.modules) ? c.modules.map((m: any, mIdx: number) => ({
-          id: m.id,
-          title: m.title || `Module ${mIdx + 1}`,
-          description: m.description,
-          order: m.order || mIdx + 1,
-          lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
-            id: l.id,
-            title: l.title || `Lesson ${lIdx + 1}`,
-            description: l.description,
-            type: l.type || 'rich_text',
-            content: l.content,
-            videoUrl: l.contentUrl,
-            durationMinutes: l.durationMinutes || 15,
-            order: l.order || lIdx + 1,
-            isRequired: l.isRequired ?? true,
-            isPreview: l.isPreview ?? false,
-            status: l.status || 'published',
-            quizConfig: l.quizConfig,
-            uploadedDocument: l.uploadedDocument,
-          })) : [],
-        })) : persistedCourse.modules,
-      };
+      persistedCourse = mapBackendCourseToFrontend(c);
     } else {
       throw new Error('Course creation failed: empty response from backend database API');
     }
@@ -670,28 +663,46 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     return persistedCourse;
   },
 
-  deleteCourse: (courseId: string) => {
-    apiClient.delete(`/courses/${courseId}`).catch((err) => {
-      console.warn('Backend API delete note:', err);
-    });
-    set((state) => {
-      const updatedCourses = state.courses.filter((c) => c.id !== courseId);
-      const updatedEnrolled = state.enrolledCourseIds.filter((id) => id !== courseId);
-      const updatedEnrollments = state.enrollments.filter((e) => e.courseId !== courseId);
-      try {
-        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-        localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
-        localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
-        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-      } catch (e) {
-        console.error('Failed to save courses to storage', e);
+  saveCourse: async (course: Course, studentIds: string[] = []) => {
+    try {
+      set({ isLoading: true, error: null });
+      const persisted = await get().addCourse(course);
+      if (studentIds.length > 0) {
+        await get().assignStudentsToCourse(persisted.id, studentIds);
       }
-      return {
-        courses: updatedCourses,
-        enrolledCourseIds: updatedEnrolled,
-        enrollments: updatedEnrollments,
-      };
+      set({ isLoading: false });
+      return { success: true, course: persisted };
+    } catch (err: any) {
+      console.error('[CourseStore] Error saving course to backend database:', err);
+      const errMsg = err?.message || 'Database error occurred while persisting the course to PostgreSQL.';
+      set({ isLoading: false, error: errMsg });
+      return { success: false, error: errMsg };
+    }
+  },
+
+  deleteCourse: async (courseId: string) => {
+    try {
+      await apiClient.delete(`/courses/${courseId}`);
+    } catch (err) {
+      console.warn('Backend course delete note:', err);
+    }
+    const updatedCourses = get().courses.filter((c) => c.id !== courseId);
+    const updatedEnrolled = get().enrolledCourseIds.filter((id) => id !== courseId);
+    const updatedEnrollments = get().enrollments.filter((e) => e.courseId !== courseId);
+    set({
+      courses: updatedCourses,
+      enrolledCourseIds: updatedEnrolled,
+      enrollments: updatedEnrollments,
     });
+    try {
+      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+      localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
+      localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
+      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+    } catch (e) {
+      console.error('Failed to save courses to storage', e);
+    }
+    return true;
   },
 
   updateCourseProgress: (courseId: string, progress: number) => {
@@ -721,7 +732,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       }
       try {
         localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
-      } catch (e) {}
+      } catch (e) { }
       return { enrollments: nextEnrollments };
     });
   },
@@ -756,7 +767,7 @@ if (typeof window !== 'undefined') {
             })),
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     }
   });
 }

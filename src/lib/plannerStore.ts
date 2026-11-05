@@ -11,8 +11,12 @@ import {
   PlannerPriority,
   PlannerStatus,
   PlannerReminderLead,
-  PlannerRecurrence
+  PlannerRecurrence,
+  PlannerSource
 } from '../types/planner';
+import { create } from 'zustand';
+import { apiClient } from './apiClient';
+import { useLiveSessionStore } from './liveSessionStore';
 
 
 const STORAGE_KEY = 'venilearn_admin_planner_activities_v3';
@@ -243,7 +247,32 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
 
 // Harvest automatically sourced LMS events without duplicating
 export const getHarvestedLMSEvents = (): PlannerActivity[] => {
-  return [];
+  try {
+    const liveSessions = useLiveSessionStore.getState().sessions || [];
+    return liveSessions.map((s) => ({
+      id: `lms-live-${s.id}`,
+      title: s.title,
+      description: s.description || (s.courseTitle ? `Course: ${s.courseTitle}` : 'Scheduled Live Session'),
+      type: 'lms_event' as PlannerActivityType,
+      date: s.date || formatLocalDate(new Date()),
+      startTime: s.startTime || '10:00',
+      endTime: s.endTime || '11:00',
+      priority: 'high' as PlannerPriority,
+      status: (s.status === 'ended' ? 'completed' : 'pending') as PlannerStatus,
+      reminder: '10_min' as PlannerReminderLead,
+      recurrence: 'none' as PlannerRecurrence,
+      source: 'lms_auto' as PlannerSource,
+      relatedLmsType: 'live_session' as const,
+      relatedLmsId: s.id,
+      relatedLmsTitle: s.title,
+      relatedLmsUrl: `/live-sessions?sessionId=${s.id}`,
+      createdAt: s.createdAt || new Date().toISOString(),
+      updatedAt: s.updatedAt || new Date().toISOString(),
+    }));
+  } catch (err) {
+    console.warn('Failed to harvest live sessions into planner:', err);
+    return [];
+  }
 };
 
 // Load saved manual activities
@@ -362,7 +391,7 @@ export const expandRecurringActivities = (
 };
 
 // Top 3 Focus Tasks for the Admin
-export const getTopFocusTasks = (referenceDate: string = '2026-10-22'): PlannerActivity[] => {
+export const getTopFocusTasks = (referenceDate: string = formatLocalDate(new Date())): PlannerActivity[] => {
   const all = getAllPlannerActivities();
 
   // Find high priority, pending tasks/deadlines on or around today
@@ -388,7 +417,7 @@ export const getTopFocusTasks = (referenceDate: string = '2026-10-22'): PlannerA
 };
 
 // Overdue Reminders
-export const getOverdueReminders = (referenceDate: string = '2026-10-22'): PlannerActivity[] => {
+export const getOverdueReminders = (referenceDate: string = formatLocalDate(new Date())): PlannerActivity[] => {
   const all = getAllPlannerActivities();
   return all.filter((a) => {
     if (a.status === 'completed') return false;
@@ -397,7 +426,7 @@ export const getOverdueReminders = (referenceDate: string = '2026-10-22'): Plann
 };
 
 // Upcoming 7 Days Activities
-export const getUpcoming7Days = (referenceDate: string = '2026-10-22'): PlannerActivity[] => {
+export const getUpcoming7Days = (referenceDate: string = formatLocalDate(new Date())): PlannerActivity[] => {
   const ref = new Date(`${referenceDate}T00:00:00`);
   const nextWeek = new Date(ref);
   nextWeek.setDate(ref.getDate() + 7);
@@ -547,3 +576,137 @@ export const dispatchWebNotification = (title: string, body: string): boolean =>
   }
   return false;
 };
+
+
+// ============================================================
+// Zustand API-connected Planner Store
+// Reads/writes activities to PostgreSQL via backend API.
+// Falls back to localStorage if the API is unavailable.
+// ============================================================
+
+interface PlannerStoreState {
+  activities: PlannerActivity[];
+  isLoading: boolean;
+  fetchActivities: (startDate?: string, endDate?: string) => Promise<void>;
+  createActivity: (data: Omit<PlannerActivity, 'id' | 'createdAt' | 'updatedAt' | 'source'>) => Promise<PlannerActivity | null>;
+  editActivity: (id: string, updates: Partial<PlannerActivity>) => Promise<PlannerActivity | null>;
+  removeActivity: (id: string) => Promise<boolean>;
+  toggleComplete: (id: string) => Promise<PlannerActivity | null>;
+}
+
+function mapBackendActivity(item: any): PlannerActivity {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description || '',
+    type: item.type || 'task',
+    date: item.date
+      ? (typeof item.date === 'string' ? item.date.slice(0, 10) : new Date(item.date).toISOString().slice(0, 10))
+      : new Date().toISOString().slice(0, 10),
+    startTime: item.startTime || undefined,
+    endTime: item.endTime || undefined,
+    priority: item.priority || 'medium',
+    status: item.status || 'pending',
+    reminder: item.reminder || 'none',
+    recurrence: item.recurrence || 'none',
+    source: item.source || 'manual',
+    relatedLmsType: item.relatedLmsType || undefined,
+    relatedLmsId: item.relatedLmsId || undefined,
+    relatedLmsTitle: item.relatedLmsTitle || undefined,
+    relatedLmsUrl: item.relatedLmsUrl || undefined,
+    isRecurringInstance: item.isRecurringInstance || false,
+    originalActivityId: item.originalActivityId || undefined,
+    completedAt: item.completedAt || undefined,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
+}
+
+export const usePlannerStore = create<PlannerStoreState>((set, get) => ({
+  activities: getStoredActivities(),
+  isLoading: false,
+
+  fetchActivities: async (startDate?: string, endDate?: string) => {
+    set({ isLoading: true });
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      const query = params.toString() ? `/planner?${params.toString()}` : '/planner';
+      const res = await apiClient.get<any[]>(query);
+      if (res && res.data && Array.isArray(res.data)) {
+        const mapped = res.data.map(mapBackendActivity);
+        set({ activities: mapped, isLoading: false });
+        saveStoredActivities(mapped);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch planner activities from backend:', e);
+    }
+    set({ activities: getStoredActivities(), isLoading: false });
+  },
+
+  createActivity: async (data: Omit<PlannerActivity, "id" | "createdAt" | "updatedAt" | "source">) => {
+    try {
+      const res = await apiClient.post<any>('/planner', {
+        ...data,
+        source: 'manual',
+      });
+      if (res?.data) {
+        const created = mapBackendActivity(res.data);
+        const updated = [created, ...get().activities];
+        set({ activities: updated });
+        saveStoredActivities(updated);
+        // Also sync to legacy store for compatibility
+        addPlannerActivity(data);
+        return created;
+      }
+    } catch (e) {
+      console.warn('Failed to create activity in backend, using local fallback:', e);
+    }
+    // Local fallback
+    const local = addPlannerActivity(data);
+    set({ activities: getAllPlannerActivities() });
+    return local;
+  },
+
+  editActivity: async (id: string, updates: Partial<PlannerActivity>) => {
+    try {
+      const res = await apiClient.put<any>(`/planner/${id}`, updates);
+      if (res?.data) {
+        const updated = mapBackendActivity(res.data);
+        const list = get().activities.map((a: PlannerActivity) => (a.id === id ? updated : a));
+        set({ activities: list });
+        saveStoredActivities(list);
+        updatePlannerActivity(id, updates);
+        return updated;
+      }
+    } catch (e) {
+      console.warn('Failed to update activity in backend, using local fallback:', e);
+    }
+    const local = updatePlannerActivity(id, updates);
+    set({ activities: getAllPlannerActivities() });
+    return local;
+  },
+
+  removeActivity: async (id: string) => {
+    try {
+      await apiClient.delete(`/planner/${id}`);
+    } catch (e) {
+      console.warn('Failed to delete activity in backend:', e);
+    }
+    const ok = deletePlannerActivity(id);
+    set({ activities: getAllPlannerActivities() });
+    return ok;
+  },
+
+  toggleComplete: async (id: string) => {
+    const target = get().activities.find((a: PlannerActivity) => a.id === id);
+    if (!target) return null;
+    const nextStatus = target.status === 'completed' ? 'pending' : 'completed';
+    return get().editActivity(id, {
+      status: nextStatus,
+      completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
+    });
+  },
+}));

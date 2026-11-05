@@ -69,7 +69,7 @@ export function downloadContentFile(
 
 export const LearnerCoursePlayerPage: React.FC = () => {
   const { user } = useAuthStore();
-  const { courses } = useCourseStore();
+  const { courses, fetchCourses, isLoading: isCoursesLoading } = useCourseStore();
   const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
   const { id } = useParams<{ id: string }>();
 
@@ -174,6 +174,26 @@ export const LearnerCoursePlayerPage: React.FC = () => {
       localStorage.setItem(`venilearn_notes_${course.id}`, JSON.stringify(updated));
     } catch { }
   };
+
+  if (!course && isCoursesLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+        padding: '40px',
+        textAlign: 'center'
+      }}>
+        <RefreshCw className="animate-spin" size={32} color="var(--primary)" style={{ marginBottom: '16px' }} />
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+          Loading Course...
+        </h3>
+        <p style={{ color: 'var(--text-secondary)' }}>Retrieving course curriculum from PostgreSQL database.</p>
+      </div>
+    );
+  }
 
   if (!course) {
     return (

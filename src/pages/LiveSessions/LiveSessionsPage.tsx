@@ -22,6 +22,7 @@ import { SessionRosterModal } from './components/SessionRosterModal';
 import { WeeklyTimetableView } from './components/WeeklyTimetableView';
 import { RecordedClassesView } from './components/RecordedClassesView';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
+import { openGoogleMeetSession } from '../../lib/googleMeet';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -71,17 +72,22 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     setActiveTab(determineInitialTab());
   }, [currentPath, searchParams]);
 
-
   // Live Sessions from centralized store
   const {
     sessions,
+    fetchSessions,
     startBroadcast,
     endSession,
     cancelSession,
     deleteSession,
   } = useLiveSessionStore();
 
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
   const { cohorts } = useCohortStore();
+  const { courses, enrollments } = useCourseStore();
 
   // Sub-filter for Live Sessions
   const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'upcoming' | 'ended' | 'cancelled'>('all');
@@ -129,22 +135,44 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     setTimeout(() => setNoticeBanner(null), 6000);
   };
 
-  // Student Cohorts & Courses
-  const studentCohortIds = useMemo(() => {
-    if (!isStudent) return [];
-    return ['coh-001', 'coh-002', 'coh-004'];
-  }, [isStudent]);
-
+  // Student Cohorts & Courses (dynamically resolved)
   const studentCourseIds = useMemo(() => {
     if (!isStudent) return [];
-    return ['crs-001', 'crs-002', 'crs-004'];
-  }, [isStudent]);
+    const fromUser = user?.eligibleCourseIds || [];
+    const fromEnrollments = enrollments.map((e) => e.courseId).filter(Boolean);
+    return Array.from(new Set([...fromUser, ...fromEnrollments]));
+  }, [isStudent, user?.eligibleCourseIds, enrollments]);
+
+  const studentCourseTitles = useMemo(() => {
+    if (!isStudent) return [];
+    return courses
+      .filter((c) => studentCourseIds.includes(c.id) || studentCourseIds.includes(c.slug || ''))
+      .map((c) => c.title.toLowerCase());
+  }, [isStudent, studentCourseIds, courses]);
+
+  const studentCohortIds = useMemo(() => {
+    if (!isStudent) return [];
+    const fromUser = user?.departmentId ? [user.departmentId] : [];
+    const fromEnrollments = enrollments.map((e) => e.cohortId).filter(Boolean) as string[];
+    const fromCohorts = cohorts
+      .filter((c) => c.studentIds?.includes(user?.id || ''))
+      .map((c) => c.id);
+    return Array.from(new Set([...fromUser, ...fromEnrollments, ...fromCohorts]));
+  }, [isStudent, user?.departmentId, user?.id, enrollments, cohorts]);
+
+  const studentCohortNames = useMemo(() => {
+    if (!isStudent) return [];
+    return cohorts
+      .filter((c) => studentCohortIds.includes(c.id))
+      .map((c) => c.name.toLowerCase());
+  }, [isStudent, studentCohortIds, cohorts]);
 
   // Filtered Sessions for the current role
   const roleFilteredSessions = useMemo(() => {
     if (isStudent) {
-      const sId = user?.id || 'u-007';
+      const sId = user?.id || '';
       return sessions.filter((s) => {
+        // Exclude faculty internal meetings
         if (
           s.audienceScope === 'faculty' ||
           s.targetAudienceType === 'faculty_only' ||
@@ -153,16 +181,44 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         ) {
           return false;
         }
-        if (s.targetStudentIds && s.targetStudentIds.includes(sId)) return true;
-        if (s.cohortId && studentCohortIds.includes(s.cohortId)) {
-          if (s.targetAudienceType === 'selected_students') {
-            return s.targetStudentIds?.includes(sId);
-          }
+
+        // If explicitly assigned in targeted student IDs
+        if (s.targetStudentIds && s.targetStudentIds.length > 0) {
+          if (s.targetStudentIds.includes(sId)) return true;
+          if (s.targetAudienceType === 'selected_students') return false;
+        }
+
+        // Match by Cohort ID or Cohort Name
+        if (s.cohortId && studentCohortIds.includes(s.cohortId)) return true;
+        if (s.cohortName && studentCohortNames.includes(s.cohortName.toLowerCase())) return true;
+
+        // Match by Course ID or Course Title
+        if (s.courseId && studentCourseIds.includes(s.courseId)) return true;
+        if (
+          s.courseTitle &&
+          studentCourseTitles.some(
+            (t) =>
+              s.courseTitle?.toLowerCase().includes(t) ||
+              t.includes(s.courseTitle?.toLowerCase() || '')
+          )
+        ) {
           return true;
         }
-        if (s.courseId && studentCourseIds.includes(s.courseId) && !s.cohortId) {
-          return true;
+
+        // General student session (open to all students in institution)
+        if (
+          s.targetAudienceType === 'all_cohort' ||
+          s.targetAudienceType === 'all_enrolled' ||
+          !s.targetAudienceType ||
+          s.audienceScope === 'students' ||
+          s.audienceScope === 'both'
+        ) {
+          if (!s.courseId && !s.cohortId) return true;
+          if (studentCourseIds.length === 0 && studentCohortIds.length === 0) return true;
+          if (s.courseId && studentCourseIds.includes(s.courseId)) return true;
+          if (s.cohortId && studentCohortIds.includes(s.cohortId)) return true;
         }
+
         return false;
       });
     }
@@ -235,7 +291,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     if (updated) {
       const meetUrl = updated.meetingUrl || updated.joinLink;
       if (meetUrl) {
-        window.open(meetUrl, '_blank', 'noopener,noreferrer');
+        openGoogleMeetSession(meetUrl);
         showNotice(`Session is now LIVE NOW on Google Meet! Meeting opened in a new tab.`);
       } else {
         showNotice('This session does not have a Google Meet link configured yet.');
@@ -628,7 +684,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <MeetingProviderBadge provider={s.provider || 'Google Meet'} hasLink={Boolean(s.meetingUrl || s.joinLink)} />
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName || 'Enrolled Students'}
+                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName ? `Cohort: ${s.cohortName}` : 'All Enrolled'}
                         </span>
                       </div>
                     </div>

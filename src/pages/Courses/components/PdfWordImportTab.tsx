@@ -463,20 +463,23 @@ export const PdfWordImportTab: React.FC<Props> = ({
                       ? '1px solid var(--primary)'
                       : '1px solid var(--border-subtle)',
                     opacity: q.selected ? 1 : 0.65,
-                    transition: 'all 0.15s ease'
+                    transition: 'all 0.15s ease',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', width: '100%', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
                       <input
                         type="checkbox"
                         checked={q.selected}
                         onChange={() => handleToggleSelectQuestion(q.id)}
-                        style={{ accentColor: 'var(--primary)', marginTop: '4px', cursor: 'pointer' }}
+                        style={{ accentColor: 'var(--primary)', marginTop: '4px', cursor: 'pointer', flexShrink: 0 }}
                         title="Include in import"
                       />
 
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                           <span className="badge badge-secondary" style={{ fontSize: '0.68rem', textTransform: 'capitalize' }}>
                             {q.type.replace('_', ' ')}
@@ -493,7 +496,7 @@ export const PdfWordImportTab: React.FC<Props> = ({
                             </span>
                           )}
                           {q.topic && (
-                            <span className="text-muted text-xs">Topic: {q.topic}</span>
+                            <span className="text-muted text-xs" style={{ wordBreak: 'break-word' }}>Topic: {q.topic}</span>
                           )}
                         </div>
 
@@ -537,7 +540,15 @@ export const PdfWordImportTab: React.FC<Props> = ({
                             </div>
                           </div>
                         ) : (
-                          <div style={{ fontWeight: 600, fontSize: '0.88rem', margin: '4px 0' }}>
+                          <div style={{
+                            fontWeight: 600,
+                            fontSize: '0.88rem',
+                            margin: '4px 0',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word',
+                            lineHeight: 1.5,
+                            color: 'var(--text-main)',
+                          }}>
                             {q.prompt}
                           </div>
                         )}
@@ -568,13 +579,15 @@ export const PdfWordImportTab: React.FC<Props> = ({
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
-                                  cursor: 'pointer'
+                                  cursor: 'pointer',
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'break-word',
                                 }}
                               >
-                                <span>
+                                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word', minWidth: 0 }}>
                                   <strong>{['A', 'B', 'C', 'D'][oIdx] || oIdx + 1}.</strong> {opt.text}
                                 </span>
-                                {opt.isCorrect && <Check size={12} color="var(--success)" />}
+                                {opt.isCorrect && <Check size={12} color="var(--success)" style={{ flexShrink: 0, marginLeft: '4px' }} />}
                               </div>
                             ))}
                           </div>
@@ -592,20 +605,20 @@ export const PdfWordImportTab: React.FC<Props> = ({
                                 style={{ fontSize: '0.78rem', marginTop: '4px' }}
                               />
                             ) : (
-                              <strong>{q.correctAnswerText}</strong>
+                              <strong style={{ wordBreak: 'break-word' }}>{q.correctAnswerText}</strong>
                             )}
                           </div>
                         )}
 
                         {q.explanation && (
-                          <div className="text-muted text-xs" style={{ marginTop: '6px' }}>
+                          <div className="text-muted text-xs" style={{ marginTop: '6px', wordBreak: 'break-word' }}>
                             <em>Explanation: {q.explanation}</em>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexShrink: 0 }}>
                       <button
                         type="button"
                         onClick={() => setEditingId(isEditing ? null : q.id)}

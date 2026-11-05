@@ -16,6 +16,7 @@ import {
   PlannerSource
 } from '../../types/planner';
 import {
+  usePlannerStore,
   getAllPlannerActivities,
   expandRecurringActivities,
   getTopFocusTasks,
@@ -34,15 +35,16 @@ import { useAuthStore } from '../../lib/store';
 
 export const AdminPlannerPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isTrainer = user?.activeRole === 'trainer';
-  const isAdmin = !isTrainer;
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isAdmin = !isStudent && !isTrainer;
 
   // Calendar view mode
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
 
-  // Currently focused date (defaults to Monday, Oct 26, 2026)
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // Month is 0-indexed: 9 = October
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-10-26');
+  // Currently focused date - defaults to today
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(formatLocalDate(new Date()));
 
   // Activity data
   const [activities, setActivities] = useState<PlannerActivity[]>([]);
@@ -68,7 +70,15 @@ export const AdminPlannerPage: React.FC = () => {
   });
   const [notifMessage, setNotifMessage] = useState<string | null>(null);
 
-  // Reload activities
+  const {
+    fetchActivities: _fetchAct,
+    createActivity: _createAct,
+    editActivity: _editAct,
+    removeActivity: _removeAct,
+    toggleComplete: _toggleComplete,
+  } = usePlannerStore();
+
+  // Reload activities from localStorage (immediate) + sync from backend
   const loadActivities = () => {
     setActivities(getAllPlannerActivities());
   };
@@ -77,6 +87,10 @@ export const AdminPlannerPage: React.FC = () => {
     loadActivities();
     const status = getWebNotificationStatus();
     setNotifStatus(status);
+    // Fetch from PostgreSQL backend
+    _fetchAct().then(() => {
+      setActivities(getAllPlannerActivities());
+    });
   }, []);
 
   // Request desktop notification permission
@@ -124,7 +138,7 @@ export const AdminPlannerPage: React.FC = () => {
   };
 
   const handleToday = () => {
-    const today = new Date(2026, 9, 26);
+    const today = new Date();
     setCurrentDate(today);
     setSelectedDateStr(formatLocalDate(today));
   };
@@ -207,11 +221,11 @@ export const AdminPlannerPage: React.FC = () => {
 
   // Overdue Reminders
   const overdueReminders = useMemo(() => {
-    return getOverdueReminders('2026-10-26');
+    return getOverdueReminders(formatLocalDate(new Date()));
   }, [activities]);
 
   // Dynamic calculations for "Today's Priorities"
-  const todayDateKey = '2026-10-26';
+  const todayDateKey = formatLocalDate(new Date());
   const todayActivities = activitiesByDate[todayDateKey] || [];
 
   // Trainer Priority Calculations
@@ -267,10 +281,10 @@ export const AdminPlannerPage: React.FC = () => {
   const selectedDateActivities = activitiesByDate[selectedDateStr] || [];
 
   // Toggle complete
+
   const handleToggleComplete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    toggleTaskCompleted(id);
-    loadActivities();
+    _toggleComplete(id).then(() => loadActivities());
   };
 
   // Add / Edit actions
@@ -287,16 +301,14 @@ export const AdminPlannerPage: React.FC = () => {
 
   const handleSaveModal = (data: Omit<PlannerActivity, 'id' | 'createdAt' | 'updatedAt' | 'source'>) => {
     if (selectedActivity) {
-      updatePlannerActivity(selectedActivity.id, data);
+      _editAct(selectedActivity.id, data).then(() => loadActivities());
     } else {
-      addPlannerActivity(data);
+      _createAct(data).then(() => loadActivities());
     }
-    loadActivities();
   };
 
   const handleDeleteModal = (id: string) => {
-    deletePlannerActivity(id);
-    loadActivities();
+    _removeAct(id).then(() => loadActivities());
   };
 
   // Category Configuration and Styles
@@ -402,7 +414,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: false,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -413,7 +425,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: true,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -425,7 +437,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: false,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -446,7 +458,7 @@ export const AdminPlannerPage: React.FC = () => {
       days.push({
         date: d,
         dateStr: formatLocalDate(d),
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
     return days;
@@ -574,7 +586,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #f59e0b', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? 'Trainer Action Queue' : 'Pending Tasks'}
+              {isTrainer ? 'Trainer Action Queue' : isStudent ? 'My Study Tasks' : 'Pending Tasks'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontSize: '0.72rem', fontWeight: 700 }}>
               <Flame size={13} fill="#f59e0b" /> ACTIVE
@@ -587,10 +599,10 @@ export const AdminPlannerPage: React.FC = () => {
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>tasks to review</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            Action items: <strong style={{ color: 'var(--text-main)' }}>{isTrainer ? 'Session preparation' : 'Faculty certifications'}</strong>
+            Action items: <strong style={{ color: 'var(--text-main)' }}>{isTrainer ? 'Session preparation' : isStudent ? 'Self-study & assignments' : 'Faculty certifications'}</strong>
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            Requires admin action or trainer verification.
+            {isStudent ? 'Track and organize your personal learning goals.' : 'Requires admin action or trainer verification.'}
           </div>
         </div>
 
@@ -622,7 +634,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #3B82F6', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? "Today's Live Sessions" : 'Leadership Meetings'}
+              {isTrainer ? "Today's Live Sessions" : isStudent ? "Today's Scheduled Classes" : 'Leadership Meetings'}
             </span>
             <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>On Schedule</span>
           </div>
@@ -636,7 +648,7 @@ export const AdminPlannerPage: React.FC = () => {
             <div className="progress-bar-fill" style={{ width: '85%', background: '#3B82F6' }} />
           </div>
           <Link
-            to={isTrainer ? '/live-sessions' : '/departments'}
+            to={isTrainer ? '/live-sessions' : isStudent ? '/my-sessions' : '/departments'}
             className="btn btn-secondary btn-sm"
             style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.76rem', padding: '4px 8px' }}
           >
@@ -648,7 +660,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #10b981', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? 'Pending Grading' : 'Overdue Audits'}
+              {isTrainer ? 'Pending Grading' : isStudent ? 'Overdue Tasks' : 'Overdue Audits'}
             </span>
             <span className="badge badge-success" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
               {adminOverdueCount > 0 ? `${adminOverdueCount} past-due` : 'All Clear'}
@@ -664,7 +676,7 @@ export const AdminPlannerPage: React.FC = () => {
             Status: <strong style={{ color: 'var(--text-main)' }}>{adminOverdueCount > 0 ? 'Requires attention' : 'Turnout certified'}</strong>
           </div>
           <Link
-            to="/attendance"
+            to={isStudent ? '/my-learning' : '/attendance'}
             className="btn btn-secondary btn-sm"
             style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.76rem', padding: '4px 8px' }}
           >

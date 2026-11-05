@@ -27,7 +27,7 @@ export const Navbar: React.FC<Props> = ({
 }) => {
   const { user, logout, unreadNotifications } = useAuthStore();
   const { preference, resolvedTheme, setTheme } = useThemeStore();
-  const [selectedOrgId, setSelectedOrgId] = useState(() => sessionStorage.getItem('venilearn_active_org_id') || 'org-001');
+  const [selectedOrgId, setSelectedOrgId] = useState(() => sessionStorage.getItem('venilearn_active_org_id') || user?.organizationId || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_active_tenant_id') : null) || 'org-001');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);

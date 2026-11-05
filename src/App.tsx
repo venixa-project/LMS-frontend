@@ -245,8 +245,6 @@ export const App: React.FC = () => {
             <Route path="courses/assign-students" element={<AssignStudentsPage />} />
             <Route path="course-builder" element={<CourseBuilderPage />} />
             <Route path="learning-paths" element={<LearningPathsPage />} />
-            <Route path="calendar" element={<AdminPlannerPage />} />
-            <Route path="planner" element={<AdminPlannerPage />} />
             <Route path="assessments" element={<AssessmentsPage />} />
             <Route path="question-banks" element={<QuestionBanksPage />} />
             <Route path="grading" element={<GradingPage />} />
@@ -269,6 +267,10 @@ export const App: React.FC = () => {
           <Route path="my-paths" element={<LearningPathsPage />} />
           <Route path="momentum" element={<MomentumPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
+
+          {/* Academic Calendar & Planner (All Roles) */}
+          <Route path="calendar" element={<AdminPlannerPage />} />
+          <Route path="planner" element={<AdminPlannerPage />} />
 
           {/* Live Sessions, Timetable & Attendance */}
           <Route path="timetable" element={<LiveSessionsPage defaultTab="timetable" />} />

@@ -460,7 +460,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Final Submission (Schedule or Save as Draft)
   // --------------------------------------------------------------------------
-  const handleFinalSubmit = (asDraft: boolean = false) => {
+  const handleFinalSubmit = async (asDraft: boolean = false) => {
     if (!validateStep(1) || !validateStep(2)) {
       return;
     }
@@ -498,12 +498,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     // Realistically provision room URL according to selected provider
     const finalMeetingUrl =
       provider === 'Google Meet'
-        ? (googleMeetUrl.trim() || `https://meet.google.com/ven-${Date.now().toString().slice(-4)}`)
+        ? (googleMeetUrl.trim() || 'https://meet.google.com/new')
         : provider.includes('Zoom')
-        ? `https://zoom.us/j/venilearn-${Date.now().toString().slice(-6)}`
+        ? `https://zoom.us/j/${Math.floor(1000000000 + Math.random() * 9000000000)}`
         : provider.includes('Teams')
-        ? `https://teams.microsoft.com/l/meetup-join/venilearn-${Date.now().toString().slice(-6)}`
-        : `https://meet.google.com/ven-${Date.now().toString().slice(-4)}`;
+        ? 'https://teams.microsoft.com/l/meetup-join/'
+        : 'https://meet.google.com/new';
 
     const payload = {
       title: title.trim(),
@@ -543,9 +543,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
     let result;
     if (sessionToEdit) {
-      result = updateSession({ ...sessionToEdit, ...payload }, notifyParticipants && !asDraft);
+      result = await updateSession({ ...sessionToEdit, ...payload }, notifyParticipants && !asDraft);
     } else {
-      result = addSession(payload, notifyParticipants && !asDraft);
+      result = await addSession(payload, notifyParticipants && !asDraft);
     }
 
     setCreatedSessionData(result.session);
@@ -1237,15 +1237,11 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                     >
                       {provider === 'Google Meet' ? (
                         <span>
-                          📹 <strong>Google Meet Integration:</strong> Enter an existing Google Meet link below, or leave it blank to auto-generate a secure demo link upon scheduling.
-                        </span>
-                      ) : provider.includes('VeniLearn') ? (
-                        <span>
-                          ✨ <strong>Automatic Room Provisioning:</strong> The built-in interactive classroom link will be generated automatically upon scheduling.
+                          Enter your Google Meet link (e.g. <code>https://meet.google.com/abc-defg-hij</code>), or leave blank to open an instant room when starting class.
                         </span>
                       ) : (
                         <span>
-                          🔗 <strong>Integration Link Sync:</strong> The meeting link will be generated and synchronized with your configured {provider} account upon scheduling.
+                          Enter your {provider} meeting link for participants.
                         </span>
                       )}
                     </div>
