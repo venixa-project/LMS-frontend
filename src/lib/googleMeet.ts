@@ -1,6 +1,7 @@
 /**
  * Google Meet Utility & URL Validation Service
  * VeniLearn LMS - Frontend-Only Meeting Integration
+ // VeniLearn LMS - Frontend-Only Meeting Integration
  */
 
 export interface GoogleMeetValidationResult {
