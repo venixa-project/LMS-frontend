@@ -16,6 +16,7 @@ import {
 import { useCohortStore } from '../../lib/cohortStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { useAssessmentStore } from '../../lib/assessmentStore';
+import { formatLocalDate } from '../../lib/plannerStore';
 
 interface Props {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export const AddEditActivityModal: React.FC<Props> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<PlannerActivityType>('task');
-  const [date, setDate] = useState('2026-10-22');
+  const [date, setDate] = useState(formatLocalDate(new Date()));
   const [isAllDay, setIsAllDay] = useState(false);
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -63,7 +64,7 @@ export const AddEditActivityModal: React.FC<Props> = ({
       setTitle(activityToEdit.title || '');
       setDescription(activityToEdit.description || '');
       setType(activityToEdit.type || 'task');
-      setDate(activityToEdit.date || '2026-10-22');
+      setDate(activityToEdit.date || formatLocalDate(new Date()));
       const allDay = !activityToEdit.startTime;
       setIsAllDay(allDay);
       setStartTime(activityToEdit.startTime || '09:00');
@@ -81,7 +82,7 @@ export const AddEditActivityModal: React.FC<Props> = ({
       setTitle('');
       setDescription('');
       setType('task');
-      setDate(initialDate || '2026-10-22');
+      setDate(initialDate || formatLocalDate(new Date()));
       setIsAllDay(false);
       setStartTime('09:00');
       setEndTime('10:00');

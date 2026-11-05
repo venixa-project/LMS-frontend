@@ -35,8 +35,9 @@ import { useAuthStore } from '../../lib/store';
 
 export const AdminPlannerPage: React.FC = () => {
   const { user } = useAuthStore();
-  const isTrainer = user?.activeRole === 'trainer';
-  const isAdmin = !isTrainer;
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isAdmin = !isStudent && !isTrainer;
 
   // Calendar view mode
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
@@ -585,7 +586,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #f59e0b', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? 'Trainer Action Queue' : 'Pending Tasks'}
+              {isTrainer ? 'Trainer Action Queue' : isStudent ? 'My Study Tasks' : 'Pending Tasks'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontSize: '0.72rem', fontWeight: 700 }}>
               <Flame size={13} fill="#f59e0b" /> ACTIVE
@@ -598,10 +599,10 @@ export const AdminPlannerPage: React.FC = () => {
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>tasks to review</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            Action items: <strong style={{ color: 'var(--text-main)' }}>{isTrainer ? 'Session preparation' : 'Faculty certifications'}</strong>
+            Action items: <strong style={{ color: 'var(--text-main)' }}>{isTrainer ? 'Session preparation' : isStudent ? 'Self-study & assignments' : 'Faculty certifications'}</strong>
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            Requires admin action or trainer verification.
+            {isStudent ? 'Track and organize your personal learning goals.' : 'Requires admin action or trainer verification.'}
           </div>
         </div>
 
@@ -633,7 +634,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #3B82F6', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? "Today's Live Sessions" : 'Leadership Meetings'}
+              {isTrainer ? "Today's Live Sessions" : isStudent ? "Today's Scheduled Classes" : 'Leadership Meetings'}
             </span>
             <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>On Schedule</span>
           </div>
@@ -647,7 +648,7 @@ export const AdminPlannerPage: React.FC = () => {
             <div className="progress-bar-fill" style={{ width: '85%', background: '#3B82F6' }} />
           </div>
           <Link
-            to={isTrainer ? '/live-sessions' : '/departments'}
+            to={isTrainer ? '/live-sessions' : isStudent ? '/my-sessions' : '/departments'}
             className="btn btn-secondary btn-sm"
             style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.76rem', padding: '4px 8px' }}
           >
@@ -659,7 +660,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #10b981', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? 'Pending Grading' : 'Overdue Audits'}
+              {isTrainer ? 'Pending Grading' : isStudent ? 'Overdue Tasks' : 'Overdue Audits'}
             </span>
             <span className="badge badge-success" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
               {adminOverdueCount > 0 ? `${adminOverdueCount} past-due` : 'All Clear'}
@@ -675,7 +676,7 @@ export const AdminPlannerPage: React.FC = () => {
             Status: <strong style={{ color: 'var(--text-main)' }}>{adminOverdueCount > 0 ? 'Requires attention' : 'Turnout certified'}</strong>
           </div>
           <Link
-            to="/attendance"
+            to={isStudent ? '/my-learning' : '/attendance'}
             className="btn btn-secondary btn-sm"
             style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.76rem', padding: '4px 8px' }}
           >
