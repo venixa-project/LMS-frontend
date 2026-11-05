@@ -1075,7 +1075,10 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                           border: q.selected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
                           display: 'flex',
                           alignItems: 'flex-start',
-                          gap: '10px'
+                          gap: '10px',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
                         }}
                       >
                         <input
@@ -1088,11 +1091,11 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                               )
                             );
                           }}
-                          style={{ accentColor: 'var(--primary)', marginTop: '3px' }}
+                          style={{ accentColor: 'var(--primary)', marginTop: '3px', flexShrink: 0 }}
                         />
 
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                             <span className="badge badge-secondary" style={{ fontSize: '0.68rem', textTransform: 'capitalize' }}>
                               {q.type.replace('_', ' ')}
                             </span>
@@ -1104,7 +1107,16 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                             </span>
                           </div>
 
-                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{q.prompt}</div>
+                          <div style={{
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            lineHeight: 1.5,
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word',
+                            color: 'var(--text-main)',
+                          }}>
+                            {q.prompt}
+                          </div>
 
                           {q.options.length > 0 && (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '4px', marginTop: '6px' }}>
@@ -1119,11 +1131,13 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                                     fontSize: '0.75rem',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'space-between'
+                                    justifyContent: 'space-between',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'break-word',
                                   }}
                                 >
-                                  <span>{opt.text}</span>
-                                  {opt.isCorrect && <Check size={12} color="var(--success)" />}
+                                  <span style={{ wordBreak: 'break-word', minWidth: 0 }}>{opt.text}</span>
+                                  {opt.isCorrect && <Check size={12} color="var(--success)" style={{ flexShrink: 0, marginLeft: '4px' }} />}
                                 </div>
                               ))}
                             </div>
@@ -1513,22 +1527,59 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                       <div
                         key={q.id}
                         style={{
-                          padding: '10px 14px',
+                          padding: '12px 16px',
                           background: 'var(--bg-input)',
                           borderRadius: 'var(--radius-md)',
                           border: '1px solid var(--border-subtle)',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '6px'
+                          gap: '8px',
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <span style={{ fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)', width: '24px' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '12px',
+                            width: '100%',
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '10px',
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                color: 'var(--primary)',
+                                minWidth: '24px',
+                                flexShrink: 0,
+                                paddingTop: '2px',
+                              }}
+                            >
                               #{idx + 1}
                             </span>
 
-                            <div style={{ display: 'flex', gap: '4px', flexDirection: 'column' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                gap: '3px',
+                                flexDirection: 'column',
+                                flexShrink: 0,
+                                paddingTop: '1px',
+                              }}
+                            >
                               <button
                                 type="button"
                                 onClick={() => handleMoveQuestion(idx, 'up')}
@@ -1551,7 +1602,7 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                               </button>
                             </div>
 
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                               {isEditing ? (
                                 <input
                                   type="text"
@@ -1562,15 +1613,31 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                                     updated[idx].prompt = e.target.value;
                                     setQuestions(updated);
                                   }}
-                                  style={{ fontSize: '0.82rem', fontWeight: 600, padding: '4px 6px' }}
+                                  style={{
+                                    fontSize: '0.82rem',
+                                    fontWeight: 600,
+                                    padding: '4px 6px',
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                  }}
                                 />
                               ) : (
-                                <div style={{ fontWeight: 600, fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    fontSize: '0.85rem',
+                                    lineHeight: 1.5,
+                                    color: 'var(--text-main)',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'break-word',
+                                    whiteSpace: 'normal',
+                                  }}
+                                >
                                   {q.prompt}
                                 </div>
                               )}
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                                 <span className="badge badge-secondary" style={{ fontSize: '0.65rem', textTransform: 'capitalize' }}>
                                   {q.type.replace('_', ' ')}
                                 </span>
@@ -1583,13 +1650,24 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                                   </span>
                                 )}
                                 {q.topic && (
-                                  <span className="text-muted text-xs">Topic: {q.topic}</span>
+                                  <span className="text-muted text-xs" style={{ wordBreak: 'break-word' }}>
+                                    Topic: {q.topic}
+                                  </span>
                                 )}
                               </div>
                             </div>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              flexShrink: 0,
+                              marginLeft: '8px',
+                              paddingTop: '1px',
+                            }}
+                          >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <input
                                 type="number"
@@ -1608,7 +1686,7 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                                   textAlign: 'center',
                                   borderRadius: '4px',
                                   border: '1px solid var(--border-subtle)',
-                                  background: 'var(--bg-surface)'
+                                  background: 'var(--bg-surface)',
                                 }}
                               />
                               <span className="text-xs text-muted">pts</span>
@@ -1654,27 +1732,56 @@ export const AssessmentConfigModal: React.FC<Props> = ({
 
                         {/* Options preview */}
                         {q.type !== 'short_answer' && q.options && q.options.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', paddingLeft: '34px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '6px',
+                              paddingLeft: '38px',
+                              marginTop: '4px',
+                              width: '100%',
+                              boxSizing: 'border-box',
+                            }}
+                          >
                             {q.options.map((opt, oI) => (
                               <span
                                 key={opt.id || oI}
                                 style={{
-                                  fontSize: '0.72rem',
-                                  padding: '1px 6px',
-                                  borderRadius: '3px',
+                                  fontSize: '0.74rem',
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
                                   background: opt.isCorrect ? 'var(--success-bg, rgba(16, 185, 129, 0.12))' : 'var(--bg-surface)',
                                   color: opt.isCorrect ? 'var(--success)' : 'var(--text-secondary)',
-                                  border: opt.isCorrect ? '1px solid var(--success)' : '1px solid var(--border-subtle)'
+                                  border: opt.isCorrect ? '1px solid var(--success)' : '1px solid var(--border-subtle)',
+                                  lineHeight: 1.4,
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'break-word',
+                                  whiteSpace: 'normal',
+                                  maxWidth: '100%',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
                                 }}
                               >
-                                {opt.text} {opt.isCorrect && '✓'}
+                                <span>{opt.text}</span>
+                                {opt.isCorrect && <Check size={11} style={{ strokeWidth: 2.5, flexShrink: 0 }} />}
                               </span>
                             ))}
                           </div>
                         )}
 
                         {q.type === 'short_answer' && q.correctAnswerText && (
-                          <div style={{ paddingLeft: '34px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          <div
+                            style={{
+                              paddingLeft: '38px',
+                              fontSize: '0.75rem',
+                              color: 'var(--text-secondary)',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word',
+                              whiteSpace: 'normal',
+                              maxWidth: '100%',
+                            }}
+                          >
                             Expected Answer: <strong style={{ color: 'var(--success)' }}>{q.correctAnswerText}</strong>
                           </div>
                         )}
