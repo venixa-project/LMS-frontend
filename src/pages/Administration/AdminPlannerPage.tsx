@@ -32,6 +32,8 @@ import {
 } from '../../lib/plannerStore';
 import { AddEditActivityModal } from '../../admin/components/AddEditActivityModal';
 import { useAuthStore } from '../../lib/store';
+import { useAssessmentStore } from '../../lib/assessmentStore';
+import { useLiveSessionStore } from '../../lib/liveSessionStore';
 
 export const AdminPlannerPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -87,8 +89,12 @@ export const AdminPlannerPage: React.FC = () => {
     loadActivities();
     const status = getWebNotificationStatus();
     setNotifStatus(status);
-    // Fetch from PostgreSQL backend
-    _fetchAct().then(() => {
+    // Fetch assessments, live sessions & planner activities from backend
+    Promise.allSettled([
+      useAssessmentStore.getState().fetchAssessments(),
+      useLiveSessionStore.getState().fetchSessions(),
+      _fetchAct(),
+    ]).then(() => {
       setActivities(getAllPlannerActivities());
     });
   }, []);
@@ -265,17 +271,36 @@ export const AdminPlannerPage: React.FC = () => {
 
   const adminUpcomingDeadlinesCount = useMemo(() => {
     return activities.filter(
-      (a) => a.type === 'deadline' && a.status !== 'completed' && a.date >= todayDateKey
+      (a) => (a.type === 'deadline' || a.relatedLmsType === 'assessment') && a.status !== 'completed' && a.date >= todayDateKey
     ).length;
   }, [activities, todayDateKey]);
 
   const adminScheduledMeetingsCount = useMemo(() => {
     return activities.filter(
-      (a) => a.type === 'meeting' && a.status !== 'completed' && a.date >= todayDateKey
+      (a) => (a.type === 'meeting' || a.type === 'lms_event' || a.relatedLmsType === 'live_session') && a.status !== 'completed' && a.date >= todayDateKey
     ).length;
   }, [activities, todayDateKey]);
 
   const adminOverdueCount = overdueReminders.length;
+
+  const nextUpcomingDeadline = useMemo(() => {
+    const list = activities
+      .filter((a) => (a.type === 'deadline' || a.relatedLmsType === 'assessment') && a.status !== 'completed' && a.date >= todayDateKey)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
+    return list[0] || null;
+  }, [activities, todayDateKey]);
+
+  const nextScheduledMeeting = useMemo(() => {
+    const list = activities
+      .filter((a) => (a.type === 'meeting' || a.type === 'lms_event' || a.relatedLmsType === 'live_session') && a.status !== 'completed' && a.date >= todayDateKey)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
+    return list[0] || null;
+  }, [activities, todayDateKey]);
+
+  const topPendingTask = useMemo(() => {
+    const list = activities.filter((a) => a.type === 'task' && a.status === 'pending');
+    return list[0] || null;
+  }, [activities]);
 
   // Selected date activities
   const selectedDateActivities = activitiesByDate[selectedDateStr] || [];
@@ -599,10 +624,10 @@ export const AdminPlannerPage: React.FC = () => {
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>tasks to review</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            Action items: <strong style={{ color: 'var(--text-main)' }}>{isTrainer ? 'Session preparation' : isStudent ? 'Self-study & assignments' : 'Faculty certifications'}</strong>
+            Action items: <strong style={{ color: 'var(--text-main)' }}>{topPendingTask ? topPendingTask.title : (isTrainer ? 'Session preparation' : isStudent ? 'All study tasks completed' : 'All operational tasks up to date')}</strong>
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            {isStudent ? 'Track and organize your personal learning goals.' : 'Requires admin action or trainer verification.'}
+            {(isTrainer ? trainerPendingTasksCount : adminPendingTasksCount) > 0 ? 'Requires action or verification.' : 'All scheduled activities are verified.'}
           </div>
         </div>
 
@@ -623,7 +648,11 @@ export const AdminPlannerPage: React.FC = () => {
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>upcoming</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Next deadline: <strong style={{ color: 'var(--text-main)' }}>React Capstone (16:00)</strong>
+            {nextUpcomingDeadline ? (
+              <>Next deadline: <strong style={{ color: 'var(--text-main)' }}>{nextUpcomingDeadline.title} ({nextUpcomingDeadline.startTime || '18:00'})</strong></>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>No upcoming deadlines scheduled</span>
+            )}
           </div>
           <div className="progress-bar-bg" style={{ height: '6px', marginTop: '6px' }}>
             <div className="progress-bar-fill" style={{ width: '75%', background: 'var(--primary)' }} />
@@ -634,7 +663,7 @@ export const AdminPlannerPage: React.FC = () => {
         <div className="card stat-card" style={{ borderLeft: '4px solid #3B82F6', padding: '16px 20px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold" style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {isTrainer ? "Today's Live Sessions" : isStudent ? "Today's Scheduled Classes" : 'Leadership Meetings'}
+              {isTrainer ? "Today's Live Sessions" : isStudent ? "Today's Scheduled Classes" : 'Classes & Sessions'}
             </span>
             <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>On Schedule</span>
           </div>
@@ -644,11 +673,18 @@ export const AdminPlannerPage: React.FC = () => {
             </span>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>scheduled</span>
           </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
+            {nextScheduledMeeting ? (
+              <>Next: <strong style={{ color: 'var(--text-main)' }}>{nextScheduledMeeting.title} ({nextScheduledMeeting.startTime || '10:00'})</strong></>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}>No live sessions today</span>
+            )}
+          </div>
           <div className="progress-bar-bg" style={{ height: '6px', margin: '6px 0 10px' }}>
             <div className="progress-bar-fill" style={{ width: '85%', background: '#3B82F6' }} />
           </div>
           <Link
-            to={isTrainer ? '/live-sessions' : isStudent ? '/my-sessions' : '/departments'}
+            to={isTrainer ? '/live-sessions' : isStudent ? '/my-sessions' : '/live-sessions'}
             className="btn btn-secondary btn-sm"
             style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.76rem', padding: '4px 8px' }}
           >

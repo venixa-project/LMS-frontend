@@ -27,10 +27,9 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (!isOpen || !session) return null;
-
-  // Dynamic chapters based on session agenda or smart timestamps
+  // Dynamic chapters based on session agenda or smart timestamps (Hooks placed unconditionally at top level)
   const chapters = React.useMemo(() => {
+    if (!session) return [];
     if (session.agenda) {
       const lines = session.agenda.split('\n').filter(Boolean);
       if (lines.length > 0) {
@@ -50,6 +49,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
       { time: formatTime(Math.floor(totalDuration * 0.9)), title: 'Summary Takeaways & Assignment Brief' },
     ];
   }, [session, totalDuration]);
+
+  if (!isOpen || !session) return null;
 
   return (
     <div
@@ -102,13 +103,27 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               {session.title}
             </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="btn btn-secondary btn-sm"
-            style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0 }}
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {session.recordingUrl && (
+              <a
+                href={session.recordingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: '0.75rem', gap: '5px' }}
+                title="Open recording in new tab (Google Drive / Cloud Video)"
+              >
+                <Share2 size={13} /> Open Recording Link
+              </a>
+            )}
+            <button
+              onClick={onClose}
+              className="btn btn-secondary btn-sm"
+              style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0 }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Video Player Area */}

@@ -778,11 +778,17 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           <button
                             className="btn btn-secondary"
                             onClick={() => {
-                              endSession(s.id);
-                              showNotice(`Broadcast ended for "${s.title}". Recording will be available shortly.`);
+                              const rec = window.prompt(
+                                'Conclude stream and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
+                                s.recordingUrl || ''
+                              );
+                              if (rec !== null) {
+                                endSession(s.id, rec.trim() || undefined);
+                                showNotice(`Broadcast concluded for "${s.title}". Recording archived in Recorded Classes.`);
+                              }
                             }}
-                            title="End live broadcast"
-                            style={{ padding: '8px 12px', color: 'var(--danger)' }}
+                            title="Conclude live broadcast and save recording"
+                            style={{ padding: '8px 12px', color: 'var(--danger)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
                           >
                             End Stream
                           </button>
@@ -791,15 +797,34 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                     )}
 
                     {isScheduled && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {isCreatorOrAdmin ? (
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleStartBroadcast(s.id)}
-                            style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
-                          >
-                            <GoogleMeetIcon size={16} /> Open Google Meet
-                          </button>
+                          <>
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => handleStartBroadcast(s.id)}
+                              style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
+                            >
+                              <GoogleMeetIcon size={16} /> Open Google Meet
+                            </button>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                const rec = window.prompt(
+                                  'Conclude scheduled class and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
+                                  s.recordingUrl || ''
+                                );
+                                if (rec !== null) {
+                                  endSession(s.id, rec.trim() || undefined);
+                                  showNotice(`Class "${s.title}" marked as concluded and recording archived.`);
+                                }
+                              }}
+                              title="Conclude class and archive recording for students"
+                              style={{ padding: '8px 12px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                            >
+                              Conclude Class
+                            </button>
+                          </>
                         ) : (
                           <GoogleMeetJoinButton
                             sessionId={s.id}
@@ -822,7 +847,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                     )}
 
                     {isEnded && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {s.recordingUrl ? (
                           <button
                             className="btn btn-primary"
@@ -835,6 +860,25 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '8px' }}>
                             Recording processing
                           </div>
+                        )}
+                        {isCreatorOrAdmin && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                              const newUrl = window.prompt(
+                                'Update recording link (Google Drive / YouTube / Cloud storage MP4):',
+                                s.recordingUrl || ''
+                              );
+                              if (newUrl !== null) {
+                                endSession(s.id, newUrl.trim() || undefined);
+                                showNotice(`Updated recording link for "${s.title}".`);
+                              }
+                            }}
+                            title="Edit or attach custom recording link"
+                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                          >
+                            Edit Link
+                          </button>
                         )}
                       </div>
                     )}
@@ -915,11 +959,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       />
 
       {/* MODAL 3: RECORDED SESSION PLAYER */}
-      <LiveRecordingPlayerModal
-        session={recordingModalSession}
-        isOpen={Boolean(recordingModalSession)}
-        onClose={() => setRecordingModalSession(null)}
-      />
+      {recordingModalSession && (
+        <LiveRecordingPlayerModal
+          session={recordingModalSession}
+          isOpen={Boolean(recordingModalSession)}
+          onClose={() => setRecordingModalSession(null)}
+        />
+      )}
 
       {/* MODAL 4: SESSION TARGET AUDIENCE & ROSTER */}
       <SessionRosterModal

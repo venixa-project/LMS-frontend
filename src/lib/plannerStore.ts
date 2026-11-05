@@ -287,7 +287,7 @@ export const getHarvestedLMSEvents = (): PlannerActivity[] => {
 
   try {
     const liveSessions = useLiveSessionStore.getState().sessions || [];
-    return liveSessions.map((s) => ({
+    const sessionActivities: PlannerActivity[] = liveSessions.map((s) => ({
       id: `lms-live-${s.id}`,
       title: s.title,
       description: s.description || (s.courseTitle ? `Course: ${s.courseTitle}` : 'Scheduled Live Session'),
@@ -307,10 +307,11 @@ export const getHarvestedLMSEvents = (): PlannerActivity[] => {
       createdAt: s.createdAt || new Date().toISOString(),
       updatedAt: s.updatedAt || new Date().toISOString(),
     }));
+    harvested.push(...sessionActivities);
   } catch (err) {
     console.warn('Failed to harvest live sessions into planner:', err);
-    return [];
   }
+  return harvested;
 };
 
 // Load saved manual activities
