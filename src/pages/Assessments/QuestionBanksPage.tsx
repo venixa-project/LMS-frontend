@@ -1,3 +1,4 @@
+import { apiClient } from '../../lib/apiClient';
 import React, { useState, useEffect } from 'react';
 import { QuestionBank, Question, QuizQuestionItem, QuestionType } from '../../types';
 import { exportQuestionsToCsv } from '../Courses/components/csvTemplateUtils';
@@ -43,6 +44,82 @@ export const QuestionBanksPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [expandedPrompts, setExpandedPrompts] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (id: string) => {
+    setExpandedPrompts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Load backend question banks on mount
+  useEffect(() => {
+    async function loadBackendBanks() {
+      try {
+        const res = await apiClient.get<any[]>('/question-banks');
+        if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped: QuestionBank[] = res.data.map((b) => ({
+            id: b.id,
+            name: b.name,
+            owner: b.owner?.displayName || 'Academic Faculty',
+            subject: b.subject || 'General',
+            tags: b.tags || [],
+            questionCount: b._count?.questions || b.questions?.length || 0,
+            version: b.version || 1,
+            status: b.status || 'published',
+            scope: b.scope || 'organization',
+            createdAt: b.createdAt || new Date().toISOString(),
+            updatedAt: b.updatedAt || new Date().toISOString()
+          }));
+          setBanks(mapped);
+          setSelectedBank(mapped[0]);
+        }
+      } catch (err) {
+        console.warn('Backend question banks fetch:', err);
+      }
+    }
+    loadBackendBanks();
+  }, []);
+
+  // Load questions for selected bank
+  useEffect(() => {
+    if (!selectedBank?.id) return;
+    async function loadBankQuestions() {
+      try {
+        const res = await apiClient.get<any[]>(`/question-banks/${selectedBank.id}/questions`);
+        if (res && res.data && Array.isArray(res.data)) {
+          const mappedQuestions: Question[] = res.data.map((q) => ({
+            id: q.id,
+            bankId: selectedBank.id,
+            prompt: q.prompt,
+            type: q.type,
+            points: q.points || 5,
+            difficulty: q.difficulty || 'medium',
+            options: q.options?.map((o: any, idx: number) => ({
+              id: o.id || `opt-${idx}`,
+              text: o.text || o.optionText || '',
+              isCorrect: Boolean(o.isCorrect)
+            })) || [],
+            explanation: q.explanation || '',
+            tags: q.tags || []
+          }));
+          setQuestions((prev) => {
+            const others = prev.filter((q) => q.bankId !== selectedBank.id);
+            return [...others, ...mappedQuestions];
+          });
+        }
+      } catch (err) {
+        // use local storage questions
+      }
+    }
+    loadBankQuestions();
+  }, [selectedBank?.id]);
+
+  const handleClearBankQuestions = () => {
+    if (window.confirm(`Are you sure you want to delete all ${bankQuestions.length} questions in "${selectedBank.name}"?`)) {
+      const remaining = questions.filter((q) => q.bankId !== selectedBank.id);
+      setQuestions(remaining);
+      saveStoredQuestions(remaining);
+    }
+  };
 
   // Modals state
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);

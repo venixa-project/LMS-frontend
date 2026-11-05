@@ -39,11 +39,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   const navigate = useNavigate();
   const currentPath = location.pathname;
 
-  // If the route or prop specifies Attendance, render AttendanceLedgerPage
-  if (defaultTab === 'attendance' || currentPath === '/attendance' || currentPath === '/attendance-ledger') {
-    return <AttendanceLedgerPage />;
-  }
-
   const { user } = useAuthStore();
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
@@ -55,12 +50,12 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   const determineInitialTab = (): 'live_sessions' | 'timetable' | 'recordings' => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'timetable' || tabParam === 'weekly-timetable') return 'timetable';
-    if (tabParam === 'recordings' || tabParam === 'recorded-classes') return 'recordings';
+    if (tabParam === 'recordings' || tabParam === 'recorded-classes' || tabParam === 'recorded_classes') return 'recordings';
     if (tabParam === 'live' || tabParam === 'live-sessions') return 'live_sessions';
     if (defaultTab === 'timetable' || currentPath === '/timetable' || currentPath === '/weekly-timetable' || currentPath === '/classes-timetable') {
       return 'timetable';
     }
-    if (defaultTab === 'recordings' || currentPath === '/recorded-classes' || currentPath === '/recordings') {
+    if (defaultTab === 'recordings' || currentPath === '/recorded-classes' || currentPath === '/recorded_classes' || currentPath === '/recordings') {
       return 'recordings';
     }
     return 'live_sessions';
@@ -327,6 +322,10 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       return 'Upcoming';
     }
   };
+
+  if (defaultTab === 'attendance' || currentPath === '/attendance' || currentPath === '/attendance-ledger') {
+    return <AttendanceLedgerPage />;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '40px' }}>

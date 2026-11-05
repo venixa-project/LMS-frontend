@@ -187,6 +187,32 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       };
     });
 
+    // Synchronize to PostgreSQL backend
+    apiClient.post('/assessments', {
+      title: newAssessment.title,
+      instructions: newAssessment.instructions || 'Answer all questions to the best of your ability.',
+      courseId: newAssessment.courseId,
+      durationMinutes: newAssessment.durationMinutes || newAssessment.duration || 45,
+      totalMarks: newAssessment.totalMarks || 100,
+      passingPercentage: newAssessment.passingMarks || newAssessment.passmark || 70,
+      scope: (newAssessment as any).scope || 'course_assessment',
+      status: 'published',
+      mode: newAssessment.mode || 'automated',
+      proctoringRequired: Boolean((newAssessment as any).proctoringRequired || newAssessment.proctoringSettings?.camera),
+      questions: (questions || newAssessment.questionsData || []).map((q) => ({
+        prompt: q.prompt,
+        type: q.type,
+        points: q.points || 5,
+        difficulty: q.difficulty || 'medium',
+        explanation: q.explanation || '',
+        options: q.options?.map((opt, idx) => ({
+          text: typeof opt === 'string' ? opt : opt.text,
+          isCorrect: typeof opt === 'string' ? idx === 0 : Boolean(opt.isCorrect),
+          order: idx
+        })) || []
+      }))
+    }).catch((err) => console.warn('Backend assessment creation sync:', err));
+
     return { success: true, id };
   },
 
