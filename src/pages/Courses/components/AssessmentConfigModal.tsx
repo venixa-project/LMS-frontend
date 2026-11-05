@@ -1763,7 +1763,7 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                                   gap: '4px',
                                 }}
                               >
-                                <span>{opt.text}</span>
+                                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word', minWidth: 0 }}>{opt.text}</span>
                                 {opt.isCorrect && <Check size={11} style={{ strokeWidth: 2.5, flexShrink: 0 }} />}
                               </span>
                             ))}
