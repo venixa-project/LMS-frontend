@@ -13,6 +13,8 @@ interface CourseState {
   enrolledCourseIds: string[];
   requestedCourseIds: string[];
   enrollments: Enrollment[];
+  adminEnrollments: any[];
+  fetchAdminEnrollments: () => Promise<any[]>;
   isLoading: boolean;
   isCoursesLoading: boolean;
   error: string | null;
@@ -238,6 +240,19 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   enrolledCourseIds: loadInitialEnrolled(),
   requestedCourseIds: loadInitialRequested(),
   enrollments: loadInitialEnrollments(),
+  adminEnrollments: [],
+  fetchAdminEnrollments: async () => {
+    try {
+      const res = await apiClient.get<any[]>('/courses/admin/enrollments');
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ adminEnrollments: res.data });
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch admin enrollments:', e);
+    }
+    return [];
+  },
   isLoading: false,
   isCoursesLoading: false,
   error: null,

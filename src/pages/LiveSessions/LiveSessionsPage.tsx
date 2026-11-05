@@ -768,6 +768,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                     {isLive && (
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <GoogleMeetJoinButton
+                          sessionId={s.id}
                           meetingUrl={s.meetingUrl || s.joinLink}
                           role={isCreatorOrAdmin ? 'instructor' : 'student'}
                           label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join with Google Meet'}
@@ -1191,6 +1192,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               <div style={{ display: 'flex', gap: '8px' }}>
                 {(selectedDetailSession.status === 'live' || selectedDetailSession.status === 'scheduled') && (
                   <GoogleMeetJoinButton
+                    sessionId={selectedDetailSession.id}
                     meetingUrl={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
                     role={isTrainer || isAdmin ? 'instructor' : 'student'}
                     size="sm"

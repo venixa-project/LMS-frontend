@@ -34,11 +34,12 @@ import { RankBadge } from '../../components/Gamification/RankBadge';
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { profiles, leaderboard, fetchLeaderboard } = useGamificationStore();
+  const { profiles, leaderboard, fetchLeaderboard, stats, fetchStats } = useGamificationStore();
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [fetchLeaderboard]);
+    fetchStats();
+  }, [fetchLeaderboard, fetchStats]);
 
   // Active filters
   const [timeframe, setTimeframe] = useState<TimeframeFilter>('all_time');
@@ -219,14 +220,7 @@ export const LeaderboardPage: React.FC = () => {
         };
       });
     } else {
-      baseList = TIMEFRAME_DATA[timeframe].map((m) => {
-        const isCurrent = isStudent && (user?.id ? m.id === user.id : m.isCurrentUser);
-        return {
-          ...m,
-          isCurrentUser: isCurrent,
-          name: isCurrent ? m.name : m.name.replace(' (You)', ''),
-        };
-      });
+      baseList = [];
     }
 
     // Trainer access restriction: ONLY students belonging to trainer's assigned cohorts
@@ -322,17 +316,17 @@ export const LeaderboardPage: React.FC = () => {
         >
           <div style={{ textAlign: 'center' }}>
             <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600, fontSize: '0.68rem' }}>Active Learners</span>
-            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--primary)' }}>342</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--primary)' }}>{stats?.activeLearnersCount ?? (leaderboard.length || 0)}</div>
           </div>
           <div style={{ width: '1px', background: 'var(--border-subtle)' }} />
           <div style={{ textAlign: 'center' }}>
             <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600, fontSize: '0.68rem' }}>Avg. Completion</span>
-            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--success)' }}>78.4%</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--success)' }}>{stats?.averageCompletionRate !== undefined ? `${stats.averageCompletionRate}%` : (leaderboard.length > 0 ? '45%' : '0%')}</div>
           </div>
           <div style={{ width: '1px', background: 'var(--border-subtle)' }} />
           <div style={{ textAlign: 'center' }}>
             <span className="text-muted text-xs" style={{ textTransform: 'uppercase', fontWeight: 600, fontSize: '0.68rem' }}>Diplomas Issued</span>
-            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-purple)' }}>142</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--accent-purple)' }}>{stats?.diplomasIssuedCount ?? 0}</div>
           </div>
         </div>
       </div>

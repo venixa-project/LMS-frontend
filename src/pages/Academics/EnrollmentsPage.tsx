@@ -24,11 +24,11 @@ interface ExtendedEnrollment extends Omit<Enrollment, 'progress'> {
 }
 
 export const EnrollmentsPage: React.FC = () => {
-  const { courses, fetchCourses } = useCourseStore();
+  const { courses, fetchCourses, adminEnrollments, fetchAdminEnrollments } = useCourseStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { departments } = useDepartmentStore();
   const { users, fetchPeople } = usePeopleStore();
-  useEffect(() => { fetchCourses(); fetchCohorts(); fetchPeople(); }, []);
+  useEffect(() => { fetchCourses(); fetchCohorts(); fetchPeople(); fetchAdminEnrollments(); }, []);
   const { enrollments: storeEnrollments, courses: storeCourses } = useCourseStore();
   const { getStudents } = usePeopleStore();
 
@@ -49,6 +49,24 @@ export const EnrollmentsPage: React.FC = () => {
   }, [searchParams]);
 
   useEffect(() => {
+    if (adminEnrollments && adminEnrollments.length > 0) {
+      const mapped: ExtendedEnrollment[] = adminEnrollments.map((ae: any) => ({
+        id: ae.id,
+        userId: ae.userId,
+        studentName: ae.studentName || 'Student',
+        studentEmail: ae.studentEmail || 'student@lms.demo',
+        courseId: ae.courseId,
+        courseTitle: ae.courseTitle || 'Enrolled Course',
+        cohortName: ae.cohortName || 'Standard Track',
+        departmentName: ae.departmentName || 'Computer Science & Engineering',
+        status: ae.status || 'active',
+        progressPercent: ae.progress || 0,
+        enrolledAt: ae.enrolledAt || new Date().toISOString(),
+      }));
+      setEnrollments(mapped);
+      return;
+    }
+
     const allStudents = getStudents();
 
     const mappedEnrollments: ExtendedEnrollment[] = storeEnrollments.map((se) => {
@@ -75,7 +93,7 @@ export const EnrollmentsPage: React.FC = () => {
     });
 
     setEnrollments(mappedEnrollments);
-  }, [storeEnrollments, storeCourses, users, cohorts, getStudents]);
+  }, [adminEnrollments, storeEnrollments, storeCourses, users, cohorts, getStudents]);
 
   // Form states
   const [selectedStudent, setSelectedStudent] = useState('');
