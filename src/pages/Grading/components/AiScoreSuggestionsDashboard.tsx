@@ -29,7 +29,7 @@ export const AiScoreSuggestionsDashboard: React.FC<AiScoreSuggestionsDashboardPr
       if (user?.eligibleCourseIds && user.eligibleCourseIds.length > 0) {
         return user.eligibleCourseIds;
       }
-      return ['crs-001', 'crs-002', 'crs-004']; // Default for faculty demo
+      return [];
     }
     return undefined; // Admin can view all
   }, [isFaculty, user]);

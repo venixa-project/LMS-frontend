@@ -12,7 +12,7 @@ const STORAGE_KEY_ASSESSMENTS = 'venilearn_assessments_store';
 const STORAGE_KEY_QUESTIONS = 'venilearn_questions_store';
 const STORAGE_KEY_DRAFTS = 'venilearn_drafts_store';
 const STORE_VERSION_KEY = 'venilearn_assessments_store_version';
-const CURRENT_STORE_VERSION = 'v2_live_db_sync';
+const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
 
 // Automatically bust stale client-side caches from previous prototype/mock data
 if (typeof window !== 'undefined') {

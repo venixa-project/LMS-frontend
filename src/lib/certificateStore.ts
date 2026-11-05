@@ -11,6 +11,19 @@ import { useAuthStore } from './store';
 import { useGamificationStore } from './gamificationStore';
 
 const STORAGE_KEY_CERTIFICATES = 'venilearn_certificates';
+const STORE_VERSION_KEY = 'venilearn_certificates_store_version';
+const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+
+// Automatically bust stale client-side caches from previous prototype/mock data
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem(STORE_VERSION_KEY);
+    if (cachedVer !== CURRENT_STORE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_CERTIFICATES);
+      localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
+    }
+  } catch {}
+}
 
 export interface PublicVerificationResult {
   isValid: boolean;
@@ -124,7 +137,7 @@ function loadInitialCertificates(): Certificate[] {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.filter((c: any) => !c.id?.startsWith('cert-00'));
+        return parsed.filter((c: any) => !c.id?.startsWith('cert-00') && !c.id?.startsWith('cert-mock') && !c.courseTitle?.includes('Distributed Systems'));
       }
     }
   } catch (err) {

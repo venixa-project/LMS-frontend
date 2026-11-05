@@ -97,53 +97,26 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     setTimeout(() => setNotice(null), 4000);
   };
 
-  // Faculty & Learner course filter logic
-  const assignedCourses = useCourseStore.getState().courses;
+  // Faculty & Learner course reactive subscription
+  const { courses: assignedCourses, fetchCourses: fetchAllCourses } = useCourseStore();
+  useEffect(() => {
+    fetchAllCourses();
+  }, [fetchAllCourses]);
 
-  // Assignments data initialized from localStorage or dynamic course deliverables
+  // Assignments initialized strictly from real submissions or empty
   const [assignments, setAssignments] = useState<CourseAssignment[]>(() => {
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('venilearn_assignments');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed)) {
+            return parsed.filter((item: any) => !item.id?.startsWith('asg-crs-00'));
+          }
         }
       }
     } catch {}
-
-    const list: CourseAssignment[] = [];
-    useCourseStore.getState().courses.forEach((c) => {
-      list.push({
-        id: `asg-${c.id}-1`,
-        title: `${c.title} — Capstone Engineering Project`,
-        description: `Architect and implement an end-to-end practical solution demonstrating mastery over the modules covered in ${c.title}. Include source files, unit tests, and comprehensive documentation.`,
-        courseId: c.id,
-        cohortId: 'coh-001',
-        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-        totalMarks: 100,
-        submissionFormat: 'repo',
-        submissionsCount: 1,
-        gradedCount: 0,
-        status: 'active',
-        learnerStatus: 'pending',
-      });
-      list.push({
-        id: `asg-${c.id}-2`,
-        title: `${c.title} — Practical Lab & Problem Solving Deliverable`,
-        description: `Complete the programming exercises and case study problems outlined in the syllabus. Submit your source archive and lab report for evaluation.`,
-        courseId: c.id,
-        cohortId: 'coh-001',
-        dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-        totalMarks: 50,
-        submissionFormat: 'file',
-        submissionsCount: 1,
-        gradedCount: 0,
-        status: 'active',
-        learnerStatus: 'pending',
-      });
-    });
-    return list;
+    return [];
   });
 
   const handleSubmitDeliverable = (e: React.FormEvent) => {
@@ -444,7 +417,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span className="text-muted">Target Course:</span>
-                        <span style={{ fontWeight: 600 }}>{course?.title || 'Advanced React'}</span>
+                        <span style={{ fontWeight: 600 }}>{course?.title || 'Course Deliverable'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span className="text-muted">Assigned Batch:</span>
@@ -577,7 +550,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
                         <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{d.title}</h3>
                         <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-                          Course: <strong>{course?.title || assignedCourses[0]?.title || 'General Curriculum'}</strong>
+                          Course: <strong>{course?.title || 'General Curriculum'}</strong>
                         </p>
 
                         <div
@@ -660,8 +633,9 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             /* PUBLISHED ASSESSMENTS GRID */
             <div className="grid-3">
               {filteredAssessments.map((a) => {
-                const course = useCourseStore.getState().courses.find((c) => c.id === a.courseId);
-                const isCompletedByLearner = a.id === 'a-001';
+                const course = assignedCourses.find((c) => c.id === a.courseId);
+                const learnerAttempt = myAttempts.find((at) => at.assessmentId === a.id || at.assessment?.id === a.id);
+                const isCompletedByLearner = !!learnerAttempt;
                 const qCount = a.questionIds?.length || a.questionsData?.length || a.questions?.length || 5;
 
                 return (
@@ -703,7 +677,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                         </div>
 
                         {isLearner && isCompletedByLearner ? (
-                          <span className="badge badge-success">PASSED &bull; 25/25 PTS</span>
+                          <span className={`badge ${learnerAttempt?.passed ? 'badge-success' : 'badge-warning'}`}>{learnerAttempt?.passed ? 'PASSED' : 'COMPLETED'} &bull; {learnerAttempt?.score ?? 0}/{a.totalMarks} PTS</span>
                         ) : (
                           <span className="badge badge-active">{a.status}</span>
                         )}
@@ -711,7 +685,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
                       <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{a.title}</h3>
                       <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-                        Course: <strong>{course?.title || assignedCourses[0]?.title || 'General Curriculum'}</strong>
+                        Course: <strong>{course?.title || 'General Curriculum'}</strong>
                       </p>
 
                       <div style={{
@@ -754,7 +728,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                               style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
                               onClick={() => setActiveTab('results')}
                             >
-                              <Award size={13} /> View Result (100%)
+                              <Award size={13} /> View Result ({learnerAttempt?.percentage ?? 0}%)
                             </button>
                             {a.proctoringRequired && (
                               <Link
@@ -924,7 +898,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                         return (
                           <tr key={at.id}>
                             <td style={{ fontWeight: 600 }}>{at.assessment?.title || 'Course Assessment'}</td>
-                            <td>{course?.title || 'java 9.0'}</td>
+                            <td>{course?.title || 'Curriculum Course'}</td>
                             <td>
                               <span className="badge badge-primary">
                                 {at.assessment?.scope === 'final_assessment' ? 'Final Exam' : 'Knowledge Check'}
@@ -960,7 +934,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                         return (
                           <tr key={asg.id}>
                             <td style={{ fontWeight: 600 }}>{asg.title}</td>
-                            <td>{course?.title || 'java 9.0'}</td>
+                            <td>{course?.title || 'Curriculum Course'}</td>
                             <td>
                               <span className="badge badge-info">Project Deliverable</span>
                             </td>
@@ -1264,7 +1238,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                   )}
                 </div>
                 <p className="text-muted text-xs">
-                  Submitted on: <strong>{viewingAssignment.learnerSubmittedAt || 'Oct 15, 2026'}</strong>
+                  Submitted on: <strong>{viewingAssignment.learnerSubmittedAt || 'Recently submitted'}</strong>
                 </p>
               </div>
 
@@ -1278,7 +1252,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                   Submitted Deliverable:
                 </div>
                 <code style={{ fontSize: '0.85rem', color: 'var(--primary)', wordBreak: 'break-all' }}>
-                  {viewingAssignment.learnerSubmissionUrl || 'https://github.com/alex-thompson/distributed-services-capstone'}
+                  {viewingAssignment.learnerSubmissionUrl || 'No deliverable link specified'}
                 </code>
               </div>
 

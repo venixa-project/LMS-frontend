@@ -707,8 +707,8 @@ export function calculateReportMetrics(
 
   // Average assessment score
   const avgScore = assessmentRows.length > 0
-    ? Math.round(assessmentRows.reduce((acc, curr) => acc + curr.percentage, 0) / assessmentRows.length * 10) / 10
-    : 85.5;
+    ? Math.round((assessmentRows.reduce((acc, curr) => acc + curr.percentage, 0) / assessmentRows.length) * 10) / 10
+    : 0;
 
   // Active enrollments
   const activeCount = enrollmentRows.filter(e => e.status === 'Active').length || enrollmentRows.length;
@@ -716,7 +716,7 @@ export function calculateReportMetrics(
   return {
     totalEnrolledStudents: uniqueStudents.size,
     courseCompletionRate: completionRate,
-    assessmentPassRate: assessmentPassRate || 88.2,
+    assessmentPassRate: assessmentPassRate,
     pendingSubmissionsCount: pendingRows.length,
     averageAssessmentScore: avgScore,
     activeEnrollmentsCount: activeCount,

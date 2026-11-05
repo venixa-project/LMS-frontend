@@ -62,6 +62,29 @@ const STORAGE_KEY_INITIALIZED = 'venilearn_courses_initialized';
 const STORAGE_KEY_ENROLLED = 'venilearn_enrolled_courses';
 const STORAGE_KEY_REQUESTED = 'venilearn_requested_courses';
 const STORAGE_KEY_ENROLLMENTS = 'venilearn_enrollments';
+const STORE_VERSION_KEY = 'venilearn_courses_store_version';
+const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+
+// Automatically bust stale client-side caches from previous prototype/mock data
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem(STORE_VERSION_KEY);
+    if (cachedVer !== CURRENT_STORE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_COURSES);
+      localStorage.removeItem(STORAGE_KEY_INITIALIZED);
+      localStorage.removeItem(STORAGE_KEY_ENROLLED);
+      localStorage.removeItem(STORAGE_KEY_REQUESTED);
+      localStorage.removeItem(STORAGE_KEY_ENROLLMENTS);
+      // Clean up legacy completed lessons keys
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith('venilearn_completed_lessons_crs') || k.startsWith('venilearn_completed_lessons_kjl')) {
+          localStorage.removeItem(k);
+        }
+      });
+      localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
+    }
+  } catch {}
+}
 
 // Safely load cached state from localStorage with persistence of deletions and empty catalogues
 function loadInitialCourses(): Course[] {
@@ -71,10 +94,12 @@ function loadInitialCourses(): Course[] {
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        return parsed.filter((c: Course) => !c.id.startsWith('crs-00')).map((c: Course) => ({
-          ...c,
-          organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
-        }));
+        return parsed
+          .filter((c: Course) => !c.id.startsWith('crs-00') && !c.title.toLowerCase().includes('kjl') && !c.title.includes('CS-401'))
+          .map((c: Course) => ({
+            ...c,
+            organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
+          }));
       }
     }
   } catch (e) {
@@ -495,8 +520,13 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           if (e.courseId && completedLids.length > 0) {
             try {
               localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
+              localStorage.setItem(`venilearn_completed_lessons_${e.courseId.toLowerCase()}`, JSON.stringify(completedLids));
             } catch {}
           }
+
+          const progressVal = typeof e.progressPercentage === 'number'
+            ? e.progressPercentage
+            : (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0);
 
           return {
             id: e.id,
@@ -504,7 +534,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
             courseId: e.courseId,
             cohortId: e.cohortId,
             status: e.status || 'active',
-            progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
+            progress: progressVal,
             enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
             completedLessonIds: completedLids,
           };
@@ -666,12 +696,12 @@ export const useCourseStore = create<CourseState>((set, get) => ({
 
   updateCourseProgress: (courseId: string, progress: number) => {
     set((state) => {
-      const existing = state.enrollments.find((e) => e.courseId === courseId);
+      const existing = state.enrollments.find((e) => e.courseId?.toLowerCase() === courseId?.toLowerCase());
       const isCompleted = progress >= 100;
       let nextEnrollments: Enrollment[];
       if (existing) {
         nextEnrollments = state.enrollments.map((e) =>
-          e.courseId === courseId
+          e.courseId?.toLowerCase() === courseId?.toLowerCase()
             ? { ...e, progress, status: isCompleted ? 'completed' : e.status }
             : e
         );

@@ -135,10 +135,9 @@ export const CertificatesPage: React.FC = () => {
 
   // Learner Certificates
   const studentCertificates = useMemo(() => {
-    const studentId = user?.id || 'u-007';
-    return certificates.filter(
-      (c) => c.learnerId === studentId || (studentId === 'u-007' && c.learnerName.includes('Alex'))
-    );
+    const studentId = user?.id;
+    if (!studentId) return [];
+    return certificates.filter((c) => c.learnerId === studentId);
   }, [certificates, user]);
 
   // Trainer Issued Certificates

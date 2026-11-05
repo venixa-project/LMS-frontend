@@ -283,8 +283,12 @@ export const App: React.FC = () => {
 
           {/* Student Assessments & Transcripts */}
           <Route path="assignments" element={<AssessmentsPage defaultTab="assignments" />} />
+          <Route path="my-assignments" element={<AssessmentsPage defaultTab="assignments" />} />
+          <Route path="my_assignments" element={<AssessmentsPage defaultTab="assignments" />} />
           <Route path="my-assessments" element={<AssessmentsPage defaultTab="assessments" />} />
+          <Route path="my_assessments" element={<AssessmentsPage defaultTab="assessments" />} />
           <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
+          <Route path="my_results" element={<AssessmentsPage defaultTab="results" />} />
           <Route path="my-proctoring-reports" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report/:sessionId" element={<MyProctoringReportPage />} />

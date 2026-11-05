@@ -100,22 +100,31 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     if (courseCompletionMap[course.id] && courseCompletionMap[course.id].length > 0) {
       return courseCompletionMap[course.id];
     }
+    if (courseCompletionMap[course.id.toLowerCase()] && courseCompletionMap[course.id.toLowerCase()].length > 0) {
+      return courseCompletionMap[course.id.toLowerCase()];
+    }
     try {
       if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem(`venilearn_completed_lessons_${course.id}`);
+        const stored = localStorage.getItem(`venilearn_completed_lessons_${course.id}`) || localStorage.getItem(`venilearn_completed_lessons_${course.id.toLowerCase()}`);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
       }
     } catch {}
+
+    // Check courseStore enrollments
+    const enr = useCourseStore.getState().enrollments.find((e) => e.courseId?.toLowerCase() === course.id.toLowerCase());
+    if (enr?.completedLessonIds && enr.completedLessonIds.length > 0) {
+      return enr.completedLessonIds;
+    }
     return [];
   }, [course?.id, courseCompletionMap]);
 
   const persistCompletions = (nextList: string[]) => {
     if (!course) return;
     setCourseCompletionMap((prev) => {
-      const updated = { ...prev, [course.id]: nextList };
+      const updated = { ...prev, [course.id]: nextList, [course.id.toLowerCase()]: nextList };
       try {
         localStorage.setItem('venilearn_course_completions', JSON.stringify(updated));
       } catch {}
@@ -123,6 +132,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     });
     try {
       localStorage.setItem(`venilearn_completed_lessons_${course.id}`, JSON.stringify(nextList));
+      localStorage.setItem(`venilearn_completed_lessons_${course.id.toLowerCase()}`, JSON.stringify(nextList));
     } catch {}
     const newPercent = allLessons.length > 0 ? Math.min(100, Math.round((nextList.length / allLessons.length) * 100)) : 0;
     useCourseStore.getState().updateCourseProgress(course.id, newPercent);
@@ -353,7 +363,7 @@ public final class CourseDataService {
 
     // 1. Immediate local state & localStorage persistence
     setCourseCompletionMap((prev) => {
-      const updated = { ...prev, [course.id]: nextList };
+      const updated = { ...prev, [course.id]: nextList, [course.id.toLowerCase()]: nextList };
       try {
         localStorage.setItem('venilearn_course_completions', JSON.stringify(updated));
       } catch {}
@@ -361,6 +371,7 @@ public final class CourseDataService {
     });
     try {
       localStorage.setItem(`venilearn_completed_lessons_${course.id}`, JSON.stringify(nextList));
+      localStorage.setItem(`venilearn_completed_lessons_${course.id.toLowerCase()}`, JSON.stringify(nextList));
     } catch {}
 
     const newPercent = allLessons.length > 0

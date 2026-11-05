@@ -29,108 +29,13 @@ export const EnrollmentsPage: React.FC = () => {
   const { departments } = useDepartmentStore();
   const { users, fetchPeople } = usePeopleStore();
   useEffect(() => { fetchCourses(); fetchCohorts(); fetchPeople(); }, []);
-  // Synthesize rich mock enrollment records
-  const initialEnrollments: ExtendedEnrollment[] = [
-    {
-      id: 'enr-101',
-      userId: 'u-006',
-      studentName: 'Alex Rivera',
-      studentEmail: 'alex@lms.demo',
-      courseId: 'c-001',
-      courseTitle: 'Advanced React & TypeScript Architecture',
-      cohortName: 'Spring 2026 Engineering',
-      departmentName: 'Computer Science & Engineering',
-      status: 'active',
-      progressPercent: 68,
-      enrolledAt: '2026-03-01T09:00:00Z',
-      completedLessons: ['l-01', 'l-02', 'l-03'],
-      updatedAt: '2026-10-15T14:30:00Z'
-    },
-    {
-      id: 'enr-102',
-      userId: 'u-007',
-      studentName: 'Daniel Wu',
-      studentEmail: 'daniel.wu@acmelearning.com',
-      courseId: 'c-001',
-      courseTitle: 'Advanced React & TypeScript Architecture',
-      cohortName: 'Spring 2026 Engineering',
-      departmentName: 'Computer Science & Engineering',
-      status: 'active',
-      progressPercent: 92,
-      enrolledAt: '2026-03-01T09:00:00Z',
-      completedLessons: ['l-01', 'l-02', 'l-03', 'l-04'],
-      updatedAt: '2026-10-16T11:00:00Z'
-    },
-    {
-      id: 'enr-103',
-      userId: 'u-008',
-      studentName: 'Elena Rostova',
-      studentEmail: 'elena.r@acmelearning.com',
-      courseId: 'c-002',
-      courseTitle: 'Cloud Native Microservices with Go',
-      cohortName: 'Summer 2026 Cloud Architects',
-      departmentName: 'Cloud & Infrastructure',
-      status: 'active',
-      progressPercent: 45,
-      enrolledAt: '2026-05-15T09:00:00Z',
-      completedLessons: ['l-01'],
-      updatedAt: '2026-10-14T09:15:00Z'
-    },
-    {
-      id: 'enr-104',
-      userId: 'u-009',
-      studentName: 'Kwame Mensah',
-      studentEmail: 'kwame.m@acmelearning.com',
-      courseId: 'c-003',
-      courseTitle: 'Enterprise Machine Learning & LLMOps',
-      cohortName: 'Fall 2026 Data Science',
-      departmentName: 'Artificial Intelligence & Data',
-      status: 'active',
-      progressPercent: 78,
-      enrolledAt: '2026-08-01T09:00:00Z',
-      completedLessons: ['l-01', 'l-02'],
-      updatedAt: '2026-10-15T16:20:00Z'
-    },
-    {
-      id: 'enr-105',
-      userId: 'u-006',
-      studentName: 'Alex Rivera',
-      studentEmail: 'alex@lms.demo',
-      courseId: 'c-004',
-      courseTitle: 'Modern Database Design & PostgreSQL',
-      cohortName: 'Spring 2026 Engineering',
-      departmentName: 'Computer Science & Engineering',
-      status: 'completed',
-      progressPercent: 100,
-      enrolledAt: '2026-01-15T09:00:00Z',
-      completedAt: '2026-05-20T17:00:00Z',
-      completedLessons: ['l-01', 'l-02', 'l-03', 'l-04', 'l-05'],
-      updatedAt: '2026-05-20T17:00:00Z'
-    },
-    {
-      id: 'enr-106',
-      userId: 'u-010',
-      studentName: 'Sophia Patel',
-      studentEmail: 'sophia.p@acmelearning.com',
-      courseId: 'c-002',
-      courseTitle: 'Cloud Native Microservices with Go',
-      cohortName: 'Summer 2026 Cloud Architects',
-      departmentName: 'Cloud & Infrastructure',
-      status: 'active',
-      progressPercent: 55,
-      enrolledAt: '2026-05-15T09:00:00Z',
-      completedLessons: ['l-01', 'l-02'],
-      updatedAt: '2026-10-16T10:00:00Z'
-    }
-  ];
-
   const { enrollments: storeEnrollments, courses: storeCourses } = useCourseStore();
   const { getStudents } = usePeopleStore();
 
   const [searchParams] = useSearchParams();
   const initialCourse = searchParams.get('courseId') || searchParams.get('course') || 'all';
 
-  const [enrollments, setEnrollments] = useState<ExtendedEnrollment[]>(initialEnrollments);
+  const [enrollments, setEnrollments] = useState<ExtendedEnrollment[]>([]);
   const [search, setSearch] = useState('');
   const [courseFilter, setCourseFilter] = useState(initialCourse);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -145,38 +50,35 @@ export const EnrollmentsPage: React.FC = () => {
 
   useEffect(() => {
     const allStudents = getStudents();
-    const existingIds = new Set(initialEnrollments.map((ie) => ie.id));
 
-    const extraEnrollments: ExtendedEnrollment[] = storeEnrollments
-      .filter((se) => !existingIds.has(se.id))
-      .map((se) => {
-        const student =
-          allStudents.find((s) => s.id === se.userId) ||
-          users.find((u) => u.id === se.userId);
-        const course = storeCourses.find((c) => c.id === se.courseId);
-        const cohort = cohorts.find((c) => c.id === se.cohortId);
+    const mappedEnrollments: ExtendedEnrollment[] = storeEnrollments.map((se) => {
+      const student =
+        allStudents.find((s) => s.id === se.userId) ||
+        users.find((u) => u.id === se.userId);
+      const course = storeCourses.find((c) => c.id === se.courseId);
+      const cohort = cohorts.find((c) => c.id === se.cohortId);
 
-        return {
-          id: se.id,
-          userId: se.userId,
-          studentName:
-            student?.displayName || `${student?.firstName || 'Student'} ${student?.lastName || ''}`,
-          studentEmail: student?.email || 'student@lms.demo',
-          courseId: se.courseId,
-          courseTitle: course?.title || 'Enrolled Course',
-          cohortName: cohort?.name || 'Spring 2026 Engineering',
-          departmentName: 'Computer Science & Engineering',
-          status: se.status,
-          progressPercent: se.progress || 0,
-          enrolledAt: se.enrolledAt,
-        };
-      });
+      return {
+        id: se.id,
+        userId: se.userId,
+        studentName:
+          student?.displayName || (student ? `${student.firstName || ''} ${student.lastName || ''}`.trim() : 'Enrolled Student'),
+        studentEmail: student?.email || 'student@lms.demo',
+        courseId: se.courseId,
+        courseTitle: course?.title || 'Enrolled Course',
+        cohortName: cohort?.name || 'Standard Track',
+        departmentName: 'Engineering & Technology',
+        status: se.status || 'active',
+        progressPercent: se.progress || 0,
+        enrolledAt: se.enrolledAt || new Date().toISOString(),
+      };
+    });
 
-    setEnrollments([...extraEnrollments, ...initialEnrollments]);
-  }, [storeEnrollments, storeCourses]);
+    setEnrollments(mappedEnrollments);
+  }, [storeEnrollments, storeCourses, users, cohorts, getStudents]);
 
   // Form states
-  const [selectedStudent, setSelectedStudent] = useState('Alex Rivera (alex@lms.demo)');
+  const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.id || '');
   const [selectedCohort, setSelectedCohort] = useState(cohorts[0]?.name || '');
   const [enrollSuccessMessage, setEnrollSuccessMessage] = useState<string | null>(null);
@@ -263,27 +165,31 @@ export const EnrollmentsPage: React.FC = () => {
       <div className="grid-4" style={{ marginBottom: '24px' }}>
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Total Enrollments</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>{enrollments.length + 178}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>{enrollments.length}</div>
           <p className="text-muted text-xs">Across all academic programs</p>
         </div>
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Active In-Progress</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>
-            {enrollments.filter((e) => e.status === 'active').length + 140}
+            {enrollments.filter((e) => e.status === 'active').length}
           </div>
-          <p className="text-success text-xs">&uarr; 18 new this semester</p>
+          <p className="text-muted text-xs">Active curriculum pace</p>
         </div>
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Completed / Graduated</span>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)' }}>
-            {enrollments.filter((e) => e.status === 'completed').length + 38}
+            {enrollments.filter((e) => e.status === 'completed').length}
           </div>
-          <p className="text-muted text-xs">Full certificate issued</p>
+          <p className="text-muted text-xs">Full certificates issued</p>
         </div>
         <div className="stat-card">
           <span className="text-muted text-xs font-semibold">Average Progress</span>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>72.4%</div>
-          <p className="text-muted text-xs">Curriculum pace on track</p>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>
+            {enrollments.length > 0
+              ? Math.round(enrollments.reduce((sum, e) => sum + (e.progressPercent || 0), 0) / enrollments.length)
+              : 0}%
+          </div>
+          <p className="text-muted text-xs">Curriculum syllabus pace</p>
         </div>
       </div>
 
@@ -348,7 +254,25 @@ export const EnrollmentsPage: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredEnrollments.map((enr) => (
+            {filteredEnrollments.length === 0 ? (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', padding: '48px 16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users size={36} color="var(--text-muted)" style={{ marginBottom: '12px' }} />
+                    <h4 style={{ fontSize: '1.1rem', margin: '0 0 6px 0' }}>No Course Enrollments Found</h4>
+                    <p className="text-muted text-sm" style={{ margin: '0 0 16px 0', maxWidth: '420px' }}>
+                      {search || courseFilter !== 'all' || statusFilter !== 'all'
+                        ? 'No enrollments match the selected filters or search terms.'
+                        : 'No students have been enrolled in courses yet.'}
+                    </p>
+                    <button className="btn btn-primary btn-sm" onClick={() => setIsEnrollModalOpen(true)}>
+                      <Plus size={14} /> Enroll Student in Course
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+            filteredEnrollments.map((enr) => (
               <tr key={enr.id}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -407,7 +331,7 @@ export const EnrollmentsPage: React.FC = () => {
                   </button>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>
@@ -432,11 +356,12 @@ export const EnrollmentsPage: React.FC = () => {
                     value={selectedStudent}
                     onChange={(e) => setSelectedStudent(e.target.value)}
                   >
-                    <option value="Alex Rivera (alex@lms.demo)">Alex Rivera (alex@lms.demo)</option>
-                    <option value="Daniel Wu (daniel.wu@acmelearning.com)">Daniel Wu (daniel.wu@acmelearning.com)</option>
-                    <option value="Kwame Mensah (kwame.m@acmelearning.com)">Kwame Mensah (kwame.m@acmelearning.com)</option>
-                    <option value="Elena Rostova (elena.r@acmelearning.com)">Elena Rostova (elena.r@acmelearning.com)</option>
-                    <option value="Sophia Patel (sophia.p@acmelearning.com)">Sophia Patel (sophia.p@acmelearning.com)</option>
+                    <option value="">-- Choose Student --</option>
+                    {getStudents().map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.displayName || s.email} ({s.email})
+                      </option>
+                    ))}
                   </select>
                 </div>
 

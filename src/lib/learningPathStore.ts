@@ -459,237 +459,8 @@ export const PATH_TEMPLATE_PRESETS: PathTemplatePreset[] = [
   },
 ];
 
-// Initial Multi-Tenant Seed Data
-export const initialLearningPaths: LearningPath[] = [
-  {
-    id: 'lp-001',
-    title: 'New Hire Engineering Onboarding & Cloud Readiness',
-    objective: 'Equip newly joined engineers with core JavaScript, TypeScript, and cloud deployment foundations.',
-    description: 'Standard technical onboarding pathway for new engineering personnel at the organization.',
-    institutionType: 'corporate',
-    category: 'Employee Onboarding',
-    targetGroup: 'Engineering & Technology',
-    targetRole: 'Software Engineer / DevOps Associate',
-    difficulty: 'Beginner',
-    estimatedHours: 120,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-004',
-    creatorName: 'Dr. James Wilson',
-    creatorRole: 'Faculty / Lead Trainer',
-    enforceSequence: true,
-    requirePassingAssessments: true,
-    completionThreshold: 80,
-    certificateEligible: true,
-    certificateTitle: 'Enterprise Cloud Developer Onboarding Credential',
-    assignedCohortIds: ['coh-001'],
-    assignedUserIds: ['u-007', 'u-009', 'u-010'],
-    assignedDepartmentIds: ['dep-001'],
-    learnerCount: 8,
-    courses: [
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-      { courseId: 'crs-004', order: 2, isRequired: true, prerequisiteCourseIds: ['crs-001'] },
-      { courseId: 'crs-006', order: 3, isRequired: true, prerequisiteCourseIds: ['crs-004'] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-06-01T10:00:00Z',
-    updatedAt: '2026-10-15T12:00:00Z',
-  },
-  {
-    id: 'lp-002',
-    title: 'Full-Stack Software Architecture Specialization',
-    objective: 'Rigorous multi-course sequence preparing computer science students for enterprise architecture roles.',
-    description: 'Official academic curriculum track for Computer Science & Engineering degree requirements.',
-    institutionType: 'higher_ed',
-    category: 'Degree Specialization',
-    targetGroup: 'B.Tech / B.S. Computer Science (Semesters 5-6)',
-    targetRole: 'Undergraduate Major Candidate',
-    difficulty: 'Advanced',
-    estimatedHours: 130,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-004',
-    creatorName: 'Dr. James Wilson',
-    creatorRole: 'Faculty / Lead Trainer',
-    enforceSequence: true,
-    requirePassingAssessments: true,
-    completionThreshold: 75,
-    certificateEligible: true,
-    certificateTitle: 'University Degree Specialization in Systems Architecture',
-    assignedCohortIds: ['coh-002'],
-    assignedUserIds: ['u-007', 'u-008'],
-    assignedDepartmentIds: ['dep-001'],
-    learnerCount: 14,
-    courses: [
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-      { courseId: 'crs-004', order: 2, isRequired: true, prerequisiteCourseIds: ['crs-001'] },
-      { courseId: 'crs-002', order: 3, isRequired: true, prerequisiteCourseIds: ['crs-004'] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-07-10T09:00:00Z',
-    updatedAt: '2026-10-16T14:30:00Z',
-  },
-  {
-    id: 'lp-003',
-    title: 'Applied Data Science & Machine Learning Sequence',
-    objective: 'Build analytical models, clean real-world data, and learn fundamental machine learning workflows.',
-    description: 'Data Science department sequence for analysts and aspiring machine learning practitioners.',
-    institutionType: 'higher_ed',
-    category: 'Semester Subject Sequence',
-    targetGroup: 'Data Science & Analytics Department',
-    targetRole: 'Data Analyst / Junior Scientist',
-    difficulty: 'Intermediate',
-    estimatedHours: 80,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-003',
-    creatorName: 'Prof. Priya Sharma',
-    creatorRole: 'Faculty / Data Science',
-    enforceSequence: true,
-    requirePassingAssessments: true,
-    completionThreshold: 80,
-    certificateEligible: true,
-    certificateTitle: 'Academic Certificate in Applied Python & Analytics',
-    assignedCohortIds: ['coh-003'],
-    assignedUserIds: ['u-009'],
-    assignedDepartmentIds: ['dep-003'],
-    learnerCount: 18,
-    courses: [
-      { courseId: 'crs-003', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-08-01T08:30:00Z',
-    updatedAt: '2026-10-12T11:00:00Z',
-  },
-  {
-    id: 'lp-004',
-    title: 'Executive Leadership & Team Collaboration Accelerator',
-    objective: 'Strengthen communication, constructive feedback frameworks, and cross-functional team execution.',
-    description: 'Professional development journey for emerging leads and tech managers.',
-    institutionType: 'corporate',
-    category: 'Leadership & Management',
-    targetGroup: 'Team Leads & Project Managers',
-    targetRole: 'Engineering Lead / Manager',
-    difficulty: 'Intermediate',
-    estimatedHours: 20,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-005',
-    creatorName: 'Emily Rodriguez',
-    creatorRole: 'Faculty / UI & Leadership',
-    enforceSequence: false,
-    requirePassingAssessments: false,
-    completionThreshold: 75,
-    certificateEligible: true,
-    certificateTitle: 'Executive Leadership Excellence Certificate',
-    assignedCohortIds: ['coh-004'],
-    assignedUserIds: ['u-007', 'u-009'],
-    assignedDepartmentIds: ['dep-002'],
-    learnerCount: 2,
-    courses: [
-      { courseId: 'crs-005', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-09-01T11:00:00Z',
-    updatedAt: '2026-10-14T16:00:00Z',
-  },
-  {
-    id: 'lp-005',
-    title: 'Secondary STEM: Code & Computational Thinking Foundation',
-    objective: 'Introduce secondary school learners to computational logic, syntax basics, and program construction.',
-    description: 'School curriculum journey aligned with secondary grade computer science standards.',
-    institutionType: 'school',
-    category: 'Grade & Subject Sequence',
-    targetGroup: 'Grade 11 Science & Technology Section',
-    targetRole: 'Secondary Student',
-    difficulty: 'Beginner',
-    estimatedHours: 40,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-002',
-    creatorName: 'Marcus Johnson',
-    creatorRole: 'Institution Admin',
-    enforceSequence: true,
-    requirePassingAssessments: true,
-    completionThreshold: 70,
-    certificateEligible: true,
-    certificateTitle: 'Secondary School Computational Thinking Badge',
-    assignedCohortIds: [],
-    assignedUserIds: [],
-    assignedDepartmentIds: ['dep-001'],
-    learnerCount: 24,
-    courses: [
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-09-15T13:00:00Z',
-    updatedAt: '2026-10-10T10:00:00Z',
-  },
-  {
-    id: 'lp-006',
-    title: 'Board Exam Preparation & Remedial Problem Solving',
-    objective: 'Targeted reinforcement and concept practice for learners preparing for standardized academic exams.',
-    description: 'School remedial journey with targeted modules to bridge learning gaps before final assessments.',
-    institutionType: 'school',
-    category: 'Exam Preparation & Remedial',
-    targetGroup: 'Class 12 Board Exam Prep Group',
-    targetRole: 'Board Exam Candidate',
-    difficulty: 'Beginner',
-    estimatedHours: 40,
-    organizationId: 'org-001',
-    status: 'draft',
-    createdBy: 'u-003',
-    creatorName: 'Prof. Priya Sharma',
-    creatorRole: 'Faculty / Data Science',
-    enforceSequence: false,
-    requirePassingAssessments: true,
-    completionThreshold: 75,
-    certificateEligible: false,
-    certificateTitle: '',
-    assignedCohortIds: [],
-    assignedUserIds: [],
-    learnerCount: 0,
-    courses: [
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-10-01T15:00:00Z',
-    updatedAt: '2026-10-05T09:00:00Z',
-  },
-  {
-    id: 'lp-007',
-    title: 'Certified Cloud & DevOps Solutions Architect',
-    objective: 'Prepare professional candidates for cloud practitioner and systems architecture credentials.',
-    description: 'Intensive certification preparation track designed for training institute cohorts.',
-    institutionType: 'training_institute',
-    category: 'Certification Preparation',
-    targetGroup: 'Professional Certification Cohort',
-    targetRole: 'Cloud Solutions Architect',
-    difficulty: 'Advanced',
-    estimatedHours: 120,
-    organizationId: 'org-001',
-    status: 'published',
-    createdBy: 'u-004',
-    creatorName: 'Dr. James Wilson',
-    creatorRole: 'Faculty / Lead Trainer',
-    enforceSequence: true,
-    requirePassingAssessments: true,
-    completionThreshold: 85,
-    certificateEligible: true,
-    certificateTitle: 'VeniLearn Certified Cloud Solutions Architect (CCSA)',
-    assignedCohortIds: ['coh-001'],
-    assignedUserIds: ['u-007'],
-    learnerCount: 35,
-    courses: [
-      { courseId: 'crs-001', order: 1, isRequired: true, prerequisiteCourseIds: [] },
-      { courseId: 'crs-004', order: 2, isRequired: true, prerequisiteCourseIds: ['crs-001'] },
-      { courseId: 'crs-006', order: 3, isRequired: true, prerequisiteCourseIds: ['crs-004'] },
-    ],
-    prerequisites: [],
-    createdAt: '2026-08-15T14:00:00Z',
-    updatedAt: '2026-10-18T10:00:00Z',
-  },
-];
+// Initial Multi-Tenant Seed Data (Empty for live database sync)
+export const initialLearningPaths: LearningPath[] = [];
 
 // Helper to validate circular dependencies in course prerequisites
 export function validateCircularPrerequisites(courses: LearningPathCourse[]): {
@@ -745,19 +516,32 @@ export function validateCircularPrerequisites(courses: LearningPathCourse[]): {
   };
 }
 
+const STORE_VERSION_KEY = 'venilearn_learning_paths_version';
+const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem(STORE_VERSION_KEY);
+    if (cachedVer !== CURRENT_STORE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_LEARNING_PATHS);
+      localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
+    }
+  } catch {}
+}
+
 function loadInitialPaths(): LearningPath[] {
   try {
     const cached = localStorage.getItem(STORAGE_KEY_LEARNING_PATHS);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed.filter((p: LearningPath) => !p.id.startsWith('lp-00'));
       }
     }
   } catch (e) {
     console.error('Failed to parse cached learning paths from storage', e);
   }
-  return initialLearningPaths;
+  return [];
 }
 
 function persistPaths(paths: LearningPath[]) {
@@ -951,7 +735,7 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
   },
 
   resetToDefaults: () => {
-    set({ paths: initialLearningPaths, selectedPathId: 'lp-001' });
-    persistPaths(initialLearningPaths);
+    set({ paths: [], selectedPathId: null });
+    persistPaths([]);
   },
 }));

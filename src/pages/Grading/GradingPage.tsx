@@ -37,7 +37,7 @@ export const GradingPage: React.FC = () => {
       if (user?.eligibleCourseIds && user.eligibleCourseIds.length > 0) {
         return user.eligibleCourseIds;
       }
-      return ['crs-001', 'crs-002', 'crs-004'];
+      return [];
     }
     return undefined;
   }, [isFaculty, user]);
@@ -68,7 +68,7 @@ export const GradingPage: React.FC = () => {
         learnerId: task.learnerId,
         learnerName: task.learnerName,
         learnerRollNo: task.learnerRollNo || 'STU-ID',
-        learnerEmail: task.learnerEmail || 'student@lms.demo',
+        learnerEmail: task.learnerEmail || '',
         status: task.status === 'completed' ? 'results_released' : 'submitted',
         evaluationStatus: task.evaluationStatus || 'ai_review_required',
         score: task.score || task.aiPreliminaryScore,
@@ -100,7 +100,7 @@ export const GradingPage: React.FC = () => {
             </span>
             {isFaculty && (
               <span className="badge badge-draft">
-                {user?.displayName || 'Dr. James Wilson'}
+                {user?.displayName || 'Faculty Member'}
               </span>
             )}
             {isAdmin && (
@@ -176,8 +176,21 @@ export const GradingPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {scopedTasks.map((t) => (
-                  <tr key={t.id}>
+                {scopedTasks.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '48px 24px' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                        <Check size={24} />
+                      </div>
+                      <h4 style={{ fontSize: '1rem', marginBottom: '4px', fontWeight: 600 }}>All Submissions Evaluated</h4>
+                      <p className="text-secondary text-xs" style={{ maxWidth: '360px', margin: '0 auto', lineHeight: 1.5 }}>
+                        There are currently no student assessment submissions awaiting AI evaluation or instructor sign-off in your active grading queue.
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  scopedTasks.map((t) => (
+                    <tr key={t.id}>
                     <td>
                       <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{t.learnerName}</div>
                       <div className="text-muted text-xs">ID: {t.learnerRollNo || t.submissionId || 'STU-ID'}</div>
@@ -233,7 +246,7 @@ export const GradingPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>

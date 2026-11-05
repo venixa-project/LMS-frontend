@@ -767,7 +767,7 @@ export const CourseBuilderPage: React.FC = () => {
   const handleAddModule = () => {
     const newMod: CourseModule = {
       id: `mod-${Date.now()}`,
-      title: `Module ${modules.length + 1}: Core Concepts`,
+      title: `Module ${modules.length + 1}`,
       order: modules.length + 1,
       lessons: []
     };
@@ -2551,17 +2551,15 @@ export const CourseBuilderPage: React.FC = () => {
                       >
                         <MoveDown size={13} />
                       </button>
-                      {modules.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => requestDeleteModule(idx)}
-                          className="btn-icon"
-                          title="Delete Module"
-                          style={{ color: 'var(--danger, #ef4444)', padding: '3px' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => requestDeleteModule(idx)}
+                        className="btn-icon"
+                        title="Delete Module"
+                        style={{ color: 'var(--danger, #ef4444)', padding: '3px' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                 ))}

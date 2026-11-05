@@ -149,13 +149,13 @@ const CoursesManagementPage: React.FC = () => {
 
   const getCourseProgress = (c: Course | string) => {
     const courseId = typeof c === 'string' ? c : c.id;
-    const courseObj = typeof c === 'string' ? courses.find((x) => x.id === c) : c;
+    const courseObj = typeof c === 'string' ? courses.find((x) => x.id?.toLowerCase() === c.toLowerCase()) : c;
     const actualTotalLessons = (courseObj?.modules || []).reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || (courseObj as any)?.lessonsCount || 10;
 
     let localCompletedIds: string[] = [];
     try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem(`venilearn_completed_lessons_${courseId}`);
+      if (typeof window !== 'undefined' && courseId) {
+        const stored = localStorage.getItem(`venilearn_completed_lessons_${courseId}`) || localStorage.getItem(`venilearn_completed_lessons_${courseId.toLowerCase()}`);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) localCompletedIds = parsed;
@@ -166,13 +166,15 @@ const CoursesManagementPage: React.FC = () => {
             const parsedAll = JSON.parse(storedAll);
             if (parsedAll && Array.isArray(parsedAll[courseId])) {
               localCompletedIds = parsedAll[courseId];
+            } else if (parsedAll && Array.isArray(parsedAll[courseId.toLowerCase()])) {
+              localCompletedIds = parsedAll[courseId.toLowerCase()];
             }
           }
         }
       }
     } catch {}
 
-    const enr = enrollments.find((e) => e.courseId === courseId);
+    const enr = enrollments.find((e) => e.courseId?.toLowerCase() === courseId?.toLowerCase());
     if (localCompletedIds.length === 0 && enr?.completedLessonIds && enr.completedLessonIds.length > 0) {
       localCompletedIds = enr.completedLessonIds;
     }
@@ -183,7 +185,7 @@ const CoursesManagementPage: React.FC = () => {
       const calculated = Math.min(100, Math.round((localCompletedIds.length / actualTotalLessons) * 100));
       progress = Math.max(progress, calculated);
     } else if (progress > 0 && actualTotalLessons > 0) {
-      completedLessons = Math.round((progress / 100) * actualTotalLessons);
+      completedLessons = Math.min(actualTotalLessons, Math.round((progress / 100) * actualTotalLessons));
     }
 
     const isCompleted = progress >= 100 || enr?.status === 'completed';
