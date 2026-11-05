@@ -18,7 +18,6 @@ interface CourseState {
   error: string | null;
 
   // Actions
-  fetchCourses: (force?: boolean) => Promise<Course[]>;
   getCourseById: (id: string) => Course | undefined;
   isEnrolled: (courseId: string) => boolean;
   hasRequested: (courseId: string) => boolean;
@@ -657,30 +656,8 @@ addCourse: async (course: Course): Promise<Course> => {
       return { success: false, error: errMsg };
     }
   },
-      };
-    } else {
-      throw new Error('Course creation failed: empty response from backend database API');
-    }
 
-    // 2. Synchronize store & local storage cache
-    set((state) => {
-      const exists = state.courses.some((c) => c.id === persistedCourse.id);
-      const updatedCourses = exists
-        ? state.courses.map((c) => (c.id === persistedCourse.id ? persistedCourse : c))
-        : [persistedCourse, ...state.courses];
-      try {
-        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-      } catch (e) {
-        console.error('Failed to save courses to storage', e);
-      }
-      return { courses: updatedCourses };
-    });
-
-    return persistedCourse;
-  },
-
-deleteCourse: async (courseId: string) => {
+  deleteCourse: async (courseId: string) => {
     try {
       await apiClient.delete(`/courses/${courseId}`);
     } catch (err) {
@@ -693,17 +670,6 @@ deleteCourse: async (courseId: string) => {
       courses: updatedCourses,
       enrolledCourseIds: updatedEnrolled,
       enrollments: updatedEnrollments,
-    });
-    try {
-      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
-      localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
-      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-    } catch (e) {
-      console.error('Failed to save courses to storage', e);
-    }
-    return true;
-  },
     });
     try {
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
