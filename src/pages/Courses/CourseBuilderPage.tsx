@@ -34,7 +34,7 @@ export const CourseBuilderPage: React.FC = () => {
   const editingCourseId = searchParams.get('id') || searchParams.get('edit');
 
   const { user } = useAuthStore();
-  const { addCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
+  const { addCourse, saveCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
@@ -1108,14 +1108,84 @@ export const CourseBuilderPage: React.FC = () => {
     };
   }, [modules, finalAssessment]);
 
-  // Save draft notification
-  const handleSaveDraft = () => {
-    setSaveDraftNotice('Course draft autosaved in your local builder session.');
-    setTimeout(() => setSaveDraftNotice(null), 4000);
+  // Save draft notification and database persistence
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const handleSaveDraft = async () => {
+    setIsSavingDraft(true);
+    setSaveDraftNotice('Saving course draft to database...');
+    try {
+      const generatedId = editingCourseId || `crs-${courseCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
+      const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
+      const enrolledCount = selectedStudentIds.size;
+
+      const activeOrgId = typeof window !== 'undefined'
+        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || user?.organizationId || 'org-001')
+        : (user?.organizationId || 'org-001');
+
+      const draftCourse: Course = {
+        createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
+        organizationId: activeOrgId,
+        id: generatedId,
+        title: title.trim() || 'Untitled Course Draft',
+        description: description.trim(),
+        shortDescription: description.trim() ? description.trim().slice(0, 140) + '...' : '',
+        category: category || 'General',
+        departmentId: departmentId || undefined,
+        level: (difficultyLevel as any) || 'beginner',
+        durationHours: Number(durationHours) || 1,
+        completionPolicy,
+        thumbnail: thumbnailUrl,
+        status: 'draft',
+        version: 1,
+        modules,
+        finalAssessment,
+        instructors: assignedInstructors,
+        learnerCount: enrolledCount,
+        enrolledLearners: enrolledCount,
+        completionRate: 0,
+        shareableLinkEnabled,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        completionPercentageRequired: certMinPercentage,
+        completionPoints: certPoints,
+        certificateConfig: {
+          enabled: certificateEnabled,
+          title: certTitle.trim() || 'Certificate of Course Completion',
+          issuingOrganization: certIssuingOrg.trim() || 'Acme Learning Corp',
+          templateId: certTemplateId,
+          requireAllLessons: certRequireAllLessons,
+          requirePassingAssessment: certRequireAssessment,
+          minimumAssessmentScore: certMinScore,
+          requiredCompletionPercentage: certMinPercentage,
+          completionPoints: certPoints,
+          validityMonths: certValidityMonths,
+          authorizedSignerName: certSignerName.trim() || 'Dr. James Wilson',
+          authorizedSignerTitle: certSignerTitle.trim() || 'Lead Instructor & Curriculum Director',
+          authorizedSignatureImage: certSignerSignatureImage,
+          secondarySignerName: 'Sarah Chen',
+          secondarySignerTitle: 'Dean of Academic Affairs',
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const res = await saveCourse(draftCourse, Array.from(selectedStudentIds));
+      if (res.success && res.course) {
+        setSaveDraftNotice('Course draft successfully saved and persisted to database.');
+      } else {
+        setSaveDraftNotice(res.error || 'Failed to save draft to database.');
+      }
+    } catch (err: any) {
+      console.error('Draft save error:', err);
+      setSaveDraftNotice(err?.message || 'Failed to save draft to database.');
+    } finally {
+      setIsSavingDraft(false);
+      setTimeout(() => setSaveDraftNotice(null), 5000);
+    }
   };
 
   // Final Publish Handler
-  const handleConfirmPublish = () => {
+  const handleConfirmPublish = async () => {
     const preCheck = validateForPublish();
     if (!preCheck.isValid) {
       setPublishError(preCheck.errors.join(' '));
@@ -1131,7 +1201,7 @@ export const CourseBuilderPage: React.FC = () => {
       const enrolledCount = selectedStudentIds.size;
 
       const activeOrgId = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || user?.organizationId || 'org-001')
+        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || user?.organizationId || 'org-001')
         : (user?.organizationId || 'org-001');
 
       const newCourse: Course = {
@@ -1142,7 +1212,7 @@ export const CourseBuilderPage: React.FC = () => {
         description: description.trim(),
         shortDescription: description.trim().slice(0, 140) + '...',
         category,
-        departmentId,
+        departmentId: departmentId || undefined,
         level: (difficultyLevel as any) || 'beginner',
         durationHours: Number(durationHours) || 1,
         completionPolicy,
@@ -1181,20 +1251,18 @@ export const CourseBuilderPage: React.FC = () => {
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Persist new course in store
-      addCourse(newCourse);
-
-      // 2. If students selected, register enrollments
-      if (selectedStudentIds.size > 0) {
-        assignStudentsToCourse(newCourse.id, Array.from(selectedStudentIds));
+      // Persist course with modules, lessons, and assignments to PostgreSQL backend
+      const res = await saveCourse(newCourse, Array.from(selectedStudentIds));
+      if (!res.success || !res.course) {
+        throw new Error(res.error || 'Database persistence failed. Please verify connection and retry.');
       }
 
-      setPublishedCourse(newCourse);
+      setPublishedCourse(res.course);
       setIsConfirmModalOpen(false);
       setIsPublishing(false);
     } catch (err: any) {
       console.error('Publishing error:', err);
-      setPublishError(err?.message || 'An unexpected error occurred while publishing the course.');
+      setPublishError(err?.message || 'An unexpected error occurred while publishing the course to the database.');
       setIsPublishing(false);
     }
   };

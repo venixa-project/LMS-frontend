@@ -134,6 +134,7 @@ export interface Cohort {
 // --- Course ---
 export interface Course {
   id: string;
+  slug?: string;
   title: string;
   shortDescription?: string;
   description: string;

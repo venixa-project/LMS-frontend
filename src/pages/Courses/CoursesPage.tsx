@@ -50,7 +50,21 @@ const CoursesManagementPage: React.FC = () => {
   const isCatalog = location.pathname === '/catalog';
   const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
 
-  const { courses, enrolledCourseIds, enrollments, updateCourseStatus, assignLeadFaculty, deleteCourse, enrollCourse } = useCourseStore();
+  const {
+    courses,
+    fetchCourses,
+    isLoading: isCoursesLoading,
+    enrolledCourseIds,
+    enrollments,
+    updateCourseStatus,
+    assignLeadFaculty,
+    deleteCourse,
+    enrollCourse
+  } = useCourseStore();
+
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
   const { cohorts, fetchCohorts } = useCohortStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const allFaculty = getFaculty();
@@ -103,7 +117,7 @@ const CoursesManagementPage: React.FC = () => {
 
   // Active organization isolation state
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
-    return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+    return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_active_tenant_id') : null) || 'org-001';
   });
 
   useEffect(() => {
@@ -112,7 +126,8 @@ const CoursesManagementPage: React.FC = () => {
       if (customEvent.detail?.orgId) {
         setActiveOrgId(customEvent.detail.orgId);
       } else {
-        const next = (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
+        const next = (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_active_tenant_id') : null) || 'org-001';
+        fetchCourses(true);
         setActiveOrgId(next);
       }
     };
@@ -284,7 +299,11 @@ const CoursesManagementPage: React.FC = () => {
   const orgScopedCourses = useMemo(() => {
     return courses.filter((c) => {
       if (isMyLearning && effectiveEnrolledIds.has(c.id)) return true;
-      return (c.organizationId || 'org-001') === activeOrgId;
+      const courseOrg = c.organizationId;
+      if (!courseOrg) return true;
+      if (courseOrg === activeOrgId) return true;
+      if (user?.organizationId && courseOrg === user.organizationId) return true;
+      return false;
     });
   }, [courses, activeOrgId, isMyLearning, effectiveEnrolledIds]);
 

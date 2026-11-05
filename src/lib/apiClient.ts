@@ -203,7 +203,7 @@ export function hasBackendAccessToken(): boolean {
 
 function getStoredTenantId(): string | null {
   try {
-    const raw = localStorage.getItem('venilearn_active_tenant_id');
+    const raw = localStorage.getItem('venilearn_active_tenant_id') || (typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null);
     return raw || null;
   } catch {
     return null;
