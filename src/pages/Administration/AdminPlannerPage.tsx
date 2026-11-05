@@ -16,6 +16,7 @@ import {
   PlannerSource
 } from '../../types/planner';
 import {
+  usePlannerStore,
   getAllPlannerActivities,
   expandRecurringActivities,
   getTopFocusTasks,
@@ -40,9 +41,9 @@ export const AdminPlannerPage: React.FC = () => {
   // Calendar view mode
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
 
-  // Currently focused date (defaults to Monday, Oct 26, 2026)
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // Month is 0-indexed: 9 = October
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-10-26');
+  // Currently focused date - defaults to today
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(formatLocalDate(new Date()));
 
   // Activity data
   const [activities, setActivities] = useState<PlannerActivity[]>([]);
@@ -68,7 +69,15 @@ export const AdminPlannerPage: React.FC = () => {
   });
   const [notifMessage, setNotifMessage] = useState<string | null>(null);
 
-  // Reload activities
+  const {
+    fetchActivities: _fetchAct,
+    createActivity: _createAct,
+    editActivity: _editAct,
+    removeActivity: _removeAct,
+    toggleComplete: _toggleComplete,
+  } = usePlannerStore();
+
+  // Reload activities from localStorage (immediate) + sync from backend
   const loadActivities = () => {
     setActivities(getAllPlannerActivities());
   };
@@ -77,6 +86,10 @@ export const AdminPlannerPage: React.FC = () => {
     loadActivities();
     const status = getWebNotificationStatus();
     setNotifStatus(status);
+    // Fetch from PostgreSQL backend
+    _fetchAct().then(() => {
+      setActivities(getAllPlannerActivities());
+    });
   }, []);
 
   // Request desktop notification permission
@@ -124,7 +137,7 @@ export const AdminPlannerPage: React.FC = () => {
   };
 
   const handleToday = () => {
-    const today = new Date(2026, 9, 26);
+    const today = new Date();
     setCurrentDate(today);
     setSelectedDateStr(formatLocalDate(today));
   };
@@ -207,11 +220,11 @@ export const AdminPlannerPage: React.FC = () => {
 
   // Overdue Reminders
   const overdueReminders = useMemo(() => {
-    return getOverdueReminders('2026-10-26');
+    return getOverdueReminders(formatLocalDate(new Date()));
   }, [activities]);
 
   // Dynamic calculations for "Today's Priorities"
-  const todayDateKey = '2026-10-26';
+  const todayDateKey = formatLocalDate(new Date());
   const todayActivities = activitiesByDate[todayDateKey] || [];
 
   // Trainer Priority Calculations
@@ -267,10 +280,10 @@ export const AdminPlannerPage: React.FC = () => {
   const selectedDateActivities = activitiesByDate[selectedDateStr] || [];
 
   // Toggle complete
+
   const handleToggleComplete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    toggleTaskCompleted(id);
-    loadActivities();
+    _toggleComplete(id).then(() => loadActivities());
   };
 
   // Add / Edit actions
@@ -287,16 +300,14 @@ export const AdminPlannerPage: React.FC = () => {
 
   const handleSaveModal = (data: Omit<PlannerActivity, 'id' | 'createdAt' | 'updatedAt' | 'source'>) => {
     if (selectedActivity) {
-      updatePlannerActivity(selectedActivity.id, data);
+      _editAct(selectedActivity.id, data).then(() => loadActivities());
     } else {
-      addPlannerActivity(data);
+      _createAct(data).then(() => loadActivities());
     }
-    loadActivities();
   };
 
   const handleDeleteModal = (id: string) => {
-    deletePlannerActivity(id);
-    loadActivities();
+    _removeAct(id).then(() => loadActivities());
   };
 
   // Category Configuration and Styles
@@ -402,7 +413,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: false,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -413,7 +424,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: true,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -425,7 +436,7 @@ export const AdminPlannerPage: React.FC = () => {
         date: d,
         dateStr: formatLocalDate(d),
         isCurrentMonth: false,
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
 
@@ -446,7 +457,7 @@ export const AdminPlannerPage: React.FC = () => {
       days.push({
         date: d,
         dateStr: formatLocalDate(d),
-        isToday: formatLocalDate(d) === '2026-10-26'
+        isToday: formatLocalDate(d) === formatLocalDate(new Date())
       });
     }
     return days;

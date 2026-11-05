@@ -22,6 +22,7 @@ import { SessionRosterModal } from './components/SessionRosterModal';
 import { WeeklyTimetableView } from './components/WeeklyTimetableView';
 import { RecordedClassesView } from './components/RecordedClassesView';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
+import { openGoogleMeetSession } from '../../lib/googleMeet';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -71,15 +72,19 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     setActiveTab(determineInitialTab());
   }, [currentPath, searchParams]);
 
-
   // Live Sessions from centralized store
   const {
     sessions,
+    fetchSessions,
     startBroadcast,
     endSession,
     cancelSession,
     deleteSession,
   } = useLiveSessionStore();
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const { cohorts } = useCohortStore();
 
@@ -235,7 +240,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     if (updated) {
       const meetUrl = updated.meetingUrl || updated.joinLink;
       if (meetUrl) {
-        window.open(meetUrl, '_blank', 'noopener,noreferrer');
+        openGoogleMeetSession(meetUrl);
         showNotice(`Session is now LIVE NOW on Google Meet! Meeting opened in a new tab.`);
       } else {
         showNotice('This session does not have a Google Meet link configured yet.');
@@ -628,7 +633,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <MeetingProviderBadge provider={s.provider || 'Google Meet'} hasLink={Boolean(s.meetingUrl || s.joinLink)} />
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName || 'Enrolled Students'}
+                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName ? `Cohort: ${s.cohortName}` : 'All Enrolled'}
                         </span>
                       </div>
                     </div>

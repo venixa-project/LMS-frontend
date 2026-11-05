@@ -1,9 +1,9 @@
-import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Live Sessions Store (Zustand with LocalStorage)
 // Manages real-time live classes, scheduling, status transitions,
 // student eligibility, and automated in-app notifications.
 // ============================================================
+import { apiClient } from './apiClient';
 import { create } from 'zustand';
 import { LiveSession } from '../types';
 
@@ -23,68 +23,38 @@ interface LiveSessionState {
   addSession: (
     session: Omit<LiveSession, 'id' | 'createdAt' | 'updatedAt' | 'attendance'>,
     notifyStudents?: boolean
-  ) => { success: boolean; session: LiveSession };
+  ) => Promise<{ success: boolean; session: LiveSession }>;
   updateSession: (
     updated: LiveSession,
     notifyStudents?: boolean
-  ) => { success: boolean; session: LiveSession };
+  ) => Promise<{ success: boolean; session: LiveSession }>;
   cancelSession: (
     sessionId: string,
     reason?: string,
     notifyStudents?: boolean
   ) => { success: boolean };
-  startBroadcast: (sessionId: string) => { success: boolean };
-  endSession: (sessionId: string, recordingUrl?: string) => { success: boolean };
+  startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
+  endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
   toggleBookmark: (sessionId: string) => void;
 }
 
 const STORAGE_KEY_SESSIONS = 'venilearn_live_sessions';
 
-const INITIAL_SESSIONS: LiveSession[] = [];
-
 function loadInitialSessions(): LiveSession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SESSIONS);
     if (raw) {
       const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const realSessions = parsed.filter((s) => !s.id?.startsWith("ls-live-") && !s.id?.startsWith("ls-rec-"));
-          return realSessions;
-        }
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Automatically upgrade any legacy Zoom/Jitsi/VeniLearn rooms to Google Meet
-        const upgraded = parsed.map((s: LiveSession) => {
-          const isLegacyProvider = s.provider && (s.provider.includes('Zoom') || s.provider.includes('VeniLearn Live') || s.provider.includes('Jitsi'));
-          const isLegacyUrl = s.meetingUrl && (s.meetingUrl.includes('zoom.us') || s.meetingUrl.includes('meet.venilearn.com') || s.meetingUrl.includes('jit.si'));
-          if (isLegacyProvider || isLegacyUrl) {
-            const cleanId = (s.id || 'ses').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(-6);
-            const meetUrl = s.meetingUrl ? `https://meet.google.com/ven-${cleanId}` : '';
-            return {
-              ...s,
-              provider: 'Google Meet',
-              meetingUrl: meetUrl,
-              joinLink: meetUrl,
-            };
-          }
-          return s;
-        });
-
-        const existingIds = new Set(upgraded.map((s: LiveSession) => s.id));
-        const missingInitial = INITIAL_SESSIONS.filter((init) => !existingIds.has(init.id));
-        if (missingInitial.length > 0) {
-          const merged = [...upgraded, ...missingInitial];
-          localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(merged));
-          return merged;
-        }
-        localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(upgraded));
-        return upgraded;
+      if (Array.isArray(parsed)) {
+        // Filter out hardcoded demo seeds
+        return parsed.filter((s) => !s.id?.startsWith('ls-live-') && !s.id?.startsWith('ls-rec-'));
       }
     }
   } catch (err) {
     console.warn('Failed to load live sessions from localStorage:', err);
   }
-  return INITIAL_SESSIONS;
+  return [];
 }
 
 function persistSessions(sessions: LiveSession[]) {
@@ -95,6 +65,50 @@ function persistSessions(sessions: LiveSession[]) {
   }
 }
 
+/** Map a backend LiveSession row to the frontend LiveSession type */
+function mapBackendSession(item: any): LiveSession {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description || '',
+    courseId: item.courseId || undefined,
+    courseTitle: item.course?.title || item.courseTitle || undefined,
+    cohortId: item.cohortId || undefined,
+    cohortName: item.cohortName || undefined,
+    departmentId: item.departmentId || undefined,
+    date: item.date
+      ? (typeof item.date === 'string' ? item.date.slice(0, 10) : new Date(item.date).toISOString().slice(0, 10))
+      : new Date().toISOString().slice(0, 10),
+    startTime: item.startTime
+      ? (item.startTime.includes('T')
+        ? new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        : item.startTime)
+      : '10:00',
+    endTime: item.endTime
+      ? (item.endTime.includes('T')
+        ? new Date(item.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        : item.endTime)
+      : '11:00',
+    durationMinutes: item.durationMinutes || 60,
+    status: item.status || 'scheduled',
+    provider: item.provider || 'Google Meet',
+    meetingUrl: item.meetingUrl || '',
+    joinLink: item.joinLink || item.meetingUrl || '',
+    recordingUrl: item.recordingUrl || '',
+    recordingLink: item.recordingUrl || '',
+    instructorId: item.instructorId || item.trainerId || '',
+    instructorName: item.instructorName || item.trainer?.displayName || 'Faculty',
+    targetAudienceType: item.targetAudienceType || 'all_enrolled',
+    targetStudentIds: item.targetStudentIds || [],
+    targetStaffIds: item.targetStaffIds || [],
+    audienceScope: item.audienceScope || 'students',
+    enrolledCount: item._count?.attendance ?? item.enrolledCount ?? 0,
+    attendance: item.attendance || [],
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
+}
+
 export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   isLoading: false,
   fetchSessions: async () => {
@@ -102,28 +116,7 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     try {
       const res = await apiClient.get<any[]>('/live-sessions');
       if (res && res.data && Array.isArray(res.data)) {
-        const mapped: LiveSession[] = res.data.map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          description: item.description || '',
-          courseId: item.courseId || undefined,
-          cohortId: item.cohortId || undefined,
-          date: item.startTime ? item.startTime.slice(0, 10) : new Date().toISOString().slice(0, 10),
-          startTime: item.startTime ? new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
-          endTime: item.endTime ? new Date(item.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '11:00',
-          durationMinutes: item.durationMinutes || 60,
-          status: item.status || 'scheduled',
-          provider: item.provider || 'Google Meet',
-          meetingUrl: item.meetingUrl || '',
-          recordingUrl: item.recordingUrl || '',
-          recordingLink: item.recordingUrl || '',
-          instructorId: item.instructorId || item.trainerId || 'trainer-default',
-          instructorName: item.instructorName || item.trainer?.displayName || 'Faculty Trainer',
-          targetAudienceType: 'all_enrolled',
-          attendance: item.attendance || [],
-          createdAt: item.createdAt || new Date().toISOString(),
-          updatedAt: item.updatedAt || new Date().toISOString(),
-        }));
+        const mapped: LiveSession[] = res.data.map(mapBackendSession);
         set({ sessions: mapped, isLoading: false });
         persistSessions(mapped);
         return;
@@ -131,7 +124,8 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     } catch (e) {
       console.warn('Failed to fetch live sessions from backend:', e);
     }
-    set({ isLoading: false });
+    // Fallback to localStorage cache
+    set({ sessions: loadInitialSessions(), isLoading: false });
   },
   sessions: loadInitialSessions(),
 
@@ -146,68 +140,94 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   getSessionsForStudent: (studentId: string, cohortIds: string[], courseIds: string[]) => {
     const { sessions } = get();
     return sessions.filter((s) => {
-      // If student is explicitly in targetStudentIds
-      if (s.targetStudentIds && s.targetStudentIds.includes(studentId)) {
-        return true;
-      }
-      // If session is for a cohort the student belongs to
+      if (s.targetStudentIds && s.targetStudentIds.includes(studentId)) return true;
       if (s.cohortId && cohortIds.includes(s.cohortId)) {
         if (s.targetAudienceType === 'selected_students') {
           return s.targetStudentIds?.includes(studentId);
         }
         return true;
       }
-      // If session is for an enrolled course with no restrictive cohort
-      if (s.courseId && courseIds.includes(s.courseId) && !s.cohortId) {
-        return true;
-      }
+      if (s.courseId && courseIds.includes(s.courseId) && !s.cohortId) return true;
       return false;
     });
   },
 
-  addSession: (sessionData, notifyStudents = true) => {
-    const newSession: LiveSession = {
+  addSession: async (sessionData, notifyStudents = true) => {
+    const currentUserId = useAuthStore.getState().user?.id;
+
+    // Build payload for backend
+    const payload = {
       ...sessionData,
-      id: `ls-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      attendance: [],
+      instructorId: sessionData.instructorId || currentUserId,
     };
 
-    const updated = [newSession, ...get().sessions];
+    let persisted: LiveSession;
+
+    try {
+      const res = await apiClient.post<any>('/live-sessions', payload);
+      if (res?.data) {
+        persisted = mapBackendSession(res.data);
+      } else {
+        // API returned unexpected shape — build local fallback
+        persisted = {
+          ...sessionData,
+          id: `ls-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          attendance: [],
+        } as LiveSession;
+      }
+    } catch (e) {
+      console.error('Failed to create live session in backend:', e);
+      // Local fallback so UI still works
+      persisted = {
+        ...sessionData,
+        id: `ls-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        attendance: [],
+      } as LiveSession;
+    }
+
+    const updated = [persisted, ...get().sessions];
     set({ sessions: updated });
     persistSessions(updated);
 
-    // Dispatch in-app notifications if requested
-    if (notifyStudents && newSession.targetStudentIds && newSession.targetStudentIds.length > 0) {
+    if (notifyStudents && persisted.targetStudentIds && persisted.targetStudentIds.length > 0) {
       try {
         useAuthStore.getState().notifyLiveSession({
-          sessionId: newSession.id,
-          sessionTitle: newSession.title,
-          instructorName: newSession.instructorName || 'Your Trainer',
-          recipientIds: newSession.targetStudentIds,
+          sessionId: persisted.id,
+          sessionTitle: persisted.title,
+          instructorName: persisted.instructorName || 'Your Trainer',
+          recipientIds: persisted.targetStudentIds,
           type: 'scheduled',
-          date: newSession.date,
-          startTime: newSession.startTime,
+          date: persisted.date,
+          startTime: persisted.startTime,
         });
       } catch (e) {
         console.warn('Failed to dispatch live session scheduled notification:', e);
       }
     }
 
-    return { success: true, session: newSession };
+    return { success: true, session: persisted };
   },
 
-  updateSession: (updatedSession, notifyStudents = true) => {
+  updateSession: async (updatedSession, notifyStudents = true) => {
     const sessionWithTimestamp: LiveSession = {
       ...updatedSession,
       updatedAt: new Date().toISOString(),
     };
 
+    // Persist to backend
+    try {
+      await apiClient.put(`/live-sessions/${updatedSession.id}`, updatedSession);
+    } catch (e) {
+      console.warn('Failed to update live session in backend:', e);
+    }
+
     const updated = get().sessions.map((s) =>
       s.id === updatedSession.id ? sessionWithTimestamp : s
     );
-
     set({ sessions: updated });
     persistSessions(updated);
 
@@ -248,6 +268,11 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     set({ sessions: updated });
     persistSessions(updated);
 
+    // Fire and forget backend cancel
+    apiClient.put(`/live-sessions/${sessionId}`, { status: 'cancelled' }).catch((e) =>
+      console.warn('Failed to cancel session in backend:', e)
+    );
+
     if (notifyStudents && target.targetStudentIds && target.targetStudentIds.length > 0) {
       try {
         useAuthStore.getState().notifyLiveSession({
@@ -266,20 +291,21 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     return { success: true };
   },
 
-  startBroadcast: (sessionId: string) => {
+  startBroadcast: async (sessionId: string) => {
     const target = get().sessions.find((s) => s.id === sessionId);
     if (!target) return { success: false };
 
+    try {
+      await apiClient.post(`/live-sessions/${sessionId}/broadcast/start`, {});
+    } catch (e) {
+      console.warn('Failed to start broadcast in backend:', e);
+    }
+
     const updated = get().sessions.map((s) =>
       s.id === sessionId
-        ? {
-            ...s,
-            status: 'live' as const,
-            updatedAt: new Date().toISOString(),
-          }
+        ? { ...s, status: 'live' as const, updatedAt: new Date().toISOString() }
         : s
     );
-
     set({ sessions: updated });
     persistSessions(updated);
 
@@ -300,19 +326,24 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     return { success: true };
   },
 
-  endSession: (sessionId: string, recordingUrl?: string) => {
+  endSession: async (sessionId: string, recordingUrl?: string) => {
+    try {
+      await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, { recordingUrl: recordingUrl || '' });
+    } catch (e) {
+      console.warn('Failed to end session in backend:', e);
+    }
+
     const updated = get().sessions.map((s) =>
       s.id === sessionId
         ? {
             ...s,
             status: 'ended' as const,
-            recordingUrl: recordingUrl || s.recordingUrl || `https://venilearn.demo/recordings/${sessionId}`,
-            recordingLink: recordingUrl || s.recordingLink || `https://venilearn.demo/recordings/${sessionId}`,
+            recordingUrl: recordingUrl || s.recordingUrl || '',
+            recordingLink: recordingUrl || s.recordingLink || '',
             updatedAt: new Date().toISOString(),
           }
         : s
     );
-
     set({ sessions: updated });
     persistSessions(updated);
     return { success: true };
@@ -322,6 +353,10 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     const updated = get().sessions.filter((s) => s.id !== sessionId);
     set({ sessions: updated });
     persistSessions(updated);
+    // Fire and forget
+    apiClient.delete(`/live-sessions/${sessionId}`).catch((e) =>
+      console.warn('Failed to delete session in backend:', e)
+    );
     return { success: true };
   },
 
