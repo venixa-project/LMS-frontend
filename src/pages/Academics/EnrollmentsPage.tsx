@@ -28,7 +28,30 @@ export const EnrollmentsPage: React.FC = () => {
   const { cohorts, fetchCohorts } = useCohortStore();
   const { departments } = useDepartmentStore();
   const { users, fetchPeople } = usePeopleStore();
-  useEffect(() => { fetchCourses(); fetchCohorts(); fetchPeople(); fetchAdminEnrollments(); }, []);
+  
+  useEffect(() => {
+    fetchCourses();
+    fetchCohorts();
+    fetchPeople();
+    fetchAdminEnrollments().then((items) => {
+      if (items && items.length > 0) {
+        const mapped: ExtendedEnrollment[] = items.map((ae: any) => ({
+          id: ae.id,
+          userId: ae.userId,
+          studentName: ae.studentName || 'Student',
+          studentEmail: ae.studentEmail || 'student@lms.demo',
+          courseId: ae.courseId,
+          courseTitle: ae.courseTitle || 'Enrolled Course',
+          cohortName: ae.cohortName || 'Standard Track',
+          departmentName: ae.departmentName || 'Computer Science & Engineering',
+          status: ae.status || 'active',
+          progressPercent: ae.progress || 0,
+          enrolledAt: ae.enrolledAt || new Date().toISOString(),
+        }));
+        setEnrollments(mapped);
+      }
+    });
+  }, []);
   const { enrollments: storeEnrollments, courses: storeCourses } = useCourseStore();
   const { getStudents } = usePeopleStore();
 

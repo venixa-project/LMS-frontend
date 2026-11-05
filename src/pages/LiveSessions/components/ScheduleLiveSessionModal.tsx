@@ -42,12 +42,14 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   const { cohorts, fetchCohorts } = useCohortStore();
   const { courses, fetchCourses } = useCourseStore();
   const { departments, fetchDepartments } = useDepartmentStore();
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
 
   useEffect(() => {
     if (isOpen) {
       fetchCourses();
       fetchDepartments();
       fetchCohorts();
+      fetchPeople();
     }
   }, [isOpen]);
 
@@ -122,12 +124,30 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Filtered Options & Eligibility Data
   // --------------------------------------------------------------------------
-  // All Trainers list
+  // All Trainers & Faculty hosts list (reactive — updates when peopleUsers loads)
   const allTrainers = useMemo(() => {
-    return usePeopleStore.getState().users.filter(
-      (u) => (u.activeRole === 'trainer' || u.activeRole === 'instructor') && u.status !== 'suspended'
+    const list = peopleUsers.filter(
+      (u) =>
+        u.status !== 'suspended' &&
+        (u.activeRole === 'trainer' ||
+          u.activeRole === 'instructor' ||
+          (u.activeRole as string) === 'faculty' ||
+          u.activeRole === 'org_admin' ||
+          u.activeRole === 'platform_admin')
     );
-  }, []);
+    if (list.length > 0) return list;
+    if (user) return [user];
+    return [];
+  }, [peopleUsers, user]);
+
+  // Synchronize instructorId whenever trainers list changes
+  useEffect(() => {
+    if (allTrainers.length > 0) {
+      if (!instructorId || !allTrainers.some((t) => t.id === instructorId)) {
+        setInstructorId(allTrainers[0].id);
+      }
+    }
+  }, [allTrainers, instructorId]);
 
   // Filtered Courses based on Department
   const departmentCourses = useMemo(() => {
@@ -179,14 +199,14 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     return cohorts.find((c) => c.id === cohortId) || eligibleCohorts[0] || cohorts[0];
   }, [cohorts, cohortId, eligibleCohorts]);
 
-  // Eligible students in selected cohort
+  // Eligible students in selected cohort (reactive — updates when peopleUsers loads)
   const cohortStudents = useMemo(() => {
     if (!activeCohort || !activeCohort.studentIds || activeCohort.studentIds.length === 0) {
-      return usePeopleStore.getState().users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
+      return peopleUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
     }
     const ids = activeCohort.studentIds;
-    return usePeopleStore.getState().users.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
-  }, [activeCohort]);
+    return peopleUsers.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
+  }, [activeCohort, peopleUsers]);
 
   // Filtered Students list by search
   const filteredStudents = useMemo(() => {
@@ -200,9 +220,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     );
   }, [cohortStudents, studentSearch]);
 
-  // Eligible Faculty & Staff
+  // Eligible Faculty & Staff (reactive — updates when peopleUsers loads)
   const eligibleFacultyStaff = useMemo(() => {
-    return usePeopleStore.getState().users.filter(
+    return peopleUsers.filter(
       (u) =>
         u.status !== 'suspended' &&
         (u.activeRole === 'trainer' ||
@@ -210,7 +230,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
           u.activeRole === 'platform_admin' ||
           u.activeRole === 'org_admin')
     );
-  }, []);
+  }, [peopleUsers]);
 
   // Filtered Faculty & Staff by search and department
   const filteredFacultyStaff = useMemo(() => {
@@ -529,15 +549,16 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
         ? 'all_cohort'
         : 'selected_students';
 
-    // Realistically provision room URL according to selected provider
+    // Use the actual meeting URL provided by the admin.
+    // Do NOT fall back to meet.google.com/new — it creates a NEW room each time it's opened.
     const finalMeetingUrl =
       provider === 'Google Meet'
-        ? (googleMeetUrl.trim() || 'https://meet.google.com/new')
+        ? googleMeetUrl.trim()
         : provider.includes('Zoom')
-        ? `https://zoom.us/j/${Math.floor(1000000000 + Math.random() * 9000000000)}`
+        ? googleMeetUrl.trim()
         : provider.includes('Teams')
-        ? 'https://teams.microsoft.com/l/meetup-join/'
-        : 'https://meet.google.com/new';
+        ? googleMeetUrl.trim()
+        : googleMeetUrl.trim();
 
     const selectedCourseObj = courses.find((c) => c.id === courseId);
     const selectedCohortObj = cohorts.find((c) => c.id === cohortId) || activeCohort;
@@ -1091,9 +1112,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         }}
                         style={{ height: '40px', fontSize: '0.85rem' }}
                       >
+                        {allTrainers.length === 0 && (
+                          <option value="">No trainers available</option>
+                        )}
                         {allTrainers.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.displayName} ({t.rollNo || 'Faculty'}) &bull; {t.specialization || 'Lead Instructor'}
+                            {t.displayName} ({t.rollNo || (t.activeRole === 'org_admin' ? 'Institution Admin' : 'Lead Faculty')}) &bull; {t.specialization || t.activeRole?.toUpperCase()}
                           </option>
                         ))}
                       </select>
@@ -1258,18 +1282,38 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
                     <div
                       style={{
-                        padding: '10px 14px',
-                        background: 'var(--bg-input)',
+                        padding: '12px 14px',
+                        background: 'rgba(56, 189, 248, 0.08)',
                         borderRadius: '8px',
-                        border: '1px solid var(--border-subtle)',
-                        fontSize: '0.78rem',
+                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                        fontSize: '0.8rem',
                         color: 'var(--text-secondary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
                       }}
                     >
                       {provider === 'Google Meet' ? (
-                        <span>
-                          Enter your Google Meet link (e.g. <code>https://meet.google.com/abc-defg-hij</code>), or leave blank to open an instant room when starting class.
-                        </span>
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                            <span style={{ color: '#38bdf8', fontWeight: 600 }}>
+                              📌 Important: All participants must join the same Google Meet room code.
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => {
+                                window.open('https://meet.google.com/new', '_blank');
+                              }}
+                              style={{ fontSize: '0.75rem', padding: '3px 10px', height: '28px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
+                            >
+                              <Video size={13} /> 1-Click Create Meet in New Tab ↗
+                            </button>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Click button above to open a Google Meet room, copy its URL from the address bar (e.g. <code>https://meet.google.com/abc-defg-hij</code>), and paste it below.
+                          </span>
+                        </>
                       ) : (
                         <span>
                           Enter your {provider} meeting link for participants.
@@ -1286,6 +1330,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                             setGoogleMeetUrl(val);
                           }}
                           required={false}
+                          helperText="Paste your exact room URL. Students who click Join will be routed to this room and recorded as present."
                         />
                       </div>
                     )}

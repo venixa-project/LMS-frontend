@@ -17,11 +17,18 @@ import {
 import { create } from 'zustand';
 import { apiClient } from './apiClient';
 import { useLiveSessionStore } from './liveSessionStore';
+import { useAssessmentStore } from './assessmentStore';
 
 
-const STORAGE_KEY = 'venilearn_admin_planner_activities_v3';
+const STORAGE_KEY = 'venilearn_admin_planner_activities_v4';
 
 // Helper to format Date to YYYY-MM-DD in local time
+export const getOffsetDate = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return formatLocalDate(d);
+};
+
 export const formatLocalDate = (d: Date = new Date()): string => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -37,7 +44,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Academic Leadership Morning Roll Call & Briefing',
       description: 'Review institutional student and faculty attendance turnouts with Department Heads.',
       type: 'meeting',
-      date: '2026-10-22',
+      date: getOffsetDate(0),
       startTime: '09:30',
       endTime: '10:15',
       priority: 'high',
@@ -56,7 +63,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Review Q4 2026 Engineering Attendance Ledger',
       description: 'Examine attendance threshold compliance and verify medical leave notes for batch ENG-Q4-26.',
       type: 'task',
-      date: '2026-10-22',
+      date: getOffsetDate(0),
       startTime: '11:00',
       endTime: '12:00',
       priority: 'high',
@@ -76,7 +83,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Finalize Midterm Exam Proctoring Roster',
       description: 'Audit AI proctoring configuration and assign faculty invigilators for upcoming quizzes.',
       type: 'deadline',
-      date: '2026-10-22',
+      date: getOffsetDate(0),
       startTime: '15:00',
       endTime: '16:00',
       priority: 'high',
@@ -96,7 +103,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Follow-up on Unassigned Grading Submissions',
       description: 'Ensure double-marking stages have allocated graders for React Capstone attempts.',
       type: 'reminder',
-      date: '2026-10-22',
+      date: getOffsetDate(0),
       startTime: '16:30',
       endTime: '17:00',
       priority: 'medium',
@@ -115,7 +122,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Verify Student Medical Leaves for Oct 20 Session',
       description: 'Overdue task: Dean certification required for excused absence requests.',
       type: 'reminder',
-      date: '2026-10-21',
+      date: getOffsetDate(-1),
       startTime: '14:00',
       priority: 'high',
       status: 'pending',
@@ -133,7 +140,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Bi-Weekly Department Chairs Council',
       description: 'Review accreditation requirements, course publishing pipeline, and faculty allocations.',
       type: 'meeting',
-      date: '2026-10-23',
+      date: getOffsetDate(1),
       startTime: '10:00',
       endTime: '11:30',
       priority: 'medium',
@@ -152,7 +159,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Review Course Approval: Leadership and Communication',
       description: 'Validate course syllabus and learning outcomes before publishing to the main catalogue.',
       type: 'task',
-      date: '2026-10-24',
+      date: getOffsetDate(2),
       startTime: '13:00',
       endTime: '14:00',
       priority: 'medium',
@@ -172,7 +179,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Cloud Lab Infrastructure Maintenance Verification',
       description: 'Check Docker runner cluster availability before weekend engineering lab work.',
       type: 'reminder',
-      date: '2026-10-25',
+      date: getOffsetDate(3),
       startTime: '09:00',
       endTime: '09:30',
       priority: 'low',
@@ -191,7 +198,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Curriculum Evaluation & Accreditation Audit',
       description: 'Review curriculum syllabus compliance with Faculty Council and Department Heads.',
       type: 'meeting',
-      date: '2026-10-26',
+      date: getOffsetDate(4),
       startTime: '10:00',
       endTime: '11:30',
       priority: 'high',
@@ -210,7 +217,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'React & Node.js Capstone Submission Deadline',
       description: 'Final repository review, commit audit, and student submission portal closing.',
       type: 'deadline',
-      date: '2026-10-26',
+      date: getOffsetDate(4),
       startTime: '16:00',
       priority: 'high',
       status: 'pending',
@@ -228,7 +235,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
       title: 'Review Batch ENG-Q4 Attendance Exceptions',
       description: 'Audit medical certificates and verify student excused absence applications.',
       type: 'task',
-      date: '2026-10-26',
+      date: getOffsetDate(4),
       startTime: '14:00',
       endTime: '15:00',
       priority: 'medium',
@@ -247,6 +254,37 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
 
 // Harvest automatically sourced LMS events without duplicating
 export const getHarvestedLMSEvents = (): PlannerActivity[] => {
+  const harvested: PlannerActivity[] = [];
+  try {
+    const assessments = useAssessmentStore.getState().assessments || [];
+    for (const a of assessments) {
+      const anyA = a as any;
+      const dueDateVal = anyA.dueDate || anyA.availabilityEnd;
+      harvested.push({
+        id: `lms-asm-${a.id}`,
+        title: `Assessment: ${a.title}`,
+        description: anyA.description || anyA.instructions || 'Institutional Assessment Deadline',
+        type: 'deadline' as PlannerActivityType,
+        date: dueDateVal ? formatLocalDate(new Date(dueDateVal)) : getOffsetDate(2),
+        startTime: '18:00',
+        endTime: '19:00',
+        priority: 'high' as PlannerPriority,
+        status: (a.status === 'published' ? 'pending' : 'completed') as PlannerStatus,
+        reminder: '1_day' as PlannerReminderLead,
+        recurrence: 'none' as PlannerRecurrence,
+        source: 'lms_auto' as PlannerSource,
+        relatedLmsType: 'assessment' as const,
+        relatedLmsId: a.id,
+        relatedLmsTitle: a.title,
+        relatedLmsUrl: '/assessments',
+        createdAt: a.createdAt || new Date().toISOString(),
+        updatedAt: a.updatedAt || new Date().toISOString(),
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to harvest assessments into planner:', e);
+  }
+
   try {
     const liveSessions = useLiveSessionStore.getState().sessions || [];
     return liveSessions.map((s) => ({

@@ -243,10 +243,15 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   adminEnrollments: [],
   fetchAdminEnrollments: async () => {
     try {
-      const res = await apiClient.get<any[]>('/courses/admin/enrollments');
-      if (res && res.data && Array.isArray(res.data)) {
-        set({ adminEnrollments: res.data });
-        return res.data;
+      const res = await apiClient.get<any>('/courses/admin/enrollments');
+      const items = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : (res?.data as any)?.items || [];
+      if (Array.isArray(items)) {
+        set({ adminEnrollments: items });
+        return items;
       }
     } catch (e) {
       console.warn('Failed to fetch admin enrollments:', e);

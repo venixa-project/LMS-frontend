@@ -34,7 +34,11 @@ export const WeeklyTimetableView: React.FC<Props> = ({
 
   // Filters and Modes
   const [timetableMode, setTimetableMode] = useState<'week' | 'day' | 'list'>('week');
-  const [currentWeekDate, setCurrentWeekDate] = useState<Date>(() => new Date('2026-10-19T00:00:00'));
+  const [currentWeekDate, setCurrentWeekDate] = useState<Date>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCohort, setSelectedCohort] = useState('all');
@@ -97,7 +101,9 @@ export const WeeklyTimetableView: React.FC<Props> = ({
   }, [weekDates]);
 
   const goToToday = () => {
-    setCurrentWeekDate(new Date('2026-10-19T00:00:00'));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setCurrentWeekDate(today);
   };
 
   const goToPrevWeek = () => {
@@ -577,9 +583,8 @@ export const WeeklyTimetableView: React.FC<Props> = ({
               {weeklySchedule.map((dayPlan, dayIdx) => {
                 const dayDate = weekDates[dayIdx];
                 const isToday = dayDate
-                  ? dayDate.toDateString() === new Date('2026-10-19T00:00:00').toDateString() ||
-                    dayDate.toDateString() === new Date().toDateString()
-                  : dayIdx === 0;
+                  ? dayDate.toDateString() === new Date().toDateString()
+                  : false;
 
                 return (
                   <div
@@ -900,7 +905,9 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
                             {s.meetingUrl ? (
                               <GoogleMeetJoinButton
+                                sessionId={s.id}
                                 meetingUrl={s.meetingUrl || s.joinLink}
+                                role={isAdmin || isTrainer ? 'instructor' : 'student'}
                                 label={isLive ? 'Join with Google Meet' : 'Open Google Meet'}
                                 size="sm"
                               />
@@ -1004,7 +1011,9 @@ export const WeeklyTimetableView: React.FC<Props> = ({
                           <td style={{ padding: '14px 16px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                             {s.meetingUrl ? (
                               <GoogleMeetJoinButton
+                                sessionId={s.id}
                                 meetingUrl={s.meetingUrl || s.joinLink}
+                                role={isAdmin || isTrainer ? 'instructor' : 'student'}
                                 label={isLive ? 'Join' : 'Meet'}
                                 size="sm"
                               />

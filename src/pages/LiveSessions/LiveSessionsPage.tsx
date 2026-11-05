@@ -802,6 +802,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           </button>
                         ) : (
                           <GoogleMeetJoinButton
+                            sessionId={s.id}
                             meetingUrl={s.meetingUrl || s.joinLink}
                             role="student"
                             label="Join with Google Meet"
