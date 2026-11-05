@@ -64,7 +64,10 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     saveDraft,
     deleteAssessment,
     deleteDraft,
-    publishAssessment
+    publishAssessment,
+    myAttempts,
+    fetchAssessments,
+    fetchMyAttempts
   } = useAssessmentStore();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -82,80 +85,76 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const [honorCodeAgreed, setHonorCodeAgreed] = useState(false);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'pending' | 'submitted' | 'graded'>('all');
 
+  useEffect(() => {
+    fetchAssessments();
+    if (isLearner) {
+      fetchMyAttempts();
+    }
+  }, [fetchAssessments, fetchMyAttempts, isLearner]);
+
   const showNotice = (msg: string) => {
     setNotice(msg);
     setTimeout(() => setNotice(null), 4000);
   };
 
   // Faculty & Learner course filter logic
-  const assignedCourses = isFaculty
-    ? useCourseStore.getState().courses.filter((c) => c.instructors?.includes('u-004') || c.createdBy === 'u-004' || c.id === 'crs-001' || c.id === 'crs-002')
-    : isLearner
-      ? useCourseStore.getState().courses.filter((c) => ['crs-001', 'crs-002', 'crs-004'].includes(c.id))
-      : useCourseStore.getState().courses;
+  const assignedCourses = useCourseStore.getState().courses;
 
-  // Assignments mock data
-  const [assignments, setAssignments] = useState<CourseAssignment[]>([
-    {
-      id: 'asg-1',
-      title: 'Distributed System Architecture & Microservices Capstone',
-      description: 'Implement a resilient microservices backend with Docker containerization, Kafka event bus, and OpenAPI documentation.',
-      courseId: 'crs-001',
-      cohortId: 'coh-001',
-      dueDate: '2026-10-28',
-      totalMarks: 100,
-      submissionFormat: 'repo',
-      submissionsCount: 24,
-      gradedCount: 18,
-      status: 'active',
-      learnerStatus: 'graded',
-      learnerScore: 92,
-      learnerFeedback: 'Outstanding decomposition of microservices and clean Docker orchestration. Kafka consumer retry topic logic is well-architected. Minus 8 marks for lack of integration stress-test scripts.',
-      learnerSubmissionUrl: 'https://github.com/alex-thompson/distributed-services-capstone',
-      learnerSubmittedAt: '2026-10-15'
-    },
-    {
-      id: 'asg-2',
-      title: 'Advanced React State Management & Custom Hooks Implementation',
-      description: 'Design an offline-capable Kanban task board utilizing Zustand, TanStack Query, and optimistic UI mutations.',
-      courseId: 'crs-002',
-      cohortId: 'coh-002',
-      dueDate: '2026-10-31',
-      totalMarks: 100,
-      submissionFormat: 'repo',
-      submissionsCount: 19,
-      gradedCount: 14,
-      status: 'active',
-      learnerStatus: 'pending'
-    },
-    {
-      id: 'asg-3',
-      title: 'TypeScript Type-Level Programming & Generics Challenge',
-      description: 'Construct type-safe JSON schema validators and compile-time utility types without runtime overhead.',
-      courseId: 'crs-004',
-      cohortId: 'coh-001',
-      dueDate: '2026-11-05',
-      totalMarks: 50,
-      submissionFormat: 'file',
-      submissionsCount: 12,
-      gradedCount: 0,
-      status: 'active',
-      learnerStatus: 'submitted',
-      learnerSubmissionUrl: 'typescript-type-validator-capstone.zip (4.2 MB)',
-      learnerSubmittedAt: '2026-10-16',
-      learnerFeedback: 'Deliverable received on time. Awaiting evaluation by Dr. James Wilson.'
-    }
-  ]);
+  // Assignments data initialized from localStorage or dynamic course deliverables
+  const [assignments, setAssignments] = useState<CourseAssignment[]>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('venilearn_assignments');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      }
+    } catch {}
+
+    const list: CourseAssignment[] = [];
+    useCourseStore.getState().courses.forEach((c) => {
+      list.push({
+        id: `asg-${c.id}-1`,
+        title: `${c.title} — Capstone Engineering Project`,
+        description: `Architect and implement an end-to-end practical solution demonstrating mastery over the modules covered in ${c.title}. Include source files, unit tests, and comprehensive documentation.`,
+        courseId: c.id,
+        cohortId: 'coh-001',
+        dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+        totalMarks: 100,
+        submissionFormat: 'repo',
+        submissionsCount: 1,
+        gradedCount: 0,
+        status: 'active',
+        learnerStatus: 'pending',
+      });
+      list.push({
+        id: `asg-${c.id}-2`,
+        title: `${c.title} — Practical Lab & Problem Solving Deliverable`,
+        description: `Complete the programming exercises and case study problems outlined in the syllabus. Submit your source archive and lab report for evaluation.`,
+        courseId: c.id,
+        cohortId: 'coh-001',
+        dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        totalMarks: 50,
+        submissionFormat: 'file',
+        submissionsCount: 1,
+        gradedCount: 0,
+        status: 'active',
+        learnerStatus: 'pending',
+      });
+    });
+    return list;
+  });
 
   const handleSubmitDeliverable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!submittingAssignment || !submissionDeliverable.trim()) return;
 
-    setAssignments(assignments.map((a) => {
+    const nextAssignments = assignments.map((a) => {
       if (a.id === submittingAssignment.id) {
         return {
           ...a,
-          learnerStatus: 'submitted',
+          learnerStatus: 'submitted' as const,
           learnerSubmissionUrl: submissionDeliverable.trim(),
           learnerSubmittedAt: new Date().toISOString().split('T')[0],
           submissionsCount: a.submissionsCount + 1,
@@ -163,9 +162,14 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         };
       }
       return a;
-    }));
+    });
 
-    showNotice(`Deliverable for "${submittingAssignment.title}" submitted successfully! (Demonstration state updated — changes will not persist across browser refresh)`);
+    setAssignments(nextAssignments);
+    try {
+      localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
+    } catch {}
+
+    showNotice(`Deliverable for "${submittingAssignment.title}" submitted successfully!`);
     setSubmittingAssignment(null);
     setSubmissionDeliverable('');
     setSubmissionNotes('');
@@ -175,9 +179,9 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   // Form states for Assignment
   const [asgTitle, setAsgTitle] = useState('');
   const [asgDesc, setAsgDesc] = useState('');
-  const [asgCourseId, setAsgCourseId] = useState(assignedCourses[0]?.id || 'crs-001');
-  const [asgCohortId, setAsgCohortId] = useState('coh-001');
-  const [asgDueDate, setAsgDueDate] = useState('2026-11-10');
+  const [asgCourseId, setAsgCourseId] = useState(assignedCourses[0]?.id || '');
+  const [asgCohortId, setAsgCohortId] = useState('');
+  const [asgDueDate, setAsgDueDate] = useState(() => new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]);
   const [asgMarks, setAsgMarks] = useState(100);
   const [asgFormat, setAsgFormat] = useState<'file' | 'repo' | 'text'>('repo');
 
@@ -245,8 +249,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             <span className="badge badge-primary">
               {isFaculty ? 'Faculty Teaching Scope' : isLearner ? 'Student Academic Portal' : 'Academic Evaluations'}
             </span>
-            {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
-            {isLearner && <span className="badge badge-active">Alex Thompson</span>}
+            {isFaculty && <span className="badge badge-draft">{user?.displayName || 'Faculty Member'}</span>}
+            {isLearner && <span className="badge badge-active">{user?.displayName || 'Enrolled Student'}</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
             {activeTab === 'assignments'
@@ -370,12 +374,38 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       {/* TAB 1: ASSIGNMENTS */}
       {activeTab === 'assignments' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="grid-3">
-            {filteredAssignments.map((asg) => {
-              const course = useCourseStore.getState().courses.find((c) => c.id === asg.courseId);
-              const cohort = useCohortStore.getState().cohorts.find((c) => c.id === asg.cohortId);
+          {filteredAssignments.length === 0 ? (
+            <div className="card" style={{ padding: '48px 24px', textAlign: 'center', background: 'var(--bg-surface)' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <ClipboardCheck size={28} />
+              </div>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No Deliverable Assignments Found</h3>
+              <p className="text-secondary text-sm" style={{ maxWidth: '480px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                {selectedCourseFilter !== 'all'
+                  ? `There are no standalone assignments matching the selected filter. Interactive lessons, video lectures, and module checkpoints are ready inside your Course Player!`
+                  : `You have completed all active assignments or no submissions have been assigned to your cohort yet.`}
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link to="/courses" className="btn btn-primary btn-sm" style={{ gap: '6px' }}>
+                  <Play size={14} /> Resume Course Lessons
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate('/my-assessments')}
+                  style={{ gap: '6px' }}
+                >
+                  <FileText size={14} /> View Quizzes & Exams
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid-3">
+              {filteredAssignments.map((asg) => {
+                const course = useCourseStore.getState().courses.find((c) => c.id === asg.courseId);
+                const cohort = useCohortStore.getState().cohorts.find((c) => c.id === asg.cohortId);
 
-              return (
+                return (
                 <div key={asg.id} className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -466,6 +496,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
               );
             })}
           </div>
+          )}
         </div>
       )}
 
@@ -546,7 +577,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
                         <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{d.title}</h3>
                         <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-                          Course: <strong>{course?.title || 'Advanced Web Development'}</strong>
+                          Course: <strong>{course?.title || assignedCourses[0]?.title || 'General Curriculum'}</strong>
                         </p>
 
                         <div
@@ -680,7 +711,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
                       <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{a.title}</h3>
                       <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-                        Course: <strong>{course?.title || 'Advanced Web Development'}</strong>
+                        Course: <strong>{course?.title || assignedCourses[0]?.title || 'General Curriculum'}</strong>
                       </p>
 
                       <div style={{
@@ -795,104 +826,177 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       )}
 
       {/* TAB 3: STUDENT RESULTS */}
-      {isLearner && activeTab === 'results' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Results KPI Summary */}
-          <div className="grid-4">
-            <div className="stat-card">
-              <span className="text-muted text-xs font-semibold">Cumulative Average</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)' }}>95.7%</div>
-              <p className="text-success text-xs">&uarr; Grade: A+ (Honors Track)</p>
-            </div>
-            <div className="stat-card">
-              <span className="text-muted text-xs font-semibold">Quizzes / Exams Passed</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>2 / 2</div>
-              <p className="text-muted text-xs">100% assessment clearance</p>
-            </div>
-            <div className="stat-card">
-              <span className="text-muted text-xs font-semibold">Assignments Graded</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>92.0%</div>
-              <p className="text-muted text-xs">92 / 100 points obtained</p>
-            </div>
-            <div className="stat-card">
-              <span className="text-muted text-xs font-semibold">Earned Certificates</span>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-purple)' }}>1 Active</div>
-              <p className="text-muted text-xs">Verified digital credential</p>
-            </div>
-          </div>
+      {isLearner && activeTab === 'results' && (() => {
+        const submittedAssignments = assignments.filter((a) => a.learnerStatus === 'submitted' || a.learnerStatus === 'graded');
+        const gradedAssignments = assignments.filter((a) => a.learnerStatus === 'graded');
+        const avgPercentage = myAttempts.length > 0
+          ? Math.round(myAttempts.reduce((acc, a) => acc + (a.percentage || 0), 0) / myAttempts.length)
+          : gradedAssignments.length > 0
+            ? Math.round(gradedAssignments.reduce((acc, a) => acc + (((a.learnerScore || 0) / a.totalMarks) * 100), 0) / gradedAssignments.length)
+            : 0;
+        const passedAttemptsCount = myAttempts.filter((a) => a.passed).length;
+        const totalEvaluationsCount = myAttempts.length + submittedAssignments.length;
 
-          {/* Academic Evaluations Table */}
-          <div className="card">
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Published Examination & Assignment Transcript</h3>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Evaluation Title</th>
-                    <th>Course</th>
-                    <th>Type</th>
-                    <th>Date Evaluated</th>
-                    <th>Score / Total</th>
-                    <th>Percentage</th>
-                    <th>Outcome</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>JavaScript & TypeScript Fundamentals Quiz</td>
-                    <td>Distributed Systems & Cloud Architecture</td>
-                    <td><span className="badge badge-primary">Proctored Quiz</span></td>
-                    <td className="text-muted text-xs">Oct 14, 2026</td>
-                    <td><strong>25 / 25</strong></td>
-                    <td style={{ color: 'var(--success)', fontWeight: 700 }}>100%</td>
-                    <td><span className="badge badge-success">PASSED</span></td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-xs"
-                        onClick={() => showNotice('Quiz Score Breakdown: Section 1 (ES6+): 10/10, Section 2 (Generics): 10/10, Section 3 (Async): 5/5.')}
-                      >
-                        <Eye size={12} /> View Breakdown
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Distributed System Architecture & Microservices Capstone</td>
-                    <td>Distributed Systems & Cloud Architecture</td>
-                    <td><span className="badge badge-info">Project Deliverable</span></td>
-                    <td className="text-muted text-xs">Oct 15, 2026</td>
-                    <td><strong>92 / 100</strong></td>
-                    <td style={{ color: 'var(--success)', fontWeight: 700 }}>92%</td>
-                    <td><span className="badge badge-success">GRADED (A)</span></td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-xs"
-                        onClick={() => setViewingAssignment(assignments[0])}
-                      >
-                        <Eye size={12} /> View Feedback
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Full-Stack Web Architecture Comprehensive Exam</td>
-                    <td>Full-Stack Web Development Bootcamp</td>
-                    <td><span className="badge badge-primary">Final Exam</span></td>
-                    <td className="text-muted text-xs">Oct 02, 2026</td>
-                    <td><strong>95 / 100</strong></td>
-                    <td style={{ color: 'var(--success)', fontWeight: 700 }}>95%</td>
-                    <td><span className="badge badge-success">PASSED &bull; CERTIFIED</span></td>
-                    <td>
-                      <Link to="/my-certificates" className="btn btn-secondary btn-xs">
-                        <Award size={12} /> View Certificate
-                      </Link>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Results KPI Summary */}
+            <div className="grid-4">
+              <div className="stat-card">
+                <span className="text-muted text-xs font-semibold">Cumulative Average</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: avgPercentage > 0 ? 'var(--success)' : 'var(--text-main)' }}>
+                  {avgPercentage > 0 ? `${avgPercentage}%` : '0%'}
+                </div>
+                <p className="text-muted text-xs">
+                  {avgPercentage > 0 ? 'Official evaluated grade transcript' : 'No evaluations graded yet'}
+                </p>
+              </div>
+              <div className="stat-card">
+                <span className="text-muted text-xs font-semibold">Quizzes / Exams Passed</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>
+                  {passedAttemptsCount} / {myAttempts.length}
+                </div>
+                <p className="text-muted text-xs">
+                  {myAttempts.length > 0 ? `${Math.round((passedAttemptsCount / myAttempts.length) * 100)}% assessment clearance` : '0 evaluations cleared'}
+                </p>
+              </div>
+              <div className="stat-card">
+                <span className="text-muted text-xs font-semibold">Assignments Graded</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>
+                  {gradedAssignments.length} / {submittedAssignments.length}
+                </div>
+                <p className="text-muted text-xs">
+                  {submittedAssignments.length - gradedAssignments.length} pending instructor review
+                </p>
+              </div>
+              <div className="stat-card">
+                <span className="text-muted text-xs font-semibold">Earned Certificates</span>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--accent-purple)' }}>
+                  {myAttempts.filter((a) => a.passed && a.assessment?.scope === 'final_assessment').length} Active
+                </div>
+                <p className="text-muted text-xs">Verified digital credentials</p>
+              </div>
+            </div>
+
+            {/* Academic Evaluations Table */}
+            <div className="card">
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Published Examination & Assignment Transcript</h3>
+              {totalEvaluationsCount === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                    <Award size={26} />
+                  </div>
+                  <h4 style={{ fontSize: '1.15rem', marginBottom: '8px' }}>No Evaluation Results Recorded Yet</h4>
+                  <p className="text-secondary text-sm" style={{ maxWidth: '460px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                    You have not submitted any course quizzes or project deliverables yet. Complete curriculum checkpoints and assessments to generate your verified academic grade transcript.
+                  </p>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <Link to="/courses" className="btn btn-primary btn-sm" style={{ gap: '6px' }}>
+                      <Play size={14} /> Resume Course Lessons
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setActiveTab('assessments')}
+                      style={{ gap: '6px' }}
+                    >
+                      <FileText size={14} /> View Quizzes & Exams
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Evaluation Title</th>
+                        <th>Course</th>
+                        <th>Type</th>
+                        <th>Date Evaluated</th>
+                        <th>Score / Total</th>
+                        <th>Percentage</th>
+                        <th>Outcome</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myAttempts.map((at) => {
+                        const course = assignedCourses.find((c) => c.id === at.assessment?.courseId) || assignedCourses[0];
+                        return (
+                          <tr key={at.id}>
+                            <td style={{ fontWeight: 600 }}>{at.assessment?.title || 'Course Assessment'}</td>
+                            <td>{course?.title || 'java 9.0'}</td>
+                            <td>
+                              <span className="badge badge-primary">
+                                {at.assessment?.scope === 'final_assessment' ? 'Final Exam' : 'Knowledge Check'}
+                              </span>
+                            </td>
+                            <td className="text-muted text-xs">
+                              {at.submittedAt ? new Date(at.submittedAt).toLocaleDateString() : 'Recent'}
+                            </td>
+                            <td>
+                              <strong>{at.score ?? 0} / {at.assessment?.totalMarks || 100}</strong>
+                            </td>
+                            <td style={{ color: at.passed ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                              {at.percentage ?? 0}%
+                            </td>
+                            <td>
+                              <span className={`badge ${at.passed ? 'badge-success' : 'badge-danger'}`}>
+                                {at.passed ? 'PASSED' : 'RETAKE REQUIRED'}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="btn btn-secondary btn-xs"
+                                onClick={() => showNotice(`Assessment "${at.assessment?.title}": Score ${at.score}/${at.assessment?.totalMarks || 100} (${at.percentage}%)`)}
+                              >
+                                <Eye size={12} /> View Breakdown
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {submittedAssignments.map((asg) => {
+                        const course = assignedCourses.find((c) => c.id === asg.courseId) || assignedCourses[0];
+                        return (
+                          <tr key={asg.id}>
+                            <td style={{ fontWeight: 600 }}>{asg.title}</td>
+                            <td>{course?.title || 'java 9.0'}</td>
+                            <td>
+                              <span className="badge badge-info">Project Deliverable</span>
+                            </td>
+                            <td className="text-muted text-xs">
+                              {asg.learnerSubmittedAt || 'Recent'}
+                            </td>
+                            <td>
+                              <strong>{asg.learnerStatus === 'graded' ? `${asg.learnerScore || 0} / ${asg.totalMarks}` : `Pending / ${asg.totalMarks}`}</strong>
+                            </td>
+                            <td style={{ color: asg.learnerStatus === 'graded' ? 'var(--success)' : 'var(--warning)', fontWeight: 700 }}>
+                              {asg.learnerStatus === 'graded' ? `${Math.round(((asg.learnerScore || 0) / asg.totalMarks) * 100)}%` : 'Under Review'}
+                            </td>
+                            <td>
+                              <span className={`badge ${asg.learnerStatus === 'graded' ? 'badge-success' : 'badge-warning'}`}>
+                                {asg.learnerStatus === 'graded' ? 'GRADED' : 'SUBMITTED'}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className="btn btn-secondary btn-xs"
+                                onClick={() => setViewingAssignment(asg)}
+                              >
+                                <Eye size={12} /> View Feedback
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Create Assessment Modal (Quiz & Exam Builder: AI or Manual) */}
       <CreateAssessmentModal
@@ -1073,8 +1177,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     required
                     placeholder={
                       submittingAssignment.submissionFormat === 'repo'
-                        ? 'https://github.com/alex-thompson/my-capstone-project'
-                        : 'react-kanban-offline-demo.zip (or enter cloud document link)'
+                        ? 'https://github.com/username/project-repository'
+                        : 'project-submission.zip (or cloud document URL)'
                     }
                     className="form-input"
                     value={submissionDeliverable}
@@ -1117,9 +1221,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                   </label>
                 </div>
 
-                <div className="text-muted text-xs" style={{ marginTop: '10px', fontStyle: 'italic' }}>
-                  * Demo Notice: Deliverable will update your local student session state. Changes do not permanently persist after page reload.
-                </div>
+
               </div>
 
               <div className="modal-footer">

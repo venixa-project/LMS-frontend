@@ -22,7 +22,7 @@ import {
 
 export const MomentumPage: React.FC = () => {
   const { user } = useAuthStore();
-  const userName = user?.displayName || user?.firstName || 'Alex';
+  const userName = user?.displayName || (user as any)?.name || user?.firstName || 'Learner';
   const { courses } = useCourseStore();
 
   const {
@@ -324,36 +324,8 @@ export const MomentumPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '18px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              <span className="badge badge-secondary" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} /> {todayDateFormatted}
-              </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  color: '#38bdf8',
-                  border: '1px solid rgba(56, 189, 248, 0.25)',
-                  fontSize: '0.72rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Clock size={12} /> Auto-Tracked from Database & Sessions
-              </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(16, 185, 129, 0.12)',
-                  color: '#10b981',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
-                  fontSize: '0.72rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Flame size={12} fill="#10b981" /> Min. 20m Daily for Streak
+              <span className="badge badge-primary" style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Calendar size={13} /> {todayDateFormatted}
               </span>
               {isLoading && (
                 <span className="badge badge-neutral" style={{ fontSize: '0.72rem', gap: '4px' }}>
@@ -366,7 +338,7 @@ export const MomentumPage: React.FC = () => {
               Learning Momentum
             </h1>
             <p className="text-secondary text-sm" style={{ maxWidth: '640px', margin: 0, lineHeight: 1.5 }}>
-              Track your persistent study habits, analyze your consistency, and maintain your learning velocity.
+              Track daily study progress, consistency milestones, and course velocity.
             </p>
           </div>
 
@@ -1313,7 +1285,7 @@ export const MomentumPage: React.FC = () => {
 
           <div style={{ display: 'flex', gap: '10px' }}>
             <Link
-              to="/student/academics/courses"
+              to="/my-learning"
               className="btn btn-primary"
               style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem', gap: '6px', fontWeight: 700 }}
             >

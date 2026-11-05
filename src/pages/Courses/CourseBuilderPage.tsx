@@ -167,7 +167,7 @@ export const CourseBuilderPage: React.FC = () => {
   // -------------------------------------------------------------
   const [certificateEnabled, setCertificateEnabled] = useState(true);
   const [certTitle, setCertTitle] = useState('Certificate of Course Completion');
-  const [certIssuingOrg, setCertIssuingOrg] = useState('Acme Learning Corp');
+  const [certIssuingOrg, setCertIssuingOrg] = useState((user as any)?.organizationName || 'RAPA TECH');
   const [certRequireAllLessons, setCertRequireAllLessons] = useState(true);
   const [certRequireAssessment, setCertRequireAssessment] = useState(true);
   const [certMinScore, setCertMinScore] = useState(70);
@@ -182,8 +182,8 @@ export const CourseBuilderPage: React.FC = () => {
   const isCreatorSigConfigured = useMemo(() => hasConfiguredSignature(user), [hasConfiguredSignature, user]);
 
   const [selectedSignatoryOption, setSelectedSignatoryOption] = useState<string>('creator_default');
-  const [certSignerName, setCertSignerName] = useState(creatorDefaultSig.name || 'Dr. James Wilson');
-  const [certSignerTitle, setCertSignerTitle] = useState(creatorDefaultSig.designation || 'Lead Instructor & Curriculum Director');
+  const [certSignerName, setCertSignerName] = useState(creatorDefaultSig.name || user?.displayName || 'Lead Instructor');
+  const [certSignerTitle, setCertSignerTitle] = useState(creatorDefaultSig.designation || 'Lead Faculty & Curriculum Director');
   const [certSignerSignatureImage, setCertSignerSignatureImage] = useState<string | undefined>(creatorDefaultSig.signatureImage);
   const [showCertPreviewModal, setShowCertPreviewModal] = useState(false);
 
@@ -356,7 +356,7 @@ export const CourseBuilderPage: React.FC = () => {
     setFacultySearchQuery('');
     setCertificateEnabled(true);
     setCertTitle('Certificate of Course Completion');
-    setCertIssuingOrg('Acme Learning Corp');
+    setCertIssuingOrg((user as any)?.organizationName || 'RAPA TECH');
     setCertRequireAllLessons(true);
     setCertRequireAssessment(true);
     setCertMinScore(70);
@@ -1171,7 +1171,7 @@ export const CourseBuilderPage: React.FC = () => {
         certificateConfig: {
           enabled: certificateEnabled,
           title: certTitle.trim() || 'Certificate of Course Completion',
-          issuingOrganization: certIssuingOrg.trim() || 'Acme Learning Corp',
+          issuingOrganization: certIssuingOrg.trim() || (user as any)?.organizationName || 'RAPA TECH',
           templateId: certTemplateId,
           requireAllLessons: certRequireAllLessons,
           requirePassingAssessment: certRequireAssessment,
@@ -1179,8 +1179,8 @@ export const CourseBuilderPage: React.FC = () => {
           requiredCompletionPercentage: certMinPercentage,
           completionPoints: certPoints,
           validityMonths: certValidityMonths,
-          authorizedSignerName: certSignerName.trim() || 'Dr. James Wilson',
-          authorizedSignerTitle: certSignerTitle.trim() || 'Lead Instructor & Curriculum Director',
+          authorizedSignerName: certSignerName.trim() || user?.displayName || 'Authorized Signatory',
+          authorizedSignerTitle: certSignerTitle.trim() || 'Principal Faculty & Curriculum Lead',
           authorizedSignatureImage: certSignerSignatureImage,
           secondarySignerName: 'Sarah Chen',
           secondarySignerTitle: 'Dean of Academic Affairs',
@@ -2080,7 +2080,7 @@ export const CourseBuilderPage: React.FC = () => {
                       className="form-input"
                       value={certIssuingOrg}
                       onChange={(e) => setCertIssuingOrg(e.target.value)}
-                      placeholder="Acme Learning Corp"
+                      placeholder={(user as any)?.organizationName || 'RAPA TECH'}
                     />
                   </div>
 
@@ -2327,7 +2327,7 @@ export const CourseBuilderPage: React.FC = () => {
                           setCertSignerName(e.target.value);
                           if (selectedSignatoryOption !== 'custom') setSelectedSignatoryOption('custom');
                         }}
-                        placeholder="e.g. Dr. James Wilson"
+                        placeholder="e.g. Lead Instructor Name"
                       />
                     </div>
 
@@ -2466,13 +2466,24 @@ export const CourseBuilderPage: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 320px) 1fr', gap: '20px', marginBottom: '24px' }}>
             {/* Left Column: Modules Navigation */}
-            <div className="card" style={{ padding: '16px', height: 'fit-content' }}>
+            <div className="card" style={{ padding: '16px', height: 'fit-content', position: 'sticky', top: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Syllabus Modules</h3>
                 <span className="text-muted text-xs">{modules.length} total</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  maxHeight: '440px',
+                  overflowY: 'auto',
+                  paddingRight: '6px',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'var(--border-subtle) transparent'
+                }}
+              >
                 {modules.map((m, idx) => (
                   <div
                     key={m.id}

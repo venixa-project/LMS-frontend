@@ -147,27 +147,52 @@ const CoursesManagementPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
 
-  const progressData: Record<string, { progress: number; completedLessons: number; totalLessons: number; status: 'in_progress' | 'completed' }> = {
-    'crs-001': { progress: 65, completedLessons: 8, totalLessons: 12, status: 'in_progress' },
-    'crs-002': { progress: 30, completedLessons: 4, totalLessons: 12, status: 'in_progress' },
-    'crs-003': { progress: 20, completedLessons: 2, totalLessons: 10, status: 'in_progress' },
-    'crs-004': { progress: 100, completedLessons: 10, totalLessons: 10, status: 'completed' },
-    'crs-005': { progress: 40, completedLessons: 3, totalLessons: 8, status: 'in_progress' },
-    'crs-006': { progress: 15, completedLessons: 2, totalLessons: 14, status: 'in_progress' },
-  };
+  const getCourseProgress = (c: Course | string) => {
+    const courseId = typeof c === 'string' ? c : c.id;
+    const courseObj = typeof c === 'string' ? courses.find((x) => x.id === c) : c;
+    const actualTotalLessons = (courseObj?.modules || []).reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || (courseObj as any)?.lessonsCount || 10;
 
-  const getCourseProgress = (courseId: string) => {
+    let localCompletedIds: string[] = [];
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(`venilearn_completed_lessons_${courseId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) localCompletedIds = parsed;
+        }
+        if (localCompletedIds.length === 0) {
+          const storedAll = localStorage.getItem('venilearn_course_completions');
+          if (storedAll) {
+            const parsedAll = JSON.parse(storedAll);
+            if (parsedAll && Array.isArray(parsedAll[courseId])) {
+              localCompletedIds = parsedAll[courseId];
+            }
+          }
+        }
+      }
+    } catch {}
+
     const enr = enrollments.find((e) => e.courseId === courseId);
-    if (enr) {
-      const isCompleted = enr.status === 'completed' || enr.progress >= 100;
-      return {
-        progress: enr.progress,
-        completedLessons: Math.round((enr.progress / 100) * 10),
-        totalLessons: 10,
-        status: isCompleted ? ('completed' as const) : ('in_progress' as const),
-      };
+    if (localCompletedIds.length === 0 && enr?.completedLessonIds && enr.completedLessonIds.length > 0) {
+      localCompletedIds = enr.completedLessonIds;
     }
-    return progressData[courseId] || { progress: 0, completedLessons: 0, totalLessons: 10, status: 'in_progress' as const };
+    let progress = enr?.progress ?? 0;
+    let completedLessons = localCompletedIds.length;
+
+    if (localCompletedIds.length > 0 && actualTotalLessons > 0) {
+      const calculated = Math.min(100, Math.round((localCompletedIds.length / actualTotalLessons) * 100));
+      progress = Math.max(progress, calculated);
+    } else if (progress > 0 && actualTotalLessons > 0) {
+      completedLessons = Math.round((progress / 100) * actualTotalLessons);
+    }
+
+    const isCompleted = progress >= 100 || enr?.status === 'completed';
+    return {
+      progress,
+      completedLessons,
+      totalLessons: actualTotalLessons,
+      status: isCompleted ? ('completed' as const) : ('in_progress' as const),
+    };
   };
 
   // Modals
@@ -204,13 +229,13 @@ const CoursesManagementPage: React.FC = () => {
       };
     }
     return {
-      id: 'u-004',
-      name: 'Dr. James Wilson',
-      email: 'trainer@lms.demo',
-      facultyId: 'FAC-2026-004',
-      department: 'Engineering',
-      departmentId: 'dep-001',
-      specialization: 'Full-Stack JavaScript & Systems Architecture',
+      id: instructorId || '',
+      name: instructorId ? 'Lead Faculty' : 'Unassigned',
+      email: '',
+      facultyId: instructorId ? `FAC-${instructorId.slice(0, 8).toUpperCase()}` : 'N/A',
+      department: 'General',
+      departmentId: undefined,
+      specialization: 'Curriculum Instructor',
       status: 'active',
     };
   };
@@ -567,12 +592,9 @@ const CoursesManagementPage: React.FC = () => {
                     ? 'Faculty Teaching Scope'
                     : 'Academic Offerings'}
             </span>
-            {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
+            {isFaculty && <span className="badge badge-draft">{user?.displayName || 'Faculty Member'}</span>}
             {isLearner && (
-              <>
-                <span className="badge badge-draft">Acme Learning Corp &bull; AY 2026&ndash;2027</span>
-                <span className="badge badge-active">{user?.displayName || 'Alex Thompson'}</span>
-              </>
+              <span className="badge badge-active">{user?.displayName || 'Enrolled Student'}</span>
             )}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
@@ -1057,19 +1079,22 @@ const CoursesManagementPage: React.FC = () => {
                   </div>
 
                   {/* Learner Progress Bar for student mode */}
-                  {isLearner && effectiveEnrolledIds.has(c.id) && (
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                        <span className="text-muted">Curriculum Progress:</span>
-                        <strong style={{ color: progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
-                          {progressData[c.id]?.progress || 0}% ({progressData[c.id]?.completedLessons || 0}/{progressData[c.id]?.totalLessons || 12} Lessons)
-                        </strong>
+                  {isLearner && effectiveEnrolledIds.has(c.id) && (() => {
+                    const prog = getCourseProgress(c);
+                    return (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                          <span className="text-muted">Curriculum Progress:</span>
+                          <strong style={{ color: prog.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
+                            {prog.progress}% ({prog.completedLessons}/{prog.totalLessons} Lessons)
+                          </strong>
+                        </div>
+                        <div className="progress-bar-bg" style={{ height: '6px' }}>
+                          <div className="progress-bar-fill" style={{ width: `${prog.progress}%` }} />
+                        </div>
                       </div>
-                      <div className="progress-bar-bg" style={{ height: '6px' }}>
-                        <div className="progress-bar-fill" style={{ width: `${progressData[c.id]?.progress || 0}%` }} />
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   {isLearner && !effectiveEnrolledIds.has(c.id) && (
                     <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', padding: '6px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
                       <span className="text-muted">Enrollment Status:</span>
@@ -1112,8 +1137,8 @@ const CoursesManagementPage: React.FC = () => {
                       </Link>
                     ) : (
                       <span className="text-muted text-xs">
-                        Enrollment: <strong style={{ color: !effectiveEnrolledIds.has(c.id) ? 'var(--text-muted)' : progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
-                          {!effectiveEnrolledIds.has(c.id) ? 'Not Enrolled' : progressData[c.id]?.status === 'completed' ? 'Completed' : 'Active Student'}
+                        Enrollment: <strong style={{ color: !effectiveEnrolledIds.has(c.id) ? 'var(--text-muted)' : getCourseProgress(c).status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
+                          {!effectiveEnrolledIds.has(c.id) ? 'Not Enrolled' : getCourseProgress(c).status === 'completed' ? 'Completed' : 'Active Student'}
                         </strong>
                       </span>
                     )}
@@ -1146,7 +1171,7 @@ const CoursesManagementPage: React.FC = () => {
                             <Eye size={13} /> Syllabus
                           </Link>
                         </div>
-                      ) : progressData[c.id]?.status === 'completed' ? (
+                      ) : getCourseProgress(c).status === 'completed' ? (
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                           <Link
                             to={`/course-player/${c.id}`}

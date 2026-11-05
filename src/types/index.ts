@@ -402,6 +402,7 @@ export interface Enrollment {
   enrolledAt: string;
   completedAt?: string;
   dueDate?: string;
+  completedLessonIds?: string[];
 }
 
 // --- Live Session ---

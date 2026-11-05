@@ -84,10 +84,49 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     moduleTitle?: string;
   } | null>(null);
 
-  // Lesson completions state keyed by course
-  const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>({});
+  // Lesson completions state keyed by course, initialized from localStorage
+  const [courseCompletionMap, setCourseCompletionMap] = useState<Record<string, string[]>>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('venilearn_course_completions');
+        if (stored) return JSON.parse(stored);
+      }
+    } catch {}
+    return {};
+  });
 
-  const completedLessonIds = course ? (courseCompletionMap[course.id] || (allLessons[0] ? [allLessons[0].id] : [])) : [];
+  const completedLessonIds = useMemo(() => {
+    if (!course) return [];
+    if (courseCompletionMap[course.id] && courseCompletionMap[course.id].length > 0) {
+      return courseCompletionMap[course.id];
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(`venilearn_completed_lessons_${course.id}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      }
+    } catch {}
+    return [];
+  }, [course?.id, courseCompletionMap]);
+
+  const persistCompletions = (nextList: string[]) => {
+    if (!course) return;
+    setCourseCompletionMap((prev) => {
+      const updated = { ...prev, [course.id]: nextList };
+      try {
+        localStorage.setItem('venilearn_course_completions', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    try {
+      localStorage.setItem(`venilearn_completed_lessons_${course.id}`, JSON.stringify(nextList));
+    } catch {}
+    const newPercent = allLessons.length > 0 ? Math.min(100, Math.round((nextList.length / allLessons.length) * 100)) : 0;
+    useCourseStore.getState().updateCourseProgress(course.id, newPercent);
+  };
 
   // Reset lesson index and playback state when course changes
   useEffect(() => {
@@ -273,54 +312,102 @@ public final class CourseDataService {
     : 0;
   const requiredPercentage = course.completionPercentageRequired ?? course.certificateConfig?.requiredCompletionPercentage ?? 100;
 
-  const toggleComplete = () => {
-    // End Date restriction: freeze progress modifications after course end date
-    if (isAfterEnd || !currentLesson) return;
+  // Synchronize completed lessons from backend enrollment if present
+  useEffect(() => {
+    if (!course) return;
+    const enr = useCourseStore.getState().enrollments.find((e) => e.courseId === course.id);
+    if (enr?.completedLessonIds && enr.completedLessonIds.length > 0) {
+      setCourseCompletionMap((prev) => {
+        const merged = Array.from(new Set([...(prev[course.id] || []), ...enr.completedLessonIds!]));
+        return { ...prev, [course.id]: merged };
+      });
+    }
+  }, [course?.id]);
 
-    if (isCompleted) {
-      const nextList = completedLessonIds.filter((lid) => lid !== currentLesson.id);
-      setCourseCompletionMap((prev) => ({
-        ...prev,
-        [course.id]: nextList,
-      }));
-    } else {
-      const nextList = [...completedLessonIds, currentLesson.id];
-      setCourseCompletionMap((prev) => ({
-        ...prev,
-        [course.id]: nextList,
-      }));
-      setShowCelebration(true);
-      // Automatically record lesson study activity in Learning Momentum
+  // Automated background study session tracking connected to Learning Momentum in PostgreSQL
+  useEffect(() => {
+    if (!course || !currentLesson) return;
+    const lessonTitle = currentLesson.title || 'Course Lesson';
+    const sessionTitle = `${course.title} — ${lessonTitle}`;
+
+    // Start live study session in database
+    useMomentumStore.getState().startSession(sessionTitle, course.id, currentLesson.id);
+
+    // Heartbeat ticker every second (sends PostgreSQL heartbeat every 60s)
+    const interval = setInterval(() => {
+      useMomentumStore.getState().tickSession();
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+      useMomentumStore.getState().endSession();
+    };
+  }, [course?.id, currentLesson?.id]);
+
+  const handleToggleLessonComplete = async (lessonId: string, customDurationMinutes?: number) => {
+    if (!course) return;
+    const isCurrentlyCompleted = completedLessonIds.includes(lessonId);
+    const nextList = isCurrentlyCompleted
+      ? completedLessonIds.filter((lid) => lid !== lessonId)
+      : [...completedLessonIds, lessonId];
+
+    // 1. Immediate local state & localStorage persistence
+    setCourseCompletionMap((prev) => {
+      const updated = { ...prev, [course.id]: nextList };
       try {
-        useMomentumStore.getState().recordActivity({
-          title: currentLesson.title,
-          durationMinutes: currentLesson.durationMinutes || 15,
+        localStorage.setItem('venilearn_course_completions', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    try {
+      localStorage.setItem(`venilearn_completed_lessons_${course.id}`, JSON.stringify(nextList));
+    } catch {}
+
+    const newPercent = allLessons.length > 0
+      ? Math.min(100, Math.round((nextList.length / allLessons.length) * 100))
+      : 0;
+    useCourseStore.getState().updateCourseProgress(course.id, newPercent);
+
+    if (!isCurrentlyCompleted) {
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2200);
+
+      const targetLesson = allLessons.find((l) => l.id === lessonId);
+      const estDuration = customDurationMinutes || targetLesson?.duration || (targetLesson as any)?.durationMinutes || 15;
+
+      // 2. Persist lesson progress into PostgreSQL database
+      try {
+        await useCourseStore.getState().recordLessonProgress(course.id, lessonId, estDuration * 60);
+      } catch (err) {
+        console.warn('Failed to record lesson progress to database:', err);
+      }
+
+      // 3. Persist activity directly into Learning Momentum in PostgreSQL
+      try {
+        await useMomentumStore.getState().recordActivity({
+          title: targetLesson?.title || 'Lesson Completed',
+          durationMinutes: estDuration,
           activityType: 'lesson',
           courseId: course.id,
-          lessonId: currentLesson.id,
+          lessonId,
         });
-        apiClient.post(`/courses/${course.id}/lessons/${currentLesson.id}/progress`, {
-          isCompleted: true,
-          timeSpentSeconds: (currentLesson.durationMinutes || 15) * 60,
-        }).catch(() => {});
-      } catch (e) {
-        console.warn('Failed to dispatch momentum activity:', e);
+      } catch (err) {
+        console.warn('Failed to record momentum activity to database:', err);
       }
-      setTimeout(() => setShowCelebration(false), 2500);
 
-      // Verify completion percentage eligibility for certificate issuance
-      const newPercent = Math.round((nextList.length / allLessons.length) * 100);
-      if (newPercent >= requiredPercentage && course.certificateConfig?.enabled !== false) {
+      // 4. Verify certificate unlock criteria
+      const reqPercent = course.completionPercentageRequired ?? course.certificateConfig?.requiredCompletionPercentage ?? 80;
+      if (newPercent >= reqPercent && course.certificateConfig?.enabled !== false) {
         const student = user || {
-          id: 'u-007',
-          displayName: 'Alex Thompson',
-          email: 'alex.thompson@student.acmelearning.com',
+          id: 'u-current',
+          displayName: 'Enrolled Learner',
+          email: 'learner@venilearn.lms',
         };
         const issueResult = issueCourseCertificate({
           course,
           learner: {
             id: student.id,
-            name: student.displayName || 'Alex Thompson',
+            name: student.displayName || 'Enrolled Learner',
             email: student.email,
           },
           scoreAchieved: 95,
@@ -335,32 +422,22 @@ public final class CourseDataService {
     }
   };
 
+  const toggleComplete = () => {
+    // End Date restriction: freeze progress modifications after course end date
+    if (isAfterEnd || !currentLesson) return;
+    handleToggleLessonComplete(currentLesson.id);
+  };
+
   // Toggle individual lesson completion from playlist
   const toggleLessonCompletion = (lessonId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const currentCompleted = courseCompletionMap[course.id] || [];
-    let updated: string[];
-    if (currentCompleted.includes(lessonId)) {
-      updated = currentCompleted.filter((lid) => lid !== lessonId);
-    } else {
-      updated = [...currentCompleted, lessonId];
-      setShowCelebration(true);
-      setTimeout(() => setShowCelebration(false), 2200);
-    }
-    setCourseCompletionMap({
-      ...courseCompletionMap,
-      [course.id]: updated
-    });
+    handleToggleLessonComplete(lessonId);
   };
 
   // Next Lesson automatically completes current lesson and advances
   const handleNext = () => {
-    const currentCompleted = courseCompletionMap[course.id] || [];
-    if (!currentCompleted.includes(currentLesson.id)) {
-      setCourseCompletionMap({
-        ...courseCompletionMap,
-        [course.id]: [...currentCompleted, currentLesson.id]
-      });
+    if (currentLesson && !completedLessonIds.includes(currentLesson.id)) {
+      handleToggleLessonComplete(currentLesson.id);
     }
     if (currentLessonIndex < allLessons.length - 1) {
       setCurrentLessonIndex(currentLessonIndex + 1);
@@ -538,15 +615,15 @@ public final class CourseDataService {
                 setTimeout(() => setShowCelebration(false), 2500);
                 if (selectedAssessment.scope === 'final_assessment') {
                   const student = user || {
-                    id: 'u-007',
-                    displayName: 'Alex Thompson',
-                    email: 'alex.thompson@student.acmelearning.com',
+                    id: 'u-current',
+                    displayName: 'Enrolled Learner',
+                    email: 'learner@venilearn.lms',
                   };
                   const issueResult = issueCourseCertificate({
                     course,
                     learner: {
                       id: student.id,
-                      name: student.displayName || 'Alex Thompson',
+                      name: student.displayName || 'Enrolled Learner',
                       email: student.email,
                     },
                     scoreAchieved: Math.round((score / total) * 100),
@@ -566,13 +643,8 @@ public final class CourseDataService {
               lessonTitle={currentLesson.title}
               courseId={course?.id || id || ''}
               onComplete={() => {
-                if (!completedLessonIds.includes(currentLesson.id)) {
-                  setCourseCompletionMap((prev) => ({
-                    ...prev,
-                    [course.id]: [...(prev[course.id] || []), currentLesson.id],
-                  }));
-                  setShowCelebration(true);
-                  setTimeout(() => setShowCelebration(false), 2200);
+                if (currentLesson && !completedLessonIds.includes(currentLesson.id)) {
+                  handleToggleLessonComplete(currentLesson.id);
                 }
               }}
             />
@@ -586,13 +658,8 @@ public final class CourseDataService {
               title={currentLesson.quizConfig?.title || currentLesson.title}
               lessonTitle={currentLesson.title}
               onQuizPassed={() => {
-                if (!completedLessonIds.includes(currentLesson.id)) {
-                  setCourseCompletionMap((prev) => ({
-                    ...prev,
-                    [course.id]: [...(prev[course.id] || []), currentLesson.id],
-                  }));
-                  setShowCelebration(true);
-                  setTimeout(() => setShowCelebration(false), 2200);
+                if (currentLesson && !completedLessonIds.includes(currentLesson.id)) {
+                  handleToggleLessonComplete(currentLesson.id);
                 }
               }}
               onNextLesson={handleNext}
@@ -1317,7 +1384,7 @@ public final class CourseDataService {
                 Course Completed &bull; 100% Progress
               </span>
               <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '8px 0 6px' }}>
-                Congratulations, {user?.displayName || 'Alex'}!
+                Congratulations, {user?.displayName || 'Learner'}!
               </h2>
               <p className="text-secondary text-sm" style={{ maxWidth: '440px', margin: '0 auto 16px' }}>
                 You have satisfied all academic curriculum requirements for <strong>{course.title}</strong>. Your official verified certificate has been recorded.

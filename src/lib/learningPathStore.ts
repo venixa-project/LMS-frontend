@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Adaptive Learning Paths Store (Zustand with LocalStorage Sync)
 // Supports Schools, Colleges/Universities, Corporates & Training Institutes
@@ -768,6 +769,8 @@ function persistPaths(paths: LearningPath[]) {
 }
 
 interface LearningPathState {
+  isLoading: boolean;
+  fetchPaths: () => Promise<void>;
   paths: LearningPath[];
   selectedPathId: string | null;
 
@@ -793,6 +796,41 @@ interface LearningPathState {
 }
 
 export const useLearningPathStore = create<LearningPathState>((set, get) => ({
+  isLoading: false,
+  fetchPaths: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.get<any[]>('/learning-paths');
+      if (res && res.data && Array.isArray(res.data)) {
+        const mappedPaths: LearningPath[] = res.data.map((p: any) => ({
+          ...p,
+          organizationId: p.tenantId || p.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
+          courses: Array.isArray(p.courses) && p.courses.length > 0
+            ? p.courses
+            : Array.isArray(p.pathCourses)
+              ? p.pathCourses.map((pc: any) => ({
+                  courseId: pc.courseId || pc.course?.id,
+                  order: pc.order || 1,
+                  isRequired: pc.isRequired ?? true,
+                  prerequisiteCourseIds: pc.prerequisiteCourseIds || [],
+                  id: pc.course?.id || pc.courseId,
+                  title: pc.course?.title || 'Course',
+                  category: pc.course?.category || 'General',
+                  durationHours: pc.course?.durationHours || 10,
+                  status: pc.course?.status || 'published',
+                }))
+              : [],
+          prerequisites: Array.isArray(p.prerequisites) ? p.prerequisites : [],
+        }));
+        set({ paths: mappedPaths, isLoading: false });
+        persistPaths(mappedPaths);
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch learning paths:', err);
+    }
+    set({ isLoading: false });
+  },
   paths: loadInitialPaths(),
   selectedPathId: 'lp-001',
 

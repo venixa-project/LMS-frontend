@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // VeniLearn Proctoring Store (Hybrid Google Meet Live + VeniGuard System)
 // Manages real-time Google Meet participants, telemetry, warnings,
@@ -245,163 +246,16 @@ const initialAuditLogs: ProctorAuditRecord[] = [
   },
 ];
 
-const SEED_SESSIONS: ProctoringSession[] = [
-  {
-    id: 'psess-001',
-    attemptId: 'att-003',
-    assessmentId: 'asm-001',
-    assessmentTitle: 'JavaScript Fundamentals Quiz',
-    learnerId: 'u-009',
-    learnerName: 'Maria Garcia',
-    policy: DEFAULT_PROCTORING_POLICIES.monitored,
-    status: 'reviewed',
-    startedAt: '2026-10-18T10:00:00Z',
-    endedAt: '2026-10-18T10:45:00Z',
-    totalDurationSeconds: 2700,
-    activeScreenShare: true,
-    activeMic: true,
-    activeWebcam: true,
-    isFullscreen: true,
-    isOnline: true,
-    jitsiRoomName: 'ven-asm1-mar',
-    events: [
-      {
-        id: 'pevt-001',
-        sessionId: 'psess-001',
-        assessmentId: 'asm-001',
-        learnerId: 'u-009',
-        category: 'tab_visibility',
-        timestamp: '2026-10-18T10:14:22Z',
-        clientTimestamp: Date.now() - 3600000,
-        relativeSeconds: 862,
-        severity: 'warning',
-        title: 'Tab Focus Lost',
-        description: 'Learner navigated away from active assessment viewport for 6 seconds.',
-        evidenceSnapshot: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=60',
-        evidenceType: 'screenshot',
-        studentExplanation: 'Accidental touchpad swipe switched to desktop file finder.',
-        studentExplanationSubmittedAt: '2026-10-18T10:50:00Z',
-        instructorVerdict: 'warning',
-      },
-      {
-        id: 'pevt-002',
-        sessionId: 'psess-001',
-        assessmentId: 'asm-001',
-        learnerId: 'u-009',
-        category: 'screen_share_interruption',
-        timestamp: '2026-10-18T10:28:05Z',
-        clientTimestamp: Date.now() - 2800000,
-        relativeSeconds: 1685,
-        severity: 'critical',
-        title: 'Screen Sharing Stream Stopped',
-        description: 'Screen capture stream was interrupted for 14 seconds before being re-established.',
-        evidenceSnapshot: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=60',
-        evidenceType: 'screenshot',
-        studentExplanation: 'OS permissions prompt popped up requesting display permissions.',
-        studentExplanationSubmittedAt: '2026-10-18T10:50:00Z',
-        instructorVerdict: 'no_violation',
-      },
-    ],
-    reviewDecision: {
-      reviewerId: 'u-004',
-      reviewerName: 'Dr. James Wilson (Instructor)',
-      outcome: 'warning_issued',
-      explanation: 'First incident logged as accidental tab loss. Screen sharing re-authorized quickly without academic dishonesty.',
-      timestamp: '2026-10-18T14:30:00Z',
-    },
-  },
-  {
-    id: 'psess-002',
-    attemptId: 'att-004',
-    assessmentId: 'asm-002',
-    assessmentTitle: 'Advanced Data Structures Midterm',
-    learnerId: 'u-010',
-    learnerName: 'David Kim',
-    policy: DEFAULT_PROCTORING_POLICIES.strict,
-    status: 'under_review',
-    startedAt: '2026-10-20T14:00:00Z',
-    endedAt: '2026-10-20T15:15:00Z',
-    totalDurationSeconds: 4500,
-    activeScreenShare: true,
-    activeMic: true,
-    activeWebcam: true,
-    isFullscreen: true,
-    isOnline: true,
-    jitsiRoomName: 'ven-asm2-dav',
-    events: [
-      {
-        id: 'pevt-003',
-        sessionId: 'psess-002',
-        assessmentId: 'asm-002',
-        learnerId: 'u-010',
-        category: 'fullscreen_exit',
-        timestamp: '2026-10-20T14:22:10Z',
-        clientTimestamp: Date.now() - 1440000,
-        relativeSeconds: 1330,
-        severity: 'critical',
-        title: 'Fullscreen Lockdown Exited',
-        description: 'Fullscreen exam lock mode exited for 42 seconds.',
-        evidenceSnapshot: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&auto=format&fit=crop&q=60',
-        evidenceType: 'screenshot',
-      },
-    ],
-    studentAppeal: {
-      appealId: 'app-001',
-      explanation: 'System crash notification from Antivirus minimized fullscreen view automatically.',
-      submittedAt: '2026-10-20T15:30:00Z',
-      status: 'pending',
-    },
-  },
-  {
-    id: 'psess-003',
-    attemptId: 'att-005',
-    assessmentId: 'asm-001',
-    assessmentTitle: 'JavaScript Fundamentals Quiz',
-    learnerId: 'u-007',
-    learnerName: 'Alex Thompson',
-    policy: DEFAULT_PROCTORING_POLICIES.monitored,
-    status: 'reviewed',
-    startedAt: '2026-10-15T11:00:00Z',
-    endedAt: '2026-10-15T11:40:00Z',
-    totalDurationSeconds: 2400,
-    activeScreenShare: true,
-    activeMic: true,
-    activeWebcam: true,
-    isFullscreen: true,
-    isOnline: true,
-    events: [
-      {
-        id: 'pevt-004',
-        sessionId: 'psess-003',
-        assessmentId: 'asm-001',
-        learnerId: 'u-007',
-        category: 'network_interruption',
-        timestamp: '2026-10-15T11:15:30Z',
-        clientTimestamp: Date.now() - 86400000,
-        relativeSeconds: 930,
-        severity: 'warning',
-        title: 'Network Connectivity Dropped',
-        description: 'Connection lost for 8 seconds. Automatic offline buffering engaged.',
-        studentExplanation: 'Wi-Fi briefly reset during rainstorm.',
-        studentExplanationSubmittedAt: '2026-10-15T12:00:00Z',
-        instructorVerdict: 'technical_accepted',
-      },
-    ],
-    reviewDecision: {
-      reviewerId: 'u-006',
-      reviewerName: 'Dr. Aisha Patel',
-      outcome: 'technical_incident_accepted',
-      explanation: 'Verified ISP router packet drop. Answers remained preserved and student completed exam upon reconnection.',
-      timestamp: '2026-10-15T16:00:00Z',
-    },
-  },
-];
+const SEED_SESSIONS: ProctoringSession[] = [];
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item: any) => !item.id?.startsWith('psess-00')) as unknown as T;
+    }
     return parsed && (Array.isArray(parsed) || typeof parsed === 'object') ? parsed : fallback;
   } catch (err) {
     console.warn(`Failed to read from localStorage (${key}):`, err);
@@ -418,6 +272,8 @@ function saveToStorage<T>(key: string, data: T): void {
 }
 
 export interface ProctoringStoreState {
+  isLoadingSessions: boolean;
+  fetchMySessions: () => Promise<void>;
   // Real-time Jitsi State
   incidents: ProctoringIncident[];
   warnings: ProctorWarning[];
@@ -523,6 +379,63 @@ export interface ProctoringStoreState {
 }
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
+  isLoadingSessions: false,
+  fetchMySessions: async () => {
+    set({ isLoadingSessions: true });
+    try {
+      const res = await apiClient.get<any[]>('/proctoring/my-sessions');
+      if (res && res.data && Array.isArray(res.data)) {
+        const mapped: ProctoringSession[] = res.data.map((item: any) => ({
+          id: item.id,
+          attemptId: item.attemptId,
+          assessmentId: item.assessmentId,
+          assessmentTitle: item.attempt?.assessment?.title || item.assessmentTitle || 'Proctored Assessment',
+          learnerId: item.learnerId,
+          learnerName: item.learnerName || 'Student',
+          policy: item.policy || DEFAULT_PROCTORING_POLICIES.basic,
+          status: item.status || 'reviewed',
+          startedAt: item.startedAt,
+          endedAt: item.endedAt,
+          totalDurationSeconds: item.totalDurationSec || 0,
+          activeScreenShare: item.activeScreenShare ?? true,
+          activeMic: item.activeMic ?? true,
+          activeWebcam: item.activeWebcam ?? true,
+          isFullscreen: item.isFullscreen ?? true,
+          isOnline: true,
+          events: (item.events || []).map((ev: any) => ({
+            id: ev.id,
+            sessionId: ev.sessionId,
+            assessmentId: item.assessmentId,
+            learnerId: item.learnerId,
+            category: ev.category,
+            timestamp: ev.createdAt,
+            clientTimestamp: ev.clientTimestamp ? Number(ev.clientTimestamp) : Date.now(),
+            relativeSeconds: ev.relativeSeconds || 0,
+            severity: ev.severity || 'warning',
+            title: ev.title,
+            description: ev.description,
+            evidenceSnapshot: ev.evidenceSnapshot,
+            evidenceType: 'screenshot',
+          })),
+          warnings: item.warnings || [],
+          incidents: item.incidents || [],
+          reviewDecision: item.reviewOutcome ? {
+            reviewerId: 'faculty',
+            reviewerName: 'Instructor',
+            outcome: item.reviewOutcome,
+            explanation: item.appealExplanation || 'Proctoring review finalized.',
+            timestamp: item.updatedAt,
+          } : undefined,
+        }));
+        set({ sessions: mapped, isLoadingSessions: false });
+        saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, mapped);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch proctoring sessions:', e);
+    }
+    set({ isLoadingSessions: false });
+  },
   // Real-time Jitsi Initial State
   incidents: [],
   warnings: initialWarnings,

@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Announcement & Notification Store (Zustand)
 // Multi-role announcement lifecycle with tenant isolation,
@@ -42,6 +43,8 @@ function persistAnnouncements(announcements: Announcement[]) {
 }
 
 interface AnnouncementState {
+  isLoading: boolean;
+  fetchAnnouncements: () => Promise<void>;
   announcements: Announcement[];
 
   // Actions
@@ -68,6 +71,21 @@ interface AnnouncementState {
 }
 
 export const useAnnouncementStore = create<AnnouncementState>((set, get) => ({
+  isLoading: false,
+  fetchAnnouncements: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.get<any[]>('/announcements');
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ announcements: res.data, isLoading: false });
+        persistAnnouncements(res.data);
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch announcements:', err);
+    }
+    set({ isLoading: false });
+  },
   announcements: loadStoredAnnouncements(),
 
   createAnnouncement: (data) => {

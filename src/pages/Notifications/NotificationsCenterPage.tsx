@@ -1566,77 +1566,13 @@ const NotificationsManagementPage: React.FC = () => {
                   </div>
                 ))}
 
-              <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-warning">Assignment Due Soon</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Due Oct 31, 2026
-                  </span>
+              {notifications.filter((n) => n.category === 'course').length === 0 && (
+                <div className="card" style={{ padding: '32px 20px', textAlign: 'center', gridColumn: '1 / -1', background: 'var(--bg-surface)' }}>
+                  <p className="text-muted text-sm" style={{ margin: 0 }}>
+                    No pending course invitations or academic notices at this time.
+                  </p>
                 </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Advanced React State Management Capstone
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Your capstone deliverable (Offline Kanban Board) is due in 14 days. Deliverable format: GitHub repository with automated tests.
-                </p>
-                <a href="/assignments" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  View Assignment & Submit &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-primary">Upcoming Live Lecture</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Tomorrow 09:00 AM
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Docker Container Orchestration & Health Checks
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Live session led by Dr. James Wilson for Distributed Systems & Cloud Architecture. Room link verified on Zoom.
-                </p>
-                <a href="/my-sessions" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Open Timetable & Join Room &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--success)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-success">Result Published</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Oct 15, 2026
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Distributed Systems Capstone: 92/100 (Grade A)
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Dr. James Wilson has evaluated your microservices submission. Faculty feedback and points are ready for review.
-                </p>
-                <a href="/my-results" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Inspect Evaluation & Feedback &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--info)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-info">Proctoring Notice</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    System Check
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Midterm Exam Window Opening
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Midterm assessments will require verified camera and screen recording authorization. Complete your system check beforehand.
-                </p>
-                <a href="/my-assessments" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Assessments Portal &rarr;
-                </a>
-              </div>
+              )}
             </div>
           )}
         </div>

@@ -34,7 +34,11 @@ import { RankBadge } from '../../components/Gamification/RankBadge';
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { profiles } = useGamificationStore();
+  const { profiles, leaderboard, fetchLeaderboard } = useGamificationStore();
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   // Active filters
   const [timeframe, setTimeframe] = useState<TimeframeFilter>('all_time');
@@ -187,14 +191,43 @@ export const LeaderboardPage: React.FC = () => {
   // Compute sorted member list based on active timeframe, role scoping, cohort filter, search query
   const sortedMembers = useMemo(() => {
     // Clone base data for timeframe
-    let baseList = TIMEFRAME_DATA[timeframe].map((m) => {
-      const isCurrent = isStudent && (user?.id ? m.id === user.id || (user.id === 'u-007' && m.id === 'u-007') : m.isCurrentUser);
-      return {
-        ...m,
-        isCurrentUser: isCurrent,
-        name: isCurrent ? m.name : m.name.replace(' (You)', ''),
-      };
-    });
+    let baseList: LeaderboardMember[] = [];
+    if (leaderboard && leaderboard.length > 0) {
+      baseList = leaderboard.map((item: any, idx: number) => {
+        const isCurrent = user?.id === item.userId || (user?.email && item.email && item.email.toLowerCase() === user.email.toLowerCase());
+        const name = item.name || (isCurrent ? (user?.displayName || 'Student (You)') : 'Scholar');
+        const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'ST';
+        return {
+          id: item.userId,
+          name: isCurrent ? (name.includes('(You)') ? name : `${name} (You)`) : name,
+          email: item.email || `${name.toLowerCase().replace(/\s+/g, '.')}@lms.demo`,
+          rollNo: item.rollNo || `STU-2026-${String(idx + 1).padStart(3, '0')}`,
+          avatarInitials: initials,
+          avatarId: item.avatar || undefined,
+          cohort: item.department || 'Computer Science & AI',
+          coursesEnrolled: item.coursesEnrolled || 2,
+          coursesCompleted: item.coursesCompleted || 1,
+          overallCompletionRate: item.completionRate || 85,
+          points: item.totalPoints || 0,
+          previousRank: item.rank || idx + 1,
+          certificates: item.certificates || 1,
+          weeklyStudyHours: Math.round((item.totalPoints || 100) / 40),
+          badgesEarned: item.badgesCount || 0,
+          streakDays: item.streakDays || 0,
+          recentCourseFinished: 'Verified Curriculum',
+          isCurrentUser: isCurrent,
+        };
+      });
+    } else {
+      baseList = TIMEFRAME_DATA[timeframe].map((m) => {
+        const isCurrent = isStudent && (user?.id ? m.id === user.id : m.isCurrentUser);
+        return {
+          ...m,
+          isCurrentUser: isCurrent,
+          name: isCurrent ? m.name : m.name.replace(' (You)', ''),
+        };
+      });
+    }
 
     // Trainer access restriction: ONLY students belonging to trainer's assigned cohorts
     if (isTrainer && trainerAuthorizedCohorts) {

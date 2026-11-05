@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
@@ -84,7 +84,12 @@ export const LearningPathsPage: React.FC = () => {
     unpublishPath,
     assignLearners,
     resetToDefaults,
+    fetchPaths,
   } = useLearningPathStore();
+
+  useEffect(() => {
+    fetchPaths();
+  }, [fetchPaths]);
 
   // Role permissions
   const activeRole = user?.activeRole || 'student';
@@ -231,7 +236,9 @@ export const LearningPathsPage: React.FC = () => {
         return false;
       }
       // Institution Boundary: non-platform admins only see their own org
-      if (!isPlatformAdmin && user?.organizationId && p.organizationId && p.organizationId !== user.organizationId) {
+      const userOrg = user?.organizationId || (user as any)?.tenantId;
+      const pathOrg = p.organizationId || (p as any)?.tenantId;
+      if (!isPlatformAdmin && userOrg && pathOrg && pathOrg !== userOrg) {
         return false;
       }
 
@@ -270,7 +277,8 @@ export const LearningPathsPage: React.FC = () => {
         const matchesCat = (p.category || '').toLowerCase().includes(q);
         const matchesCreator = (p.creatorName || '').toLowerCase().includes(q);
         const matchesRole = (p.targetRole || '').toLowerCase().includes(q);
-        if (!matchesTitle && !matchesDesc && !matchesCat && !matchesCreator && !matchesRole) {
+        const matchesCourse = (p.courses || []).some((c) => (c.title || '').toLowerCase().includes(q));
+        if (!matchesTitle && !matchesDesc && !matchesCat && !matchesCreator && !matchesRole && !matchesCourse) {
           return false;
         }
       }

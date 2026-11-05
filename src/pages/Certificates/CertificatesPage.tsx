@@ -5,7 +5,7 @@
 // - Trainer/Faculty: Course-authorized eligibility monitoring & issued certificates
 // - Student: Personal earned certificates, PDF downloads, and in-progress unlocking
 // ============================================================
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCertificateStore } from '../../lib/certificateStore';
@@ -30,11 +30,20 @@ export const CertificatesPage: React.FC = () => {
     getCertificatesByLearner,
     getCertificatesForTrainer,
     issueCourseCertificate,
+    fetchCertificates,
   } = useCertificateStore();
+
+  useEffect(() => {
+    fetchCertificates();
+  }, [fetchCertificates]);
 
   const { courses, enrollments } = useCourseStore();
   const { getStudents, getFaculty } = usePeopleStore();
   const { cohorts } = useCohortStore();
+
+  const enrolledCourses = useMemo(() => {
+    return courses.filter((c) => enrollments.some((e) => e.courseId === c.id));
+  }, [courses, enrollments]);
 
   // Role determinations
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
@@ -228,8 +237,8 @@ export const CertificatesPage: React.FC = () => {
             <span className="badge badge-primary">
               {isAdmin ? 'Institution Administration' : isTrainer ? 'Faculty & Grading' : 'Verified Credentials'}
             </span>
-            <span className="text-muted text-xs">Acme Learning Corp &bull; Official Credentials Registry</span>
-            {isLearner && <span className="badge badge-active">{user?.displayName || 'Alex Thompson'}</span>}
+            <span className="text-muted text-xs">{(user as any)?.organizationName || 'RAPA TECH'} &bull; Official Credentials Registry</span>
+            {isLearner && <span className="badge badge-active">{user?.displayName || (user as any)?.name || 'Enrolled Student'}</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>
             {isAdmin
@@ -468,7 +477,7 @@ export const CertificatesPage: React.FC = () => {
                             <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {cert.courseTitle || cert.courseName}
                             </div>
-                            <div className="text-muted text-xs">{cert.issuingOrganization || 'Acme Learning Corp'}</div>
+                            <div className="text-muted text-xs">{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</div>
                           </td>
                           <td style={{ padding: '12px 16px' }}>
                             {new Date(cert.issuedAt || cert.issueDate || '').toLocaleDateString()}
@@ -561,7 +570,7 @@ export const CertificatesPage: React.FC = () => {
 
                       <div style={{ background: 'var(--bg-input)', padding: '12px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div><strong>Title:</strong> {cfg?.title || 'Certificate of Course Completion'}</div>
-                        <div><strong>Template:</strong> {cfg?.templateId || 'standard'} &bull; <strong>Issuing Org:</strong> {cfg?.issuingOrganization || 'Acme Learning Corp'}</div>
+                        <div><strong>Template:</strong> {cfg?.templateId || 'standard'} &bull; <strong>Issuing Org:</strong> {cfg?.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</div>
                         <div style={{ color: 'var(--text-secondary)' }}>
                           Requirements: {cfg?.requireAllLessons ?? true ? 'All lessons required' : 'Lessons optional'} &bull; Min Exam Score: {cfg?.minimumAssessmentScore || 70}%
                         </div>
@@ -937,7 +946,7 @@ export const CertificatesPage: React.FC = () => {
 
                       <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle || cert.courseName}</h3>
                       <p className="text-muted text-xs" style={{ marginBottom: '14px' }}>
-                        Issuing Organization: <strong>{cert.issuingOrganization || 'Acme Learning Corp'}</strong>
+                        Issuing Organization: <strong>{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</strong>
                       </p>
 
                       <div style={{
@@ -995,74 +1004,84 @@ export const CertificatesPage: React.FC = () => {
               <Lock size={18} color="var(--primary)" />
               In-Progress Course Certifications & Unlocking Criteria
             </h2>
-            <div className="grid-2">
-              <div className="card" style={{ borderLeft: '3px solid var(--primary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <div>
-                    <span className="badge badge-primary">65% Progress</span>
-                    <h3 style={{ fontSize: '1.1rem', marginTop: '6px', marginBottom: '4px' }}>
-                      Distributed Systems & Cloud Architecture
-                    </h3>
-                    <p className="text-muted text-xs">Issued by Department of Engineering</p>
-                  </div>
-                  <Lock size={18} color="var(--text-muted)" />
-                </div>
-
-                <div className="progress-bar-bg" style={{ height: '6px', marginBottom: '14px' }}>
-                  <div className="progress-bar-fill" style={{ width: '65%' }} />
-                </div>
-
-                <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)' }}>
-                    <CheckCircle2 size={13} /> Complete 6 Curriculum Modules (4/6 completed)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)' }}>
-                    <CheckCircle2 size={13} /> Pass Midterm Examination (Score: 25/25 pts)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--warning)' }}>
-                    <Clock size={13} /> Pending Capstone Project Evaluation (Score &gt;= 70%)
-                  </div>
-                </div>
-
+            {enrolledCourses.length === 0 ? (
+              <div className="card" style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--bg-surface)' }}>
+                <p className="text-muted text-sm" style={{ margin: 0 }}>
+                  You are not currently enrolled in any courses with certificate tracks.
+                </p>
                 <div style={{ marginTop: '14px' }}>
-                  <Link to="/course-player/crs-001" className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                    Continue Learning to Unlock &rarr;
+                  <Link to="/courses" className="btn btn-secondary btn-sm">
+                    Explore Course Catalog
                   </Link>
                 </div>
               </div>
+            ) : (
+              <div className="grid-2">
+                {enrolledCourses.map((c) => {
+                  const enr = enrollments.find((e) => e.courseId === c.id);
+                  const totalLessons = (c.modules || []).reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 10;
+                  
+                  let localCompletedIds: string[] = [];
+                  try {
+                    const stored = localStorage.getItem(`venilearn_completed_lessons_${c.id}`);
+                    if (stored) {
+                      const parsed = JSON.parse(stored);
+                      if (Array.isArray(parsed)) localCompletedIds = parsed;
+                    }
+                  } catch {}
 
-              <div className="card" style={{ borderLeft: '3px solid var(--info, #06b6d4)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <div>
-                    <span className="badge badge-info">30% Progress</span>
-                    <h3 style={{ fontSize: '1.1rem', marginTop: '6px', marginBottom: '4px' }}>
-                      Advanced React & Component Design Patterns
-                    </h3>
-                    <p className="text-muted text-xs">Issued by Web Architecture Faculty</p>
-                  </div>
-                  <Lock size={18} color="var(--text-muted)" />
-                </div>
+                  let progress = enr?.progress ?? 0;
+                  if (localCompletedIds.length > 0 && totalLessons > 0) {
+                    progress = Math.max(progress, Math.min(100, Math.round((localCompletedIds.length / totalLessons) * 100)));
+                  }
 
-                <div className="progress-bar-bg" style={{ height: '6px', marginBottom: '14px' }}>
-                  <div className="progress-bar-fill" style={{ width: '30%', background: 'var(--info, #06b6d4)' }} />
-                </div>
+                  const reqPercent = c.completionPercentageRequired || c.certificateConfig?.requiredCompletionPercentage || 80;
+                  const reqScore = c.certificateConfig?.minimumAssessmentScore || 70;
+                  const isEligible = progress >= reqPercent;
 
-                <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)' }}>
-                    <CheckCircle2 size={13} /> Complete 5 Advanced Modules (1/5 completed)
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
-                    <Clock size={13} /> Complete Proctored React Final Exam (Required Score: 70%)
-                  </div>
-                </div>
+                  return (
+                    <div key={c.id} className="card" style={{ borderLeft: '3px solid var(--primary)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                        <div>
+                          <span className={`badge ${isEligible ? 'badge-success' : 'badge-primary'}`}>
+                            {progress}% Progress
+                          </span>
+                          <h3 style={{ fontSize: '1.1rem', marginTop: '6px', marginBottom: '4px' }}>
+                            {c.title}
+                          </h3>
+                          <p className="text-muted text-xs">
+                            {c.certificateConfig?.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}
+                          </p>
+                        </div>
+                        <Lock size={18} color="var(--text-muted)" />
+                      </div>
 
-                <div style={{ marginTop: '14px' }}>
-                  <Link to="/course-player/crs-002" className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                    Continue Learning to Unlock &rarr;
-                  </Link>
-                </div>
+                      <div className="progress-bar-bg" style={{ height: '6px', marginBottom: '14px' }}>
+                        <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                      </div>
+
+                      <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: localCompletedIds.length > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                          <CheckCircle2 size={13} /> Complete {c.modules?.length || 1} Curriculum Modules ({localCompletedIds.length}/{totalLessons} lessons completed)
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isEligible ? 'var(--success)' : 'var(--warning)' }}>
+                          <Clock size={13} /> Minimum Curriculum Progress ({progress}% / {reqPercent}% required)
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                          <Clock size={13} /> Pass Final Course Assessment (Required Passing Score: {reqScore}%)
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '14px' }}>
+                        <Link to={`/course-player/${c.id}`} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                          Continue Learning to Unlock &rarr;
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -1108,7 +1127,7 @@ export const CertificatesPage: React.FC = () => {
                 </div>
 
                 <div style={{ fontSize: '0.725rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                  {selectedCert.issuingOrganization || 'Acme Learning Corp'} &bull; Official Credentials Registry
+                  {selectedCert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'} &bull; Official Credentials Registry
                 </div>
                 <div style={{ width: '90px', height: '2px', background: 'linear-gradient(90deg, transparent, #d97706, transparent)', margin: '0 auto 12px' }} />
 

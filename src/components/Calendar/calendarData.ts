@@ -51,12 +51,8 @@ export const CATEGORY_META: Record<EventCategory, CategoryMeta> = {
 
 // Available courses for dropdowns
 export const AVAILABLE_COURSES = [
-  'Advanced React & Component Design Patterns',
-  'Distributed Systems & Cloud Architecture',
-  'Database Optimization & Indexing',
-  'Machine Learning Pipelines & Data Prep',
-  'Neural Networks & PyTorch Fundamentals',
-  'Full-Stack Web Development Bootcamp',
+  'java 9.0',
+  'Full-Stack Software Engineering',
   'Independent Study / Capstone Preparation'
 ];
 
@@ -85,8 +81,8 @@ export const AVAILABLE_LOCATIONS = [
 export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
   {
     title: 'React Hooks & State Architecture',
-    course: 'Advanced React & Component Design Patterns',
-    courseId: 'crs-002',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Dr. James Wilson',
     instructorRole: 'Lead Instructor & Faculty Chair',
     cohort: 'Spring 2026 Engineering',
@@ -102,8 +98,8 @@ export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
   },
   {
     title: 'Microservices with Go & Docker',
-    course: 'Distributed Systems & Cloud Architecture',
-    courseId: 'crs-006',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Prof. Elena Rostova',
     instructorRole: 'Associate Professor of Cloud Systems',
     cohort: 'Summer 2026 Cloud',
@@ -154,8 +150,8 @@ export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
   },
   {
     title: 'React Hooks & State Architecture (Lab)',
-    course: 'Advanced React & Component Design Patterns',
-    courseId: 'crs-002',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Dr. James Wilson',
     instructorRole: 'Lead Instructor',
     cohort: 'Spring 2026 Engineering',
@@ -171,8 +167,8 @@ export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
   },
   {
     title: 'Kubernetes Cluster Deployment',
-    course: 'Distributed Systems & Cloud Architecture',
-    courseId: 'crs-006',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Prof. Elena Rostova',
     instructorRole: 'Associate Professor',
     cohort: 'Summer 2026 Cloud',
@@ -206,8 +202,8 @@ export const BASE_WEEKLY_TEMPLATE: Omit<AcademicEvent, 'id' | 'date'>[] = [
   },
   {
     title: 'Cloud Architecture Design Review',
-    course: 'Distributed Systems & Cloud Architecture',
-    courseId: 'crs-006',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Prof. Elena Rostova',
     instructorRole: 'Associate Professor',
     cohort: 'Summer 2026 Cloud',
@@ -280,8 +276,8 @@ export const INITIAL_ACADEMIC_EVENTS: AcademicEvent[] = [
   {
     id: 'custom-sat-study',
     title: 'Weekend Peer Study Group: React Patterns',
-    course: 'Advanced React & Component Design Patterns',
-    courseId: 'crs-002',
+    course: 'java 9.0',
+    courseId: '285a3241-6004-49cd-acab-4d85e86594b4',
     instructor: 'Alex Thompson (Peer Lead)',
     cohort: 'Spring 2026 Engineering',
     date: '2026-10-24',

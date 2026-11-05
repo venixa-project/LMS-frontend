@@ -53,6 +53,8 @@ interface CourseState {
   fetchCourses: () => Promise<void>;
   addCourse: (course: Course) => Promise<Course>;
   deleteCourse: (courseId: string) => void;
+  updateCourseProgress: (courseId: string, progress: number) => void;
+  recordLessonProgress: (courseId: string, lessonId: string, timeSpentSeconds?: number) => Promise<any>;
 }
 
 const STORAGE_KEY_COURSES = 'venilearn_courses';
@@ -474,39 +476,47 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           updatedAt: c.updatedAt,
         }));
 
-        set((state) => {
-          const cleanLocal = state.courses.filter((c) => !c.id.startsWith('crs-00'));
-          const existingMap = new Map(cleanLocal.map((c) => [c.id, c]));
-          backendCourses.forEach((bc) => existingMap.set(bc.id, bc));
-          const merged = Array.from(existingMap.values());
+        set(() => {
           try {
-            localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(merged));
+            localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
             localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
           } catch (e) { }
-          return { courses: merged };
+          return { courses: backendCourses };
         });
       }
 
       if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
         const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
-        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => ({
-          id: e.id,
-          userId: e.userId,
-          courseId: e.courseId,
-          cohortId: e.cohortId,
-          status: e.status || 'active',
-          progress: e.progressPercentage || 0,
-          enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
-        }));
+        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
+          const completedLids: string[] = Array.isArray(e.lessonProgress)
+            ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
+            : [];
 
-        set((state) => {
-          const uniqueIds = Array.from(new Set([...state.enrolledCourseIds, ...backendEnrolledIds]));
+          if (e.courseId && completedLids.length > 0) {
+            try {
+              localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
+            } catch {}
+          }
+
+          return {
+            id: e.id,
+            userId: e.userId,
+            courseId: e.courseId,
+            cohortId: e.cohortId,
+            status: e.status || 'active',
+            progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
+            enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
+            completedLessonIds: completedLids,
+          };
+        });
+
+        set(() => {
           try {
-            localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(uniqueIds));
+            localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
             localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
           } catch (e) { }
           return {
-            enrolledCourseIds: uniqueIds,
+            enrolledCourseIds: backendEnrolledIds,
             enrollments: mappedEnrollments,
           };
         });
@@ -652,6 +662,53 @@ export const useCourseStore = create<CourseState>((set, get) => ({
         enrollments: updatedEnrollments,
       };
     });
+  },
+
+  updateCourseProgress: (courseId: string, progress: number) => {
+    set((state) => {
+      const existing = state.enrollments.find((e) => e.courseId === courseId);
+      const isCompleted = progress >= 100;
+      let nextEnrollments: Enrollment[];
+      if (existing) {
+        nextEnrollments = state.enrollments.map((e) =>
+          e.courseId === courseId
+            ? { ...e, progress, status: isCompleted ? 'completed' : e.status }
+            : e
+        );
+      } else {
+        nextEnrollments = [
+          ...state.enrollments,
+          {
+            id: `enr-${Date.now()}`,
+            courseId,
+            userId: 'current-user',
+            cohortId: undefined,
+            status: isCompleted ? 'completed' : 'active',
+            progress,
+            enrolledAt: new Date().toISOString(),
+          },
+        ];
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
+      } catch (e) {}
+      return { enrollments: nextEnrollments };
+    });
+  },
+
+  recordLessonProgress: async (courseId: string, lessonId: string, timeSpentSeconds: number = 60) => {
+    try {
+      const res = await apiClient.post<any>(`/courses/${courseId}/lessons/${lessonId}/progress`, {
+        timeSpentSeconds,
+      });
+      if (res && res.data && typeof res.data.progressPercentage === 'number') {
+        get().updateCourseProgress(courseId, res.data.progressPercentage);
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('Backend progress recording failed, falling back to local state:', err);
+    }
+    return null;
   },
 }));
 
