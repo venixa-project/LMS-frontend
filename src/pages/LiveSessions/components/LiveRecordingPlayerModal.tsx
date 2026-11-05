@@ -126,103 +126,140 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Video Player Area */}
-        <div
-          style={{
-            background: '#020617',
-            height: '380px',
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        {/* Video Player or Honest Recording Unavailable State */}
+        {session.recordingUrl ? (
           <div
             style={{
-              width: '90px',
-              height: '90px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#ffffff',
-              boxShadow: '0 0 30px var(--primary-glow)',
-              transition: 'var(--transition)',
-            }}
-            onClick={() => setIsPlaying(!isPlaying)}
-          >
-            {isPlaying ? <Pause size={38} /> : <Play size={38} style={{ marginLeft: '4px' }} />}
-          </div>
-
-          <div style={{ marginTop: '16px', color: '#94a3b8', fontSize: '0.85rem' }}>
-            {isPlaying ? 'Streaming High-Definition Lecture Stream (1080p)...' : 'Click play to start video replay'}
-          </div>
-
-          {/* Bottom Video Controls Bar */}
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              background: 'linear-gradient(transparent, rgba(2, 6, 23, 0.95))',
-              padding: '12px 20px',
+              background: '#020617',
+              height: '380px',
+              position: 'relative',
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {/* Scrubber Bar */}
-            <input
-              type="range"
-              min={0}
-              max={totalDuration}
-              value={currentTime}
-              onChange={(e) => setCurrentTime(Number(e.target.value))}
-              style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
-            />
+            <div
+              style={{
+                width: '90px',
+                height: '90px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, var(--primary), var(--accent-purple))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#ffffff',
+                boxShadow: '0 0 30px var(--primary-glow)',
+                transition: 'var(--transition)',
+              }}
+              onClick={() => setIsPlaying(!isPlaying)}
+            >
+              {isPlaying ? <Pause size={38} /> : <Play size={38} style={{ marginLeft: '4px' }} />}
+            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
-                >
-                  {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                </button>
-                <span className="font-mono">
-                  {formatTime(currentTime)} / {formatTime(totalDuration)}
-                </span>
-                <Volume2 size={16} style={{ color: '#94a3b8' }} />
-              </div>
+            <div style={{ marginTop: '16px', color: '#94a3b8', fontSize: '0.85rem' }}>
+              {isPlaying ? 'Streaming High-Definition Lecture Stream (1080p)...' : 'Click play to start video replay'}
+            </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {/* Speed buttons */}
-                {[1, 1.25, 1.5, 2].map((spd) => (
+            {/* Bottom Video Controls Bar */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                background: 'linear-gradient(transparent, rgba(2, 6, 23, 0.95))',
+                padding: '12px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <input
+                type="range"
+                min={0}
+                max={totalDuration}
+                value={currentTime}
+                onChange={(e) => setCurrentTime(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <button
-                    key={spd}
-                    onClick={() => setPlaybackSpeed(spd)}
-                    style={{
-                      background: playbackSpeed === spd ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                      border: 'none',
-                      color: '#ffffff',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
                   >
-                    {spd}x
+                    {isPlaying ? <Pause size={18} /> : <Play size={18} />}
                   </button>
-                ))}
+                  <span className="font-mono">
+                    {formatTime(currentTime)} / {formatTime(totalDuration)}
+                  </span>
+                  <Volume2 size={16} style={{ color: '#94a3b8' }} />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {[1, 1.25, 1.5, 2].map((spd) => (
+                    <button
+                      key={spd}
+                      onClick={() => setPlaybackSpeed(spd)}
+                      style={{
+                        background: playbackSpeed === spd ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {spd}x
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div
+            style={{
+              background: '#090d16',
+              height: '220px',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px',
+              textAlign: 'center',
+              borderBottom: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '12px',
+              }}
+            >
+              <Clock size={26} color="#f59e0b" />
+            </div>
+            <h4 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              Recording Unavailable
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', maxWidth: '480px', lineHeight: 1.5 }}>
+              No recorded video stream was attached when this session ended. You can still review the timestamped agenda outline, takeaways, and curriculum materials below.
+            </p>
+          </div>
+        )}
 
         {/* Chapters & Session Notes */}
         <div

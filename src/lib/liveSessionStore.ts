@@ -35,6 +35,7 @@ interface LiveSessionState {
   ) => { success: boolean };
   startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
   endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
+  updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
   toggleBookmark: (sessionId: string) => void;
 }
@@ -94,8 +95,8 @@ function mapBackendSession(item: any): LiveSession {
     provider: item.provider || 'Google Meet',
     meetingUrl: item.meetingUrl || '',
     joinLink: item.joinLink || item.meetingUrl || '',
-    recordingUrl: item.recordingUrl || (item.status === 'ended' ? `https://cloud-recordings.lms.storage/${item.id}.mp4` : ''),
-    recordingLink: item.recordingUrl || (item.status === 'ended' ? `https://cloud-recordings.lms.storage/${item.id}.mp4` : ''),
+    recordingUrl: item.recordingUrl || '',
+    recordingLink: item.recordingUrl || '',
     instructorId: item.instructorId || item.trainerId || '',
     instructorName: item.instructorName || item.trainer?.displayName || 'Faculty',
     targetAudienceType: item.targetAudienceType || 'all_enrolled',
@@ -328,13 +329,12 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
 
   endSession: async (sessionId: string, recordingUrl?: string) => {
     const target = get().sessions.find((s) => s.id === sessionId);
-    const finalRecordingUrl =
-      recordingUrl && recordingUrl.trim()
-        ? recordingUrl.trim()
-        : target?.recordingUrl || `https://cloud-recordings.lms.storage/${sessionId}.mp4`;
+    const finalRecordingUrl = recordingUrl && recordingUrl.trim() ? recordingUrl.trim() : (target?.recordingUrl || '');
 
     try {
-      await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, { recordingUrl: finalRecordingUrl });
+      await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, {
+        recordingUrl: finalRecordingUrl || undefined,
+      });
     } catch (e) {
       console.warn('Failed to end session in backend:', e);
     }
@@ -346,6 +346,29 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
             status: 'ended' as const,
             recordingUrl: finalRecordingUrl,
             recordingLink: finalRecordingUrl,
+            updatedAt: new Date().toISOString(),
+          }
+        : s
+    );
+    set({ sessions: updated });
+    persistSessions(updated);
+    return { success: true };
+  },
+
+  updateRecordingUrl: async (sessionId: string, recordingUrl: string) => {
+    const cleanUrl = recordingUrl ? recordingUrl.trim() : '';
+    try {
+      await apiClient.put(`/live-sessions/${sessionId}`, { recordingUrl: cleanUrl });
+    } catch (e) {
+      console.warn('Failed to update recording URL in backend:', e);
+    }
+
+    const updated = get().sessions.map((s) =>
+      s.id === sessionId
+        ? {
+            ...s,
+            recordingUrl: cleanUrl,
+            recordingLink: cleanUrl,
             updatedAt: new Date().toISOString(),
           }
         : s
