@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RotateCcw, Calendar, Building2, BookOpen } from 'lucide-react';
 import { useDashboardFilters } from '../context/DashboardFilterContext';
-import { mockDepartments } from '../../data/mockData';
+import { apiClient } from '../../lib/apiClient';
+
+interface DepartmentItem {
+  id: string;
+  name: string;
+  parentId?: string | null;
+}
 
 export const GlobalDashboardFilters: React.FC = () => {
   const {
@@ -17,6 +23,23 @@ export const GlobalDashboardFilters: React.FC = () => {
     setEndDate,
     resetFilters,
   } = useDashboardFilters();
+
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    apiClient
+      .get<any[]>('/admin/departments')
+      .then((res) => {
+        if (!isMounted) return;
+        const list = Array.isArray(res.data) ? res.data : (res.data as any)?.items || [];
+        setDepartments(list);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div
@@ -49,7 +72,7 @@ export const GlobalDashboardFilters: React.FC = () => {
           title="Filter by Department"
         >
           <option value="all">All Departments</option>
-          {mockDepartments.map((d) => (
+          {departments.map((d) => (
             <option key={d.id} value={d.id}>
               {d.parentId ? `↳ ${d.name}` : d.name}
             </option>

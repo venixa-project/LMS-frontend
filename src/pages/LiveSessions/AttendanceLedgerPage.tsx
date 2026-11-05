@@ -3,8 +3,8 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
 import {
   Download, Users, Clock, AlertTriangle, ShieldCheck,
@@ -108,7 +108,7 @@ export const AttendanceLedgerPage: React.FC = () => {
 
     const targetStudentIds = activeSession.targetStudentIds || ['st-1', 'st-2', 'st-3', 'st-4', 'st-5', 'u-007', 'u-009', 'u-010'];
     const sessionAttendance = activeSession.attendance || [];
-    const courseObj = mockCourses.find((c) => c.id === activeSession.courseId);
+    const courseObj = useCourseStore.getState().courses.find((c) => c.id === activeSession.courseId);
     const cohortObj = cohorts.find((c) => c.id === activeSession.cohortId);
 
     const sessionDuration = activeSession.durationMinutes || activeSession.duration || 60;
@@ -124,19 +124,8 @@ export const AttendanceLedgerPage: React.FC = () => {
 
     return allParticipantIds.map((studentId) => {
       // Find matching mock user or synthesize consistent scholar details
-      const userObj = mockUsers.find((u) => u.id === studentId || u.rollNo === studentId);
-      const studentName = userObj?.displayName || (
-        studentId === 'st-1' ? 'Alex Rivera' :
-        studentId === 'st-2' ? 'Daniel Wu' :
-        studentId === 'st-3' ? 'Elena Rostova' :
-        studentId === 'st-4' ? 'Kwame Mensah' :
-        studentId === 'st-5' ? 'Sophia Patel' :
-        studentId === 'st-6' ? 'Marcus Bell' :
-        studentId === 'st-7' ? 'Aria Montgomery' :
-        studentId === 'u-007' ? 'Alex Thompson' :
-        studentId === 'u-009' ? 'Maria Garcia' :
-        studentId === 'u-010' ? 'David Kim' : 'Enrolled Scholar'
-      );
+      const userObj = usePeopleStore.getState().users.find((u) => u.id === studentId || u.rollNo === studentId);
+      const studentName = userObj?.displayName || (studentId === user?.id ? (user.displayName || 'You') : 'Enrolled Student');
       const rollNo = userObj?.rollNo || `STU-2026-${studentId.replace(/\D/g, '').padStart(3, '0') || '001'}`;
       const email = userObj?.email || `${studentName.toLowerCase().replace(/\s+/g, '.')}@acmelearning.com`;
       const department = userObj?.departmentId || 'Computer Science & Engineering';

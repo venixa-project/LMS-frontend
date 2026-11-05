@@ -1,10 +1,28 @@
-import React, { useState } from 'react';
-import { mockDepartments } from '../../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { Department } from '../../types';
 import { Network, Plus, Edit2, Trash2, Users, ChevronRight, X, AlertTriangle } from 'lucide-react';
 
 export const DepartmentsPage: React.FC = () => {
-  const [departments, setDepartments] = useState<Department[]>(mockDepartments);
+  const { departments: storeDepts, fetchDepartments } = useDepartmentStore();
+  const [departments, setDepartments] = useState<Department[]>([]);
+  useEffect(() => {
+    fetchDepartments().catch(() => {});
+  }, [fetchDepartments]);
+  useEffect(() => {
+    setDepartments(storeDepts.map(d => ({
+      id: d.id,
+      name: d.name,
+      code: d.code,
+      status: (d.status === 'active' || d.status === 'inactive') ? d.status : 'active',
+      organizationId: 'org-001',
+      parentId: d.parentId || undefined,
+      memberCount: d.memberCount || 0,
+      createdAt: (d as any).createdAt || new Date().toISOString(),
+      updatedAt: (d as any).updatedAt || new Date().toISOString()
+    } as Department)));
+  }, [storeDepts]);
+  useEffect(() => { fetchDepartments().catch(() => {}); }, [fetchDepartments]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);

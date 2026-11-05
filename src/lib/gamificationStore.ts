@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Centralized Gamification Store (Zustand + LocalStorage)
 // Manages student point-award events, daily login rewards, consecutive streaks,
@@ -73,6 +74,9 @@ export interface QuizRewardResult {
 }
 
 interface GamificationStoreState {
+  leaderboard: any[];
+  isLoadingLeaderboard: boolean;
+  fetchLeaderboard: () => Promise<any[]>;
   profiles: Record<string, StudentGamificationRecord>;
   unacknowledgedRankUps: Record<string, RankUpPayload>;
 
@@ -317,6 +321,22 @@ function persistRankUps(rankUps: Record<string, RankUpPayload>): void {
 }
 
 export const useGamificationStore = create<GamificationStoreState>((set, get) => ({
+  leaderboard: [],
+  isLoadingLeaderboard: false,
+  fetchLeaderboard: async () => {
+    set({ isLoadingLeaderboard: true });
+    try {
+      const res = await apiClient.get<any[]>('/gamification/leaderboard');
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ leaderboard: res.data, isLoadingLeaderboard: false });
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch leaderboard:', err);
+    }
+    set({ isLoadingLeaderboard: false });
+    return [];
+  },
   profiles: loadStoredProfiles(),
   unacknowledgedRankUps: loadStoredRankUps(),
 

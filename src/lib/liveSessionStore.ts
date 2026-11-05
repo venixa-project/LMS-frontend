@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Live Sessions Store (Zustand with LocalStorage)
 // Manages real-time live classes, scheduling, status transitions,
@@ -5,10 +6,12 @@
 // ============================================================
 import { create } from 'zustand';
 import { LiveSession } from '../types';
-import { mockLiveSessions } from '../data/mockData';
+
 import { useAuthStore } from './store';
 
 interface LiveSessionState {
+  isLoading: boolean;
+  fetchSessions: () => Promise<void>;
   sessions: LiveSession[];
 
   // Selectors
@@ -93,6 +96,43 @@ function persistSessions(sessions: LiveSession[]) {
 }
 
 export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
+  isLoading: false,
+  fetchSessions: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.get<any[]>('/live-sessions');
+      if (res && res.data && Array.isArray(res.data)) {
+        const mapped: LiveSession[] = res.data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description || '',
+          courseId: item.courseId || undefined,
+          cohortId: item.cohortId || undefined,
+          date: item.startTime ? item.startTime.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          startTime: item.startTime ? new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '10:00',
+          endTime: item.endTime ? new Date(item.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '11:00',
+          durationMinutes: item.durationMinutes || 60,
+          status: item.status || 'scheduled',
+          provider: item.provider || 'Google Meet',
+          meetingUrl: item.meetingUrl || '',
+          recordingUrl: item.recordingUrl || '',
+          recordingLink: item.recordingUrl || '',
+          instructorId: item.instructorId || item.trainerId || 'trainer-default',
+          instructorName: item.instructorName || item.trainer?.displayName || 'Faculty Trainer',
+          targetAudienceType: 'all_enrolled',
+          attendance: item.attendance || [],
+          createdAt: item.createdAt || new Date().toISOString(),
+          updatedAt: item.updatedAt || new Date().toISOString(),
+        }));
+        set({ sessions: mapped, isLoading: false });
+        persistSessions(mapped);
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch live sessions from backend:', e);
+    }
+    set({ isLoading: false });
+  },
   sessions: loadInitialSessions(),
 
   getSessionById: (id: string) => {

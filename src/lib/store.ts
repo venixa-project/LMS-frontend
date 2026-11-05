@@ -115,26 +115,6 @@ function restoreSessionFromStorage(): {
   }
 }
 
-/**
- * Persists verified session to localStorage
- */
-function persistSession(user: User, role: RoleName, accessToken?: string) {
-  try {
-    const payload: StoredSession = {
-      userId: user.id,
-      email: user.email,
-      activeRole: role,
-      token: accessToken || `venilearn-token-${user.id}-${Date.now()}`,
-      expiresAt: Date.now() + (accessToken ? 15 : 7 * 24 * 60) * 60 * 1000,
-      ...(accessToken ? { userSnapshot: user } : {}),
-    };
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(payload));
-    sessionStorage.removeItem(LOGGED_OUT_KEY);
-  } catch (err) {
-    console.warn('Failed to persist session to localStorage:', err);
-  }
-}
-
 function getPersistedAccessToken(): string | undefined {
   try {
     const raw = localStorage.getItem(AUTH_SESSION_KEY);
@@ -144,6 +124,28 @@ function getPersistedAccessToken(): string | undefined {
   } catch (err) {
     console.warn('Failed to read access token while updating profile:', err);
     return undefined;
+  }
+}
+
+/**
+ * Persists verified session to localStorage
+ */
+function persistSession(user: User, role: RoleName, accessToken?: string) {
+  try {
+    const existingToken = accessToken || getPersistedAccessToken();
+    const token = existingToken || `venilearn-token-${user.id}-${Date.now()}`;
+    const payload: StoredSession = {
+      userId: user.id,
+      email: user.email,
+      activeRole: role,
+      token,
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days full session validity
+      userSnapshot: user,
+    };
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(payload));
+    sessionStorage.removeItem(LOGGED_OUT_KEY);
+  } catch (err) {
+    console.warn('Failed to persist session to localStorage:', err);
   }
 }
 
@@ -308,6 +310,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (foundUser) {
         const permissions = getPermissionsForRole(foundUser.activeRole);
         const navigation = getNavigationForRole(foundUser.activeRole);
+        localStorage.setItem('venilearn_active_tenant_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
+        if (typeof window !== 'undefined') sessionStorage.setItem('venilearn_active_org_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
         persistSession(foundUser, foundUser.activeRole);
         const notifications = getUserNotifications(foundUser);
         set({
@@ -445,8 +449,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     const updatedUser = { ...user, activeRole: targetRole };
-    // Persist verified switched role session
-    persistSession(updatedUser, targetRole);
+    const currentToken = getPersistedAccessToken();
+    // Persist verified switched role session with active JWT token
+    persistSession(updatedUser, targetRole, currentToken);
 
     const permissions = getPermissionsForRole(targetRole);
     const navigation = getNavigationForRole(targetRole);

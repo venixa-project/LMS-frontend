@@ -1,85 +1,121 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
+import { useMomentumStore } from '../../lib/momentumStore';
 import {
   Flame, Award, Trophy, Zap, Clock, Calendar, CheckCircle2,
   ArrowRight, Target, TrendingUp,
   Play, BookOpen, Star, BarChart2, ChevronLeft, ChevronRight,
-  CalendarDays, Check, HelpCircle
+  CalendarDays, Check, HelpCircle, Square, Timer, RefreshCw
 } from 'lucide-react';
 import {
   DayStudyRecord,
-  TODAY_DATE_STR,
-  generateInitialStudyDatabase,
+  formatDate,
+  formatDuration,
+  parseDate,
   calculateStreak,
   get28DayWindow,
   getMonthCalendarGrid,
   getWeeklyLearningSummary,
-  formatDuration,
-  parseDate
 } from './momentumData';
 
 export const MomentumPage: React.FC = () => {
   const { user } = useAuthStore();
-  const userName = user?.displayName || user?.firstName || 'Alex';
+  const userName = user?.displayName || (user as any)?.name || user?.firstName || 'Learner';
   const { courses } = useCourseStore();
 
-  // Core Study Settings & State
-  const [dailyGoalMinutes, setDailyGoalMinutes] = useState<number>(45);
-  const [weeklyGoalHours, setWeeklyGoalHours] = useState<number>(10);
-  const [studyDatabase, setStudyDatabase] = useState<Record<string, DayStudyRecord>>(() =>
-    generateInitialStudyDatabase(45)
-  );
+  const {
+    days: studyDatabase,
+    metrics: backendMetrics,
+    settings,
+    todayDate,
+    selectedDateStr,
+    isLoading,
+    activeSession,
+    fetchMomentum,
+    setSelectedDate,
+    updateGoals,
+    startSession,
+    tickSession,
+    endSession,
+  } = useMomentumStore();
+
+  const dailyGoalMinutes = settings.dailyGoalMinutes || 45;
+  const weeklyGoalHours = settings.weeklyGoalHours || 10;
 
   // Calendar View State: '28-day' vs 'month'
-  const [calendarView, setCalendarView] = useState<'28-day' | 'month'>('28-day');
-  const [periodOffset28, setPeriodOffset28] = useState<number>(0); // 0 = current 28 days, -1 = previous
+  const [calendarView, setCalendarView] = useState<'28-day' | 'month'>('month');
+  const [periodOffset28, setPeriodOffset28] = useState<number>(0);
+
+  // Month navigation: dynamically initialized to current year and month
+  const now = new Date();
   const [monthNav, setMonthNav] = useState<{ year: number; monthIndex: number }>({
-    year: 2026,
-    monthIndex: 9 // 0-indexed: 9 = October
+    year: now.getFullYear(),
+    monthIndex: now.getMonth(),
   });
 
-  // Selected date for details drawer (default to today)
-  const [selectedDateStr, setSelectedDateStr] = useState<string>(TODAY_DATE_STR);
+  // Session input title
+  const [sessionTitleInput, setSessionTitleInput] = useState<string>('');
+  const [isStartingSession, setIsStartingSession] = useState<boolean>(false);
+
+  // Fetch initial momentum data from backend
+  useEffect(() => {
+    fetchMomentum();
+  }, [fetchMomentum]);
+
+  // Active study session timer tick
+  useEffect(() => {
+    if (!activeSession) return;
+    const interval = setInterval(() => {
+      tickSession();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession, tickSession]);
 
   // Today's record
-  const todayRecord = studyDatabase[TODAY_DATE_STR] || {
-    date: TODAY_DATE_STR,
-    dayName: 'Tue',
-    dayNumber: 27,
-    minutes: 35,
+  const todayRecord: DayStudyRecord = studyDatabase[todayDate] || {
+    date: todayDate,
+    dayName: parseDate(todayDate).toLocaleDateString('en-US', { weekday: 'short' }),
+    dayNumber: parseDate(todayDate).getDate(),
+    minutes: 0,
     dailyGoalMinutes,
     goalReached: false,
     goalExceeded: false,
-    level: 1,
+    level: 0,
     isToday: true,
     isFuture: false,
-    activities: []
+    activities: [],
   };
 
-  // Streak calculation (automatically derived from study history with min 20m requirement)
+  // Streak calculation (falls back to local calculator if backend metrics null)
   const streakData = useMemo(() => {
+    if (backendMetrics && backendMetrics.currentStreak !== undefined) {
+      return {
+        currentStreak: backendMetrics.currentStreak,
+        personalBest: backendMetrics.personalBestStreak,
+      };
+    }
     return calculateStreak(studyDatabase, 20);
-  }, [studyDatabase]);
+  }, [backendMetrics, studyDatabase]);
 
   // 28-Day Window Data
   const window28Data = useMemo(() => {
-    return get28DayWindow(studyDatabase, periodOffset28);
-  }, [studyDatabase, periodOffset28]);
+    return get28DayWindow(studyDatabase, periodOffset28, parseDate(todayDate));
+  }, [studyDatabase, periodOffset28, todayDate]);
 
-  // Month View Data
+  // Month View Data (Google Calendar style dynamic month grid)
   const monthData = useMemo(() => {
-    return getMonthCalendarGrid(monthNav.year, monthNav.monthIndex, studyDatabase);
-  }, [monthNav, studyDatabase]);
+    return getMonthCalendarGrid(monthNav.year, monthNav.monthIndex, studyDatabase, parseDate(todayDate));
+  }, [monthNav, studyDatabase, todayDate]);
 
   // Weekly Summary Data
   const weeklySummary = useMemo(() => {
-    return getWeeklyLearningSummary(studyDatabase, dailyGoalMinutes, weeklyGoalHours);
-  }, [studyDatabase, dailyGoalMinutes, weeklyGoalHours]);
+    return getWeeklyLearningSummary(studyDatabase, dailyGoalMinutes, weeklyGoalHours, parseDate(todayDate));
+  }, [studyDatabase, dailyGoalMinutes, weeklyGoalHours, todayDate]);
 
   // Selected Day Record
-  const selectedDayRecord = studyDatabase[selectedDateStr] || {
+  const selectedDayRecord: DayStudyRecord = studyDatabase[selectedDateStr] || {
     date: selectedDateStr,
     dayName: parseDate(selectedDateStr).toLocaleDateString('en-US', { weekday: 'short' }),
     dayNumber: parseDate(selectedDateStr).getDate(),
@@ -88,13 +124,20 @@ export const MomentumPage: React.FC = () => {
     goalReached: false,
     goalExceeded: false,
     level: 0,
-    isToday: selectedDateStr === TODAY_DATE_STR,
-    isFuture: selectedDateStr > TODAY_DATE_STR,
-    activities: []
+    isToday: selectedDateStr === todayDate,
+    isFuture: selectedDateStr > todayDate,
+    activities: [],
   };
 
   // Consistency calculation over the current 28-day window
   const consistencyStats = useMemo(() => {
+    if (backendMetrics && backendMetrics.consistencyPercent !== undefined) {
+      return {
+        percent: backendMetrics.consistencyPercent,
+        reachedDays: backendMetrics.consistencyDaysReached,
+        totalTracked: backendMetrics.consistencyTotalTrackedDays,
+      };
+    }
     const days = window28Data.days;
     const trackedDays = days.filter((d) => !d.isFuture);
     const reachedDays = trackedDays.filter((d) => d.minutes >= dailyGoalMinutes);
@@ -102,36 +145,13 @@ export const MomentumPage: React.FC = () => {
     return {
       percent,
       reachedDays: reachedDays.length,
-      totalTracked: trackedDays.length
+      totalTracked: trackedDays.length,
     };
-  }, [window28Data, dailyGoalMinutes]);
+  }, [backendMetrics, window28Data, dailyGoalMinutes]);
 
   // Handle changing daily goal
-  const handleSelectDailyGoal = (mins: number) => {
-    setDailyGoalMinutes(mins);
-    // Recompute levels for existing database
-    setStudyDatabase((prev) => {
-      const updated: Record<string, DayStudyRecord> = {};
-      Object.keys(prev).forEach((dateKey) => {
-        const item = prev[dateKey];
-        const goalReached = item.minutes >= mins;
-        const goalExceeded = item.minutes >= Math.round(mins * 1.5);
-        let level: 0 | 1 | 2 | 3 = 0;
-        if (item.minutes === 0) level = 0;
-        else if (goalExceeded) level = 3;
-        else if (goalReached) level = 2;
-        else level = 1;
-
-        updated[dateKey] = {
-          ...item,
-          dailyGoalMinutes: mins,
-          goalReached,
-          goalExceeded,
-          level
-        };
-      });
-      return updated;
-    });
+  const handleSelectDailyGoal = async (mins: number) => {
+    await updateGoals(mins);
   };
 
   // Navigation handlers for 28-day view
@@ -140,17 +160,15 @@ export const MomentumPage: React.FC = () => {
   };
 
   const handleNext28 = () => {
-    if (periodOffset28 < 0) {
-      setPeriodOffset28((prev) => prev + 1);
-    }
+    setPeriodOffset28((prev) => prev + 1);
   };
 
   const handleCurrent28 = () => {
     setPeriodOffset28(0);
-    setSelectedDateStr(TODAY_DATE_STR);
+    setSelectedDate(todayDate);
   };
 
-  // Navigation handlers for Month view
+  // Google Calendar Month Navigation handlers
   const handlePrevMonth = () => {
     setMonthNav((prev) => {
       if (prev.monthIndex === 0) {
@@ -161,7 +179,6 @@ export const MomentumPage: React.FC = () => {
   };
 
   const handleNextMonth = () => {
-    if (monthNav.year === 2026 && monthNav.monthIndex >= 9) return;
     setMonthNav((prev) => {
       if (prev.monthIndex === 11) {
         return { year: prev.year + 1, monthIndex: 0 };
@@ -171,16 +188,33 @@ export const MomentumPage: React.FC = () => {
   };
 
   const handleCurrentMonth = () => {
-    setMonthNav({ year: 2026, monthIndex: 9 });
-    setSelectedDateStr(TODAY_DATE_STR);
+    const cur = new Date();
+    setMonthNav({ year: cur.getFullYear(), monthIndex: cur.getMonth() });
+    setSelectedDate(todayDate);
   };
 
   // Select a date card
   const handleSelectDate = (dateStr: string) => {
-    setSelectedDateStr(dateStr);
+    setSelectedDate(dateStr);
   };
 
-  // Modern Dark Cosmic Level Styling (No flat overpowering green blocks)
+  // Start study session handler
+  const handleStartSession = async () => {
+    setIsStartingSession(true);
+    const title = sessionTitleInput.trim() || 'Core Curriculum Study Session';
+    await startSession(title);
+    setSessionTitleInput('');
+    setIsStartingSession(false);
+  };
+
+  // Format elapsed time MM:SS
+  const formatTimer = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  // Modern Dark Cosmic Level Styling
   const levelStyles: Record<
     0 | 1 | 2 | 3,
     {
@@ -206,7 +240,7 @@ export const MomentumPage: React.FC = () => {
       badgeBorder: '1px solid rgba(255, 255, 255, 0.08)',
       glowShadow: 'none',
       label: 'Rest Day (0m)',
-      barColor: 'rgba(255, 255, 255, 0.06)'
+      barColor: 'rgba(255, 255, 255, 0.06)',
     },
     1: {
       cardBg: 'linear-gradient(180deg, rgba(245, 158, 11, 0.09) 0%, rgba(15, 23, 42, 0.8) 100%)',
@@ -218,7 +252,7 @@ export const MomentumPage: React.FC = () => {
       badgeBorder: '1px solid rgba(245, 158, 11, 0.32)',
       glowShadow: '0 4px 12px rgba(245, 158, 11, 0.08)',
       label: `In Progress (<${dailyGoalMinutes}m)`,
-      barColor: '#f59e0b'
+      barColor: '#f59e0b',
     },
     2: {
       cardBg: 'linear-gradient(180deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.85) 100%)',
@@ -230,7 +264,7 @@ export const MomentumPage: React.FC = () => {
       badgeBorder: '1px solid rgba(16, 185, 129, 0.4)',
       glowShadow: '0 4px 14px rgba(16, 185, 129, 0.12)',
       label: `Goal Met (${dailyGoalMinutes}m+)`,
-      barColor: '#10b981'
+      barColor: '#10b981',
     },
     3: {
       cardBg: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(99, 102, 241, 0.18) 100%)',
@@ -242,31 +276,41 @@ export const MomentumPage: React.FC = () => {
       badgeBorder: '1px solid rgba(52, 211, 153, 0.5)',
       glowShadow: '0 4px 16px rgba(16, 185, 129, 0.22), 0 0 10px rgba(99, 102, 241, 0.15)',
       label: `Supercharged (${Math.round(dailyGoalMinutes * 1.5)}m+)`,
-      barColor: 'linear-gradient(180deg, #34d399 0%, #10b981 100%)'
-    }
+      barColor: 'linear-gradient(180deg, #34d399 0%, #10b981 100%)',
+    },
   };
 
   // Format today's remaining time
   const todayProgressPercent = Math.min(100, Math.round((todayRecord.minutes / dailyGoalMinutes) * 100));
   const todayRemainingMinutes = Math.max(0, dailyGoalMinutes - todayRecord.minutes);
 
-  // Selected date formatted text (e.g. "Tuesday, 27 October 2026")
+  // Selected date formatted text (e.g. "Tuesday, 4 November 2026")
   const selectedDateFormatted = useMemo(() => {
     const d = parseDate(selectedDateStr);
     return d.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   }, [selectedDateStr]);
+
+  const todayDateFormatted = useMemo(() => {
+    const d = parseDate(todayDate);
+    return d.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }, [todayDate]);
 
   const selectedProgressPercent = Math.min(100, Math.round((selectedDayRecord.minutes / dailyGoalMinutes) * 100));
   const selectedRemainingMinutes = Math.max(0, dailyGoalMinutes - selectedDayRecord.minutes);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* 1. CLEAN EXECUTIVE MOMENTUM HEADER */}
+      {/* 1. EXECUTIVE MOMENTUM HEADER */}
       <div
         className="card"
         style={{
@@ -274,50 +318,27 @@ export const MomentumPage: React.FC = () => {
           border: '1px solid var(--border-subtle)',
           padding: '24px 28px',
           borderRadius: 'var(--radius-xl)',
-          position: 'relative'
+          position: 'relative',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '18px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              <span className="badge badge-secondary" style={{ fontSize: '0.72rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <Calendar size={12} /> Tuesday, 27 October 2026
+              <span className="badge badge-primary" style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Calendar size={13} /> {todayDateFormatted}
               </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  color: '#38bdf8',
-                  border: '1px solid rgba(56, 189, 248, 0.25)',
-                  fontSize: '0.72rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Clock size={12} /> Auto-Tracked from Course Player
-              </span>
-              <span
-                className="badge"
-                style={{
-                  background: 'rgba(16, 185, 129, 0.12)',
-                  color: '#10b981',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
-                  fontSize: '0.72rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <Flame size={12} fill="#10b981" /> Min. 20m Daily to Maintain Streak
-              </span>
+              {isLoading && (
+                <span className="badge badge-neutral" style={{ fontSize: '0.72rem', gap: '4px' }}>
+                  <RefreshCw size={11} className="animate-spin" /> Syncing...
+                </span>
+              )}
             </div>
 
             <h1 style={{ fontSize: '1.9rem', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-              Momentum
+              Learning Momentum
             </h1>
             <p className="text-secondary text-sm" style={{ maxWidth: '640px', margin: 0, lineHeight: 1.5 }}>
-              Track your study habits, understand your progress, and see what to do next.
+              Track daily study progress, consistency milestones, and course velocity.
             </p>
           </div>
 
@@ -331,7 +352,7 @@ export const MomentumPage: React.FC = () => {
                 padding: '6px 12px',
                 background: 'var(--bg-input)',
                 borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-subtle)'
+                border: '1px solid var(--border-subtle)',
               }}
             >
               <Target size={15} color="var(--primary)" />
@@ -351,7 +372,7 @@ export const MomentumPage: React.FC = () => {
                       fontWeight: 700,
                       fontSize: '0.72rem',
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease'
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     {mins}m
@@ -360,6 +381,124 @@ export const MomentumPage: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* LIVE STUDY TRACKER BAR */}
+        <div
+          style={{
+            marginTop: '20px',
+            padding: '14px 18px',
+            background: activeSession
+              ? 'linear-gradient(90deg, rgba(16, 185, 129, 0.18) 0%, rgba(15, 23, 42, 0.85) 100%)'
+              : 'rgba(15, 23, 42, 0.55)',
+            border: activeSession ? '1.5px solid #10b981' : '1px solid var(--border-subtle)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+          }}
+        >
+          {activeSession ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    background: 'rgba(16, 185, 129, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#10b981',
+                  }}
+                >
+                  <Timer size={20} className="animate-pulse" />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#10b981' }}>
+                      ● Active Study Session
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Auto-recording to database</span>
+                  </div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '2px' }}>
+                    {activeSession.title}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'monospace', color: '#34d399' }}>
+                    {formatTimer(activeSession.elapsedSeconds)}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Elapsed Study Time</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => endSession()}
+                  className="btn btn-sm"
+                  style={{
+                    background: '#ef4444',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    padding: '8px 14px',
+                    gap: '6px',
+                  }}
+                >
+                  <Square size={13} fill="#ffffff" /> End & Save Session
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Zap size={18} color="var(--primary)" />
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Study Session Tracker
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Start a focused session right now to automatically advance today&apos;s momentum.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, maxWidth: '440px', justifyContent: 'flex-end' }}>
+                <input
+                  type="text"
+                  placeholder="Session focus (e.g. Algorithms Review)..."
+                  value={sessionTitleInput}
+                  onChange={(e) => setSessionTitleInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleStartSession();
+                  }}
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '7px 12px',
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '6px',
+                    color: 'var(--text-main)',
+                    flex: 1,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleStartSession}
+                  disabled={isStartingSession}
+                  className="btn btn-primary btn-sm"
+                  style={{ fontWeight: 700, gap: '6px', whiteSpace: 'nowrap' }}
+                >
+                  <Play size={13} /> Start Live Session
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -370,7 +509,7 @@ export const MomentumPage: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="text-muted text-xs font-semibold">Study Streak</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f59e0b', fontSize: '0.75rem', fontWeight: 700 }}>
-              <Flame size={14} fill="#f59e0b" /> ACTIVE
+              <Flame size={14} fill="#f59e0b" /> {streakData.currentStreak > 0 ? 'ACTIVE' : 'READY'}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
@@ -380,10 +519,10 @@ export const MomentumPage: React.FC = () => {
             <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>days in a row</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            Personal best: <strong style={{ color: 'var(--text-main)' }}>{streakData.personalBest} days</strong> (June 2026)
+            Personal best: <strong style={{ color: 'var(--text-main)' }}>{streakData.personalBest} days</strong>
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            Requires at least 20 mins of verified study per day.
+            Requires at least 20 mins of study activity per day.
           </div>
         </div>
 
@@ -399,127 +538,116 @@ export const MomentumPage: React.FC = () => {
             <span style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
               {formatDuration(weeklySummary.totalMinutes)}
             </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>studied</span>
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Weekly goal: <strong style={{ color: 'var(--text-main)' }}>{weeklyGoalHours}h 00m</strong>
-          </div>
-          <div className="progress-bar-bg" style={{ height: '6px', marginTop: '6px' }}>
-            <div
-              className="progress-bar-fill"
-              style={{
-                width: `${Math.min(100, weeklySummary.goalPercent)}%`,
-                background: weeklySummary.goalPercent >= 100 ? '#10b981' : 'var(--primary)'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* CARD 3: LESSONS COMPLETED */}
-        <div className="card stat-card" style={{ borderLeft: '4px solid #3B82F6', position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="text-muted text-xs font-semibold">Lessons Completed</span>
-            <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>65% complete</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
-            <span style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              28
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>of 43 lessons</span>
-          </div>
-          <div className="progress-bar-bg" style={{ height: '6px', margin: '6px 0 10px' }}>
-            <div className="progress-bar-fill" style={{ width: '65%', background: '#3B82F6' }} />
-          </div>
-          <Link
-            to="/course-player/crs-001"
-            className="btn btn-secondary btn-sm"
-            style={{ width: '100%', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', padding: '5px 8px' }}
-          >
-            <Play size={12} color="var(--primary)" /> Continue Learning &rarr;
-          </Link>
-        </div>
-
-        {/* CARD 4: STUDY GOAL CONSISTENCY */}
-        <div className="card stat-card" style={{ borderLeft: '4px solid #10b981', position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="text-muted text-xs font-semibold">Study Goal Consistency</span>
-            <span className="badge badge-success" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
-              Past 28 Days
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
-            <span style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {consistencyStats.percent}%
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>target met</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>/ {weeklyGoalHours}h goal</span>
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-            Achieved {dailyGoalMinutes}m target on <strong style={{ color: 'var(--text-main)' }}>{consistencyStats.reachedDays} of {consistencyStats.totalTracked} days</strong>.
+            Active days: <strong style={{ color: 'var(--text-main)' }}>{weeklySummary.activeDaysCount} of 7 days</strong>
           </div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            Formula: (Target Met Days ÷ Eligible Tracked Days) × 100.
+          <div className="progress-bar-bg" style={{ height: '6px' }}>
+            <div className="progress-bar-fill" style={{ width: `${Math.min(100, weeklySummary.goalPercent)}%` }} />
+          </div>
+        </div>
+
+        {/* CARD 3: 28-DAY CONSISTENCY */}
+        <div className="card stat-card" style={{ borderLeft: '4px solid #10b981', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="text-muted text-xs font-semibold">28-Day Consistency</span>
+            <span className="badge badge-success" style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+              {consistencyStats.percent}%
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
+            <span style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+              {consistencyStats.reachedDays}
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>/ {consistencyStats.totalTracked} tracked days</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            Days target reached ({dailyGoalMinutes}m+) in current window
+          </div>
+          <div className="progress-bar-bg" style={{ height: '6px' }}>
+            <div className="progress-bar-fill" style={{ width: `${consistencyStats.percent}%`, background: '#10b981' }} />
+          </div>
+        </div>
+
+        {/* CARD 4: TODAY'S STUDY DURATION */}
+        <div className="card stat-card" style={{ borderLeft: '4px solid #8b5cf6', position: 'relative' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="text-muted text-xs font-semibold">Today&apos;s Study Time</span>
+            <span className={`badge badge-${todayRecord.goalReached ? 'success' : 'warning'}`} style={{ fontSize: '0.68rem', fontWeight: 700 }}>
+              {todayRecord.goalReached ? 'Target Reached' : `${todayRemainingMinutes}m left`}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '6px 0 2px' }}>
+            <span style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+              {formatDuration(todayRecord.minutes)}
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 600 }}>/ {dailyGoalMinutes}m target</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            {todayRecord.activities.length} activity item{todayRecord.activities.length === 1 ? '' : 's'} recorded today
+          </div>
+          <div className="progress-bar-bg" style={{ height: '6px' }}>
+            <div className="progress-bar-fill" style={{ width: `${todayProgressPercent}%`, background: todayRecord.goalReached ? '#10b981' : '#8b5cf6' }} />
           </div>
         </div>
       </div>
 
-      {/* 3. HYBRID STUDY CONSISTENCY CALENDAR (WOW Dark Theme & Visual Depth) */}
+      {/* 3. INTERACTIVE STUDY CONSISTENCY CALENDAR */}
       <div className="card" style={{ padding: '24px' }}>
-        {/* Calendar Header with View Switcher & Navigation Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '14px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <CalendarDays size={18} color="var(--primary)" />
+              <CalendarDays size={20} color="var(--primary)" />
               <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
                 Study Consistency Calendar
               </h2>
             </div>
-            <p className="text-secondary text-xs" style={{ margin: '4px 0 0 0' }}>
+            <p className="text-secondary text-xs" style={{ margin: '3px 0 0 0' }}>
               Inspect daily study duration, lesson completions, and goal achievement history.
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {/* View Switcher: [ 28-Day View ] [ Month View ] */}
-            <div
-              style={{
-                display: 'inline-flex',
-                background: 'var(--bg-input)',
-                padding: '3px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-subtle)'
-              }}
-            >
+            {/* View Switcher: 28-Day View vs Month View */}
+            <div style={{ display: 'flex', background: 'var(--bg-input)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
               <button
                 type="button"
-                className={`btn btn-sm ${calendarView === '28-day' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setCalendarView('28-day')}
                 style={{
-                  padding: '5px 14px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
                   fontSize: '0.78rem',
                   fontWeight: 700,
-                  borderRadius: '6px',
-                  color: calendarView === '28-day' ? '#ffffff' : 'var(--text-secondary)'
+                  border: 'none',
+                  background: calendarView === '28-day' ? 'var(--primary)' : 'transparent',
+                  color: calendarView === '28-day' ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 28-Day View
               </button>
               <button
                 type="button"
-                className={`btn btn-sm ${calendarView === 'month' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setCalendarView('month')}
                 style={{
-                  padding: '5px 14px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
                   fontSize: '0.78rem',
                   fontWeight: 700,
-                  borderRadius: '6px',
-                  color: calendarView === 'month' ? '#ffffff' : 'var(--text-secondary)'
+                  border: 'none',
+                  background: calendarView === 'month' ? 'var(--primary)' : 'transparent',
+                  color: calendarView === 'month' ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 Month View
               </button>
             </div>
 
-            {/* Navigation Controls */}
+            {/* Google Calendar Style Dynamic Navigation Controls */}
             {calendarView === '28-day' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button
@@ -545,9 +673,8 @@ export const MomentumPage: React.FC = () => {
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={handleNext28}
-                  disabled={periodOffset28 >= 0}
-                  style={{ padding: '6px 10px', fontSize: '0.75rem', opacity: periodOffset28 >= 0 ? 0.5 : 1 }}
-                  title="Next 28 days (disabled for future dates)"
+                  style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                  title="Next 28 days"
                 >
                   Next <ChevronRight size={14} />
                 </button>
@@ -567,19 +694,17 @@ export const MomentumPage: React.FC = () => {
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={handleCurrentMonth}
-                  disabled={monthNav.year === 2026 && monthNav.monthIndex === 9}
                   style={{ padding: '6px 10px', fontSize: '0.75rem', fontWeight: 600 }}
-                  title="Current month (October 2026)"
+                  title="Return to today"
                 >
-                  Current Month
+                  Today
                 </button>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={handleNextMonth}
-                  disabled={monthNav.year === 2026 && monthNav.monthIndex >= 9}
-                  style={{ padding: '6px 10px', fontSize: '0.75rem', opacity: monthNav.year === 2026 && monthNav.monthIndex >= 9 ? 0.5 : 1 }}
-                  title="Next month (disabled for future unrecorded periods)"
+                  style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                  title="Next month"
                 >
                   Next <ChevronRight size={14} />
                 </button>
@@ -588,7 +713,7 @@ export const MomentumPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Date Range Badge & Visible Legend */}
+        {/* Date Range Badge & Legend */}
         <div
           style={{
             display: 'flex',
@@ -600,20 +725,20 @@ export const MomentumPage: React.FC = () => {
             background: 'var(--bg-input)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-subtle)',
-            marginBottom: '16px'
+            marginBottom: '16px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)' }}>
               {calendarView === '28-day' ? (
-                <>Period: {window28Data.startDate} &mdash; {window28Data.endDate} ({periodOffset28 === 0 ? 'Current 28 Days' : 'Historical Period'})</>
+                <>Period: {window28Data.startDate} &mdash; {window28Data.endDate} ({periodOffset28 === 0 ? 'Current 28 Days' : 'Historical Window'})</>
               ) : (
                 <>{monthData.monthName} {monthData.year}</>
               )}
             </span>
           </div>
 
-          {/* Accessible Visible Legend with Accurate Harmonized Colors */}
+          {/* Accessible Visible Legend */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '0.73rem', color: 'var(--text-muted)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: levelStyles[0].cardBg, border: levelStyles[0].cardBorder }} />
@@ -634,18 +759,18 @@ export const MomentumPage: React.FC = () => {
           </div>
         </div>
 
-        {/* VIEW A: 28-DAY STUDY CALENDAR (WOW Dark Glass Theme) */}
+        {/* VIEW A: 28-DAY STUDY CALENDAR */}
         {calendarView === '28-day' && (
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(7, 1fr)',
-              gap: '10px'
+              gap: '10px',
             }}
           >
             {window28Data.days.map((item) => {
               const isSelected = selectedDateStr === item.date;
-              const isToday = item.date === TODAY_DATE_STR;
+              const isToday = item.date === todayDate;
               const style = levelStyles[item.level];
               const pctOfGoal = Math.min(100, Math.round((item.minutes / dailyGoalMinutes) * 100));
 
@@ -669,8 +794,8 @@ export const MomentumPage: React.FC = () => {
                     border: isSelected
                       ? '2.5px solid #ffffff'
                       : isToday
-                      ? '2px solid #38bdf8'
-                      : style.cardBorder,
+                        ? '2px solid #38bdf8'
+                        : style.cardBorder,
                     borderRadius: '12px',
                     padding: '12px 10px',
                     minHeight: '86px',
@@ -683,11 +808,11 @@ export const MomentumPage: React.FC = () => {
                     boxShadow: isSelected
                       ? '0 0 18px rgba(255,255,255,0.45)'
                       : isToday
-                      ? '0 0 16px rgba(56, 189, 248, 0.45), inset 0 0 10px rgba(56, 189, 248, 0.1)'
-                      : style.glowShadow,
+                        ? '0 0 16px rgba(56, 189, 248, 0.45), inset 0 0 10px rgba(56, 189, 248, 0.1)'
+                        : style.glowShadow,
                     position: 'relative',
                     outline: 'none',
-                    backdropFilter: 'blur(8px)'
+                    backdropFilter: 'blur(8px)',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-3px)';
@@ -696,7 +821,6 @@ export const MomentumPage: React.FC = () => {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
-                  {/* Today Badge */}
                   {isToday && (
                     <span
                       style={{
@@ -710,39 +834,36 @@ export const MomentumPage: React.FC = () => {
                         borderRadius: '4px',
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
-                        boxShadow: '0 2px 8px rgba(56, 189, 248, 0.5)'
+                        boxShadow: '0 2px 8px rgba(56, 189, 248, 0.5)',
                       }}
                     >
                       Today
                     </span>
                   )}
 
-                  {/* Weekday Label */}
                   <span
                     style={{
                       fontSize: '0.72rem',
                       fontWeight: 600,
                       color: style.weekdayColor,
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em'
+                      letterSpacing: '0.04em',
                     }}
                   >
                     {item.dayName}
                   </span>
 
-                  {/* Date Number */}
                   <span
                     style={{
                       fontSize: '1.15rem',
                       fontWeight: 800,
                       color: isToday ? '#38bdf8' : style.dayNumberColor,
-                      lineHeight: 1.1
+                      lineHeight: 1.1,
                     }}
                   >
                     {item.dayNumber}
                   </span>
 
-                  {/* Achievement Pill / Progress */}
                   {item.minutes > 0 ? (
                     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
                       <span
@@ -756,13 +877,12 @@ export const MomentumPage: React.FC = () => {
                           borderRadius: '5px',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '3px'
+                          gap: '3px',
                         }}
                       >
                         {item.minutes}m {item.level === 3 ? '★' : item.level === 2 ? '✓' : ''}
                       </span>
 
-                      {/* Mini Progress Bar for In-Progress Days */}
                       {item.level === 1 && (
                         <div
                           style={{
@@ -770,7 +890,7 @@ export const MomentumPage: React.FC = () => {
                             height: '3px',
                             background: 'rgba(255, 255, 255, 0.08)',
                             borderRadius: '2px',
-                            overflow: 'hidden'
+                            overflow: 'hidden',
                           }}
                           title={`${pctOfGoal}% of daily target (${dailyGoalMinutes - item.minutes}m remaining)`}
                         >
@@ -779,7 +899,7 @@ export const MomentumPage: React.FC = () => {
                               width: `${pctOfGoal}%`,
                               height: '100%',
                               background: '#f59e0b',
-                              borderRadius: '2px'
+                              borderRadius: '2px',
                             }}
                           />
                         </div>
@@ -793,7 +913,7 @@ export const MomentumPage: React.FC = () => {
                         background: style.badgeBg,
                         border: style.badgeBorder,
                         padding: '1px 6px',
-                        borderRadius: '4px'
+                        borderRadius: '4px',
                       }}
                     >
                       Rest
@@ -805,17 +925,17 @@ export const MomentumPage: React.FC = () => {
           </div>
         )}
 
-        {/* VIEW B: MONTHLY STUDY CALENDAR (WOW Dark Theme) */}
+        {/* VIEW B: MONTHLY STUDY CALENDAR (Google Calendar Grid Style) */}
         {calendarView === 'month' && (
           <div>
-            {/* Weekday Column Headers (Monday to Sunday) */}
+            {/* Weekday Column Headers */}
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(7, 1fr)',
                 gap: '8px',
                 textAlign: 'center',
-                marginBottom: '8px'
+                marginBottom: '8px',
               }}
             >
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
@@ -830,12 +950,12 @@ export const MomentumPage: React.FC = () => {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: '8px'
+                gap: '8px',
               }}
             >
               {monthData.cells.map((cell) => {
                 const isSelected = selectedDateStr === cell.date;
-                const isToday = cell.date === TODAY_DATE_STR;
+                const isToday = cell.date === todayDate;
                 const rec = cell.record;
                 const style = levelStyles[rec.level];
 
@@ -857,15 +977,15 @@ export const MomentumPage: React.FC = () => {
                       background: isToday
                         ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.16) 0%, rgba(15, 23, 42, 0.9) 100%)'
                         : cell.isCurrentMonth
-                        ? style.cardBg
-                        : 'rgba(15, 23, 42, 0.2)',
+                          ? style.cardBg
+                          : 'rgba(15, 23, 42, 0.2)',
                       border: isSelected
                         ? '2.5px solid #ffffff'
                         : isToday
-                        ? '2px solid #38bdf8'
-                        : cell.isCurrentMonth
-                        ? style.cardBorder
-                        : '1px solid rgba(255, 255, 255, 0.04)',
+                          ? '2px solid #38bdf8'
+                          : cell.isCurrentMonth
+                            ? style.cardBorder
+                            : '1px solid rgba(255, 255, 255, 0.04)',
                       borderRadius: '10px',
                       padding: '8px 10px',
                       display: 'flex',
@@ -876,11 +996,11 @@ export const MomentumPage: React.FC = () => {
                       boxShadow: isSelected
                         ? '0 0 16px rgba(255,255,255,0.45)'
                         : isToday
-                        ? '0 0 16px rgba(56, 189, 248, 0.4)'
-                        : style.glowShadow,
+                          ? '0 0 16px rgba(56, 189, 248, 0.4)'
+                          : style.glowShadow,
                       position: 'relative',
                       outline: 'none',
-                      transition: 'all 0.15s ease'
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -894,7 +1014,7 @@ export const MomentumPage: React.FC = () => {
                         style={{
                           fontSize: '0.88rem',
                           fontWeight: isToday ? 800 : 700,
-                          color: isToday ? '#38bdf8' : '#ffffff'
+                          color: isToday ? '#38bdf8' : '#ffffff',
                         }}
                       >
                         {cell.dayNumber}
@@ -907,7 +1027,7 @@ export const MomentumPage: React.FC = () => {
                             fontSize: '0.58rem',
                             fontWeight: 800,
                             padding: '1px 5px',
-                            borderRadius: '3px'
+                            borderRadius: '3px',
                           }}
                         >
                           Today
@@ -925,7 +1045,7 @@ export const MomentumPage: React.FC = () => {
                             color: style.badgeColor,
                             border: style.badgeBorder,
                             padding: '1px 5px',
-                            borderRadius: '4px'
+                            borderRadius: '4px',
                           }}
                         >
                           {rec.minutes}m {rec.level === 3 ? '★' : rec.level === 2 ? '✓' : ''}
@@ -942,9 +1062,9 @@ export const MomentumPage: React.FC = () => {
         )}
       </div>
 
-      {/* 4. SELECTED-DAY DETAILS (Left) + TODAY'S STUDY GOAL (Right) */}
+      {/* 4. SELECTED-DAY DETAILS + TODAY'S STUDY GOAL */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1.1fr)', gap: '20px' }}>
-        {/* SELECTED-DAY DETAILS DRAWER / PANEL */}
+        {/* SELECTED-DAY DETAILS DRAWER */}
         <div className="card" style={{ padding: '22px', position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -984,7 +1104,7 @@ export const MomentumPage: React.FC = () => {
               background: 'var(--bg-input)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-subtle)',
-              marginBottom: '16px'
+              marginBottom: '16px',
             }}
           >
             <div>
@@ -1014,7 +1134,7 @@ export const MomentumPage: React.FC = () => {
                 className="progress-bar-fill"
                 style={{
                   width: `${selectedProgressPercent}%`,
-                  background: selectedDayRecord.goalReached ? '#10b981' : 'var(--primary)'
+                  background: selectedDayRecord.goalReached ? '#10b981' : 'var(--primary)',
                 }}
               />
             </div>
@@ -1023,7 +1143,7 @@ export const MomentumPage: React.FC = () => {
           {/* Detailed Activity Breakdown for Selected Day */}
           <div>
             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, margin: '0 0 10px 0', color: 'var(--text-secondary)' }}>
-              Completed Curriculum Items ({selectedDayRecord.activities.length}):
+              Recorded Learning Events ({selectedDayRecord.activities.length}):
             </h4>
 
             {selectedDayRecord.activities.length === 0 ? (
@@ -1033,7 +1153,7 @@ export const MomentumPage: React.FC = () => {
                   background: 'var(--bg-input)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px dashed var(--border-subtle)',
-                  textAlign: 'center'
+                  textAlign: 'center',
                 }}
               >
                 <Clock size={24} color="var(--text-muted)" style={{ margin: '0 auto 8px' }} />
@@ -1041,7 +1161,7 @@ export const MomentumPage: React.FC = () => {
                   No study activity is recorded for this date.
                 </p>
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-placeholder)', display: 'block', marginTop: '4px' }}>
-                  Missing data does not necessarily prove that no offline studying occurred.
+                  Use the Study Session Tracker above or complete lessons in your course player to log activity!
                 </span>
               </div>
             ) : (
@@ -1057,7 +1177,7 @@ export const MomentumPage: React.FC = () => {
                       background: 'var(--bg-input)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px solid var(--border-subtle)',
-                      gap: '10px'
+                      gap: '10px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
@@ -1088,7 +1208,7 @@ export const MomentumPage: React.FC = () => {
           </div>
         </div>
 
-        {/* TODAY'S STUDY GOAL CARD (Automated Live Progress) */}
+        {/* TODAY'S STUDY GOAL CARD */}
         <div className="card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -1103,7 +1223,7 @@ export const MomentumPage: React.FC = () => {
               </span>
             </div>
 
-            {/* Target Preset Selector Buttons (15m, 30m, 45m, 60m) */}
+            {/* Target Preset Selector Buttons */}
             <div style={{ marginBottom: '16px' }}>
               <div className="text-muted text-xs" style={{ marginBottom: '6px' }}>Customize Daily Study Target:</div>
               <div style={{ display: 'flex', gap: '6px' }}>
@@ -1122,7 +1242,7 @@ export const MomentumPage: React.FC = () => {
                       fontWeight: 700,
                       fontSize: '0.75rem',
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease'
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     {mins}m
@@ -1144,32 +1264,28 @@ export const MomentumPage: React.FC = () => {
                   className="progress-bar-fill"
                   style={{
                     width: `${todayProgressPercent}%`,
-                    background: todayProgressPercent >= 100 ? '#10b981' : 'linear-gradient(90deg, var(--primary) 0%, #10b981 100%)'
+                    background: todayProgressPercent >= 100 ? '#10b981' : 'linear-gradient(90deg, var(--primary) 0%, #10b981 100%)',
                   }}
                 />
               </div>
             </div>
 
-            {/* Completed Activities & Up Next Checklist */}
+            {/* Quick Status */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={15} color="#10b981" />
-                <span>Reviewed Lesson 3: Asynchronous Loops (20 mins)</span>
+                <CheckCircle2 size={15} color={todayRecord.minutes > 0 ? '#10b981' : '#64748b'} />
+                <span>Active Study Today: {todayRecord.minutes} minutes</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CheckCircle2 size={15} color="#10b981" />
-                <span>Submitted React Fundamentals Practice Quiz (15 mins)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
-                <div style={{ width: '15px', height: '15px', borderRadius: '50%', border: '1.5px dashed var(--border-subtle)', margin: '0 0 0 1px' }} />
-                <span>Next: Complete Lesson 4 interactive lab (10 mins)</span>
+                <Flame size={15} color={streakData.currentStreak > 0 ? '#f59e0b' : '#64748b'} />
+                <span>Consecutive Streak: {streakData.currentStreak} day{streakData.currentStreak === 1 ? '' : 's'}</span>
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
             <Link
-              to="/course-player/crs-001"
+              to="/my-learning"
               className="btn btn-primary"
               style={{ flex: 1, justifyContent: 'center', fontSize: '0.85rem', gap: '6px', fontWeight: 700 }}
             >
@@ -1179,7 +1295,7 @@ export const MomentumPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 5. WEEKLY LEARNING SUMMARY ("Your Week at a Glance") */}
+      {/* 5. WEEKLY LEARNING SUMMARY */}
       <div className="card" style={{ padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
@@ -1205,7 +1321,7 @@ export const MomentumPage: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: '12px',
-            marginBottom: '20px'
+            marginBottom: '20px',
           }}
         >
           <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
@@ -1251,7 +1367,7 @@ export const MomentumPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Daily Study Time Visual Bar Chart (Monday to Sunday) */}
+        {/* Daily Study Time Visual Bar Chart */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
@@ -1270,7 +1386,7 @@ export const MomentumPage: React.FC = () => {
               background: 'var(--bg-input)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-subtle)',
-              position: 'relative'
+              position: 'relative',
             }}
           >
             {/* Goal threshold dashed reference line */}
@@ -1282,7 +1398,7 @@ export const MomentumPage: React.FC = () => {
                 bottom: `${Math.min(130, Math.round((dailyGoalMinutes / 90) * 120) + 26)}px`,
                 borderTop: '1.5px dashed rgba(16, 185, 129, 0.65)',
                 pointerEvents: 'none',
-                zIndex: 1
+                zIndex: 1,
               }}
             >
               <span
@@ -1295,7 +1411,7 @@ export const MomentumPage: React.FC = () => {
                   color: '#10b981',
                   background: 'var(--bg-input)',
                   padding: '1px 4px',
-                  borderRadius: '3px'
+                  borderRadius: '3px',
                 }}
               >
                 Target: {dailyGoalMinutes}m
@@ -1303,9 +1419,9 @@ export const MomentumPage: React.FC = () => {
             </div>
 
             {weeklySummary.days.map((day) => {
-              const maxScale = 90;
+              const maxScale = Math.max(90, dailyGoalMinutes * 1.5);
               const heightPx = Math.min(120, Math.max(8, Math.round((day.minutes / maxScale) * 110)));
-              const isToday = day.date === TODAY_DATE_STR;
+              const isToday = day.date === todayDate;
               const color = day.minutes >= dailyGoalMinutes ? '#10b981' : day.minutes > 0 ? '#f59e0b' : 'rgba(255,255,255,0.08)';
 
               return (
@@ -1318,7 +1434,7 @@ export const MomentumPage: React.FC = () => {
                     alignItems: 'center',
                     gap: '6px',
                     cursor: 'pointer',
-                    zIndex: 2
+                    zIndex: 2,
                   }}
                   title={`${day.dayName}, ${day.date}: ${day.minutes} mins studied`}
                 >
@@ -1335,7 +1451,7 @@ export const MomentumPage: React.FC = () => {
                       borderRadius: '4px 4px 2px 2px',
                       border: isToday ? '2px solid #38bdf8' : 'none',
                       boxShadow: isToday ? '0 0 10px rgba(56, 189, 248, 0.4)' : 'none',
-                      transition: 'all 0.2s ease'
+                      transition: 'all 0.2s ease',
                     }}
                   />
 
@@ -1350,207 +1466,6 @@ export const MomentumPage: React.FC = () => {
                 </div>
               );
             })}
-          </div>
-        </div>
-      </div>
-
-      {/* 6. RECOMMENDED NEXT STEP */}
-      <div
-        className="card"
-        style={{
-          padding: '20px 24px',
-          background: 'radial-gradient(ellipse at top left, rgba(37, 99, 235, 0.12) 0%, var(--bg-surface) 100%)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-xl)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'rgba(37, 99, 235, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--primary)',
-                flexShrink: 0
-              }}
-            >
-              <Zap size={22} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--primary)' }}>
-                Your Next Step
-              </div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '2px 0', color: 'var(--text-main)' }}>
-                {todayRecord.minutes < dailyGoalMinutes ? (
-                  <>You have {todayRemainingMinutes} minutes left to reach today&apos;s study goal!</>
-                ) : (
-                  <>🎉 You&apos;ve reached today&apos;s {dailyGoalMinutes}-minute target!</>
-                )}
-              </h3>
-              <p className="text-secondary text-xs" style={{ margin: 0 }}>
-                Continue &ldquo;JavaScript Fundamentals&rdquo; &mdash; Module 1: Lesson 4 (Asynchronous Promises).
-              </p>
-            </div>
-          </div>
-
-          <Link
-            to="/course-player/crs-001"
-            className="btn btn-primary"
-            style={{ gap: '6px', fontWeight: 700, padding: '10px 18px' }}
-          >
-            <Play size={14} /> Resume Lesson 4 &rarr;
-          </Link>
-        </div>
-      </div>
-
-      {/* 7. GAMIFICATION STREAK MILESTONES */}
-      <div className="card" style={{ padding: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
-              Habit Streaks & Milestone Badges
-            </h3>
-            <p className="text-secondary text-xs" style={{ margin: '2px 0 0 0' }}>
-              Earn badges and verified credentials by sustaining your daily learning velocity.
-            </p>
-          </div>
-          <span className="badge badge-secondary">Gamification Engine Active</span>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px' }}>
-          {/* Badge 1 */}
-          <div
-            style={{
-              background: 'var(--bg-input)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '12px',
-              padding: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}
-          >
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'rgba(239, 68, 68, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px'
-              }}
-            >
-              🔥
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>7-Day Streak</div>
-              <div style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>Unlocked &bull; 100 XP</div>
-            </div>
-          </div>
-
-          {/* Badge 2 */}
-          <div
-            style={{
-              background: 'var(--bg-input)',
-              border: '1.5px solid var(--primary)',
-              borderRadius: '12px',
-              padding: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              boxShadow: '0 0 12px var(--primary-glow)'
-            }}
-          >
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'var(--primary-light)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px'
-              }}
-            >
-              ⚡
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>14-Day Velocity</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 700 }}>2 Days Away (86%)</div>
-            </div>
-          </div>
-
-          {/* Badge 3 */}
-          <div
-            style={{
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '12px',
-              padding: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              opacity: 0.75
-            }}
-          >
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'rgba(255, 255, 255, 0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px'
-              }}
-            >
-              🏆
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>30-Day Legend</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>18 Days to unlock</div>
-            </div>
-          </div>
-
-          {/* Badge 4 */}
-          <div
-            style={{
-              background: 'var(--bg-input)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: '12px',
-              padding: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}
-          >
-            <div
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'rgba(16, 185, 129, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px'
-              }}
-            >
-              🎓
-            </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>Live Class Pro</div>
-              <div style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>Unlocked &bull; 95%+ Turnout</div>
-            </div>
           </div>
         </div>
       </div>

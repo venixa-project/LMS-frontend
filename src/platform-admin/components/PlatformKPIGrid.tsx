@@ -1,13 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Users, GraduationCap, BookOpen, TrendingUp } from 'lucide-react';
-import { mockOrganizations, mockCourses } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
 
 interface Props {
   facultyCount?: number;
 }
 
-export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 18 }) => {
+export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 0 }) => {
+  const { courses } = useCourseStore();
   return (
     <div className="dashboard-kpi-grid">
       <Link to="/organizations" className="stat-card stat-card-link">
@@ -19,7 +20,7 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 18 }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            {mockOrganizations.length}
+            1
           </span>
           <Building2 size={22} color="var(--primary)" />
         </div>
@@ -35,7 +36,7 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 18 }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            892
+            0
           </span>
           <Users size={22} color="var(--accent-cyan)" />
         </div>
@@ -67,7 +68,7 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 18 }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            {mockCourses.length}
+            {courses.filter(c => c.status === 'published').length}
           </span>
           <BookOpen size={22} color="var(--warning)" />
         </div>

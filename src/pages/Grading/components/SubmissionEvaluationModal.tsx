@@ -1,6 +1,7 @@
+import { mockQuestions } from '../../../data/mockData';
 import React, { useState, useEffect } from 'react';
 import { AssessmentAttempt, Rubric } from '../../../types';
-import { mockRubrics, mockQuestions } from '../../../data/mockData';
+
 import { useGradingStore } from '../../../lib/gradingStore';
 import {
   X, Check, Sparkles, CheckCircle2, Clock, AlertTriangle,
@@ -20,7 +21,16 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
 }) => {
   const { acceptAiScore, overrideScore, saveDraftGrade } = useGradingStore();
 
-  const rubric: Rubric = mockRubrics[0];
+  const rubric: Rubric = {
+    id: 'default',
+    name: 'Standard Rubric',
+    title: 'Standard Rubric',
+    criteria: [],
+    totalPoints: 100,
+    version: 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
   const [score, setScore] = useState<number>(attempt.score || attempt.aiSuggestion?.score || 80);
   const [feedback, setFeedback] = useState<string>(
     attempt.feedback ||

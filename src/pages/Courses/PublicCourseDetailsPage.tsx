@@ -3,8 +3,7 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockDepartments, mockCohorts } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
 import { BackToCoursesButton } from '../../components/BackToCoursesButton';
 import {
@@ -25,15 +24,32 @@ export const PublicCourseDetailsPage: React.FC = () => {
     isEnrolled,
     hasRequested,
     enrollInCourse,
-    requestToJoinCourse
+    requestToJoinCourse,
+    fetchCourses
   } = useCourseStore();
 
   const [enrollmentNotice, setEnrollmentNotice] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [loadingCourse, setLoadingCourse] = useState(true);
+
+  React.useEffect(() => {
+    fetchCourses().finally(() => setLoadingCourse(false));
+  }, [fetchCourses]);
 
   // Normalize course id lookup
   const course = id ? getCourseById(id) : undefined;
+
+  if (loadingCourse && !course) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="pulse-indicator" style={{ width: '14px', height: '14px', margin: '0 auto 12px' }} />
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Loading course curriculum...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!course) {
     return (
@@ -149,8 +165,8 @@ export const PublicCourseDetailsPage: React.FC = () => {
 
   // Lead Trainer lookup
   const trainerId = course.instructors?.[0] || 'u-004';
-  const leadTrainer = mockUsers.find(u => u.id === trainerId);
-  const trainerDept = mockDepartments.find(d => d.id === leadTrainer?.departmentId);
+  const leadTrainer = usePeopleStore.getState().users.find(u => u.id === trainerId);
+  const trainerDept = useDepartmentStore.getState().departments.find(d => d.id === leadTrainer?.departmentId);
 
   const totalLessons = course.modules?.reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 0;
 

@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Assessment Store (Zustand with LocalStorage Persistence)
 // Manages assessments, question sets, drafts, publication status,
@@ -5,11 +6,27 @@
 // ============================================================
 import { create } from 'zustand';
 import { Assessment, Question } from '../types';
-import { mockAssessments, mockQuestions } from '../data/mockData';
+
 
 const STORAGE_KEY_ASSESSMENTS = 'venilearn_assessments_store';
 const STORAGE_KEY_QUESTIONS = 'venilearn_questions_store';
 const STORAGE_KEY_DRAFTS = 'venilearn_drafts_store';
+const STORE_VERSION_KEY = 'venilearn_assessments_store_version';
+const CURRENT_STORE_VERSION = 'v2_live_db_sync';
+
+// Automatically bust stale client-side caches from previous prototype/mock data
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem(STORE_VERSION_KEY);
+    if (cachedVer !== CURRENT_STORE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_ASSESSMENTS);
+      localStorage.removeItem(STORAGE_KEY_QUESTIONS);
+      localStorage.removeItem(STORAGE_KEY_DRAFTS);
+      localStorage.removeItem('venilearn_assignments');
+      localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
+    }
+  } catch {}
+}
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -37,6 +54,10 @@ function saveToStorage<T>(key: string, data: T): void {
 export const MAX_ASSESSMENT_QUESTIONS = 100;
 
 interface AssessmentStoreState {
+  myAttempts: any[];
+  isLoading: boolean;
+  fetchAssessments: () => Promise<void>;
+  fetchMyAttempts: () => Promise<void>;
   assessments: Assessment[];
   questions: Question[];
   drafts: Assessment[];
@@ -58,8 +79,34 @@ interface AssessmentStoreState {
 }
 
 export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
-  assessments: loadFromStorage<Assessment[]>(STORAGE_KEY_ASSESSMENTS, mockAssessments),
-  questions: loadFromStorage<Question[]>(STORAGE_KEY_QUESTIONS, mockQuestions),
+  myAttempts: [],
+  isLoading: false,
+  fetchAssessments: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.get<any[]>('/assessments');
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ assessments: res.data, isLoading: false });
+        saveToStorage(STORAGE_KEY_ASSESSMENTS, res.data);
+        return;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch assessments:', err);
+    }
+    set({ isLoading: false });
+  },
+  fetchMyAttempts: async () => {
+    try {
+      const res = await apiClient.get<any[]>('/assessments/my-attempts');
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ myAttempts: res.data });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch my assessment attempts:', err);
+    }
+  },
+  assessments: loadFromStorage<Assessment[]>(STORAGE_KEY_ASSESSMENTS, []),
+  questions: loadFromStorage<Question[]>(STORAGE_KEY_QUESTIONS, []),
   drafts: loadFromStorage<Assessment[]>(STORAGE_KEY_DRAFTS, []),
 
   getAssessmentById: (id: string) => {
@@ -87,8 +134,8 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       if (matched.length > 0) return matched;
     }
 
-    // 4. Default fallback: first 5 mock questions
-    return state.questions.slice(0, 5);
+    // 4. Default: return empty array if no questions configured yet
+    return [];
   },
 
   getAssessmentsForCourse: (courseId: string) => {
@@ -291,8 +338,8 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
     localStorage.removeItem(STORAGE_KEY_QUESTIONS);
     localStorage.removeItem(STORAGE_KEY_DRAFTS);
     set({
-      assessments: mockAssessments,
-      questions: mockQuestions,
+      assessments: [],
+      questions: [],
       drafts: []
     });
   }

@@ -37,7 +37,7 @@ export const InstitutionKPIGrid: React.FC<Props> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <span className="text-muted text-xs font-semibold stat-card-title">Total Students</span>
           <span className="text-success text-xs" style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 700 }}>
-            <TrendingUp size={13} /> {isFiltered ? 'Filtered' : '+12 new'}
+            <TrendingUp size={13} /> {isFiltered ? 'Filtered' : 'Active'}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

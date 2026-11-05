@@ -13,12 +13,7 @@ import {
   PlannerReminderLead,
   PlannerRecurrence
 } from '../types/planner';
-import {
-  mockCohorts,
-  mockLiveSessions,
-  mockAssessments,
-  mockGradingTasks
-} from '../data/mockData';
+
 
 const STORAGE_KEY = 'venilearn_admin_planner_activities_v3';
 
@@ -248,112 +243,7 @@ const getInitialSeedActivities = (): PlannerActivity[] => {
 
 // Harvest automatically sourced LMS events without duplicating
 export const getHarvestedLMSEvents = (): PlannerActivity[] => {
-  const events: PlannerActivity[] = [];
-
-  // 1. Cohort Start Dates from mockCohorts
-  mockCohorts.forEach((coh) => {
-    if (coh.startDate) {
-      events.push({
-        id: `lms-cohort-${coh.id}`,
-        title: `Cohort Start: ${coh.name} (${coh.code})`,
-        description: `Scheduled cohort start date. Capacity: ${coh.capacity} students. Faculty assigned: ${coh.instructors?.length || 1}.`,
-        type: 'lms_event',
-        date: coh.startDate,
-        startTime: '09:00',
-        endTime: '10:00',
-        priority: coh.status === 'active' ? 'high' : 'medium',
-        status: coh.status === 'completed' ? 'completed' : 'pending',
-        reminder: '1_day',
-        recurrence: 'none',
-        source: 'lms_auto',
-        relatedLmsType: 'cohort',
-        relatedLmsId: coh.id,
-        relatedLmsTitle: coh.name,
-        relatedLmsUrl: '/cohorts',
-        createdAt: coh.createdAt,
-        updatedAt: coh.updatedAt
-      });
-    }
-  });
-
-  // 2. Scheduled Live Sessions
-  mockLiveSessions.forEach((sess) => {
-    if (sess.date) {
-      events.push({
-        id: `lms-session-${sess.id}`,
-        title: `Live Session: ${sess.title}`,
-        description: `Live interactive webinar. Instructor: ${sess.instructorName}. Duration: ${sess.duration} mins.`,
-        type: 'meeting',
-        date: sess.date,
-        startTime: sess.startTime || '10:00',
-        endTime: sess.endTime || '11:30',
-        priority: 'high',
-        status: sess.status === 'ended' ? 'completed' : 'pending',
-        reminder: '30_min',
-        recurrence: 'none',
-        source: 'lms_auto',
-        relatedLmsType: 'live_session',
-        relatedLmsId: sess.id,
-        relatedLmsTitle: sess.title,
-        relatedLmsUrl: '/live-sessions',
-        createdAt: sess.createdAt,
-        updatedAt: sess.updatedAt
-      });
-    }
-  });
-
-  // 3. Assessment Deadlines
-  mockAssessments.forEach((asm) => {
-    if (asm.availabilityEnd) {
-      const datePart = asm.availabilityEnd.split('T')[0];
-      events.push({
-        id: `lms-assessment-${asm.id}`,
-        title: `Assessment Deadline: ${asm.title}`,
-        description: `Examination closing window. Duration: ${asm.duration} mins, Total Marks: ${asm.totalMarks}.`,
-        type: 'deadline',
-        date: datePart,
-        startTime: '23:59',
-        priority: 'high',
-        status: 'pending',
-        reminder: '1_day',
-        recurrence: 'none',
-        source: 'lms_auto',
-        relatedLmsType: 'assessment',
-        relatedLmsId: asm.id,
-        relatedLmsTitle: asm.title,
-        relatedLmsUrl: '/assessments',
-        createdAt: asm.createdAt,
-        updatedAt: asm.updatedAt
-      });
-    }
-  });
-
-  // 4. Grading Tasks Due
-  mockGradingTasks.forEach((gt) => {
-    if (gt.dueDate && gt.status !== 'completed') {
-      events.push({
-        id: `lms-grading-${gt.id}`,
-        title: `Grading Due: ${gt.assessmentTitle}`,
-        description: `Submission evaluation for ${gt.learnerName}. Stage: ${gt.markingStage}.`,
-        type: 'task',
-        date: gt.dueDate,
-        startTime: '17:00',
-        priority: gt.priority === 'high' ? 'high' : 'medium',
-        status: 'pending',
-        reminder: '1_hour',
-        recurrence: 'none',
-        source: 'lms_auto',
-        relatedLmsType: 'grading',
-        relatedLmsId: gt.id,
-        relatedLmsTitle: gt.assessmentTitle,
-        relatedLmsUrl: '/grading',
-        createdAt: gt.createdAt,
-        updatedAt: gt.updatedAt
-      });
-    }
-  });
-
-  return events;
+  return [];
 };
 
 // Load saved manual activities

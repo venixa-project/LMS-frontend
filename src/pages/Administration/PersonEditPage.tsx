@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { peopleApi } from '../../lib/peopleApiService';
-import { mockCourses } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
@@ -81,7 +81,7 @@ export const PersonEditPage: React.FC = () => {
       setStatus(existingPerson.status);
       setRollNo(existingPerson.rollNo || '');
       setSpecialization(existingPerson.specialization || '');
-      setSelectedCourses(existingPerson.eligibleCourseIds || [mockCourses[0]?.id || 'crs-001']);
+      setSelectedCourses(existingPerson.eligibleCourseIds || [useCourseStore.getState().courses[0]?.id || '']);
     } else if (id) {
       peopleApi.get(id).then((p) => {
         if (p) {
@@ -529,7 +529,7 @@ export const PersonEditPage: React.FC = () => {
                   Permitted Teaching Course Allocations
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px' }}>
-                  {mockCourses.map((crs) => {
+                  {useCourseStore.getState().courses.map((crs) => {
                     const isSelected = selectedCourses.includes(crs.id);
                     return (
                       <div

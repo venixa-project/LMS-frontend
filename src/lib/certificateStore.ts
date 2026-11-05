@@ -1,3 +1,4 @@
+import { apiClient } from './apiClient';
 // ============================================================
 // LMS - Certificate Management Store (Zustand + LocalStorage)
 // Manages course completion certificates, verification hashes,
@@ -5,7 +6,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Certificate, Course, User, Assessment } from '../types';
-import { mockCertificates } from '../data/mockData';
+
 import { useAuthStore } from './store';
 import { useGamificationStore } from './gamificationStore';
 
@@ -44,6 +45,8 @@ export interface EligibilityResult {
 }
 
 interface CertificateState {
+  isLoading: boolean;
+  fetchCertificates: () => Promise<void>;
   certificates: Certificate[];
 
   // Queries
@@ -131,6 +134,39 @@ function loadInitialCertificates(): Certificate[] {
 }
 
 export const useCertificateStore = create<CertificateState>((set, get) => ({
+  isLoading: false,
+  fetchCertificates: async () => {
+    set({ isLoading: true });
+    try {
+      const res = await apiClient.get<any[]>('/certificates');
+      if (res && res.data && Array.isArray(res.data)) {
+        const mapped: Certificate[] = res.data.map((c: any) => ({
+          id: c.id,
+          learnerId: c.learnerId,
+          learnerName: c.learner?.displayName || c.learnerName || 'Student',
+          learnerEmail: c.learner?.email || c.learnerEmail,
+          courseId: c.courseId,
+          courseTitle: c.course?.title || c.courseTitle || 'Certified Course',
+          issueDate: c.issueDate || c.createdAt,
+          expiryDate: c.expiryDate,
+          verificationHash: c.verificationHash,
+          status: c.status || 'active',
+          templateId: c.templateId || 'tpl-default',
+          authorizedSignerName: c.authorizedSignerName || 'Academic Director',
+          authorizedSignerTitle: c.authorizedSignerTitle || 'Head of Academics',
+          organizationId: c.tenantId,
+          issuingOrganization: c.issuingOrganization || 'VeniLearn LMS',
+          scoreAchieved: c.scoreAchieved,
+        }));
+        set({ certificates: mapped, isLoading: false });
+        localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(mapped));
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch certificates:', e);
+    }
+    set({ isLoading: false });
+  },
   certificates: loadInitialCertificates(),
 
   getCertificates: () => get().certificates,
@@ -143,7 +179,7 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
 
   getCertificatesByLearner: (learnerId: string) => {
     const list = get().certificates;
-    return list.filter((c) => c.learnerId === learnerId || (learnerId === 'u-007' && c.learnerName.includes('Alex')));
+    return list.filter((c) => c.learnerId === learnerId);
   },
 
   getCertificatesByCourse: (courseId: string) => {

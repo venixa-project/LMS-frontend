@@ -28,7 +28,7 @@ import {
   ProctoringSettings,
   ProctoringPolicyLevel
 } from '../../../types';
-import { mockCourses } from '../../../data/mockData';
+import { useCourseStore } from '../../../lib/courseStore';
 import { extractDocumentContent } from '../../../lib/documentParser';
 import {
   generateAssessmentQuestions,
@@ -96,7 +96,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
   // Assessment Settings
   const [title, setTitle] = useState(initialDraft?.title || '');
-  const [courseId, setCourseId] = useState(initialDraft?.courseId || defaultCourseId || mockCourses[0]?.id || 'crs-001');
+  const [courseId, setCourseId] = useState(initialDraft?.courseId || defaultCourseId || useCourseStore.getState().courses[0]?.id || 'crs-001');
 
   // Numeric Form States (Number + Raw String to support uninhibited typing, select-all, backspace, and cursor preservation)
   const initialTargetCount = initialDraft?.questionsData?.length || 10;
@@ -279,7 +279,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   useEffect(() => {
     if (initialDraft) {
       setTitle(initialDraft.title);
-      setCourseId(initialDraft.courseId || defaultCourseId || mockCourses[0]?.id || 'crs-001');
+      setCourseId(initialDraft.courseId || defaultCourseId || useCourseStore.getState().courses[0]?.id || 'crs-001');
       const dur = initialDraft.durationMinutes || initialDraft.duration || 45;
       setDurationMinutes(dur);
       setRawDuration(String(dur));
@@ -1541,7 +1541,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   <div className="form-group">
                     <label className="form-label">Linked Course</label>
                     <select className="form-select" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-                      {mockCourses.map((c) => (
+                      {useCourseStore.getState().courses.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.title} ({c.id})
                         </option>
@@ -4447,7 +4447,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     {title || 'Untitled Assessment'}
                   </h3>
                   <span className="badge badge-primary">
-                    Course: {mockCourses.find((c) => c.id === courseId)?.title || courseId}
+                    Course: {useCourseStore.getState().courses.find((c) => c.id === courseId)?.title || courseId}
                   </span>
                 </div>
 

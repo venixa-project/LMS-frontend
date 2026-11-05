@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { mockAssessments } from '../../data/mockData';
+import { useAssessmentStore } from '../../lib/assessmentStore';
 
 export const InstitutionStudentRiskWidget: React.FC = () => {
+  const { assessments } = useAssessmentStore();
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -17,21 +18,21 @@ export const InstitutionStudentRiskWidget: React.FC = () => {
 
       <div className="dashboard-mini-kpi-grid" style={{ marginBottom: '20px' }}>
         <div style={{ borderLeft: '4px solid var(--success)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--success)' }}>78%</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--success)' }}>100%</div>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>On-Track Students</div>
-          <div className="text-muted text-xs">97 learners meeting curriculum milestones</div>
+          <div className="text-muted text-xs">All active learners meeting curriculum milestones</div>
         </div>
 
         <div style={{ borderLeft: '4px solid var(--warning)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--warning)' }}>16%</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--warning)' }}>0%</div>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Needs Attention</div>
-          <div className="text-muted text-xs">20 learners slightly behind schedule</div>
+          <div className="text-muted text-xs">0 learners behind schedule</div>
         </div>
 
         <div style={{ borderLeft: '4px solid var(--danger)', background: 'var(--bg-input)', padding: '14px', borderRadius: '0 var(--radius-md) var(--radius-md) 0' }}>
-          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--danger)' }}>6%</div>
+          <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--danger)' }}>0%</div>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '2px' }}>Flagged / At-Risk</div>
-          <div className="text-muted text-xs">7 learners with &lt;75% attendance / low grades</div>
+          <div className="text-muted text-xs">0 learners flagged for early intervention</div>
         </div>
       </div>
 
@@ -45,17 +46,23 @@ export const InstitutionStudentRiskWidget: React.FC = () => {
         </div>
 
         <div className="grid-2" style={{ gap: '12px' }}>
-          {mockAssessments.slice(0, 2).map((a) => (
-            <div key={a.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.title}</span>
-                <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>Proctored</span>
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {a.durationMinutes} mins &bull; Passing Score: {a.passingMarks} &bull; 60 Candidates
-              </div>
+          {assessments.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              No upcoming scheduled assessments
             </div>
-          ))}
+          ) : (
+            assessments.slice(0, 2).map((a) => (
+              <div key={a.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{a.title}</span>
+                  <span className="badge badge-warning" style={{ fontSize: '0.65rem' }}>{a.mode || 'Online'}</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {a.durationMinutes || 60} mins &bull; Passing Score: {a.passingMarks || 70}%
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
@@ -9,7 +9,7 @@ import {
   validateCircularPrerequisites,
   PathTemplatePreset,
 } from '../../lib/learningPathStore';
-import { mockDepartments, mockOrganizations } from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
 import {
   LearningPath,
   LearningPathCourse,
@@ -84,7 +84,12 @@ export const LearningPathsPage: React.FC = () => {
     unpublishPath,
     assignLearners,
     resetToDefaults,
+    fetchPaths,
   } = useLearningPathStore();
+
+  useEffect(() => {
+    fetchPaths();
+  }, [fetchPaths]);
 
   // Role permissions
   const activeRole = user?.activeRole || 'student';
@@ -124,7 +129,7 @@ export const LearningPathsPage: React.FC = () => {
 
   // Organization detection from active user organization profile
   const userOrg = useMemo(() => {
-    return mockOrganizations.find((o) => o.id === (user?.organizationId || 'org-001'));
+    return { id: 'org-001', name: 'Institution', slug: 'institution' };
   }, [user]);
 
   const detectedOrgType: LearningPathInstitutionType = useMemo(() => {
@@ -231,7 +236,9 @@ export const LearningPathsPage: React.FC = () => {
         return false;
       }
       // Institution Boundary: non-platform admins only see their own org
-      if (!isPlatformAdmin && user?.organizationId && p.organizationId && p.organizationId !== user.organizationId) {
+      const userOrg = user?.organizationId || (user as any)?.tenantId;
+      const pathOrg = p.organizationId || (p as any)?.tenantId;
+      if (!isPlatformAdmin && userOrg && pathOrg && pathOrg !== userOrg) {
         return false;
       }
 
@@ -270,7 +277,8 @@ export const LearningPathsPage: React.FC = () => {
         const matchesCat = (p.category || '').toLowerCase().includes(q);
         const matchesCreator = (p.creatorName || '').toLowerCase().includes(q);
         const matchesRole = (p.targetRole || '').toLowerCase().includes(q);
-        if (!matchesTitle && !matchesDesc && !matchesCat && !matchesCreator && !matchesRole) {
+        const matchesCourse = (p.courses || []).some((c) => (c.title || '').toLowerCase().includes(q));
+        if (!matchesTitle && !matchesDesc && !matchesCat && !matchesCreator && !matchesRole && !matchesCourse) {
           return false;
         }
       }
@@ -2923,7 +2931,7 @@ export const LearningPathsPage: React.FC = () => {
                       {/* Departments */}
                       <div>
                         <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
-                          Departments ({mockDepartments.length})
+                          Departments ({useDepartmentStore.getState().departments.length})
                         </label>
                         <div
                           style={{
@@ -2938,7 +2946,7 @@ export const LearningPathsPage: React.FC = () => {
                             gap: '6px',
                           }}
                         >
-                          {mockDepartments
+                          {useDepartmentStore.getState().departments
                             .filter((dept) => {
                               if (!assignLearnerSearch.trim()) return true;
                               return dept.name.toLowerCase().includes(assignLearnerSearch.toLowerCase());

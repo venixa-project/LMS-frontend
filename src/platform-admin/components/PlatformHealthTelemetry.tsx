@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
-import { mockOrganizations } from '../../data/mockData';
+
 
 export const PlatformHealthTelemetry: React.FC = () => {
   return (
@@ -22,7 +22,7 @@ export const PlatformHealthTelemetry: React.FC = () => {
             <CheckCircle2 size={16} color="var(--success)" />
             <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Multi-Tenant Isolation</span>
           </div>
-          <span className="badge badge-active">{mockOrganizations.length} Orgs Active</span>
+          <span className="badge badge-active">{[].length} Orgs Active</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>

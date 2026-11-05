@@ -1,3 +1,4 @@
+import { apiClient } from '../../lib/apiClient';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
@@ -37,12 +38,12 @@ export const CourseBuilderPage: React.FC = () => {
   const { addCourse, saveCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const { cohorts } = useCohortStore();
-  const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
-  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
 
   useEffect(() => {
     fetchDepartments();
   }, [fetchDepartments]);
+  const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const isOrgAdmin =
@@ -95,18 +96,28 @@ export const CourseBuilderPage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setThumbnailUrl(result);
-        setThumbnailError(null);
-      }
-    };
-    reader.onerror = () => {
-      setThumbnailError('Failed to read image file. Please try again.');
-    };
-    reader.readAsDataURL(file);
+    // 1. Physically upload to backend local storage (storage/thumbnails/)
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    apiClient.upload<any>('/courses/upload-thumbnail', formData)
+      .then((uploadRes) => {
+        if (uploadRes?.data?.url) {
+          setThumbnailUrl(uploadRes.data.url);
+          setThumbnailError(null);
+        }
+      })
+      .catch((uploadErr) => {
+        console.warn('Thumbnail upload note (falling back to preview):', uploadErr);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          if (result) {
+            setThumbnailUrl(result);
+            setThumbnailError(null);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
 
     if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
   };
@@ -156,7 +167,7 @@ export const CourseBuilderPage: React.FC = () => {
   // -------------------------------------------------------------
   const [certificateEnabled, setCertificateEnabled] = useState(true);
   const [certTitle, setCertTitle] = useState('Certificate of Course Completion');
-  const [certIssuingOrg, setCertIssuingOrg] = useState('Acme Learning Corp');
+  const [certIssuingOrg, setCertIssuingOrg] = useState((user as any)?.organizationName || 'RAPA TECH');
   const [certRequireAllLessons, setCertRequireAllLessons] = useState(true);
   const [certRequireAssessment, setCertRequireAssessment] = useState(true);
   const [certMinScore, setCertMinScore] = useState(70);
@@ -171,8 +182,8 @@ export const CourseBuilderPage: React.FC = () => {
   const isCreatorSigConfigured = useMemo(() => hasConfiguredSignature(user), [hasConfiguredSignature, user]);
 
   const [selectedSignatoryOption, setSelectedSignatoryOption] = useState<string>('creator_default');
-  const [certSignerName, setCertSignerName] = useState(creatorDefaultSig.name || 'Dr. James Wilson');
-  const [certSignerTitle, setCertSignerTitle] = useState(creatorDefaultSig.designation || 'Lead Instructor & Curriculum Director');
+  const [certSignerName, setCertSignerName] = useState(creatorDefaultSig.name || user?.displayName || 'Lead Instructor');
+  const [certSignerTitle, setCertSignerTitle] = useState(creatorDefaultSig.designation || 'Lead Faculty & Curriculum Director');
   const [certSignerSignatureImage, setCertSignerSignatureImage] = useState<string | undefined>(creatorDefaultSig.signatureImage);
   const [showCertPreviewModal, setShowCertPreviewModal] = useState(false);
 
@@ -184,7 +195,7 @@ export const CourseBuilderPage: React.FC = () => {
     }
   }, [selectedSignatoryOption, creatorDefaultSig]);
 
-    // -------------------------------------------------------------
+  // -------------------------------------------------------------
   // STEP 2: Curriculum & Lessons (Fresh Empty Outline in Create Mode)
   // -------------------------------------------------------------
   const [modules, setModules] = useState<CourseModule[]>([]);
@@ -240,7 +251,7 @@ export const CourseBuilderPage: React.FC = () => {
     onConfirm: () => { },
   });
 
-    // Resolved existing course for Edit Mode
+  // Resolved existing course for Edit Mode
   const editingCourse = useMemo(() => {
     if (!editingCourseId) return undefined;
     return courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
@@ -345,7 +356,7 @@ export const CourseBuilderPage: React.FC = () => {
     setFacultySearchQuery('');
     setCertificateEnabled(true);
     setCertTitle('Certificate of Course Completion');
-    setCertIssuingOrg('Acme Learning Corp');
+    setCertIssuingOrg((user as any)?.organizationName || 'RAPA TECH');
     setCertRequireAllLessons(true);
     setCertRequireAssessment(true);
     setCertMinScore(70);
@@ -485,10 +496,12 @@ export const CourseBuilderPage: React.FC = () => {
 
   // Trainer authorized academic departments
   const trainerAuthorizedDepartments = useMemo(() => {
-    if (!isFaculty) return departments;
+    const list = departments && departments.length > 0 ? departments : [];
+    if (!isFaculty) return list;
     const userDeptId = user?.departmentId;
-    if (!userDeptId) return departments;
-    return departments.filter((d) => d.id === userDeptId || d.parentId === userDeptId);
+    if (!userDeptId) return list;
+    const filtered = list.filter((d) => d.id === userDeptId || (d as any).code === userDeptId);
+    return filtered.length > 0 ? filtered : list;
   }, [isFaculty, user, departments]);
 
   // Trainer authorized cohorts/batches
@@ -609,13 +622,8 @@ export const CourseBuilderPage: React.FC = () => {
   // Helper: Department Name
   const getDepartmentName = (deptId?: string) => {
     if (!deptId) return 'General';
-    const dept = departments.find((d) => d.id === deptId);
-    if (!dept) return deptId;
-    if (dept.parentId) {
-      const parent = departments.find((p) => p.id === dept.parentId);
-      return `${parent ? parent.name + ' → ' : ''}${dept.name}`;
-    }
-    return dept.name;
+    const dept = departments.find((d) => d.id === deptId || d.name.toLowerCase() === deptId.toLowerCase());
+    return dept ? dept.name : deptId;
   };
 
   // Helper: Cohort Name
@@ -1200,9 +1208,9 @@ export const CourseBuilderPage: React.FC = () => {
       const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
       const enrolledCount = selectedStudentIds.size;
 
-      const activeOrgId = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || user?.organizationId || 'org-001')
-        : (user?.organizationId || 'org-001');
+const activeOrgId = (typeof window !== 'undefined'
+        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id'))
+        : null) || user?.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14';
 
       const newCourse: Course = {
         createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
@@ -1233,7 +1241,7 @@ export const CourseBuilderPage: React.FC = () => {
         certificateConfig: {
           enabled: certificateEnabled,
           title: certTitle.trim() || 'Certificate of Course Completion',
-          issuingOrganization: certIssuingOrg.trim() || 'Acme Learning Corp',
+          issuingOrganization: certIssuingOrg.trim() || (user as any)?.organizationName || 'RAPA TECH',
           templateId: certTemplateId,
           requireAllLessons: certRequireAllLessons,
           requirePassingAssessment: certRequireAssessment,
@@ -1241,8 +1249,8 @@ export const CourseBuilderPage: React.FC = () => {
           requiredCompletionPercentage: certMinPercentage,
           completionPoints: certPoints,
           validityMonths: certValidityMonths,
-          authorizedSignerName: certSignerName.trim() || 'Dr. James Wilson',
-          authorizedSignerTitle: certSignerTitle.trim() || 'Lead Instructor & Curriculum Director',
+          authorizedSignerName: certSignerName.trim() || user?.displayName || 'Authorized Signatory',
+          authorizedSignerTitle: certSignerTitle.trim() || 'Principal Faculty & Curriculum Lead',
           authorizedSignatureImage: certSignerSignatureImage,
           secondarySignerName: 'Sarah Chen',
           secondarySignerTitle: 'Dean of Academic Affairs',
@@ -1251,8 +1259,18 @@ export const CourseBuilderPage: React.FC = () => {
         updatedAt: new Date().toISOString()
       };
 
-      // Persist course with modules, lessons, and assignments to PostgreSQL backend
-      const res = await saveCourse(newCourse, Array.from(selectedStudentIds));
+// 1. Persist course with modules, lessons, and assignments to PostgreSQL backend
+      const courseSlug = (courseCode || title)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') || `course-${Date.now()}`;
+
+      const courseToPersist: Course = {
+        ...newCourse,
+        slug: courseSlug,
+      };
+
+      const res = await saveCourse(courseToPersist, Array.from(selectedStudentIds));
       if (!res.success || !res.course) {
         throw new Error(res.error || 'Database persistence failed. Please verify connection and retry.');
       }
@@ -1262,7 +1280,12 @@ export const CourseBuilderPage: React.FC = () => {
       setIsPublishing(false);
     } catch (err: any) {
       console.error('Publishing error:', err);
-      setPublishError(err?.message || 'An unexpected error occurred while publishing the course to the database.');
+let errorMsg = err?.message || 'An unexpected error occurred while publishing the course to the database.';
+      if (err?.details && Array.isArray(err.details)) {
+        const issues = err.details.map((d: any) => `${d.field ? `${d.field}: ` : ''}${d.message}`).join(', ');
+        if (issues) errorMsg = `Validation error: ${issues}`;
+      }
+      setPublishError(errorMsg);
       setIsPublishing(false);
     }
   };
@@ -1647,7 +1670,7 @@ export const CourseBuilderPage: React.FC = () => {
             {/* Department Selection - Critical for Step 3 filtering */}
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontWeight: 600 }}>
-                Department / Academic Division <span className="required" style={{ color: 'var(--danger)' }}>*</span>
+                Department <span className="required" style={{ color: 'var(--danger)' }}>*</span>
               </label>
               <select
                 className="form-select"
@@ -1657,40 +1680,13 @@ export const CourseBuilderPage: React.FC = () => {
                   if (step1Error) setStep1Error(null);
                 }}
                 style={{ fontWeight: 600 }}
-                disabled={isDeptsLoading}
               >
-                <option value="">
-                  {isDeptsLoading ? 'Loading departments...' : 'Select Department / Academic Division...'}
-                </option>
-                {(() => {
-                  const mainDepts = trainerAuthorizedDepartments.filter((d) => !d.parentId);
-                  return (
-                    <>
-                      {mainDepts.map((main) => {
-                        const children = trainerAuthorizedDepartments.filter((d) => d.parentId === main.id);
-                        return (
-                          <React.Fragment key={main.id}>
-                            <option value={main.id} style={{ fontWeight: 700 }}>
-                              {main.name} ({main.code}) {children.length > 0 ? '[Division]' : ''}
-                            </option>
-                            {children.map((sub) => (
-                              <option key={sub.id} value={sub.id}>
-                                &nbsp;&nbsp;&nbsp;&nbsp;↳ {sub.name} ({sub.code}) [Branch]
-                              </option>
-                            ))}
-                          </React.Fragment>
-                        );
-                      })}
-                      {trainerAuthorizedDepartments
-                        .filter((d) => d.parentId && !mainDepts.some((m) => m.id === d.parentId))
-                        .map((orphan) => (
-                          <option key={orphan.id} value={orphan.id}>
-                            {orphan.name} ({orphan.code})
-                          </option>
-                        ))}
-                    </>
-                  );
-                })()}
+                <option value="">Select Department...</option>
+                {trainerAuthorizedDepartments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({dept.id})
+                  </option>
+                ))}
               </select>
               <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                 Used to filter and prioritize faculty & students in Step 3
@@ -2152,7 +2148,7 @@ export const CourseBuilderPage: React.FC = () => {
                       className="form-input"
                       value={certIssuingOrg}
                       onChange={(e) => setCertIssuingOrg(e.target.value)}
-                      placeholder="Acme Learning Corp"
+                      placeholder={(user as any)?.organizationName || 'RAPA TECH'}
                     />
                   </div>
 
@@ -2399,7 +2395,7 @@ export const CourseBuilderPage: React.FC = () => {
                           setCertSignerName(e.target.value);
                           if (selectedSignatoryOption !== 'custom') setSelectedSignatoryOption('custom');
                         }}
-                        placeholder="e.g. Dr. James Wilson"
+                        placeholder="e.g. Lead Instructor Name"
                       />
                     </div>
 
@@ -2538,13 +2534,24 @@ export const CourseBuilderPage: React.FC = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 320px) 1fr', gap: '20px', marginBottom: '24px' }}>
             {/* Left Column: Modules Navigation */}
-            <div className="card" style={{ padding: '16px', height: 'fit-content' }}>
+            <div className="card" style={{ padding: '16px', height: 'fit-content', position: 'sticky', top: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Syllabus Modules</h3>
                 <span className="text-muted text-xs">{modules.length} total</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  maxHeight: '440px',
+                  overflowY: 'auto',
+                  paddingRight: '6px',
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: 'var(--border-subtle) transparent'
+                }}
+              >
                 {modules.map((m, idx) => (
                   <div
                     key={m.id}
@@ -3209,7 +3216,7 @@ export const CourseBuilderPage: React.FC = () => {
                     {!isFaculty && <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>}
                     {trainerAuthorizedDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} ({d.code}) {d.id === departmentId ? '(Course Dept)' : ''}
+                        {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
                     ))}
                   </select>
@@ -3481,10 +3488,10 @@ export const CourseBuilderPage: React.FC = () => {
                     onChange={(e) => setStudentDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
-                    <option value="all">All Departments ({departments.length})</option>
-                    {departments.map((d) => (
+                    <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>
+                    {trainerAuthorizedDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name} ({d.code}) {d.id === departmentId ? '(Course Dept)' : ''}
+                        {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
                     ))}
                   </select>
@@ -3675,7 +3682,7 @@ export const CourseBuilderPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                                    {filteredStudents.map((st) => {
+                  {filteredStudents.map((st) => {
                     const isAlreadyEnrolled = alreadyEnrolledStudentIds.has(st.id);
                     const isChecked = selectedStudentIds.has(st.id);
                     const isInactive = st.status === 'suspended' || st.status === 'deactivated';

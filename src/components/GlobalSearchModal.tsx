@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, BookOpen, ClipboardCheck, Users, Video, Shield, ArrowRight } from 'lucide-react';
-import { mockAssessments } from '../data/mockData';
+import { useAssessmentStore } from '../lib/assessmentStore';
 import { useCourseStore } from '../lib/courseStore';
-import { mockUsers } from '../data/mockUsers';
+import { usePeopleStore } from '../lib/peopleStore';
 
 interface Props {
   isOpen: boolean;
@@ -15,6 +15,7 @@ export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { courses } = useCourseStore();
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
     return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || 'org-001';
@@ -36,8 +37,6 @@ export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  const { courses } = useCourseStore();
-
   const filteredCourses = courses.filter((c) => {
     const matchesOrg = (c.organizationId || 'org-001') === activeOrgId;
     if (!matchesOrg) return false;
@@ -47,11 +46,11 @@ export const GlobalSearchModal: React.FC<Props> = ({ isOpen, onClose }) => {
     );
   }).slice(0, 3);
 
-  const filteredAssessments = mockAssessments.filter((a) =>
+  const filteredAssessments = useAssessmentStore.getState().assessments.filter((a) =>
     a.title.toLowerCase().includes(query.toLowerCase())
   ).slice(0, 3);
 
-  const filteredUsers = mockUsers.filter((u) => {
+  const filteredUsers = usePeopleStore.getState().users.filter((u) => {
     const matchesOrg = (u.organizationId || 'org-001') === activeOrgId;
     if (!matchesOrg) return false;
     return (

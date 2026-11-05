@@ -11,16 +11,7 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
-import {
-  mockAssessments,
-  mockAttempts,
-  mockCertificates,
-  mockCourses,
-  mockEnrollments,
-  mockGamificationProfile,
-  mockLiveSessions,
-} from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+// Authenticated database-driven student dashboard
 import type { Course, Enrollment, Cohort } from '../../types';
 
 interface StudentDashboardData {
@@ -301,119 +292,27 @@ function formatSessionDate(value: string, startTime: string) {
   });
 }
 
-function getDemoDashboardData(
-  userId: string,
-  userEmail: string | undefined,
-  courses: Course[],
-  enrollments: Enrollment[],
-  studentCohorts: Cohort[]
-): StudentDashboardData {
-  const isDemo = userId === 'u-001' || userEmail === 'student@lms.demo';
-  const cohortCourseIds = new Set(studentCohorts.map((c) => c.courseId).filter(Boolean) as string[]);
-
-  const studentEnrollments = (enrollments.length ? enrollments : mockEnrollments)
-    .filter((enrollment) => (enrollment.userId === userId || (isDemo && enrollment.userId === 'u-001')) && enrollment.courseId);
-
-  const coursesById = new Map(courses.map((course) => [course.id, course]));
-  mockCourses.forEach((c) => {
-    if (!coursesById.has(c.id)) coursesById.set(c.id, c);
-  });
-
-  const enrolledCourseIdSet = new Set<string>([
-    ...studentEnrollments.map((e) => e.courseId!),
-    ...cohortCourseIds,
-    ...(isDemo ? ['crs-001', 'crs-002', 'crs-004'] : [])
-  ]);
-
-  const enrolledCourses = Array.from(enrolledCourseIdSet).flatMap((cId) => {
-    const course = coursesById.get(cId);
-    if (!course) return [];
-    const directEnrollment = studentEnrollments.find((e) => e.courseId === cId);
-    const progress = directEnrollment ? directEnrollment.progress : 20;
-    const lessons = course.modules?.flatMap((module) => module.lessons) || [];
-    const completedLessons = Math.round((lessons.length || 10) * progress / 100);
-    const nextLesson = lessons[completedLessons] || lessons[0];
-    return [{
-      id: course.id,
-      title: course.title,
-      description: course.shortDescription || course.description,
-      status: (directEnrollment?.status === 'completed') ? 'completed' : 'in_progress',
-      progressPercentage: progress,
-      completedLessons,
-      totalLessons: lessons.length || 10,
-      nextLesson: nextLesson ? { id: nextLesson.id, title: nextLesson.title } : null,
-    }];
-  });
-
-  const courseIds = new Set(enrolledCourses.map((course) => course.id));
-  const assessments = mockAssessments.filter((assessment) =>
-    assessment.status === 'published' && assessment.courseId && courseIds.has(assessment.courseId)
-  ).map((assessment) => {
-    const course = coursesById.get(assessment.courseId!);
-    const attemptsUsed = mockAttempts.filter((attempt) =>
-      attempt.learnerId === userId && attempt.assessmentId === assessment.id
-    ).length;
-    return {
-      id: assessment.id,
-      title: assessment.title,
-      course: course ? { id: course.id, title: course.title } : null,
-      durationMinutes: assessment.durationMinutes || assessment.duration || 0,
-      totalMarks: assessment.totalMarks,
-      passingPercentage: assessment.passmark || 0,
-      attemptsRemaining: Math.max(0, (assessment.maxAttempts || assessment.attempts || 1) - attemptsUsed),
-    };
-  });
-
-  const upcomingSessions = mockLiveSessions.flatMap((session) => {
-    if (
-      !session.courseId ||
-      !session.date ||
-      !courseIds.has(session.courseId) ||
-      (session.status !== 'scheduled' && session.status !== 'live') ||
-      session.date < new Date().toISOString().slice(0, 10)
-    ) return [];
-    const course = coursesById.get(session.courseId);
-    return [{
-      id: session.id,
-      title: session.title,
-      course: course ? { id: course.id, title: course.title } : null,
-      date: session.date,
-      startTime: session.startTime,
-      endTime: session.endTime || null,
-      provider: session.provider,
-      meetingUrl: session.meetingUrl || session.joinLink || null,
-      status: session.status,
-    }];
-  });
-
-  const completedCourses = enrolledCourses.filter((course) => course.status === 'completed').length;
-  const totalLessons = enrolledCourses.reduce((total, course) => total + course.totalLessons, 0);
-  const completedLessons = enrolledCourses.reduce((total, course) => total + course.completedLessons, 0);
-  const certificates = mockCertificates.filter((certificate) =>
-    certificate.learnerId === userId && certificate.status === 'active'
-  );
-  const gamification = mockGamificationProfile.userId === userId ? mockGamificationProfile : null;
-
+function getEmptyDashboardData(): StudentDashboardData {
   return {
     stats: {
-      enrolledCourses: enrolledCourses.length,
-      inProgressCourses: enrolledCourses.filter((course) => course.status !== 'completed').length,
-      completedCourses,
-      completedCertificates: certificates.length,
-      totalLessons,
-      completedLessons,
-      curriculumProgressPercentage: totalLessons ? Math.round(completedLessons / totalLessons * 100) : 0,
+      enrolledCourses: 0,
+      inProgressCourses: 0,
+      completedCourses: 0,
+      completedCertificates: 0,
+      totalLessons: 0,
+      completedLessons: 0,
+      curriculumProgressPercentage: 0,
       unreadNotifications: 0,
     },
-    courses: enrolledCourses,
-    assessments,
-    sessions: upcomingSessions,
+    courses: [],
+    assessments: [],
+    sessions: [],
     notifications: [],
     gamification: {
-      totalPoints: gamification?.totalPoints ?? 0,
-      rank: gamification ? 'Gold Scholar' : 'Novice',
-      streakDays: gamification?.streak ?? 0,
-      badges: gamification?.badges ?? [],
+      totalPoints: 0,
+      rank: 'Novice',
+      streakDays: 0,
+      badges: [],
       leaderboardRank: null,
     },
   };
@@ -421,9 +320,10 @@ function getDemoDashboardData(
 
 export const StudentDashboard: React.FC = () => {
   const user = useAuthStore((state) => state.user);
+  const fetchNotifications = useAuthStore((state) => state.fetchNotifications);
   const courses = useCourseStore((state) => state.courses);
   const enrollments = useCourseStore((state) => state.enrollments);
-  const { enrollCourse } = useCourseStore();
+  const { enrollCourse, fetchCourses } = useCourseStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { users: peopleUsers, fetchPeople } = usePeopleStore();
 
@@ -468,14 +368,40 @@ export const StudentDashboard: React.FC = () => {
   }, [recommendedCategory, data]);
 
   const filteredRecommendedCourses = useMemo(() => {
-    if (recommendedCategory === 'all') return RECOMMENDED_COURSES;
-    return RECOMMENDED_COURSES.filter((course) => course.category === recommendedCategory);
-  }, [recommendedCategory]);
+    const realPublished = courses.filter((c) => !c.id.startsWith('crs-00') && c.status === 'published');
+    if (realPublished.length > 0) {
+      const mapped = realPublished.map((c, idx) => ({
+        id: c.id,
+        courseId: c.id,
+        title: c.title,
+        category: (c.category || 'general').toLowerCase(),
+        categoryName: c.category || 'General',
+        badge: idx === 0 ? '🔥 #1 Popular' : '⭐ Recommended',
+        badgeColor: idx === 0 ? 'var(--danger)' : 'var(--primary)',
+        rating: '4.9',
+        ratingCount: c.enrolledLearners || 12,
+        learnersCount: c.enrolledLearners || 12,
+        duration: `${c.durationHours || 10} Hours`,
+        modulesCount: c.modules?.length || 3,
+        level: c.level || 'Intermediate',
+        instructor: 'Faculty Trainer',
+        description: c.shortDescription || c.description?.slice(0, 120) || 'Comprehensive course curriculum.',
+        accentColor: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
+      }));
+      if (recommendedCategory === 'all') return mapped;
+      return mapped.filter((course) => course.category.includes(recommendedCategory));
+    }
+    return [];
+  }, [courses, recommendedCategory]);
 
   useEffect(() => {
     fetchCohorts();
     fetchPeople();
-  }, [fetchCohorts, fetchPeople]);
+    fetchCourses();
+    if (fetchNotifications) {
+      fetchNotifications();
+    }
+  }, [fetchCohorts, fetchPeople, fetchCourses, fetchNotifications]);
 
   // Derive cohorts this student is enrolled in
   const studentCohorts = useMemo(() => {
@@ -511,8 +437,8 @@ export const StudentDashboard: React.FC = () => {
         setIsLoading(false);
         return;
       }
-      setData(getDemoDashboardData(user.id, user.email, courses, enrollments, studentCohorts));
-      setIsDemoPreview(true);
+      setData(getEmptyDashboardData());
+      setIsDemoPreview(false);
       setIsLoading(false);
       return;
     }
@@ -520,21 +446,14 @@ export const StudentDashboard: React.FC = () => {
     setIsDemoPreview(false);
     try {
       const response = await apiClient.get<StudentDashboardData>('/student/dashboard');
-      const backendData = response.data;
-      if (!backendData.courses || backendData.courses.length === 0) {
-        const fallback = getDemoDashboardData(user?.id || '', user?.email, courses, enrollments, studentCohorts);
-        backendData.courses = fallback.courses;
-        backendData.stats = {
-          ...backendData.stats,
-          enrolledCourses: fallback.stats.enrolledCourses,
-          inProgressCourses: fallback.stats.inProgressCourses,
-          curriculumProgressPercentage: fallback.stats.curriculumProgressPercentage,
-        };
+      if (response && response.data) {
+        setData(response.data);
+      } else {
+        setData(getEmptyDashboardData());
       }
-      setData(backendData);
     } catch (loadError) {
       if (user) {
-        setData(getDemoDashboardData(user.id, user.email, courses, enrollments, studentCohorts));
+        setData(getEmptyDashboardData());
       } else {
         setError(loadError instanceof ApiError && loadError.statusCode < 500
           ? loadError.message
@@ -543,7 +462,7 @@ export const StudentDashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [courses, enrollments, studentCohorts, user]);
+  }, [user]);
 
   useEffect(() => {
     void loadDashboard();
@@ -680,7 +599,7 @@ export const StudentDashboard: React.FC = () => {
       {/* 3. Balanced 2x2 Main Grid (All cards identical height & symmetric) */}
       <div className="student-dashboard-grid">
         {/* ROW 1 - LEFT: My Enrolled Cohorts & Classes */}
-        <article className="card" style={{ borderLeft: '4px solid var(--primary)', padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--primary)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -703,8 +622,8 @@ export const StudentDashboard: React.FC = () => {
             {displayCohorts.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {displayCohorts.slice(0, 2).map((co: any) => {
-                  const courseTitle = co.courseTitle || co.course?.title || courses.find((c) => c.id === co.courseId)?.title || mockCourses.find((c) => c.id === co.courseId)?.title;
-                  const trainerName = co.leadTrainer || (co.trainers && co.trainers[0]) || (co.instructors?.[0] ? (peopleUsers?.find((u) => u.id === co.instructors[0])?.displayName || mockUsers.find((u) => u.id === co.instructors[0])?.displayName) : 'Assigned Faculty');
+                  const courseTitle = co.courseTitle || co.course?.title || courses.find((c) => c.id === co.courseId)?.title || 'Assigned Course';
+                  const trainerName = co.leadTrainer || (co.trainers && co.trainers[0]) || (co.instructors?.[0] ? (peopleUsers?.find((u) => u.id === co.instructors[0])?.displayName || 'Assigned Faculty') : 'Assigned Faculty');
 
                   return (
                     <div
@@ -777,7 +696,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 1 - RIGHT: Upcoming Assessment & Live Schedule */}
-        <article className="card" style={{ borderLeft: '4px solid var(--accent-cyan)', padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--accent-cyan)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -889,7 +808,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 2 - LEFT: Continue Learning (Active Syllabus Track) */}
-        <article className="card" style={{ padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid #6366f1', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -954,7 +873,7 @@ export const StudentDashboard: React.FC = () => {
         </article>
 
         {/* ROW 2 - RIGHT: My Enrolled Courses Overview */}
-        <article className="card" style={{ padding: '22px' }}>
+        <article className="card" style={{ borderLeft: '4px solid var(--accent-purple)', padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '340px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

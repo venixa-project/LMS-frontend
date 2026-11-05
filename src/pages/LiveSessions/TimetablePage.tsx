@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import { mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
 import {
   Plus, Calendar, Clock, Users,
@@ -621,7 +621,7 @@ export const TimetablePage: React.FC = () => {
                                   }}
                                 >
                                   {slot.rawSession.courseTitle ||
-                                    mockCourses.find((c) => c.id === slot.rawSession.courseId)?.title ||
+                                    useCourseStore.getState().courses.find((c) => c.id === slot.rawSession.courseId)?.title ||
                                     'Core Subject'}
                                 </div>
 
@@ -797,7 +797,7 @@ export const TimetablePage: React.FC = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                                   <span>
-                                    <strong>Course:</strong> {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'Core Subject'}
+                                    <strong>Course:</strong> {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'Core Subject'}
                                   </span>
                                   <span>•</span>
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -895,7 +895,7 @@ export const TimetablePage: React.FC = () => {
                                 <div>
                                   <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{s.title}</div>
                                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                    {s.courseTitle || mockCourses.find((c) => c.id === s.courseId)?.title || 'Core Subject'}
+                                    {s.courseTitle || useCourseStore.getState().courses.find((c) => c.id === s.courseId)?.title || 'Core Subject'}
                                   </div>
                                 </div>
                               </div>
@@ -1032,7 +1032,7 @@ export const TimetablePage: React.FC = () => {
                 </h3>
                 <p className="text-secondary text-xs" style={{ margin: 0 }}>
                   {selectedDetailSession.courseTitle ||
-                    mockCourses.find((c) => c.id === selectedDetailSession.courseId)?.title ||
+                    useCourseStore.getState().courses.find((c) => c.id === selectedDetailSession.courseId)?.title ||
                     'General Curriculum'}
                 </p>
               </div>

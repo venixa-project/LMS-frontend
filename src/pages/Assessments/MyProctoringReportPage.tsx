@@ -17,7 +17,12 @@ export const MyProctoringReportPage: React.FC = () => {
     getSessionsForLearner,
     submitStudentExplanation,
     submitStudentAppeal,
+    fetchMySessions,
   } = useProctoringStore();
+
+  React.useEffect(() => {
+    fetchMySessions();
+  }, [fetchMySessions]);
 
   // Filter sessions for currently authenticated student
   const studentSessions = user ? getSessionsForLearner(user.id) : sessions;

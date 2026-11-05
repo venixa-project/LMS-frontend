@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useLiveSessionStore } from '../../../lib/liveSessionStore';
 import { useCohortStore } from '../../../lib/cohortStore';
-import { mockDepartments, mockCourses } from '../../../data/mockData';
-import { mockUsers } from '../../../data/mockUsers';
+import { useDepartmentStore } from '../../../lib/departmentStore';
+import { useCourseStore } from '../../../lib/courseStore';
+import { usePeopleStore } from '../../../lib/peopleStore';
 import { LiveSession, User } from '../../../types';
 import {
   Video, Calendar, Clock, Users, X, Check, AlertCircle,
@@ -113,16 +114,16 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // All Trainers list
   const allTrainers = useMemo(() => {
-    return mockUsers.filter(
+    return usePeopleStore.getState().users.filter(
       (u) => (u.activeRole === 'trainer' || u.activeRole === 'instructor') && u.status !== 'suspended'
     );
   }, []);
 
   // Filtered Courses based on Department
   const departmentCourses = useMemo(() => {
-    let list = mockCourses.filter((c) => !c.departmentId || c.departmentId === departmentId);
+    let list = useCourseStore.getState().courses.filter((c) => !c.departmentId || c.departmentId === departmentId);
     if (isTrainer && user?.id) {
-      const trainerUser = mockUsers.find((u) => u.id === user.id);
+      const trainerUser = usePeopleStore.getState().users.find((u) => u.id === user.id);
       const eligible = trainerUser?.eligibleCourseIds || ['crs-001', 'crs-002', 'crs-004'];
       list = list.filter((c) => eligible.includes(c.id));
     }
@@ -146,10 +147,10 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // Eligible students in selected cohort
   const cohortStudents = useMemo(() => {
     if (!activeCohort || !activeCohort.studentIds || activeCohort.studentIds.length === 0) {
-      return mockUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
+      return usePeopleStore.getState().users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
     }
     const ids = activeCohort.studentIds;
-    return mockUsers.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
+    return usePeopleStore.getState().users.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
   }, [activeCohort]);
 
   // Filtered Students list by search
@@ -166,7 +167,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
   // Eligible Faculty & Staff
   const eligibleFacultyStaff = useMemo(() => {
-    return mockUsers.filter(
+    return usePeopleStore.getState().users.filter(
       (u) =>
         u.status !== 'suspended' &&
         (u.activeRole === 'trainer' ||
@@ -337,7 +338,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   const handleDepartmentChange = (newDeptId: string) => {
     setIsDirty(true);
     setDepartmentId(newDeptId);
-    const validCourses = mockCourses.filter((c) => !c.departmentId || c.departmentId === newDeptId);
+    const validCourses = useCourseStore.getState().courses.filter((c) => !c.departmentId || c.departmentId === newDeptId);
     if (validCourses.length > 0) {
       const nextCourseId = validCourses.some((c) => c.id === courseId) ? courseId : validCourses[0].id;
       setCourseId(nextCourseId);
@@ -517,7 +518,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       endTime,
       room: room.trim() || 'Hall 101',
       cohortName: activeCohort?.name || cohorts.find((c) => c.id === cohortId)?.name || 'Spring 2026 Engineering',
-      courseTitle: mockCourses.find((c) => c.id === courseId)?.title || 'Course Lecture',
+      courseTitle: useCourseStore.getState().courses.find((c) => c.id === courseId)?.title || 'Course Lecture',
       createdBy: sessionToEdit?.createdBy || user?.id,
       createdRole: sessionToEdit?.createdRole || user?.activeRole,
       duration: durationInfo.minutes,
@@ -567,8 +568,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const selectedDeptObj = mockDepartments.find((d) => d.id === departmentId);
-  const selectedCourseObj = mockCourses.find((c) => c.id === courseId);
+  const selectedDeptObj = useDepartmentStore.getState().departments.find((d) => d.id === departmentId);
+  const selectedCourseObj = useCourseStore.getState().courses.find((c) => c.id === courseId);
   const selectedCohortObj = cohorts.find((c) => c.id === cohortId);
   const selectedHostObj = allTrainers.find((t) => t.id === instructorId) || user;
 
@@ -914,7 +915,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         onChange={(e) => handleDepartmentChange(e.target.value)}
                         style={{ height: '40px', fontSize: '0.85rem' }}
                       >
-                        {mockDepartments.map((d) => (
+                        {useDepartmentStore.getState().departments.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.name}
                           </option>
@@ -1576,7 +1577,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                                   style={{ height: '34px', fontSize: '0.78rem', width: 'auto' }}
                                 >
                                   <option value="all">All Departments</option>
-                                  {mockDepartments.map((d) => (
+                                  {useDepartmentStore.getState().departments.map((d) => (
                                     <option key={d.id} value={d.id}>{d.name}</option>
                                   ))}
                                 </select>
@@ -1612,7 +1613,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                               >
                                 {filteredFacultyStaff.map((f) => {
                                   const isSelected = selectedStaffIds.includes(f.id);
-                                  const dept = mockDepartments.find((d) => d.id === f.departmentId);
+                                  const dept = useDepartmentStore.getState().departments.find((d) => d.id === f.departmentId);
                                   return (
                                     <div
                                       key={f.id}

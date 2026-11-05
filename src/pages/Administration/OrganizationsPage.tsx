@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mockOrganizations } from '../../data/mockData';
+
 import { Organization } from '../../types';
 import { StructureTenantsNav } from '../../components/StructureTenantsNav';
 import {
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 export const OrganizationsPage: React.FC = () => {
-  const [orgs, setOrgs] = useState<Organization[]>(mockOrganizations);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
   const [search, setSearch] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

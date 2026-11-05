@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { usePeopleStore } from '../../lib/peopleStore';
-import { mockCohorts, mockCourses } from '../../data/mockData';
+import { useCourseStore } from '../../lib/courseStore';
+import { useCohortStore } from '../../lib/cohortStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
 import { User, RoleName, UserAccountStatus } from '../../types';
 import {
@@ -119,7 +120,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
   const [statusChangeUser, setStatusChangeUser] = useState<User | null>(null);
   const [facultyAssignUser, setFacultyAssignUser] = useState<User | null>(null);
-  const [selectedCourseToAssign, setSelectedCourseToAssign] = useState(mockCourses[0]?.id || 'c-001');
+  const [selectedCourseToAssign, setSelectedCourseToAssign] = useState(useCourseStore.getState().courses[0]?.id || '');
 
   // Feedback notifications
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -203,7 +204,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
   // Handle Assign Course to Faculty
   const handleAssignCourse = () => {
     if (!facultyAssignUser) return;
-    const course = mockCourses.find((c) => c.id === selectedCourseToAssign);
+    const course = useCourseStore.getState().courses.find((c) => c.id === selectedCourseToAssign);
     showNotice(`Assigned "${course?.title || 'Course'}" to faculty ${facultyAssignUser.displayName}.`);
     setFacultyAssignUser(null);
   };
@@ -833,7 +834,7 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                   value={selectedCourseToAssign}
                   onChange={(e) => setSelectedCourseToAssign(e.target.value)}
                 >
-                  {mockCourses.map((c) => (
+                  {useCourseStore.getState().courses.map((c) => (
                     <option key={c.id} value={c.id}>{c.title} ({c.level})</option>
                   ))}
                 </select>

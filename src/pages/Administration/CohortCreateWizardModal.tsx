@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Cohort, Course, Department, User } from '../../types';
-import { mockDepartments, mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useCourseStore } from '../../lib/courseStore';
+
 import { usePeopleStore } from '../../lib/peopleStore';
 import {
   X, Check, ChevronRight, ChevronLeft, Calendar, BookOpen,
@@ -34,7 +35,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
   // Step 1: Basic Details
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [courseId, setCourseId] = useState<string>(mockCourses[0]?.id || 'crs-001');
+  const [courseId, setCourseId] = useState<string>(useCourseStore.getState().courses[0]?.id || '');
   const [startDate, setStartDate] = useState('2026-11-01');
   const [endDate, setEndDate] = useState('2027-02-28');
   const [capacity, setCapacity] = useState<number>(30);
@@ -64,13 +65,12 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
     const live = peopleUsers || [];
     const liveIds = new Set(live.map(u => u.id));
     const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
-    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
-    return [...live, ...remainingMock];
+    return live;
   }, [peopleUsers]);
 
   // Institution Departments & All Users
   const institutionDepartments = useMemo(() => {
-    return mockDepartments.filter(d => !d.organizationId || d.organizationId === currentOrganizationId);
+    return useDepartmentStore.getState().departments;
   }, [currentOrganizationId]);
 
   const allFaculty = useMemo(() => {
@@ -89,7 +89,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
   }, [allUsers, currentOrganizationId]);
 
   const selectedCourse = useMemo(() => {
-    return mockCourses.find(c => c.id === courseId);
+    return useCourseStore.getState().courses.find(c => c.id === courseId);
   }, [courseId]);
 
   const assignedTrainer = useMemo(() => {
@@ -154,7 +154,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
     setCurrentStep('details');
     setName('');
     setCode('');
-    setCourseId(mockCourses[0]?.id || 'crs-001');
+    setCourseId(useCourseStore.getState().courses[0]?.id || '');
     setStartDate('2026-11-01');
     setEndDate('2027-02-28');
     setCapacity(30);
@@ -668,7 +668,7 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
                   value={courseId}
                   onChange={(e) => setCourseId(e.target.value)}
                 >
-                  {mockCourses.map((c) => (
+                  {useCourseStore.getState().courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title} ({c.category} &bull; {c.modules?.length || 0} Modules)
                     </option>

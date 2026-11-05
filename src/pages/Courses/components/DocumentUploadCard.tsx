@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { FileText, Upload, CheckCircle2, AlertCircle, X, Download, RefreshCw } from 'lucide-react';
 import { UploadedDocumentInfo } from '../../../types';
 import { registerDocumentFile } from '../../../lib/videoService';
+import { apiClient } from '../../../lib/apiClient';
 
 interface Props {
   document?: UploadedDocumentInfo;
@@ -28,7 +29,7 @@ export const DocumentUploadCard: React.FC<Props> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setUploadError(null);
 
     // Validate size

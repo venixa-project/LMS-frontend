@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
-import { mockCourses, mockEnrollments } from '../data/mockData';
+
 import { apiClient } from './apiClient';
 
 interface CourseState {
@@ -14,6 +14,7 @@ interface CourseState {
   requestedCourseIds: string[];
   enrollments: Enrollment[];
   isLoading: boolean;
+  isCoursesLoading: boolean;
   error: string | null;
 
   // Actions
@@ -52,13 +53,16 @@ interface CourseState {
     alreadyEnrolledCount: number;
     message: string;
   };
+  fetchCourses: (force?: boolean) => Promise<Course[]>;
   saveCourse: (course: Course, studentIds?: string[]) => Promise<{
     success: boolean;
     course?: Course;
     error?: string;
   }>;
-  addCourse: (course: Course) => void;
+  addCourse: (course: Course) => Promise<Course>;
   deleteCourse: (courseId: string) => Promise<boolean>;
+  updateCourseProgress: (courseId: string, progress: number) => void;
+  recordLessonProgress: (courseId: string, lessonId: string, timeSpentSeconds?: number) => Promise<any>;
 }
 
 const STORAGE_KEY_COURSES = 'venilearn_courses';
@@ -150,7 +154,7 @@ function loadInitialCourses(): Course[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed.map((c: Course) => ({
           ...c,
-          organizationId: c.organizationId || 'org-001',
+          organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
         }));
       }
     }
@@ -166,7 +170,9 @@ function loadInitialEnrolled(): string[] {
     if (cached !== null) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed
+          .map((e: any) => (typeof e === 'string' ? e : e.courseId || e.id))
+          .filter((id: string) => typeof id === 'string');
       }
     }
   } catch (e) {
@@ -211,37 +217,78 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   requestedCourseIds: loadInitialRequested(),
   enrollments: loadInitialEnrollments(),
   isLoading: false,
+  isCoursesLoading: false,
   error: null,
 
   fetchCourses: async (force = false) => {
+    set({ isLoading: true, isCoursesLoading: true, error: null });
     try {
-      set({ isLoading: true, error: null });
-      const res = await apiClient.get<any>('/courses?limit=200');
-      if (res && res.data) {
-        const rawItems = Array.isArray(res.data)
-          ? res.data
-          : (res.data as any).items || [];
-        const mappedCourses = rawItems.map(mapBackendCourseToFrontend);
+      const [coursesRes, enrollmentsRes] = await Promise.all([
+        apiClient.get<any>('/courses?limit=200').catch(() => null),
+        apiClient.get<any>('/courses/my-enrollments').catch(() => null),
+      ]);
 
-        // Update state and localStorage
-        set({ courses: mappedCourses, isLoading: false });
+      let backendCourses: Course[] = [];
+      if (coursesRes && coursesRes.data) {
+        const rawItems = Array.isArray(coursesRes.data)
+          ? coursesRes.data
+          : (coursesRes.data as any).items || [];
+        backendCourses = rawItems.map(mapBackendCourseToFrontend);
+
+        set({ courses: backendCourses, isLoading: false, isCoursesLoading: false });
         try {
-          localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(mappedCourses));
+          localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
           localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
         } catch (e) {}
-        return mappedCourses;
       }
+
+      if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
+        const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
+        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
+          const completedLids: string[] = Array.isArray(e.lessonProgress)
+            ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
+            : [];
+          if (e.courseId && completedLids.length > 0) {
+            try {
+              localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
+            } catch {}
+          }
+          return {
+            id: e.id,
+            userId: e.userId,
+            courseId: e.courseId,
+            cohortId: e.cohortId,
+            status: e.status || 'active',
+            progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
+            enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
+            completedLessonIds: completedLids,
+          };
+        });
+
+        set({
+          enrolledCourseIds: backendEnrolledIds,
+          enrollments: mappedEnrollments,
+        });
+        try {
+          localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
+          localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
+        } catch (e) {}
+      }
+      return backendCourses;
     } catch (err: any) {
       console.warn('[CourseStore] Failed to fetch courses from backend API:', err);
-      set({ isLoading: false, error: err.message || 'Failed to load courses' });
+      set({ isLoading: false, isCoursesLoading: false, error: err.message || 'Failed to load courses' });
+      return get().courses;
     }
-    return get().courses;
   },
 
   getCourseById: (id: string) => {
     const { courses } = get();
     return courses.find(
-      (c) => c.id.toLowerCase() === id.toLowerCase() || (c as any).slug === id.toLowerCase()
+(c) =>
+        c.id.toLowerCase() === id.toLowerCase() ||
+        (c.slug && c.slug.toLowerCase() === id.toLowerCase()) ||
+        ((c as any).code && (c as any).code.toLowerCase() === id.toLowerCase())
     );
   },
 
@@ -376,7 +423,9 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(nextEnrolled));
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      apiClient.post(`/courses/${course.id}/enroll`, {}).catch(() => {});
+apiClient.post(`/courses/${course.id}/enroll`, {}).catch((err) => {
+        console.warn('Backend enrollment sync note:', err);
+      });
     } catch (e) {}
 
     return {
@@ -508,88 +557,78 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     };
   },
 
-  saveCourse: async (course: Course, studentIds: string[] = []) => {
-    try {
-      set({ isLoading: true, error: null });
-      const payload = {
-        id: course.id,
-        title: course.title,
-        slug: (course as any).slug || (course as any).code || course.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        code: (course as any).code || undefined,
-        description: course.description,
-        shortDescription: course.shortDescription,
-        category: course.category,
-        departmentId: course.departmentId,
-        level: course.level || 'Beginner',
-        durationHours: course.durationHours || 1,
-        estimatedDuration: course.estimatedDuration,
-        thumbnail: course.thumbnail,
-        thumbnailUrl: course.thumbnail,
-        status: course.status || 'draft',
-        visibility: course.visibility || 'public',
-        completionPolicy: course.completionPolicy,
-        shareableLinkEnabled: course.shareableLinkEnabled,
-        completionPercentageRequired: course.completionPercentageRequired,
-        completionPoints: course.completionPoints,
-        certificateConfig: course.certificateConfig,
-        finalAssessmentConfig: course.finalAssessment,
-        finalAssessment: course.finalAssessment,
-        instructors: course.instructors || [],
-        studentIds,
-        modules: course.modules || [],
-        organizationId: course.organizationId,
-        startDate: course.startDate,
-        endDate: course.endDate,
-      };
+addCourse: async (course: Course): Promise<Course> => {
+    const fallbackOrg = typeof window !== 'undefined'
+      ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || '871abf8a-e563-4d0f-afc7-416d8da3df14')
+      : '871abf8a-e563-4d0f-afc7-416d8da3df14';
 
-      const res = await apiClient.post<any>('/courses', payload);
-      if (res && res.data) {
-        const persisted = mapBackendCourseToFrontend(res.data);
+    let persistedCourse: Course = {
+      ...course,
+      organizationId: course.organizationId || fallbackOrg,
+    };
 
-        // Update in Zustand state
-        const existingCourses = get().courses;
-        const existsIndex = existingCourses.findIndex(
-          (c) => c.id === persisted.id || (persisted.slug && (c as any).slug === persisted.slug)
-        );
-        let nextCourses: Course[];
-        if (existsIndex >= 0) {
-          nextCourses = [...existingCourses];
-          nextCourses[existsIndex] = persisted;
-        } else {
-          nextCourses = [persisted, ...existingCourses];
-        }
+    // Sanitize departmentId: only send if valid UUID
+    const sanitizedDeptId = course.departmentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.departmentId)
+      ? course.departmentId
+      : undefined;
 
-        set({ courses: nextCourses, isLoading: false });
-        try {
-          localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(nextCourses));
-          localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-        } catch (e) {}
+    const payload = {
+      title: course.title,
+      slug: course.slug || course.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      description: course.description || 'Comprehensive course syllabus and curriculum modules.',
+      shortDescription: course.shortDescription,
+      category: course.category || 'General',
+      departmentId: sanitizedDeptId,
+      level: course.level || 'Beginner',
+      durationHours: course.durationHours || 10,
+      status: course.status || 'draft',
+      thumbnailUrl: course.thumbnail || (course as any).thumbnailUrl,
+      shareableLinkEnabled: course.shareableLinkEnabled ?? true,
+      enrollmentCapacity: course.enrollmentCapacity,
+      enrollmentDeadline: course.enrollmentDeadline,
+      enrollmentApprovalRequired: course.enrollmentApprovalRequired,
+      completionPercentageRequired: course.completionPercentageRequired || 80,
+      completionPoints: course.completionPoints || 100,
+      instructors: course.instructors || [],
+      modules: (course.modules || []).map((m, mIdx) => ({
+        title: m.title || `Module ${mIdx + 1}`,
+        description: m.description,
+        order: m.order || mIdx + 1,
+        lessons: (m.lessons || []).map((l, lIdx) => ({
+          title: l.title || `Lesson ${lIdx + 1}`,
+          description: l.description,
+          type: l.type || 'rich_text',
+          content: l.content,
+          contentUrl: l.videoUrl || (l as any).contentUrl,
+          durationMinutes: l.durationMinutes || 15,
+          order: l.order || lIdx + 1,
+          isRequired: l.isRequired ?? true,
+          isPreview: l.isPreview ?? false,
+          status: l.status || 'published',
+          quizConfig: (l as any).quizConfig || {},
+          uploadedDocument: (l as any).uploadedDocument || {},
+        })),
+      })),
+      finalAssessmentConfig: course.finalAssessmentConfig || course.finalAssessment,
+      certificateConfig: course.certificateConfig,
+      evaluationCriteria: (course as any).evaluationCriteria,
+    };
 
-        return { success: true, course: persisted };
-      } else {
-        throw new Error('Backend failed to return persisted course record');
-      }
-    } catch (err: any) {
-      console.error('[CourseStore] Error saving course to backend database:', err);
-      const errMsg = err?.message || 'Database error occurred while persisting the course to PostgreSQL.';
-      set({ isLoading: false, error: errMsg });
-      return { success: false, error: errMsg };
+    // 1. Authoritative write to PostgreSQL
+    const res = await apiClient.post<any>('/courses', payload);
+    if (res && res.data) {
+      const c = res.data;
+      persistedCourse = mapBackendCourseToFrontend(c);
+    } else {
+      throw new Error('Course creation failed: empty response from backend database API');
     }
-  },
 
-  addCourse: (course: Course) => {
+    // 2. Synchronize store & local storage cache
     set((state) => {
-      const fallbackOrg = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || 'org-001')
-        : 'org-001';
-      const courseWithOrg: Course = {
-        ...course,
-        organizationId: course.organizationId || fallbackOrg,
-      };
-      const exists = state.courses.some((c) => c.id === courseWithOrg.id);
+      const exists = state.courses.some((c) => c.id === persistedCourse.id);
       const updatedCourses = exists
-        ? state.courses.map((c) => (c.id === courseWithOrg.id ? courseWithOrg : c))
-        : [courseWithOrg, ...state.courses];
+        ? state.courses.map((c) => (c.id === persistedCourse.id ? persistedCourse : c))
+        : [persistedCourse, ...state.courses];
       try {
         localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
         localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
@@ -598,9 +637,50 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       }
       return { courses: updatedCourses };
     });
+
+    return persistedCourse;
   },
 
-  deleteCourse: async (courseId: string) => {
+  saveCourse: async (course: Course, studentIds: string[] = []) => {
+    try {
+      set({ isLoading: true, error: null });
+      const persisted = await get().addCourse(course);
+      if (studentIds.length > 0) {
+        await get().assignStudentsToCourse(persisted.id, studentIds);
+      }
+      set({ isLoading: false });
+      return { success: true, course: persisted };
+    } catch (err: any) {
+      console.error('[CourseStore] Error saving course to backend database:', err);
+      const errMsg = err?.message || 'Database error occurred while persisting the course to PostgreSQL.';
+      set({ isLoading: false, error: errMsg });
+      return { success: false, error: errMsg };
+    }
+  },
+      };
+    } else {
+      throw new Error('Course creation failed: empty response from backend database API');
+    }
+
+    // 2. Synchronize store & local storage cache
+    set((state) => {
+      const exists = state.courses.some((c) => c.id === persistedCourse.id);
+      const updatedCourses = exists
+        ? state.courses.map((c) => (c.id === persistedCourse.id ? persistedCourse : c))
+        : [persistedCourse, ...state.courses];
+      try {
+        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      } catch (e) {
+        console.error('Failed to save courses to storage', e);
+      }
+      return { courses: updatedCourses };
+    });
+
+    return persistedCourse;
+  },
+
+deleteCourse: async (courseId: string) => {
     try {
       await apiClient.delete(`/courses/${courseId}`);
     } catch (err) {
@@ -623,6 +703,64 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       console.error('Failed to save courses to storage', e);
     }
     return true;
+  },
+    });
+    try {
+      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+      localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
+      localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
+      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+    } catch (e) {
+      console.error('Failed to save courses to storage', e);
+    }
+    return true;
+  },
+
+  updateCourseProgress: (courseId: string, progress: number) => {
+    set((state) => {
+      const existing = state.enrollments.find((e) => e.courseId === courseId);
+      const isCompleted = progress >= 100;
+      let nextEnrollments: Enrollment[];
+      if (existing) {
+        nextEnrollments = state.enrollments.map((e) =>
+          e.courseId === courseId
+            ? { ...e, progress, status: isCompleted ? 'completed' : e.status }
+            : e
+        );
+      } else {
+        nextEnrollments = [
+          ...state.enrollments,
+          {
+            id: `enr-${Date.now()}`,
+            courseId,
+            userId: 'current-user',
+            cohortId: undefined,
+            status: isCompleted ? 'completed' : 'active',
+            progress,
+            enrolledAt: new Date().toISOString(),
+          },
+        ];
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(nextEnrollments));
+      } catch (e) {}
+      return { enrollments: nextEnrollments };
+    });
+  },
+
+  recordLessonProgress: async (courseId: string, lessonId: string, timeSpentSeconds: number = 60) => {
+    try {
+      const res = await apiClient.post<any>(`/courses/${courseId}/lessons/${lessonId}/progress`, {
+        timeSpentSeconds,
+      });
+      if (res && res.data && typeof res.data.progressPercentage === 'number') {
+        get().updateCourseProgress(courseId, res.data.progressPercentage);
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('Backend progress recording failed, falling back to local state:', err);
+    }
+    return null;
   },
 }));
 

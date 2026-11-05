@@ -4,8 +4,7 @@ import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
-import { mockCohorts } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+
 import { Course, EntityStatus } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -48,12 +47,12 @@ const CoursesManagementPage: React.FC = () => {
   const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isAdmin = isPlatformAdmin || isOrgAdmin || (isAuth && !isFaculty && !isLearner);
   const isCatalog = location.pathname === '/catalog';
-  const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning';
+  const isMyLearning = location.pathname === '/my-courses' || location.pathname === '/my-learning' || location.pathname === '/my_learning';
 
   const {
     courses,
     fetchCourses,
-    isLoading: isCoursesLoading,
+    isCoursesLoading,
     enrolledCourseIds,
     enrollments,
     updateCourseStatus,
@@ -72,7 +71,8 @@ const CoursesManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchCohorts();
-  }, [fetchCohorts]);
+    fetchCourses();
+  }, [fetchCohorts, fetchCourses]);
 
   // Derive courses associated with the user's assigned cohorts (for both students and trainers)
   const cohortLinkedCourseIds = useMemo(() => {
@@ -105,10 +105,8 @@ const CoursesManagementPage: React.FC = () => {
   }, [cohorts, user]);
 
   const effectiveEnrolledIds = useMemo(() => {
-    const isDemoStudent = user?.id === 'u-001' || user?.email === 'student@lms.demo' || (isLearner && enrolledCourseIds.length === 0);
-    const demoIds = isDemoStudent ? ['crs-001', 'crs-002', 'crs-004'] : [];
-    return new Set([...enrolledCourseIds, ...cohortLinkedCourseIds, ...demoIds]);
-  }, [enrolledCourseIds, cohortLinkedCourseIds, user, isLearner]);
+    return new Set([...enrolledCourseIds, ...cohortLinkedCourseIds]);
+  }, [enrolledCourseIds, cohortLinkedCourseIds]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -119,6 +117,12 @@ const CoursesManagementPage: React.FC = () => {
   const [activeOrgId, setActiveOrgId] = useState<string>(() => {
     return (isPlatformAdmin && typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null) || user?.organizationId || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_active_tenant_id') : null) || 'org-001';
   });
+
+  useEffect(() => {
+    if (user?.organizationId && !isPlatformAdmin) {
+      setActiveOrgId(user.organizationId);
+    }
+  }, [user?.organizationId, isPlatformAdmin]);
 
   useEffect(() => {
     const handleOrgSwitch = (e: Event) => {
@@ -158,17 +162,52 @@ const CoursesManagementPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
 
-  const progressData: Record<string, { progress: number; completedLessons: number; totalLessons: number; status: 'in_progress' | 'completed' }> = {
-    'crs-001': { progress: 65, completedLessons: 8, totalLessons: 12, status: 'in_progress' },
-    'crs-002': { progress: 30, completedLessons: 4, totalLessons: 12, status: 'in_progress' },
-    'crs-003': { progress: 20, completedLessons: 2, totalLessons: 10, status: 'in_progress' },
-    'crs-004': { progress: 100, completedLessons: 10, totalLessons: 10, status: 'completed' },
-    'crs-005': { progress: 40, completedLessons: 3, totalLessons: 8, status: 'in_progress' },
-    'crs-006': { progress: 15, completedLessons: 2, totalLessons: 14, status: 'in_progress' },
-  };
+  const getCourseProgress = (c: Course | string) => {
+    const courseId = typeof c === 'string' ? c : c.id;
+    const courseObj = typeof c === 'string' ? courses.find((x) => x.id === c) : c;
+    const actualTotalLessons = (courseObj?.modules || []).reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || (courseObj as any)?.lessonsCount || 10;
 
-  const getCourseProgress = (courseId: string) => {
-    return progressData[courseId] || { progress: 0, completedLessons: 0, totalLessons: 10, status: 'in_progress' as const };
+    let localCompletedIds: string[] = [];
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(`venilearn_completed_lessons_${courseId}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) localCompletedIds = parsed;
+        }
+        if (localCompletedIds.length === 0) {
+          const storedAll = localStorage.getItem('venilearn_course_completions');
+          if (storedAll) {
+            const parsedAll = JSON.parse(storedAll);
+            if (parsedAll && Array.isArray(parsedAll[courseId])) {
+              localCompletedIds = parsedAll[courseId];
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const enr = enrollments.find((e) => e.courseId === courseId);
+    if (localCompletedIds.length === 0 && enr?.completedLessonIds && enr.completedLessonIds.length > 0) {
+      localCompletedIds = enr.completedLessonIds;
+    }
+    let progress = enr?.progress ?? 0;
+    let completedLessons = localCompletedIds.length;
+
+    if (localCompletedIds.length > 0 && actualTotalLessons > 0) {
+      const calculated = Math.min(100, Math.round((localCompletedIds.length / actualTotalLessons) * 100));
+      progress = Math.max(progress, calculated);
+    } else if (progress > 0 && actualTotalLessons > 0) {
+      completedLessons = Math.round((progress / 100) * actualTotalLessons);
+    }
+
+    const isCompleted = progress >= 100 || enr?.status === 'completed';
+    return {
+      progress,
+      completedLessons,
+      totalLessons: actualTotalLessons,
+      status: isCompleted ? ('completed' as const) : ('in_progress' as const),
+    };
   };
 
   // Modals
@@ -186,7 +225,7 @@ const CoursesManagementPage: React.FC = () => {
     const instructorId = c.instructors?.[0] || 'u-004';
     const found =
       allFaculty.find((f) => f.id === instructorId) ||
-      mockUsers.find((u) => u.id === instructorId);
+      allFaculty.find((u) => u.id === instructorId);
 
     if (found) {
       const deptName =
@@ -205,13 +244,13 @@ const CoursesManagementPage: React.FC = () => {
       };
     }
     return {
-      id: 'u-004',
-      name: 'Dr. James Wilson',
-      email: 'trainer@lms.demo',
-      facultyId: 'FAC-2026-004',
-      department: 'Engineering',
-      departmentId: 'dep-001',
-      specialization: 'Full-Stack JavaScript & Systems Architecture',
+      id: instructorId || '',
+      name: instructorId ? 'Lead Faculty' : 'Unassigned',
+      email: '',
+      facultyId: instructorId ? `FAC-${instructorId.slice(0, 8).toUpperCase()}` : 'N/A',
+      department: 'General',
+      departmentId: undefined,
+      specialization: 'Curriculum Instructor',
       status: 'active',
     };
   };
@@ -269,7 +308,7 @@ const CoursesManagementPage: React.FC = () => {
 
     const chosenFaculty =
       allFaculty.find((f) => f.id === selectedFacultyId) ||
-      mockUsers.find((u) => u.id === selectedFacultyId);
+      allFaculty.find((u) => u.id === selectedFacultyId);
 
     if (!chosenFaculty) return;
 
@@ -295,15 +334,20 @@ const CoursesManagementPage: React.FC = () => {
     showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
   };
 
+  // Primary tenant equivalence helper: 'org-001' is the canonical mock/seed alias for tenant '871abf8a-e563-4d0f-afc7-416d8da3df14'
+  const isMatchingOrg = (courseOrgId: string | undefined, currentOrgId: string) => {
+    if (!courseOrgId) return true;
+    if (courseOrgId === currentOrgId) return true;
+    const isPrimaryTenant = (id?: string) => !id || id === 'org-001' || id === '871abf8a-e563-4d0f-afc7-416d8da3df14';
+    if (isPrimaryTenant(courseOrgId) && isPrimaryTenant(currentOrgId)) return true;
+    return false;
+  };
+
   // Courses scoped to active organization
   const orgScopedCourses = useMemo(() => {
     return courses.filter((c) => {
       if (isMyLearning && effectiveEnrolledIds.has(c.id)) return true;
-      const courseOrg = c.organizationId;
-      if (!courseOrg) return true;
-      if (courseOrg === activeOrgId) return true;
-      if (user?.organizationId && courseOrg === user.organizationId) return true;
-      return false;
+      return isMatchingOrg(c.organizationId, activeOrgId) || (user?.organizationId ? isMatchingOrg(c.organizationId, user.organizationId) : false);
     });
   }, [courses, activeOrgId, isMyLearning, effectiveEnrolledIds]);
 
@@ -520,7 +564,7 @@ const CoursesManagementPage: React.FC = () => {
     if (courseEnrollments.length > 0) {
       return courseEnrollments.map((enr, idx) => {
         const student = allStudents.find((s) => s.id === enr.userId);
-        const userCohort = mockCohorts.find((c) => c.studentIds?.includes(enr.userId));
+        const userCohort = useCohortStore.getState().cohorts.find((c) => c.studentIds?.includes(enr.userId));
         const cohortName = userCohort?.name || 'Spring 2026 Engineering';
         return {
           id: enr.id || `enr-${idx}`,
@@ -534,33 +578,7 @@ const CoursesManagementPage: React.FC = () => {
       });
     }
 
-    // 2. If course has enrolled learners count, generate mock entries for realistic preview
-    const learnerCount = rosterCourse.enrolledLearners ?? rosterCourse.learnerCount ?? 0;
-    if (learnerCount > 0) {
-      const count = Math.min(learnerCount, allStudents.length);
-      if (count > 0) {
-        return allStudents.slice(0, count).map((st, idx) => {
-          const userCohort = mockCohorts.find((c) => c.studentIds?.includes(st.id));
-          const cohortName = userCohort?.name || 'Spring 2026 Engineering';
-          return {
-            id: st.id,
-            name: st.displayName || `${st.firstName} ${st.lastName}`,
-            email: st.email,
-            cohort: cohortName,
-            progress: Math.floor(45 + (idx * 13) % 50),
-            attendance: `${(93 + (idx * 1.5) % 6).toFixed(1)}%`,
-            enrolledAt: '2026-03-01',
-          };
-        });
-      }
-      return [
-        { id: '1', name: 'Alex Rivera', email: 'alex@lms.demo', cohort: 'Spring 2026 Engineering', progress: 68, attendance: '96.2%', enrolledAt: '2026-03-01' },
-        { id: '2', name: 'Daniel Wu', email: 'daniel.wu@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 92, attendance: '94.0%', enrolledAt: '2026-03-01' },
-        { id: '3', name: 'Sophia Patel', email: 'sophia.p@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 85, attendance: '98.0%', enrolledAt: '2026-03-05' },
-        { id: '4', name: 'Kwame Mensah', email: 'kwame.m@acmelearning.com', cohort: 'Spring 2026 Engineering', progress: 54, attendance: '91.5%', enrolledAt: '2026-03-10' },
-      ];
-    }
-
+    // No synthetic fallback entries
     return [];
   }, [rosterCourse, enrollments, allStudents]);
 
@@ -589,12 +607,9 @@ const CoursesManagementPage: React.FC = () => {
                     ? 'Faculty Teaching Scope'
                     : 'Academic Offerings'}
             </span>
-            {isFaculty && <span className="badge badge-draft">Dr. James Wilson</span>}
+            {isFaculty && <span className="badge badge-draft">{user?.displayName || 'Faculty Member'}</span>}
             {isLearner && (
-              <>
-                <span className="badge badge-draft">Acme Learning Corp &bull; AY 2026&ndash;2027</span>
-                <span className="badge badge-active">{user?.displayName || 'Alex Thompson'}</span>
-              </>
+              <span className="badge badge-active">{user?.displayName || 'Enrolled Student'}</span>
             )}
           </div>
           <h1 style={{ fontSize: '1.75rem', margin: 0 }}>
@@ -617,7 +632,7 @@ const CoursesManagementPage: React.FC = () => {
           </p>
         </div>
 
-        {isCatalog ? (
+        {isCatalog || isMyLearning ? (
           <div style={{ display: 'flex', gap: '10px' }}>
             <Link to="/join-course" className="btn btn-primary">
               <Link2 size={16} /> Join with Link
@@ -795,7 +810,14 @@ const CoursesManagementPage: React.FC = () => {
       </div>
 
       {/* Courses Grid or Empty State */}
-      {filteredCourses.length === 0 ? (
+      {isCoursesLoading && courses.length === 0 ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div className="pulse-indicator" style={{ width: '16px', height: '16px', margin: '0 auto 12px' }} />
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Loading course catalogue...</div>
+          </div>
+        </div>
+      ) : filteredCourses.length === 0 ? (
         <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
           <div style={{
             width: '56px',
@@ -1072,19 +1094,22 @@ const CoursesManagementPage: React.FC = () => {
                   </div>
 
                   {/* Learner Progress Bar for student mode */}
-                  {isLearner && effectiveEnrolledIds.has(c.id) && (
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                        <span className="text-muted">Curriculum Progress:</span>
-                        <strong style={{ color: progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
-                          {progressData[c.id]?.progress || 0}% ({progressData[c.id]?.completedLessons || 0}/{progressData[c.id]?.totalLessons || 12} Lessons)
-                        </strong>
+                  {isLearner && effectiveEnrolledIds.has(c.id) && (() => {
+                    const prog = getCourseProgress(c);
+                    return (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                          <span className="text-muted">Curriculum Progress:</span>
+                          <strong style={{ color: prog.status === 'completed' ? 'var(--success)' : 'var(--primary)' }}>
+                            {prog.progress}% ({prog.completedLessons}/{prog.totalLessons} Lessons)
+                          </strong>
+                        </div>
+                        <div className="progress-bar-bg" style={{ height: '6px' }}>
+                          <div className="progress-bar-fill" style={{ width: `${prog.progress}%` }} />
+                        </div>
                       </div>
-                      <div className="progress-bar-bg" style={{ height: '6px' }}>
-                        <div className="progress-bar-fill" style={{ width: `${progressData[c.id]?.progress || 0}%` }} />
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   {isLearner && !effectiveEnrolledIds.has(c.id) && (
                     <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', padding: '6px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)' }}>
                       <span className="text-muted">Enrollment Status:</span>
@@ -1127,8 +1152,8 @@ const CoursesManagementPage: React.FC = () => {
                       </Link>
                     ) : (
                       <span className="text-muted text-xs">
-                        Enrollment: <strong style={{ color: !effectiveEnrolledIds.has(c.id) ? 'var(--text-muted)' : progressData[c.id]?.status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
-                          {!effectiveEnrolledIds.has(c.id) ? 'Not Enrolled' : progressData[c.id]?.status === 'completed' ? 'Completed' : 'Active Student'}
+                        Enrollment: <strong style={{ color: !effectiveEnrolledIds.has(c.id) ? 'var(--text-muted)' : getCourseProgress(c).status === 'completed' ? 'var(--success)' : 'var(--accent-cyan)' }}>
+                          {!effectiveEnrolledIds.has(c.id) ? 'Not Enrolled' : getCourseProgress(c).status === 'completed' ? 'Completed' : 'Active Student'}
                         </strong>
                       </span>
                     )}
@@ -1161,7 +1186,7 @@ const CoursesManagementPage: React.FC = () => {
                             <Eye size={13} /> Syllabus
                           </Link>
                         </div>
-                      ) : progressData[c.id]?.status === 'completed' ? (
+                      ) : getCourseProgress(c).status === 'completed' ? (
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                           <Link
                             to={`/course-player/${c.id}`}
@@ -1508,7 +1533,7 @@ const CoursesManagementPage: React.FC = () => {
         const currentLead = getLeadFacultyInfo(assignFacultyCourse);
         const courseDept = departments.find((d) => d.id === assignFacultyCourse.departmentId);
         const isSelectedSameAsCurrent = selectedFacultyId === (assignFacultyCourse.instructors?.[0] || 'u-004');
-        const selectedFacultyObj = allFaculty.find((f) => f.id === selectedFacultyId) || mockUsers.find((u) => u.id === selectedFacultyId);
+        const selectedFacultyObj = allFaculty.find((f) => f.id === selectedFacultyId) || allFaculty.find((u) => u.id === selectedFacultyId);
         const isSelectedInactive = selectedFacultyObj?.status !== 'active';
 
         return (

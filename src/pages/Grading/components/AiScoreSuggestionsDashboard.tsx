@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useGradingStore, StudentAssessmentSummary } from '../../../lib/gradingStore';
-import { mockCourses } from '../../../data/mockData';
-import { mockUsers } from '../../../data/mockUsers';
+import { useCourseStore } from '../../../lib/courseStore';
+import { usePeopleStore } from '../../../lib/peopleStore';
 import {
   Users, CheckCircle2, Clock, Sparkles, TrendingUp, Award,
   Search, Filter, X, ChevronRight, Eye, Calendar, RefreshCw, FileText
@@ -45,15 +45,15 @@ export const AiScoreSuggestionsDashboard: React.FC<AiScoreSuggestionsDashboardPr
 
   // Instructor list for Admin dropdown
   const facultyList = useMemo(() => {
-    return mockUsers.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor');
+    return usePeopleStore.getState().users.filter((u) => u.activeRole === 'trainer' || u.activeRole === 'instructor');
   }, []);
 
   // Filter courses available in dropdown
   const availableCourses = useMemo(() => {
     if (isFaculty && authorizedCourseIds) {
-      return mockCourses.filter((c) => authorizedCourseIds.includes(c.id));
+      return useCourseStore.getState().courses.filter((c) => authorizedCourseIds.includes(c.id));
     }
-    return mockCourses;
+    return useCourseStore.getState().courses;
   }, [isFaculty, authorizedCourseIds]);
 
   // 1. First scope attempts by RBAC (Faculty vs Admin) and Admin faculty filter

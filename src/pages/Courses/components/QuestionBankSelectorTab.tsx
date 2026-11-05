@@ -4,7 +4,7 @@ import {
   CheckCircle2, AlertCircle, Layers, Tag, X, Award, HelpCircle
 } from 'lucide-react';
 import { QuestionBank, Question, QuizQuestionItem, QuizOption } from '../../../types';
-import { mockQuestionBanks, mockQuestions } from '../../../data/mockData';
+
 import { exportQuestionsToCsv } from './csvTemplateUtils';
 import { getStoredQuestionBanks, getStoredQuestions } from '../../../lib/questionBankStorage';
 

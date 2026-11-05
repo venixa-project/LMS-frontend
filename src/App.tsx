@@ -261,6 +261,7 @@ export const App: React.FC = () => {
           <Route path="courses/:id" element={<PublicCourseDetailsPage />} />
           <Route path="join-course" element={<JoinCourseWithLinkPage />} />
           <Route path="my-learning" element={<CoursesPage />} />
+          <Route path="my_learning" element={<CoursesPage />} />
           <Route path="catalog" element={<CoursesPage />} />
           <Route path="course-player/:id" element={<LearnerCoursePlayerPage />} />
           <Route path="course-player" element={<Navigate to="/my-learning" replace />} />

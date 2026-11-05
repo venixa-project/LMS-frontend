@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { BookOpen, CheckCircle2, TrendingUp, BarChart2, Calendar, Activity, Info } from 'lucide-react';
 import { useDashboardFilters, DashboardDateRange, CourseStatBarItem } from '../context/DashboardFilterContext';
-import { mockDepartments, mockCourses } from '../../data/mockData';
 
 export const CourseEnrollmentStatsChart: React.FC = () => {
   const {
@@ -11,13 +10,13 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
     periodLabel,
     departmentId,
     courseId,
+    availableCourses,
     kpiSummary,
   } = useDashboardFilters();
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const selectedDept = mockDepartments.find((d) => d.id === departmentId);
-  const selectedCourse = mockCourses.find((c) => c.id === courseId);
+  const selectedCourse = availableCourses.find((c) => c.id === courseId);
 
   // Calculated aggregate metrics
   const totalEnrollments = enrollmentStatsData.reduce((acc, curr) => acc + curr.enrollments, 0);
@@ -118,7 +117,7 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
             </div>
             <p className="text-secondary text-xs" style={{ margin: 0, maxWidth: '420px' }}>
               No enrollments or completions recorded for{' '}
-              <strong>{selectedCourse ? selectedCourse.title : selectedDept?.name || 'the selected filter'}</strong>.
+              <strong>{selectedCourse ? selectedCourse.title : 'the selected filter'}</strong>.
             </p>
           </div>
         ) : (

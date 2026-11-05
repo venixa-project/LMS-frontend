@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LiveSession } from '../../../types';
-import { mockUsers } from '../../../data/mockUsers';
+import { usePeopleStore } from '../../../lib/peopleStore';
 import {
   Users, X, Search, CheckCircle2, Clock, XCircle, ShieldCheck, Download
 } from 'lucide-react';
@@ -17,7 +17,7 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
   if (!isOpen || !session) return null;
 
   const targetIds = session.targetStudentIds || [];
-  const students = mockUsers.filter(
+  const students = usePeopleStore.getState().users.filter(
     (u) =>
       (u.activeRole === 'student' || u.activeRole === 'learner') &&
       (targetIds.length === 0 || targetIds.includes(u.id) || targetIds.includes(u.rollNo || ''))

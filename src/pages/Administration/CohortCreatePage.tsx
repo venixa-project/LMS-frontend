@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Cohort, User } from '../../types';
 import { useDepartmentStore } from '../../lib/departmentStore';
-import { mockCourses } from '../../data/mockData';
-import { mockUsers } from '../../data/mockUsers';
+import { useCourseStore } from '../../lib/courseStore';
+
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import {
@@ -30,7 +30,7 @@ export const CohortCreatePage: React.FC = () => {
   // Step 1: Basic Details
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [courseId, setCourseId] = useState<string>(mockCourses[0]?.id || 'crs-001');
+  const [courseId, setCourseId] = useState<string>(useCourseStore.getState().courses[0]?.id || '');
   const [startDate, setStartDate] = useState('2026-11-01');
   const [endDate, setEndDate] = useState('2027-02-28');
   const [capacity, setCapacity] = useState<number>(30);
@@ -59,8 +59,7 @@ export const CohortCreatePage: React.FC = () => {
     const live = peopleUsers || [];
     const liveIds = new Set(live.map(u => u.id));
     const liveEmails = new Set(live.map(u => u.email.toLowerCase()));
-    const remainingMock = mockUsers.filter(u => !liveIds.has(u.id) && !liveEmails.has(u.email.toLowerCase()));
-    return [...live, ...remainingMock];
+    return live;
   }, [peopleUsers]);
 
   // Submission error
@@ -82,7 +81,7 @@ export const CohortCreatePage: React.FC = () => {
   }, [allUsers]);
 
   const selectedCourse = useMemo(() => {
-    return mockCourses.find(c => c.id === courseId);
+    return useCourseStore.getState().courses.find(c => c.id === courseId);
   }, [courseId]);
 
   const assignedTrainer = useMemo(() => {
@@ -589,7 +588,7 @@ export const CohortCreatePage: React.FC = () => {
                 value={courseId}
                 onChange={(e) => setCourseId(e.target.value)}
               >
-                {mockCourses.map((c) => (
+                {useCourseStore.getState().courses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title} &bull; {c.category} ({c.status.toUpperCase()})
                   </option>

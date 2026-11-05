@@ -70,6 +70,17 @@ export function generateContextualQuestions(params: GenerateQuestionsParams): Qu
     subjectContext.includes('frontend') ||
     subjectContext.includes('web');
 
+  const isLifeSciencesOrBio =
+    subjectContext.includes('bio') ||
+    subjectContext.includes('dock') ||
+    subjectContext.includes('molecul') ||
+    subjectContext.includes('protein') ||
+    subjectContext.includes('drug') ||
+    subjectContext.includes('ligand') ||
+    subjectContext.includes('genom') ||
+    subjectContext.includes('active site') ||
+    subjectContext.includes('biotech');
+
   const isDataOrPython =
     subjectContext.includes('python') ||
     subjectContext.includes('data') ||
@@ -361,47 +372,123 @@ export function generateContextualQuestions(params: GenerateQuestionsParams): Qu
   }
 
   // ==========================================
+  // DOMAIN 6: BIOINFORMATICS & LIFE SCIENCES
+  // ==========================================
+  if (isLifeSciencesOrBio) {
+    pool.push(
+      {
+        id: `q-bio-${Date.now()}-1`,
+        prompt: 'In molecular docking and virtual screening workflows, what is the primary purpose of defining a grid box around the macromolecular receptor?',
+        type: 'single_choice',
+        difficulty,
+        points: difficulty === 'hard' ? 10 : 5,
+        explanation: `The grid box defines the bounded 3D search space (spatial coordinates) where the docking algorithm performs conformational sampling and evaluates receptor-ligand interaction energies.${docRefNotice}`,
+        options: [
+          { id: 'opt-b-1', text: 'To restrict the conformational search space to the target active or allosteric binding site', isCorrect: true },
+          { id: 'opt-b-2', text: 'To permanently convert all flexible covalent bonds into rigid non-rotatable coordinates', isCorrect: false },
+          { id: 'opt-b-3', text: 'To bypass electrostatic and van der Waals calculations to speed up execution', isCorrect: false },
+          { id: 'opt-b-4', text: 'To automatically synthesize physical ligand derivatives in wet-lab environments', isCorrect: false },
+        ],
+      },
+      {
+        id: `q-bio-${Date.now()}-2`,
+        prompt: 'Which scoring metrics and structural criteria are critical when evaluating predicted ligand binding poses? (Select all that apply)',
+        type: 'multiple_choice',
+        difficulty,
+        points: difficulty === 'hard' ? 15 : 10,
+        explanation: `Valid pose evaluation requires assessing estimated free energy of binding (delta G), Root Mean Square Deviation (RMSD) clustering, complementary hydrogen bonding with catalytic residues, and absence of steric clashes.${docRefNotice}`,
+        options: [
+          { id: 'opt-b-5', text: 'Estimated free energy of binding (lower/more negative kcal/mol scores indicate favorable affinity)', isCorrect: true },
+          { id: 'opt-b-6', text: 'RMSD clustering to confirm reproducible, stable conformational poses', isCorrect: true },
+          { id: 'opt-b-7', text: 'Formation of specific hydrogen bonds and hydrophobic contacts with key active site residues', isCorrect: true },
+          { id: 'opt-b-8', text: 'Arbitrary alphabetical ordering of ligand atom records in the PDBQT structure', isCorrect: false },
+        ],
+      },
+      {
+        id: `q-bio-${Date.now()}-3`,
+        prompt: 'In computational molecular docking, a lower (more negative) binding free energy score generally signifies stronger predicted binding affinity between the ligand and receptor.',
+        type: 'true_false',
+        difficulty,
+        points: 5,
+        explanation: `True. Thermodynamically, binding reactions are favored when Gibbs free energy change (delta G) is negative, indicating a spontaneous and stable complex formation.${docRefNotice}`,
+        options: [
+          { id: 'opt-tf-b1', text: 'True', isCorrect: true },
+          { id: 'opt-tf-b2', text: 'False', isCorrect: false },
+        ],
+      },
+      {
+        id: `q-bio-${Date.now()}-4`,
+        prompt: 'When preparing a protein crystal structure (from PDB) for molecular docking simulations, which protocol steps are essential? (Select all that apply)',
+        type: 'multiple_choice',
+        difficulty,
+        points: 10,
+        explanation: `Raw PDB files typically lack hydrogen atoms, contain crystallographic water molecules that may block binding pockets, and need proper partial charge assignment (e.g. Kollman or Gasteiger charges).${docRefNotice}`,
+        options: [
+          { id: 'opt-b-9', text: 'Removal of non-catalytic crystallographic water molecules and co-crystallized solvents', isCorrect: true },
+          { id: 'opt-b-10', text: 'Addition of polar hydrogen atoms and assignment of partial atomic charges (PDBQT preparation)', isCorrect: true },
+          { id: 'opt-b-11', text: 'Inspection and repair of missing side-chain atoms in active site residues', isCorrect: true },
+          { id: 'opt-b-12', text: 'Complete deletion of all amino acid alpha-carbons to treat the receptor as a uniform gas', isCorrect: false },
+        ],
+      },
+      {
+        id: `q-bio-${Date.now()}-5`,
+        prompt: 'Scenario: During a virtual screening run, Compound X exhibits a raw binding score of -9.2 kcal/mol but causes severe steric clashes and buries an uncompensated charged group in a hydrophobic cavity. Compound Y exhibits -8.4 kcal/mol with optimal hydrogen bond geometry and no steric strain. How should the candidate molecules be prioritized?',
+        type: 'single_choice',
+        difficulty: 'hard',
+        points: 15,
+        explanation: `Heuristic scoring functions can over-predict affinity due to hydrophobic surface terms. Ligands with severe steric strain or desolvation penalties fail experimentally; stereochemical plausibility and specific bond geometry must be prioritized.${docRefNotice}`,
+        options: [
+          { id: 'opt-b-13', text: 'Prioritize Compound Y; stereochemical geometry, hydrogen bond complementarity, and strain-free poses supersede raw score artifacts', isCorrect: true },
+          { id: 'opt-b-14', text: 'Select Compound X exclusively because the lowest numerical score is always experimentally infallible', isCorrect: false },
+          { id: 'opt-b-15', text: 'Discard both compounds because docking scores above -15 kcal/mol are universally inert', isCorrect: false },
+          { id: 'opt-b-16', text: 'Convert Compound X into an irreversible covalent binder without altering its atomic structure', isCorrect: false },
+        ],
+      }
+    );
+  }
+
+  // ==========================================
   // UNIVERSAL HIGH-FIDELITY SYNTHESIZER
-  // (If pool needs more or custom subject)
+  // (Scenario-based practical questions)
   // ==========================================
   if (pool.length < count) {
     const contextUnit = lessonTitle || moduleTitle || courseTitle;
     pool.push(
       {
         id: `q-univ-${Date.now()}-1`,
-        prompt: `When designing software modules for "${contextUnit}", which principle ensures loose coupling and high cohesion?`,
+        prompt: `Practical Scenario: A system implementing "${contextUnit}" experiences performance bottlenecks under peak concurrent load. What architectural adjustment provides the most effective scalability and fault tolerance?`,
         type: 'single_choice',
         difficulty,
         points: 5,
-        explanation: `Single Responsibility and Dependency Inversion decouple high-level business policies from low-level implementation details.${docRefNotice}`,
+        explanation: `Applying horizontal scaling with decoupled asynchronous processing queues isolates high-load tasks, prevents thread exhaustion, and ensures system resilience.${docRefNotice}`,
         options: [
-          { id: 'opt-u-1', text: 'Programming to abstract interfaces rather than concrete implementations', isCorrect: true },
-          { id: 'opt-u-2', text: 'Directly referencing private fields of other classes across package boundaries', isCorrect: false },
-          { id: 'opt-u-3', text: 'Bundling UI presentation, business validation, and database queries into a single monolithic class', isCorrect: false },
-          { id: 'opt-u-4', text: 'Bypassing dependency injection in favor of hard-coded static singletons everywhere', isCorrect: false },
+          { id: 'opt-u-1', text: 'Decoupling compute-intensive tasks via asynchronous queues and applying stateless service instances', isCorrect: true },
+          { id: 'opt-u-2', text: 'Disabling all data validation routines to reduce CPU instruction cycles', isCorrect: false },
+          { id: 'opt-u-3', text: 'Replacing relational integrity constraints with global static variables', isCorrect: false },
+          { id: 'opt-u-4', text: 'Enforcing single-threaded execution to eliminate synchronization complexity', isCorrect: false },
         ],
       },
       {
         id: `q-univ-${Date.now()}-2`,
-        prompt: `Which quality attributes are critical when validating system requirements in "${courseTitle}"? (Select all that apply)`,
+        prompt: `Which quality attributes and verification standards are mandatory when deploying workflows in "${courseTitle}"? (Select all that apply)`,
         type: 'multiple_choice',
         difficulty,
         points: 10,
-        explanation: `Production architectures prioritize deterministic error handling, comprehensive test coverage, and automated telemetry logging.${docRefNotice}`,
+        explanation: `Enterprise production deployments require deterministic error boundary management, rigorous input sanitization, comprehensive test coverage, and automated telemetry logging.${docRefNotice}`,
         options: [
-          { id: 'opt-u-5', text: 'Comprehensive unit and integration test coverage for boundary conditions', isCorrect: true },
-          { id: 'opt-u-6', text: 'Deterministic resource cleanup and exception handling boundaries', isCorrect: true },
-          { id: 'opt-u-7', text: 'Adherence to enterprise security and input sanitization standards', isCorrect: true },
-          { id: 'opt-u-8', text: 'Disabling telemetry and audit logging to minimize disk space', isCorrect: false },
+          { id: 'opt-u-5', text: 'Comprehensive boundary condition validation and regression test coverage', isCorrect: true },
+          { id: 'opt-u-6', text: 'Deterministic resource cleanup and exception isolation boundaries', isCorrect: true },
+          { id: 'opt-u-7', text: 'Adherence to enterprise input sanitization and zero-trust security standards', isCorrect: true },
+          { id: 'opt-u-8', text: 'Suppression of telemetry and error monitoring logs to save disk storage', isCorrect: false },
         ],
       },
       {
         id: `q-univ-${Date.now()}-3`,
-        prompt: `In modern software development, automated unit and integration tests serve as living documentation of system contracts and invariants.`,
+        prompt: `In production-grade systems, adhering to strict architectural modularity and interface contracts reduces the blast radius of component failures and enables continuous integration without regression.`,
         type: 'true_false',
         difficulty,
         points: 5,
-        explanation: `True. Automated regression test suites document expected behaviors and prevent regressions as codebases evolve.${docRefNotice}`,
+        explanation: `True. Strong separation of concerns and clear interface contracts localize defects, simplify unit testing, and prevent cascading system failures.${docRefNotice}`,
         options: [
           { id: 'opt-tf-u1', text: 'True', isCorrect: true },
           { id: 'opt-tf-u2', text: 'False', isCorrect: false },
@@ -409,16 +496,30 @@ export function generateContextualQuestions(params: GenerateQuestionsParams): Qu
       },
       {
         id: `q-univ-${Date.now()}-4`,
-        prompt: `What is the primary benefit of applying the Principle of Least Privilege in software security and API architecture?`,
+        prompt: `What is the primary operational objective of implementing idempotent APIs and retry mechanisms with exponential backoff in distributed workflows?`,
         type: 'single_choice',
         difficulty,
         points: 5,
-        explanation: `The Principle of Least Privilege restricts system identities and processes to only the exact permissions necessary for their legitimate tasks, minimizing blast radius upon compromise.${docRefNotice}`,
+        explanation: `Idempotency guarantees that duplicate requests produce the same state change, while exponential backoff with jitter prevents thundering herd problem during transient network recovery.${docRefNotice}`,
         options: [
-          { id: 'opt-u-9', text: 'Minimizes the potential attack surface and blast radius if a component or credential is compromised', isCorrect: true },
-          { id: 'opt-u-10', text: 'Eliminates the requirement for user authentication tokens', isCorrect: false },
-          { id: 'opt-u-11', text: 'Forces all database tables to use public write permissions', isCorrect: false },
-          { id: 'opt-u-12', text: 'Guarantees 100% network bandwidth utilization at all times', isCorrect: false },
+          { id: 'opt-u-9', text: 'Guarantees state consistency during network retries while preventing service saturation (thundering herd problem)', isCorrect: true },
+          { id: 'opt-u-10', text: 'Permanently removes the necessity for client-side authentication tokens', isCorrect: false },
+          { id: 'opt-u-11', text: 'Forces all database write transactions to execute without locking or consistency checks', isCorrect: false },
+          { id: 'opt-u-12', text: 'Guarantees that network latency is reduced to exactly zero milliseconds', isCorrect: false },
+        ],
+      },
+      {
+        id: `q-univ-${Date.now()}-5`,
+        prompt: `Applied Case: You are performing a root cause analysis for an operational defect in "${contextUnit}". Which analytical protocol is recommended to isolate the failure?`,
+        type: 'single_choice',
+        difficulty: 'hard',
+        points: 10,
+        explanation: `Structured troubleshooting follows a systematic process: reproducing the defect with deterministic boundary test cases, inspecting distributed trace logs, verifying input invariance, and isolating regressions.${docRefNotice}`,
+        options: [
+          { id: 'opt-u-13', text: 'Reproducing the defect with minimal isolated boundary test cases and inspecting structured telemetry traces', isCorrect: true },
+          { id: 'opt-u-14', text: 'Immediately deploying unreviewed hotfixes directly to production environments', isCorrect: false },
+          { id: 'opt-u-15', text: 'Deleting historic audit logs to hide previous error occurrences', isCorrect: false },
+          { id: 'opt-u-16', text: 'Disabling compiler type checking to allow execution to proceed past runtime exceptions', isCorrect: false },
         ],
       }
     );

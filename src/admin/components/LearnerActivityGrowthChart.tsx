@@ -10,7 +10,6 @@ import {
   CalendarRange,
 } from 'lucide-react';
 import { useDashboardFilters, DashboardDateRange, MonthlyGrowthPoint } from '../context/DashboardFilterContext';
-import { mockDepartments, mockCourses } from '../../data/mockData';
 
 export const LearnerActivityGrowthChart: React.FC = () => {
   const {

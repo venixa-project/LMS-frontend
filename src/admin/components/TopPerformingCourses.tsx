@@ -84,7 +84,10 @@ export const TopPerformingCourses: React.FC = () => {
 
       // Filter by active tenant & exclude archived
       const tenantCourses = rawCourses.filter((c: any) => {
-        const orgMatch = c.organizationId ? c.organizationId === tenantId : tenantId === 'org-001';
+        const cOrg = c.organizationId || c.tenantId;
+        const orgMatch = !cOrg || !tenantId || cOrg === tenantId ||
+          ((cOrg === 'org-001' || cOrg === '871abf8a-e563-4d0f-afc7-416d8da3df14') &&
+           (tenantId === 'org-001' || tenantId === '871abf8a-e563-4d0f-afc7-416d8da3df14'));
         return orgMatch && c.status !== 'archived';
       });
 

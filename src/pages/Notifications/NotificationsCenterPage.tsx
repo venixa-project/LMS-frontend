@@ -4,12 +4,9 @@ import { useAnnouncementStore } from '../../lib/announcementStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { apiClient } from '../../lib/apiClient';
-import {
-  mockNotificationTemplates,
-  mockDepartments,
-  mockAssessments,
-  mockLiveSessions,
-} from '../../data/mockData';
+import { useDepartmentStore } from '../../lib/departmentStore';
+import { useAssessmentStore } from '../../lib/assessmentStore';
+import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import {
   NotificationTemplate,
   Announcement,
@@ -441,7 +438,7 @@ const NotificationsManagementPage: React.FC = () => {
   const [formAssociatedSessionId, setFormAssociatedSessionId] = useState<string>('');
 
   // Notification Templates (Admin)
-  const [templates] = useState<NotificationTemplate[]>(mockNotificationTemplates);
+  const [templates] = useState<NotificationTemplate[]>([]);
   const [previewTemplate, setPreviewTemplate] = useState<NotificationTemplate | null>(null);
 
   // Open Create Modal
@@ -492,7 +489,7 @@ const NotificationsManagementPage: React.FC = () => {
   const handleSelectAssociatedAssessment = (assessmentId: string) => {
     setFormAssociatedAssessmentId(assessmentId);
     if (!assessmentId) return;
-    const asm = mockAssessments.find((a) => a.id === assessmentId);
+    const asm = useAssessmentStore.getState().assessments.find((a) => a.id === assessmentId);
     if (asm) {
       if (!formTitle.trim()) {
         setFormTitle(`Assessment Notice: ${asm.title}`);
@@ -511,7 +508,7 @@ const NotificationsManagementPage: React.FC = () => {
   const handleSelectAssociatedSession = (sessionId: string) => {
     setFormAssociatedSessionId(sessionId);
     if (!sessionId) return;
-    const sess = mockLiveSessions.find((s) => s.id === sessionId);
+    const sess = useLiveSessionStore.getState().sessions.find((s) => s.id === sessionId);
     if (sess) {
       if (!formTitle.trim()) {
         setFormTitle(`Live Lecture Reminder: ${sess.title}`);
@@ -552,7 +549,7 @@ const NotificationsManagementPage: React.FC = () => {
       audienceLabel = 'All Faculty & Staff';
       scope = 'institution';
     } else if (formAudienceType === 'department') {
-      const dept = mockDepartments.find((d) => d.id === formTargetDepartmentId);
+      const dept = useDepartmentStore.getState().departments.find((d) => d.id === formTargetDepartmentId);
       audienceLabel = `${dept?.name || 'Department'} Department`;
       scope = 'department';
     } else if (formAudienceType === 'course') {
@@ -1569,77 +1566,13 @@ const NotificationsManagementPage: React.FC = () => {
                   </div>
                 ))}
 
-              <div className="card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-warning">Assignment Due Soon</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Due Oct 31, 2026
-                  </span>
+              {notifications.filter((n) => n.category === 'course').length === 0 && (
+                <div className="card" style={{ padding: '32px 20px', textAlign: 'center', gridColumn: '1 / -1', background: 'var(--bg-surface)' }}>
+                  <p className="text-muted text-sm" style={{ margin: 0 }}>
+                    No pending course invitations or academic notices at this time.
+                  </p>
                 </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Advanced React State Management Capstone
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Your capstone deliverable (Offline Kanban Board) is due in 14 days. Deliverable format: GitHub repository with automated tests.
-                </p>
-                <a href="/assignments" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  View Assignment & Submit &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--primary)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-primary">Upcoming Live Lecture</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Tomorrow 09:00 AM
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Docker Container Orchestration & Health Checks
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Live session led by Dr. James Wilson for Distributed Systems & Cloud Architecture. Room link verified on Zoom.
-                </p>
-                <a href="/my-sessions" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Open Timetable & Join Room &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--success)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-success">Result Published</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    Oct 15, 2026
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Distributed Systems Capstone: 92/100 (Grade A)
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Dr. James Wilson has evaluated your microservices submission. Faculty feedback and points are ready for review.
-                </p>
-                <a href="/my-results" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Inspect Evaluation & Feedback &rarr;
-                </a>
-              </div>
-
-              <div className="card" style={{ borderLeft: '4px solid var(--info)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <span className="badge badge-info">Proctoring Notice</span>
-                  <span className="text-muted text-xs" style={{ marginLeft: 'auto' }}>
-                    System Check
-                  </span>
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Midterm Exam Window Opening
-                </h4>
-                <p className="text-secondary text-sm" style={{ marginBottom: '12px', lineHeight: 1.5 }}>
-                  Midterm assessments will require verified camera and screen recording authorization. Complete your system check beforehand.
-                </p>
-                <a href="/my-assessments" className="btn btn-secondary btn-sm" style={{ width: 'fit-content' }}>
-                  Assessments Portal &rarr;
-                </a>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -2075,7 +2008,7 @@ const NotificationsManagementPage: React.FC = () => {
                             style={{ fontSize: '0.825rem', height: '34px' }}
                           >
                             <option value="">None (Custom Notice)</option>
-                            {mockAssessments.map((a) => (
+                            {useAssessmentStore.getState().assessments.map((a) => (
                               <option key={a.id} value={a.id}>
                                 {a.title} ({a.duration || 45} mins)
                               </option>
@@ -2094,7 +2027,7 @@ const NotificationsManagementPage: React.FC = () => {
                             style={{ fontSize: '0.825rem', height: '34px' }}
                           >
                             <option value="">None (Custom Notice)</option>
-                            {mockLiveSessions.map((s) => (
+                            {useLiveSessionStore.getState().sessions.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.title} ({s.date || 'Upcoming'})
                               </option>
@@ -2212,7 +2145,7 @@ const NotificationsManagementPage: React.FC = () => {
                             onChange={(e) => setFormTargetDepartmentId(e.target.value)}
                             style={{ fontSize: '0.9rem' }}
                           >
-                            {mockDepartments.map((dept) => (
+                            {useDepartmentStore.getState().departments.map((dept) => (
                               <option key={dept.id} value={dept.id}>
                                 {dept.name}
                               </option>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../../lib/store';
-import { mockAuditLog } from '../../data/mockData';
+
 import { AuditEntry } from '../../types';
 import {
   Settings, Shield, Activity, Lock, Database, RefreshCw,
@@ -44,7 +44,7 @@ export const PlatformSettingsPage: React.FC = () => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
-  const [auditLogs] = useState<AuditEntry[]>(mockAuditLog);
+  const [auditLogs] = useState<AuditEntry[]>([]);
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
