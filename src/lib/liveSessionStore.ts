@@ -34,7 +34,8 @@ interface LiveSessionState {
     notifyStudents?: boolean
   ) => { success: boolean };
   startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
-  generateGoogleMeet: (sessionId: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string }>;
+  generateGoogleMeet: (sessionId: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string; notConfigured?: boolean }>;
+  attachGoogleMeet: (sessionId: string, meetingUrl: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string }>;
   endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
   updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
@@ -342,7 +343,34 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
       }
       return { success: false, message: res?.message || 'Failed to generate Google Meet' };
     } catch (e: any) {
-      return { success: false, message: e.message || 'Error generating Google Meet' };
+      const notConfigured = e?.response?.data?.code === 'GOOGLE_INTEGRATION_NOT_CONFIGURED' ||
+        e?.code === 'GOOGLE_INTEGRATION_NOT_CONFIGURED';
+      return {
+        success: false,
+        notConfigured,
+        message: e?.response?.data?.message || e.message || 'Error generating Google Meet',
+      };
+    }
+  },
+
+  attachGoogleMeet: async (sessionId: string, meetingUrl: string) => {
+    try {
+      const res = await apiClient.post<any>(`/live-sessions/${sessionId}/attach-meet-url`, { meetingUrl });
+      if (res && res.data && res.data.meetingUrl) {
+        const url = res.data.meetingUrl;
+        const updated = get().sessions.map((s) =>
+          s.id === sessionId ? { ...s, meetingUrl: url, joinLink: url, provider: 'Google Meet' } : s
+        );
+        set({ sessions: updated });
+        persistSessions(updated);
+        return { success: true, meetingUrl: url, message: res.data.message };
+      }
+      return { success: false, message: res?.message || 'Failed to attach Google Meet URL' };
+    } catch (e: any) {
+      return {
+        success: false,
+        message: e?.response?.data?.message || e.message || 'Error attaching Google Meet URL',
+      };
     }
   },
 
