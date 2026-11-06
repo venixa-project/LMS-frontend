@@ -418,26 +418,47 @@ export const RecordedClassesView: React.FC<Props> = ({
                     }}
                   />
 
-                  {/* Play Button Icon */}
-                  <div
-                    style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '50%',
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      backdropFilter: 'blur(8px)',
-                      border: '1.5px solid rgba(255, 255, 255, 0.4)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-                      transition: 'transform 0.15s ease',
-                      zIndex: 2,
-                    }}
-                  >
-                    <Play size={24} style={{ marginLeft: '3px' }} />
-                  </div>
+                  {/* Play Button or Honest Recording Unavailable Icon */}
+                  {s.recordingUrl ? (
+                    <div
+                      style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.2)',
+                        backdropFilter: 'blur(8px)',
+                        border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                        transition: 'transform 0.15s ease',
+                        zIndex: 2,
+                      }}
+                    >
+                      <Play size={24} style={{ marginLeft: '3px' }} />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '6px',
+                        zIndex: 2,
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                      }}
+                    >
+                      <Clock size={20} color="#f59e0b" />
+                      <span style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 700 }}>
+                        Recording Unavailable
+                      </span>
+                    </div>
+                  )}
 
                   {/* Duration Pill */}
                   <div
@@ -462,7 +483,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                     <span>{s.durationMinutes || s.duration || 60}m</span>
                   </div>
 
-                  {/* Quality & HD Pill */}
+                  {/* Quality / Status Pill */}
                   <div
                     style={{
                       position: 'absolute',
@@ -470,16 +491,16 @@ export const RecordedClassesView: React.FC<Props> = ({
                       left: '12px',
                       background: 'rgba(15, 23, 42, 0.75)',
                       backdropFilter: 'blur(4px)',
-                      color: '#38bdf8',
+                      color: s.recordingUrl ? '#38bdf8' : '#f59e0b',
                       fontSize: '0.68rem',
                       fontWeight: 800,
                       padding: '2px 8px',
                       borderRadius: '4px',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      border: s.recordingUrl ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
                       zIndex: 2,
                     }}
                   >
-                    1080p Full HD
+                    {s.recordingUrl ? 'Stream Available' : 'Notes & Agenda'}
                   </div>
 
                   {/* Bookmark Button */}
@@ -677,13 +698,23 @@ export const RecordedClassesView: React.FC<Props> = ({
                         {copiedSessionId === s.id ? <Check size={14} color="var(--success)" /> : <Share2 size={14} />}
                       </button>
 
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={() => onPlayRecording(s)}
-                        style={{ gap: '6px', fontWeight: 700, padding: '6px 14px' }}
-                      >
-                        <Play size={14} /> Watch
-                      </button>
+                      {s.recordingUrl ? (
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => onPlayRecording(s)}
+                          style={{ gap: '6px', fontWeight: 700, padding: '6px 14px' }}
+                        >
+                          <Play size={14} /> Watch
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => onPlayRecording(s)}
+                          style={{ gap: '6px', fontWeight: 600, padding: '6px 12px', fontSize: '0.76rem' }}
+                        >
+                          <FileText size={13} /> Notes & Agenda
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -795,14 +826,14 @@ export const RecordedClassesView: React.FC<Props> = ({
                             <Bookmark size={14} fill={s.isBookmarked ? 'var(--accent-purple)' : 'none'} color={s.isBookmarked ? 'var(--accent-purple)' : 'currentColor'} />
                           </button>
                           <button
-                            className="btn btn-primary btn-sm"
+                            className={s.recordingUrl ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
                             onClick={(e) => {
                               e.stopPropagation();
                               onPlayRecording(s);
                             }}
                             style={{ padding: '4px 12px', fontSize: '0.78rem' }}
                           >
-                            Play
+                            {s.recordingUrl ? 'Play' : 'Notes & Agenda'}
                           </button>
                         </div>
                       </td>

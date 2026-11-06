@@ -279,6 +279,7 @@ export const App: React.FC = () => {
           <Route path="live-sessions" element={<LiveSessionsPage defaultTab="live_sessions" />} />
           <Route path="my-sessions" element={<LiveSessionsPage defaultTab="live_sessions" />} />
           <Route path="recorded-classes" element={<LiveSessionsPage defaultTab="recordings" />} />
+          <Route path="recorded_classes" element={<LiveSessionsPage defaultTab="recordings" />} />
           <Route path="recordings" element={<LiveSessionsPage defaultTab="recordings" />} />
           <Route path="attendance" element={<AttendanceLedgerPage />} />
           <Route path="attendance-ledger" element={<AttendanceLedgerPage />} />

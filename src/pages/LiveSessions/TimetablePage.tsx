@@ -47,7 +47,11 @@ export const TimetablePage: React.FC = () => {
   const [timetableTrainer, setTimetableTrainer] = useState('all');
   const [timetableSearch, setTimetableSearch] = useState('');
   const [timetableMode, setTimetableMode] = useState<'week' | 'day' | 'list'>('week');
-  const [currentWeekDate, setCurrentWeekDate] = useState<Date>(() => new Date('2026-10-19T00:00:00'));
+  const [currentWeekDate, setCurrentWeekDate] = useState<Date>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
 
   // Student Cohorts
@@ -210,7 +214,9 @@ export const TimetablePage: React.FC = () => {
   }, [weekDates]);
 
   const goToToday = () => {
-    setCurrentWeekDate(new Date('2026-10-19T00:00:00'));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setCurrentWeekDate(today);
   };
 
   const goToPrevWeek = () => {
@@ -1182,6 +1188,7 @@ export const TimetablePage: React.FC = () => {
               <div style={{ display: 'flex', gap: '8px' }}>
                 {(selectedDetailSession.status === 'live' || selectedDetailSession.status === 'scheduled') && (
                   <GoogleMeetJoinButton
+                    sessionId={selectedDetailSession.id}
                     meetingUrl={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
                     role={isTrainer || isAdmin ? 'instructor' : 'student'}
                     size="sm"

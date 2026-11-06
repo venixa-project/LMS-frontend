@@ -6,6 +6,7 @@ import { useCohortStore } from '../../lib/cohortStore';
 import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
+import { apiClient } from '../../lib/apiClient';
 import {
   Download, Users, Clock, AlertTriangle, ShieldCheck,
   Search, Filter, Calendar as CalendarIcon, Video, CheckCircle2,
@@ -89,6 +90,7 @@ export const AttendanceLedgerPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'late' | 'left_early' | 'absent'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [dbRoster, setDbRoster] = useState<any[]>([]);
 
   // Sync with URL query parameter
   useEffect(() => {
@@ -101,6 +103,19 @@ export const AttendanceLedgerPage: React.FC = () => {
   const activeSession: LiveSession | undefined = useMemo(() => {
     return authorizedSessions.find((s) => s.id === selectedSessionId) || authorizedSessions[0];
   }, [authorizedSessions, selectedSessionId]);
+
+
+  useEffect(() => {
+    if (!activeSession?.id) return;
+    apiClient.get(`/live-sessions/${activeSession.id}/attendance`).then((res) => {
+      if (res && res.data) {
+        const data = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
+        setDbRoster(data);
+      }
+    }).catch(() => {});
+  }, [activeSession?.id]);
+
+
 
   // Registered students roster for the active live session
   const activeRosterData = useMemo<ParticipantParticipationRow[]>(() => {
@@ -210,7 +225,7 @@ export const AttendanceLedgerPage: React.FC = () => {
         rawLeaveIso: record?.leftAt,
       };
     });
-  }, [activeSession, cohorts]);
+  }, [activeSession, cohorts, dbRoster]);
 
   // Filtered roster according to UI search and status filters
   const filteredRoster = useMemo(() => {

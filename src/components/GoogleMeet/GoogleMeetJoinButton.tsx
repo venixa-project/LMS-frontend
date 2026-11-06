@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { ExternalLink, AlertCircle } from 'lucide-react';
 import { GoogleMeetIcon } from './GoogleMeetIcon';
 import { openGoogleMeetSession, isValidGoogleMeetUrl } from '../../lib/googleMeet';
+import { apiClient } from '../../lib/apiClient';
 
 interface Props {
   meetingUrl?: string | null;
+  sessionId?: string | null;
+  onJoined?: () => void;
   label?: string;
   isHost?: boolean;
   isLive?: boolean;
@@ -19,6 +22,8 @@ interface Props {
 
 export const GoogleMeetJoinButton: React.FC<Props> = ({
   meetingUrl,
+  sessionId,
+  onJoined,
   label,
   isHost = false,
   isLive = false,
@@ -51,6 +56,13 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
         setTimeout(() => setMissingNotice(null), 3800);
       }
       return;
+    }
+
+    if (sessionId) {
+      apiClient.post(`/live-sessions/${sessionId}/join`).catch((err) => {
+        console.warn('Auto attendance recording failed:', err);
+      });
+      if (onJoined) onJoined();
     }
 
     openGoogleMeetSession(meetingUrl, {

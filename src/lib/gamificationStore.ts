@@ -77,6 +77,8 @@ interface GamificationStoreState {
   leaderboard: any[];
   isLoadingLeaderboard: boolean;
   fetchLeaderboard: () => Promise<any[]>;
+  stats: { activeLearnersCount: number; averageCompletionRate: number; diplomasIssuedCount: number } | null;
+  fetchStats: () => Promise<any>;
   profiles: Record<string, StudentGamificationRecord>;
   unacknowledgedRankUps: Record<string, RankUpPayload>;
 
@@ -323,6 +325,19 @@ function persistRankUps(rankUps: Record<string, RankUpPayload>): void {
 export const useGamificationStore = create<GamificationStoreState>((set, get) => ({
   leaderboard: [],
   isLoadingLeaderboard: false,
+  stats: null,
+  fetchStats: async () => {
+    try {
+      const res = await apiClient.get<any>('/gamification/stats');
+      if (res && res.data) {
+        set({ stats: res.data });
+        return res.data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch gamification stats:', err);
+    }
+    return null;
+  },
   fetchLeaderboard: async () => {
     set({ isLoadingLeaderboard: true });
     try {

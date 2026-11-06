@@ -54,23 +54,15 @@ export const useCohortStore = create<CohortState>((set, get) => ({
   totalCohorts: 0,
 
   fetchCohorts: async (params?: ListCohortsParams) => {
-    // Always fetch real cohorts
-    try {
-      const res = await cohortApi.list();
-      set({ cohorts: res.cohorts || [], totalCohorts: res.meta?.total || 0, isLoading: false });
-      return;
-    } catch (e) {
-      set({ cohorts: [], isLoading: false });
-      return;
-    }
-
     set({ isLoading: true });
     try {
       const res = await cohortApi.list(params);
-      const cohortsMapped: Cohort[] = (res.cohorts || []).map((c: any) => ({
+      const rawList = res.cohorts || [];
+      const cohortsMapped: Cohort[] = rawList.map((c: any) => ({
         ...c,
         startDate: typeof c.startDate === 'string' ? c.startDate : new Date(c.startDate).toISOString(),
         endDate: typeof c.endDate === 'string' ? c.endDate : new Date(c.endDate).toISOString(),
+        learnerCount: c.learnerCount ?? c.members?.length ?? c._count?.members ?? 0,
         studentIds: c.members?.map((m: any) => m.userId || m.user?.id) || c.studentIds || [],
         instructorIds: Array.isArray(c.instructors) ? c.instructors : [],
       }));
@@ -82,7 +74,7 @@ export const useCohortStore = create<CohortState>((set, get) => ({
       });
     } catch (err: any) {
       console.error('Failed to fetch cohorts from API:', err);
-      set({ isLoading: false });
+      set({ cohorts: [], isLoading: false });
     }
   },
 

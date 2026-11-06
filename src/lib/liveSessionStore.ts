@@ -35,6 +35,7 @@ interface LiveSessionState {
   ) => { success: boolean };
   startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
   endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
+  updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
   toggleBookmark: (sessionId: string) => void;
 }
@@ -327,8 +328,13 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   },
 
   endSession: async (sessionId: string, recordingUrl?: string) => {
+    const target = get().sessions.find((s) => s.id === sessionId);
+    const finalRecordingUrl = recordingUrl && recordingUrl.trim() ? recordingUrl.trim() : (target?.recordingUrl || '');
+
     try {
-      await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, { recordingUrl: recordingUrl || '' });
+      await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, {
+        recordingUrl: finalRecordingUrl || undefined,
+      });
     } catch (e) {
       console.warn('Failed to end session in backend:', e);
     }
@@ -338,8 +344,31 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
         ? {
             ...s,
             status: 'ended' as const,
-            recordingUrl: recordingUrl || s.recordingUrl || '',
-            recordingLink: recordingUrl || s.recordingLink || '',
+            recordingUrl: finalRecordingUrl,
+            recordingLink: finalRecordingUrl,
+            updatedAt: new Date().toISOString(),
+          }
+        : s
+    );
+    set({ sessions: updated });
+    persistSessions(updated);
+    return { success: true };
+  },
+
+  updateRecordingUrl: async (sessionId: string, recordingUrl: string) => {
+    const cleanUrl = recordingUrl ? recordingUrl.trim() : '';
+    try {
+      await apiClient.put(`/live-sessions/${sessionId}`, { recordingUrl: cleanUrl });
+    } catch (e) {
+      console.warn('Failed to update recording URL in backend:', e);
+    }
+
+    const updated = get().sessions.map((s) =>
+      s.id === sessionId
+        ? {
+            ...s,
+            recordingUrl: cleanUrl,
+            recordingLink: cleanUrl,
             updatedAt: new Date().toISOString(),
           }
         : s

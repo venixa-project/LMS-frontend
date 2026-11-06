@@ -39,7 +39,19 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 }) => {
   const { user } = useAuthStore();
   const { sessions, addSession, updateSession } = useLiveSessionStore();
-  const { cohorts } = useCohortStore();
+  const { cohorts, fetchCohorts } = useCohortStore();
+  const { courses, fetchCourses } = useCourseStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
+  const { users: peopleUsers, fetchPeople } = usePeopleStore();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCourses();
+      fetchDepartments();
+      fetchCohorts();
+      fetchPeople();
+    }
+  }, [isOpen]);
 
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
 
@@ -55,9 +67,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // STEP 1 — Session Details
   // --------------------------------------------------------------------------
   const [title, setTitle] = useState('');
-  const [departmentId, setDepartmentId] = useState('dep-001');
-  const [courseId, setCourseId] = useState('crs-001');
-  const [cohortId, setCohortId] = useState('coh-001');
+  const [departmentId, setDepartmentId] = useState('all');
+  const [courseId, setCourseId] = useState('');
+  const [cohortId, setCohortId] = useState('');
   const [description, setDescription] = useState('');
   const [agenda, setAgenda] = useState('');
 
@@ -112,46 +124,89 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Filtered Options & Eligibility Data
   // --------------------------------------------------------------------------
-  // All Trainers list
+  // All Trainers & Faculty hosts list (reactive — updates when peopleUsers loads)
   const allTrainers = useMemo(() => {
-    return usePeopleStore.getState().users.filter(
-      (u) => (u.activeRole === 'trainer' || u.activeRole === 'instructor') && u.status !== 'suspended'
+    const list = peopleUsers.filter(
+      (u) =>
+        u.status !== 'suspended' &&
+        (u.activeRole === 'trainer' ||
+          u.activeRole === 'instructor' ||
+          (u.activeRole as string) === 'faculty' ||
+          u.activeRole === 'org_admin' ||
+          u.activeRole === 'platform_admin')
     );
-  }, []);
+    if (list.length > 0) return list;
+    if (user) return [user];
+    return [];
+  }, [peopleUsers, user]);
+
+  // Synchronize instructorId whenever trainers list changes
+  useEffect(() => {
+    if (allTrainers.length > 0) {
+      if (!instructorId || !allTrainers.some((t) => t.id === instructorId)) {
+        setInstructorId(allTrainers[0].id);
+      }
+    }
+  }, [allTrainers, instructorId]);
 
   // Filtered Courses based on Department
   const departmentCourses = useMemo(() => {
-    let list = useCourseStore.getState().courses.filter((c) => !c.departmentId || c.departmentId === departmentId);
-    if (isTrainer && user?.id) {
-      const trainerUser = usePeopleStore.getState().users.find((u) => u.id === user.id);
-      const eligible = trainerUser?.eligibleCourseIds || ['crs-001', 'crs-002', 'crs-004'];
-      list = list.filter((c) => eligible.includes(c.id));
+    if (!departmentId || departmentId === 'all') {
+      return courses;
     }
-    return list;
-  }, [departmentId, isTrainer, user?.id]);
+    const filtered = courses.filter((c) => c.departmentId === departmentId || !c.departmentId);
+    return filtered.length > 0 ? filtered : courses;
+  }, [courses, departmentId]);
+
+  // Synchronize selected course when courses load or department changes
+  useEffect(() => {
+    if (departmentCourses.length > 0) {
+      if (!courseId || !departmentCourses.some((c) => c.id === courseId)) {
+        setCourseId(departmentCourses[0].id);
+      }
+    }
+  }, [departmentCourses, courseId]);
 
   // Filtered Cohorts based on Course & Department
   const eligibleCohorts = useMemo(() => {
-    return cohorts.filter((coh) => {
-      const matchCourse = !coh.courseId || coh.courseId === courseId;
+    if (!cohorts || cohorts.length === 0) return [];
+    if (!departmentId || departmentId === 'all') {
+      if (courseId && courseId !== 'all') {
+        const byCourse = cohorts.filter((coh) => !coh.courseId || coh.courseId === courseId);
+        if (byCourse.length > 0) return byCourse;
+      }
+      return cohorts;
+    }
+    const filtered = cohorts.filter((coh) => {
+      const matchCourse = !courseId || courseId === 'all' || !coh.courseId || coh.courseId === courseId;
       const matchDept = !coh.departmentId || coh.departmentId === departmentId;
       return matchCourse && matchDept;
     });
+    return filtered.length > 0 ? filtered : cohorts;
   }, [cohorts, courseId, departmentId]);
+
+  // Synchronize selected cohort when eligible cohorts change
+  useEffect(() => {
+    if (eligibleCohorts.length > 0) {
+      if (!cohortId || !eligibleCohorts.some((c) => c.id === cohortId)) {
+        setCohortId(eligibleCohorts[0].id);
+      }
+    }
+  }, [eligibleCohorts, cohortId]);
 
   // Selected Cohort
   const activeCohort = useMemo(() => {
     return cohorts.find((c) => c.id === cohortId) || eligibleCohorts[0] || cohorts[0];
   }, [cohorts, cohortId, eligibleCohorts]);
 
-  // Eligible students in selected cohort
+  // Eligible students in selected cohort (reactive — updates when peopleUsers loads)
   const cohortStudents = useMemo(() => {
     if (!activeCohort || !activeCohort.studentIds || activeCohort.studentIds.length === 0) {
-      return usePeopleStore.getState().users.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
+      return peopleUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
     }
     const ids = activeCohort.studentIds;
-    return usePeopleStore.getState().users.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
-  }, [activeCohort]);
+    return peopleUsers.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
+  }, [activeCohort, peopleUsers]);
 
   // Filtered Students list by search
   const filteredStudents = useMemo(() => {
@@ -165,9 +220,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     );
   }, [cohortStudents, studentSearch]);
 
-  // Eligible Faculty & Staff
+  // Eligible Faculty & Staff (reactive — updates when peopleUsers loads)
   const eligibleFacultyStaff = useMemo(() => {
-    return usePeopleStore.getState().users.filter(
+    return peopleUsers.filter(
       (u) =>
         u.status !== 'suspended' &&
         (u.activeRole === 'trainer' ||
@@ -175,7 +230,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
           u.activeRole === 'platform_admin' ||
           u.activeRole === 'org_admin')
     );
-  }, []);
+  }, [peopleUsers]);
 
   // Filtered Faculty & Staff by search and department
   const filteredFacultyStaff = useMemo(() => {
@@ -302,9 +357,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     } else {
       // Default clean values
       setTitle('');
-      setDepartmentId('dep-001');
-      setCourseId('crs-001');
-      setCohortId('coh-001');
+      setDepartmentId('all');
+      setCourseId(courses[0]?.id || '');
+      setCohortId(cohorts[0]?.id || '');
       setDescription('');
       setAgenda('');
       const tomorrow = new Date();
@@ -338,14 +393,13 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   const handleDepartmentChange = (newDeptId: string) => {
     setIsDirty(true);
     setDepartmentId(newDeptId);
-    const validCourses = useCourseStore.getState().courses.filter((c) => !c.departmentId || c.departmentId === newDeptId);
-    if (validCourses.length > 0) {
-      const nextCourseId = validCourses.some((c) => c.id === courseId) ? courseId : validCourses[0].id;
+    const validCourses = newDeptId === 'all'
+      ? courses
+      : courses.filter((c) => !c.departmentId || c.departmentId === newDeptId);
+    const targetCourses = validCourses.length > 0 ? validCourses : courses;
+    if (targetCourses.length > 0) {
+      const nextCourseId = targetCourses.some((c) => c.id === courseId) ? courseId : targetCourses[0].id;
       setCourseId(nextCourseId);
-      const validCohorts = cohorts.filter((c) => c.courseId === nextCourseId);
-      if (validCohorts.length > 0) {
-        setCohortId(validCohorts[0].id);
-      }
     }
   };
 
@@ -353,9 +407,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   const handleCourseChange = (newCourseId: string) => {
     setIsDirty(true);
     setCourseId(newCourseId);
-    const validCohorts = cohorts.filter((c) => c.courseId === newCourseId);
-    if (validCohorts.length > 0) {
-      setCohortId(validCohorts[0].id);
+    const selected = courses.find((c) => c.id === newCourseId);
+    if (selected && selected.departmentId && departmentId !== 'all') {
+      setDepartmentId(selected.departmentId);
     }
   };
 
@@ -495,21 +549,28 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
         ? 'all_cohort'
         : 'selected_students';
 
-    // Realistically provision room URL according to selected provider
+    // Use the actual meeting URL provided by the admin.
+    // Do NOT fall back to meet.google.com/new — it creates a NEW room each time it's opened.
     const finalMeetingUrl =
       provider === 'Google Meet'
-        ? (googleMeetUrl.trim() || 'https://meet.google.com/new')
+        ? googleMeetUrl.trim()
         : provider.includes('Zoom')
-        ? `https://zoom.us/j/${Math.floor(1000000000 + Math.random() * 9000000000)}`
+        ? googleMeetUrl.trim()
         : provider.includes('Teams')
-        ? 'https://teams.microsoft.com/l/meetup-join/'
-        : 'https://meet.google.com/new';
+        ? googleMeetUrl.trim()
+        : googleMeetUrl.trim();
+
+    const selectedCourseObj = courses.find((c) => c.id === courseId);
+    const selectedCohortObj = cohorts.find((c) => c.id === cohortId) || activeCohort;
+    const finalDepartmentId = departmentId !== 'all' ? departmentId : (selectedCourseObj?.departmentId || undefined);
 
     const payload = {
       title: title.trim(),
-      departmentId,
+      departmentId: finalDepartmentId,
       courseId,
+      courseTitle: selectedCourseObj?.title || 'java 9.0',
       cohortId,
+      cohortName: selectedCohortObj?.name || 'Class of 2026',
       instructorId: hostTrainer?.id || user?.id || 'u-004',
       instructorName: hostTrainer?.displayName || 'Dr. James Wilson',
       date,
@@ -517,8 +578,6 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       startTime,
       endTime,
       room: room.trim() || 'Hall 101',
-      cohortName: activeCohort?.name || cohorts.find((c) => c.id === cohortId)?.name || 'Spring 2026 Engineering',
-      courseTitle: useCourseStore.getState().courses.find((c) => c.id === courseId)?.title || 'Course Lecture',
       createdBy: sessionToEdit?.createdBy || user?.id,
       createdRole: sessionToEdit?.createdRole || user?.activeRole,
       duration: durationInfo.minutes,
@@ -915,9 +974,10 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         onChange={(e) => handleDepartmentChange(e.target.value)}
                         style={{ height: '40px', fontSize: '0.85rem' }}
                       >
-                        {useDepartmentStore.getState().departments.map((d) => (
+                        <option value="all">All Academic Departments</option>
+                        {departments.map((d) => (
                           <option key={d.id} value={d.id}>
-                            {d.name}
+                            {d.name} ({d.code})
                           </option>
                         ))}
                       </select>
@@ -967,19 +1027,11 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                       }}
                       style={{ height: '40px', fontSize: '0.85rem' }}
                     >
-                      {eligibleCohorts.length === 0 ? (
-                        cohorts.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} ({c.code}) &bull; {c.learnerCount}/{c.capacity || 35} Scholars
-                          </option>
-                        ))
-                      ) : (
-                        eligibleCohorts.map((coh) => (
-                          <option key={coh.id} value={coh.id}>
-                            {coh.name} ({coh.code}) &bull; {coh.learnerCount}/{coh.capacity || 35} Scholars
-                          </option>
-                        ))
-                      )}
+                      {(eligibleCohorts.length > 0 ? eligibleCohorts : cohorts).map((coh) => (
+                        <option key={coh.id} value={coh.id}>
+                          {coh.name} ({coh.code}) &bull; {coh.learnerCount || (coh.studentIds?.length || 0)} Scholars
+                        </option>
+                      ))}
                     </select>
                     <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                       Primary academic cohort linked to this classroom session
@@ -1060,9 +1112,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         }}
                         style={{ height: '40px', fontSize: '0.85rem' }}
                       >
+                        {allTrainers.length === 0 && (
+                          <option value="">No trainers available</option>
+                        )}
                         {allTrainers.map((t) => (
                           <option key={t.id} value={t.id}>
-                            {t.displayName} ({t.rollNo || 'Faculty'}) &bull; {t.specialization || 'Lead Instructor'}
+                            {t.displayName} ({t.rollNo || (t.activeRole === 'org_admin' ? 'Institution Admin' : 'Lead Faculty')}) &bull; {t.specialization || t.activeRole?.toUpperCase()}
                           </option>
                         ))}
                       </select>
@@ -1227,18 +1282,38 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
                     <div
                       style={{
-                        padding: '10px 14px',
-                        background: 'var(--bg-input)',
+                        padding: '12px 14px',
+                        background: 'rgba(56, 189, 248, 0.08)',
                         borderRadius: '8px',
-                        border: '1px solid var(--border-subtle)',
-                        fontSize: '0.78rem',
+                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                        fontSize: '0.8rem',
                         color: 'var(--text-secondary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
                       }}
                     >
                       {provider === 'Google Meet' ? (
-                        <span>
-                          Enter your Google Meet link (e.g. <code>https://meet.google.com/abc-defg-hij</code>), or leave blank to open an instant room when starting class.
-                        </span>
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                            <span style={{ color: '#38bdf8', fontWeight: 600 }}>
+                              📌 Important: All participants must join the same Google Meet room code.
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => {
+                                window.open('https://meet.google.com/new', '_blank');
+                              }}
+                              style={{ fontSize: '0.75rem', padding: '3px 10px', height: '28px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
+                            >
+                              <Video size={13} /> 1-Click Create Meet in New Tab ↗
+                            </button>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Click button above to open a Google Meet room, copy its URL from the address bar (e.g. <code>https://meet.google.com/abc-defg-hij</code>), and paste it below.
+                          </span>
+                        </>
                       ) : (
                         <span>
                           Enter your {provider} meeting link for participants.
@@ -1255,6 +1330,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                             setGoogleMeetUrl(val);
                           }}
                           required={false}
+                          helperText="Paste your exact room URL. Students who click Join will be routed to this room and recorded as present."
                         />
                       </div>
                     )}

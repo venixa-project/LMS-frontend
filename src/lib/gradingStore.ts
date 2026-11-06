@@ -25,6 +25,8 @@ if (typeof window !== 'undefined') {
   try {
     localStorage.removeItem('venilearn-grading-store');
     localStorage.removeItem('venilearn_grading_store');
+    localStorage.removeItem('venilearn-grading-store-v4');
+    localStorage.removeItem('venilearn-grading-store-v3');
   } catch {}
 }
 

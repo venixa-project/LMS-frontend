@@ -241,6 +241,7 @@ export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEve
 
           {event.isVirtual ? (
             <GoogleMeetJoinButton
+              sessionId={event.id}
               meetingUrl={event.meetingUrl}
               label="Join with Google Meet"
               size="sm"
