@@ -61,7 +61,6 @@ interface CourseState {
     error?: string;
   }>;
   addCourse: (course: Course) => Promise<Course>;
-  updateCourse: (courseId: string, course: Partial<Course>) => Promise<Course>;
   deleteCourse: (courseId: string) => Promise<boolean>;
   updateCourseProgress: (courseId: string, progress: number) => void;
   recordLessonProgress: (courseId: string, lessonId: string, timeSpentSeconds?: number) => Promise<any>;
@@ -128,36 +127,22 @@ export function mapBackendCourseToFrontend(item: any): Course {
         order: m.order || mIdx + 1,
         assessment: m.assessment || undefined,
         lessons: Array.isArray(m.lessons)
-          ? m.lessons.map((l: any, lIdx: number) => {
-            const rawContentUrl = l.contentUrl || l.videoUrl || (l.videoInfo?.url) || undefined;
-            const validMediaUrl = typeof rawContentUrl === 'string' && !rawContentUrl.startsWith('blob:')
-              ? rawContentUrl
-              : undefined;
-
-            return {
-              id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
-              title: l.title || `Lesson ${lIdx + 1}`,
-              type: l.type || 'video',
-              content: l.content || undefined,
-              contentUrl: validMediaUrl,
-              videoUrl: validMediaUrl,
-              duration: l.durationMinutes || l.duration || 15,
-              durationMinutes: l.durationMinutes || l.duration || 15,
-              order: l.order || lIdx + 1,
-              isRequired: l.isRequired !== false,
-              isPreview: Boolean(l.isPreview),
-              status: l.status || 'published',
-              quizConfig: l.quizConfig || undefined,
-              uploadedDocument: l.uploadedDocument || undefined,
-              videoInfo: l.videoInfo || (validMediaUrl ? {
-                id: l.id,
-                url: validMediaUrl,
-                embedUrl: validMediaUrl,
-                sourceType: validMediaUrl.includes('youtube') ? 'youtube' : validMediaUrl.includes('vimeo') ? 'vimeo' : 'upload',
-                title: l.title,
-              } : undefined),
-            };
-          })
+          ? m.lessons.map((l: any, lIdx: number) => ({
+            id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
+            title: l.title || `Lesson ${lIdx + 1}`,
+            type: l.type || 'video',
+            content: l.content || undefined,
+            contentUrl: l.contentUrl || undefined,
+            duration: l.durationMinutes || l.duration || 15,
+            durationMinutes: l.durationMinutes || l.duration || 15,
+            order: l.order || lIdx + 1,
+            isRequired: l.isRequired !== false,
+            isPreview: Boolean(l.isPreview),
+            status: l.status || 'published',
+            quizConfig: l.quizConfig || undefined,
+            uploadedDocument: l.uploadedDocument || undefined,
+            videoInfo: l.videoInfo || undefined,
+          }))
           : [],
       }))
       : [],
@@ -648,37 +633,23 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       completionPoints: course.completionPoints || 100,
       instructors: course.instructors || [],
       modules: (course.modules || []).map((m, mIdx) => ({
-        id: m.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id) ? m.id : undefined,
         title: m.title || `Module ${mIdx + 1}`,
         description: m.description,
         order: m.order || mIdx + 1,
-        lessons: (m.lessons || []).map((l, lIdx) => {
-          const resolvedContentUrl = l.contentUrl && !l.contentUrl.startsWith('blob:')
-            ? l.contentUrl
-            : l.videoUrl && !l.videoUrl.startsWith('blob:')
-              ? l.videoUrl
-              : (l.videoInfo?.url && !l.videoInfo.url.startsWith('blob:') ? l.videoInfo.url : undefined);
-          const rawDoc = (l as any).uploadedDocument || (l as any).document;
-          const sanitizedDoc = rawDoc && typeof rawDoc === 'object'
-            ? { ...rawDoc, url: rawDoc.url && !rawDoc.url.startsWith('blob:') ? rawDoc.url : undefined }
-            : {};
-
-          return {
-            id: l.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(l.id) ? l.id : undefined,
-            title: l.title || `Lesson ${lIdx + 1}`,
-            description: l.description,
-            type: l.type || 'video',
-            content: l.content,
-            contentUrl: resolvedContentUrl,
-            durationMinutes: l.durationMinutes || 15,
-            order: l.order || lIdx + 1,
-            isRequired: l.isRequired ?? true,
-            isPreview: l.isPreview ?? false,
-            status: l.status || 'published',
-            quizConfig: (l as any).quizConfig || {},
-            uploadedDocument: sanitizedDoc,
-          };
-        }),
+        lessons: (m.lessons || []).map((l, lIdx) => ({
+          title: l.title || `Lesson ${lIdx + 1}`,
+          description: l.description,
+          type: l.type || 'rich_text',
+          content: l.content,
+          contentUrl: l.videoUrl || (l as any).contentUrl,
+          durationMinutes: l.durationMinutes || 15,
+          order: l.order || lIdx + 1,
+          isRequired: l.isRequired ?? true,
+          isPreview: l.isPreview ?? false,
+          status: l.status || 'published',
+          quizConfig: (l as any).quizConfig || {},
+          uploadedDocument: (l as any).uploadedDocument || {},
+        })),
       })),
       finalAssessmentConfig: course.finalAssessmentConfig || course.finalAssessment,
       certificateConfig: course.certificateConfig,
@@ -712,110 +683,10 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     return persistedCourse;
   },
 
-  updateCourse: async (courseId: string, course: Partial<Course>): Promise<Course> => {
-    const fallbackOrg = typeof window !== 'undefined'
-      ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || '871abf8a-e563-4d0f-afc7-416d8da3df14')
-      : '871abf8a-e563-4d0f-afc7-416d8da3df14';
-
-    const sanitizedDeptId = course.departmentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.departmentId)
-      ? course.departmentId
-      : undefined;
-
-    const payload: any = {
-      id: courseId,
-      title: course.title,
-      slug: course.slug,
-      description: course.description || 'Comprehensive course syllabus and curriculum modules.',
-      shortDescription: course.shortDescription,
-      category: course.category || 'General',
-      departmentId: sanitizedDeptId,
-      level: course.level || 'Beginner',
-      durationHours: course.durationHours || 10,
-      status: course.status || 'draft',
-      thumbnailUrl: course.thumbnail || (course as any).thumbnailUrl,
-      shareableLinkEnabled: course.shareableLinkEnabled ?? true,
-      enrollmentCapacity: course.enrollmentCapacity,
-      enrollmentDeadline: course.enrollmentDeadline,
-      enrollmentApprovalRequired: course.enrollmentApprovalRequired,
-      completionPercentageRequired: course.completionPercentageRequired || 80,
-      completionPoints: course.completionPoints || 100,
-      instructors: course.instructors || [],
-      modules: (course.modules || []).map((m, mIdx) => ({
-        id: m.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id) ? m.id : undefined,
-        title: m.title || `Module ${mIdx + 1}`,
-        description: m.description,
-        order: m.order || mIdx + 1,
-        lessons: (m.lessons || []).map((l, lIdx) => {
-          const resolvedContentUrl = l.contentUrl && !l.contentUrl.startsWith('blob:')
-            ? l.contentUrl
-            : l.videoUrl && !l.videoUrl.startsWith('blob:')
-              ? l.videoUrl
-              : (l.videoInfo?.url && !l.videoInfo.url.startsWith('blob:') ? l.videoInfo.url : undefined);
-          const rawDoc = (l as any).uploadedDocument || (l as any).document;
-          const sanitizedDoc = rawDoc && typeof rawDoc === 'object'
-            ? { ...rawDoc, url: rawDoc.url && !rawDoc.url.startsWith('blob:') ? rawDoc.url : undefined }
-            : {};
-
-          return {
-            id: l.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(l.id) ? l.id : undefined,
-            title: l.title || `Lesson ${lIdx + 1}`,
-            description: l.description,
-            type: l.type || 'video',
-            content: l.content,
-            contentUrl: resolvedContentUrl,
-            durationMinutes: l.durationMinutes || 15,
-            order: l.order || lIdx + 1,
-            isRequired: l.isRequired ?? true,
-            isPreview: l.isPreview ?? false,
-            status: l.status || 'published',
-            quizConfig: (l as any).quizConfig || {},
-            uploadedDocument: sanitizedDoc,
-          };
-        }),
-      })),
-      finalAssessmentConfig: course.finalAssessmentConfig || course.finalAssessment,
-      certificateConfig: course.certificateConfig,
-      evaluationCriteria: (course as any).evaluationCriteria,
-    };
-
-    // Authoritative update to PostgreSQL
-    const res = await apiClient.put<any>(`/courses/${courseId}`, payload);
-    let persistedCourse: Course;
-    if (res && res.data) {
-      persistedCourse = mapBackendCourseToFrontend(res.data);
-    } else {
-      throw new Error('Course update failed: empty response from backend database API');
-    }
-
-    set((state) => {
-      const updatedCourses = state.courses.map((c) => (c.id === courseId ? persistedCourse : c));
-      try {
-        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      } catch (e) {
-        console.error('Failed to update courses in storage', e);
-      }
-      return { courses: updatedCourses };
-    });
-
-    return persistedCourse;
-  },
-
   saveCourse: async (course: Course, studentIds: string[] = []) => {
     try {
       set({ isLoading: true, error: null });
-      const isExistingCourse = Boolean(
-        course.id &&
-        (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.id) ||
-         get().courses.some((c) => c.id.toLowerCase() === course.id.toLowerCase()))
-      );
-
-      let persisted: Course;
-      if (isExistingCourse) {
-        persisted = await get().updateCourse(course.id, course);
-      } else {
-        persisted = await get().addCourse(course);
-      }
-
+      const persisted = await get().addCourse(course);
       if (studentIds.length > 0) {
         await get().assignStudentsToCourse(persisted.id, studentIds);
       }

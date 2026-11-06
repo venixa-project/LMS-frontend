@@ -232,11 +232,38 @@ async function request<T = any>(
     headers['X-Tenant-Id'] = tenantId;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  if (!headers['X-Request-Id'] && !headers['X-Correlation-Id']) {
+    headers['X-Request-Id'] = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  }
+
+  // Guard against hanging requests: 60-second client timeout
+  const abortController = new AbortController();
+  const timeoutMs = 60000;
+  const timeoutId = setTimeout(() => {
+    abortController.abort();
+  }, timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: options.signal || abortController.signal,
+    });
+  } catch (fetchErr: any) {
+    if (fetchErr.name === 'AbortError') {
+      throw new ApiError({
+        success: false,
+        statusCode: 408,
+        message: 'Request timed out after 60 seconds. The server may still be processing your request.',
+        code: 'REQUEST_TIMEOUT',
+      });
+    }
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const body = isJson ? await response.json() : await response.text();
