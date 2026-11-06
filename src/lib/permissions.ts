@@ -359,6 +359,8 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath.startsWith('/my-proctoring-report') ||
     cleanPath === '/my-certificates' ||
     cleanPath === '/assignments' ||
+    cleanPath === '/calendar' ||
+    cleanPath === '/planner' ||
     cleanPath === '/certificates' ||
     cleanPath === '/verify-certificate' ||
     cleanPath.startsWith('/verify-certificate') ||
@@ -414,8 +416,6 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '/students' ||
     cleanPath === '/course-builder' ||
     cleanPath === '/learning-paths' ||
-    cleanPath === '/calendar' ||
-    cleanPath === '/planner' ||
     cleanPath === '/assessments' ||
     cleanPath === '/question-banks' ||
     cleanPath === '/grading' ||

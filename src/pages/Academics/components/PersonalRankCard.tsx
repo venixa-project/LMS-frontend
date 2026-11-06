@@ -29,19 +29,19 @@ export const PersonalRankCard: React.FC<PersonalRankCardProps> = ({
   if (!currentUser) return null;
 
   const { profiles } = useGamificationStore();
-  const studentProfile = profiles[currentUser.id] || profiles['u-007'];
+  const studentProfile = profiles[currentUser.id] || null;
 
-  // Total points and competitive rank tier calculation
-  const totalPoints = studentProfile ? studentProfile.totalPoints : currentUser.points;
+  // Total points and competitive rank tier calculation (derived from live database member)
+  const totalPoints = studentProfile?.totalPoints ?? currentUser.points ?? 0;
   const rankTier = getRankForPoints(totalPoints);
   const nextTier = getNextRank(rankTier.tier);
   const rankProgress = getRankProgress(totalPoints);
   const currentStreak = studentProfile
-    ? (studentProfile.streakData?.currentStreak ?? studentProfile.currentStreak)
+    ? (studentProfile.streakData?.currentStreak ?? studentProfile.currentStreak ?? currentUser.streakDays)
     : currentUser.streakDays;
   const totalRewardsEarned = studentProfile
-    ? (studentProfile.events?.length ?? studentProfile.history?.length ?? 0)
-    : 12;
+    ? (studentProfile.events?.length ?? studentProfile.history?.length ?? currentUser.badgesEarned)
+    : (currentUser.badgesEarned || 0);
 
   const isFirstPlace = currentRank === 1;
   const rankDelta = currentUser.previousRank - currentRank; // positive = gained ranks

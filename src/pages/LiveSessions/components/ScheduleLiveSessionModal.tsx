@@ -383,8 +383,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
       if (isTrainer && user?.id) {
         setInstructorId(user.id);
+      } else if (allTrainers.length > 0) {
+        setInstructorId(allTrainers[0].id);
+      } else if (user?.id) {
+        setInstructorId(user.id);
       } else {
-        setInstructorId('u-004');
+        setInstructorId('');
       }
     }
   }, [isOpen, sessionToEdit, isTrainer, user?.id]);

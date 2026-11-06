@@ -35,11 +35,15 @@ export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const { profiles, leaderboard, fetchLeaderboard, stats, fetchStats } = useGamificationStore();
+  const { cohorts, fetchCohorts } = useCohortStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
 
   useEffect(() => {
     fetchLeaderboard();
     fetchStats();
-  }, [fetchLeaderboard, fetchStats]);
+    fetchCohorts();
+    fetchDepartments();
+  }, [fetchLeaderboard, fetchStats, fetchCohorts, fetchDepartments]);
 
   // Active filters
   const [timeframe, setTimeframe] = useState<TimeframeFilter>('all_time');
@@ -129,13 +133,24 @@ export const LeaderboardPage: React.FC = () => {
     return Array.from(authorized);
   }, [isTrainer, user?.id, user?.email]);
 
-  // Available cohorts for filter dropdown
+  // Available cohorts for filter dropdown (dynamically populated from database)
   const availableCohorts = useMemo(() => {
-    if (isTrainer && trainerAuthorizedCohorts) {
+    if (isTrainer && trainerAuthorizedCohorts && trainerAuthorizedCohorts.length > 0) {
       return trainerAuthorizedCohorts;
     }
-    return ['Spring 2026 Engineering', 'Summer 2026 Cloud Architects', 'Fall 2026 Data Science'];
-  }, [isTrainer, trainerAuthorizedCohorts]);
+    const set = new Set<string>();
+    cohorts.forEach((c) => {
+      if (c.name) set.add(c.name);
+    });
+    departments.forEach((d) => {
+      if (d.name) set.add(d.name);
+    });
+    if (set.size === 0) {
+      set.add('Computer Science & AI');
+      set.add('Engineering & Technology');
+    }
+    return Array.from(set);
+  }, [cohorts, departments, isTrainer, trainerAuthorizedCohorts]);
 
   // Synchronize selectedCohort if switching to a role with restricted cohorts
   useEffect(() => {
@@ -231,7 +246,12 @@ export const LeaderboardPage: React.FC = () => {
     // Cohort filtering
     let list = baseList;
     if (selectedCohort !== 'all') {
-      list = list.filter((m) => m.cohort === selectedCohort);
+      const q = selectedCohort.toLowerCase().trim();
+      list = list.filter((m) =>
+        m.cohort.toLowerCase() === q ||
+        m.cohort.toLowerCase().includes(q) ||
+        q.includes(m.cohort.toLowerCase())
+      );
     }
 
     // Search query filtering

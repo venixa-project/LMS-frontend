@@ -44,10 +44,33 @@ export const WeeklyTimetableView: React.FC<Props> = ({
   const [selectedCohort, setSelectedCohort] = useState('all');
   const [myClassesOnly, setMyClassesOnly] = useState(isStudent || isTrainer);
 
-  // Student Cohorts
+  const { enrollments: storeEnrollments } = useCourseStore();
+
+  // Dynamic Student Cohort Resolution
   const studentCohortIds = useMemo(() => {
-    return ['coh-001', 'coh-002', 'coh-004'];
-  }, []);
+    if (!isStudent) return [];
+    const sId = user?.id;
+    const cohortSet = new Set<string>();
+
+    cohorts.forEach((c) => {
+      const isMember =
+        (c.studentIds && (c.studentIds.includes(sId || '') || c.studentIds.includes(user?.rollNo || ''))) ||
+        (Boolean((c as any).members) && (c as any).members.some((m: any) => m.id === sId || m.userId === sId || m.email === user?.email));
+      if (isMember) {
+        cohortSet.add(c.id);
+        if (c.name) cohortSet.add(c.name);
+      }
+    });
+
+    storeEnrollments.forEach((e) => {
+      if (e.userId === sId) {
+        if (e.cohortId) cohortSet.add(e.cohortId);
+        cohorts.filter((c) => c.courseId === e.courseId).forEach((c) => cohortSet.add(c.id));
+      }
+    });
+
+    return Array.from(cohortSet);
+  }, [cohorts, isStudent, storeEnrollments, user?.email, user?.id, user?.rollNo]);
 
   // Determine weekday helper
   const getSessionWeekday = (s: LiveSession): string => {
@@ -128,10 +151,17 @@ export const WeeklyTimetableView: React.FC<Props> = ({
       // Role & personalization filter
       if (myClassesOnly) {
         if (isStudent) {
-          const sId = user?.id || 'u-007';
-          const isTargeted = s.targetStudentIds && s.targetStudentIds.includes(sId);
-          const isInCohort = s.cohortId && studentCohortIds.includes(s.cohortId);
-          if (!isTargeted && !isInCohort) return false;
+          const sId = user?.id;
+          const isTargeted = Boolean(sId && s.targetStudentIds && s.targetStudentIds.includes(sId));
+          const currentCohortId = s.cohortId;
+          const isInCohort = Boolean(
+            currentCohortId &&
+            (studentCohortIds.includes(currentCohortId) ||
+              studentCohortIds.some((cid) => cid.toLowerCase() === currentCohortId.toLowerCase() || (s.cohortName && cid.toLowerCase() === s.cohortName.toLowerCase())))
+          );
+          const isEnrolledCourse = Boolean(s.courseId && storeEnrollments.some((e) => e.userId === sId && e.courseId === s.courseId));
+          const matchesStudent = isTargeted || isInCohort || isEnrolledCourse || studentCohortIds.length === 0;
+          if (!matchesStudent) return false;
         } else if (isTrainer) {
           const tId = user?.id || 'u-004';
           const isInstructor = s.instructorId === tId || s.createdBy === tId;

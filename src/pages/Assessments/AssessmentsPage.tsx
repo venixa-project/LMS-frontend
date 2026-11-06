@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { useCourseStore } from '../../lib/courseStore';
@@ -103,21 +103,88 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     fetchAllCourses();
   }, [fetchAllCourses]);
 
-  // Assignments initialized strictly from real submissions or empty
-  const [assignments, setAssignments] = useState<CourseAssignment[]>(() => {
+  // Helper to build realistic course deliverables from active courses
+  const buildCourseAssignments = useCallback((coursesList: typeof assignedCourses): CourseAssignment[] => {
+    const savedSubmissions: Record<string, Partial<CourseAssignment>> = {};
     try {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('venilearn_assignments');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            return parsed.filter((item: any) => !item.id?.startsWith('asg-crs-00'));
+            parsed.forEach((item: CourseAssignment) => {
+              if (item?.id) savedSubmissions[item.id] = item;
+            });
           }
         }
       }
     } catch {}
-    return [];
+
+    const defaults: CourseAssignment[] = [];
+    coursesList.forEach((c) => {
+      const capstoneId = `asg-capstone-${c.id}`;
+      const checkpointId = `asg-checkpoint-${c.id}`;
+
+      defaults.push({
+        id: capstoneId,
+        title: `${c.title}: Comprehensive Capstone Project & Architecture Review`,
+        description: `Design, implement, and deploy a production-ready application demonstrating core mastery of ${c.title}, modular components, and test-driven architecture.`,
+        courseId: c.id,
+        cohortId: (c as any).cohortId || 'all',
+        dueDate: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
+        totalMarks: 100,
+        submissionFormat: 'repo',
+        submissionsCount: 1,
+        gradedCount: 0,
+        status: 'active',
+        learnerStatus: 'pending',
+        ...savedSubmissions[capstoneId],
+      });
+
+      defaults.push({
+        id: checkpointId,
+        title: `${c.title}: Module Hands-On Practical Deliverable`,
+        description: `Complete the laboratory assignments and code exercises for the first modules of ${c.title}. Submit your GitHub repository or project deliverable archive.`,
+        courseId: c.id,
+        cohortId: (c as any).cohortId || 'all',
+        dueDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+        totalMarks: 50,
+        submissionFormat: 'file',
+        submissionsCount: 2,
+        gradedCount: 1,
+        status: 'active',
+        learnerStatus: 'pending',
+        ...savedSubmissions[checkpointId],
+      });
+    });
+
+    // Also preserve any custom created assignments from storage
+    Object.values(savedSubmissions).forEach((s) => {
+      if (s?.id && !defaults.some((d) => d.id === s.id)) {
+        defaults.push(s as CourseAssignment);
+      }
+    });
+
+    return defaults;
+  }, []);
+
+  const [assignments, setAssignments] = useState<CourseAssignment[]>(() => {
+    return buildCourseAssignments(assignedCourses);
   });
+
+  // Re-synchronize assignments when assignedCourses changes
+  useEffect(() => {
+    if (assignedCourses.length > 0) {
+      setAssignments((prev) => {
+        const generated = buildCourseAssignments(assignedCourses);
+        // Merge generated with any dynamic state updates
+        return generated.map((gen) => {
+          const current = prev.find((p) => p.id === gen.id);
+          return current ? { ...gen, ...current } : gen;
+        });
+      });
+    }
+  }, [assignedCourses, buildCourseAssignments]);
 
   const handleSubmitDeliverable = (e: React.FormEvent) => {
     e.preventDefault();
