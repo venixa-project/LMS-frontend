@@ -34,6 +34,7 @@ interface LiveSessionState {
     notifyStudents?: boolean
   ) => { success: boolean };
   startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
+  generateGoogleMeet: (sessionId: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string }>;
   endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
   updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
@@ -325,6 +326,24 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     }
 
     return { success: true };
+  },
+
+  generateGoogleMeet: async (sessionId: string) => {
+    try {
+      const res = await apiClient.post<any>(`/live-sessions/${sessionId}/generate-meet`);
+      if (res && res.data && res.data.meetingUrl) {
+        const { meetingUrl, joinLink } = res.data;
+        const updated = get().sessions.map((s) =>
+          s.id === sessionId ? { ...s, meetingUrl, joinLink } : s
+        );
+        set({ sessions: updated });
+        persistSessions(updated);
+        return { success: true, meetingUrl, message: res.data.message };
+      }
+      return { success: false, message: res?.message || 'Failed to generate Google Meet' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Error generating Google Meet' };
+    }
   },
 
   endSession: async (sessionId: string, recordingUrl?: string) => {

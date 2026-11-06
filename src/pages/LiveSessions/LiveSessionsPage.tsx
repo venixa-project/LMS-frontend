@@ -75,10 +75,20 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     endSession,
     cancelSession,
     deleteSession,
+    generateGoogleMeet,
   } = useLiveSessionStore();
 
   useEffect(() => {
     fetchSessions();
+    const interval = setInterval(() => {
+      fetchSessions();
+    }, 30000);
+    const handleFocus = () => fetchSessions();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [fetchSessions]);
 
   const { cohorts } = useCohortStore();
@@ -275,8 +285,60 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     }
     navigator.clipboard.writeText(link);
     setCopiedSessionId(session.id);
-    showNotice(`Google Meet link copied: ${link}`);
+    showNotice(`Google Meet link copied successfully.`);
     setTimeout(() => setCopiedSessionId(null), 3000);
+  };
+
+  // Share Meeting Link via Web Share API or Clipboard Fallback
+  const handleShareLink = async (session: LiveSession) => {
+    const link = session.meetingUrl || session.joinLink;
+    if (!link) {
+      showNotice('This session does not have a Google Meet link configured yet.');
+      return;
+    }
+    const shareData = {
+      title: session.title,
+      text: `Join the live class session "${session.title}" on Google Meet:`,
+      url: link,
+    };
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        showNotice('Session link shared successfully.');
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+    navigator.clipboard.writeText(link);
+    setCopiedSessionId(session.id);
+    showNotice(`Google Meet link copied to clipboard: ${link}`);
+    setTimeout(() => setCopiedSessionId(null), 3000);
+  };
+
+  // Generate canonical Google Meet link
+  const handleGenerateMeet = async (sessionId: string) => {
+    const res = await generateGoogleMeet(sessionId);
+    if (res.success && res.meetingUrl) {
+      showNotice(`Google Meet room created and saved: ${res.meetingUrl}`);
+    } else {
+      showNotice(res.message || 'Failed to generate Google Meet room.');
+    }
+  };
+
+  // Check if session is within the permitted 15-minute join window
+  const isJoinWindowOpen = (session: LiveSession) => {
+    if (session.status === 'live') return true;
+    if (session.status === 'ended' || session.status === 'cancelled') return false;
+    if (!session.date || !session.startTime) return false;
+    try {
+      const targetDate = new Date(`${session.date}T${session.startTime}:00`);
+      const now = new Date();
+      const diffMs = targetDate.getTime() - now.getTime();
+      return diffMs <= 15 * 60 * 1000;
+    } catch {
+      return true;
+    }
   };
 
   // Launch Broadcast / Open Google Meet
@@ -800,13 +862,23 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {isCreatorOrAdmin ? (
                           <>
-                            <button
-                              className="btn btn-primary"
-                              onClick={() => handleStartBroadcast(s.id)}
-                              style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
-                            >
-                              <GoogleMeetIcon size={16} /> Open Google Meet
-                            </button>
+                            {s.meetingUrl ? (
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleStartBroadcast(s.id)}
+                                style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
+                              >
+                                <GoogleMeetIcon size={16} /> Open Google Meet
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleGenerateMeet(s.id)}
+                                style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #00ac47 0%, #00832d 100%)' }}
+                              >
+                                <GoogleMeetIcon size={16} /> Generate Google Meet
+                              </button>
+                            )}
                             <button
                               className="btn btn-secondary"
                               onClick={() => {
@@ -826,14 +898,36 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                             </button>
                           </>
                         ) : (
-                          <GoogleMeetJoinButton
-                            sessionId={s.id}
-                            meetingUrl={s.meetingUrl || s.joinLink}
-                            role="student"
-                            label="Join with Google Meet"
-                            size="md"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                          />
+                          isJoinWindowOpen(s) ? (
+                            <GoogleMeetJoinButton
+                              sessionId={s.id}
+                              meetingUrl={s.meetingUrl || s.joinLink}
+                              role="student"
+                              label="Join with Google Meet"
+                              size="md"
+                              style={{ flex: 1, justifyContent: 'center' }}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="btn btn-secondary"
+                              style={{ flex: 1, justifyContent: 'center', opacity: 0.65, cursor: 'not-allowed', fontSize: '0.82rem' }}
+                              title="Meeting room opens 15 minutes before scheduled start time."
+                            >
+                              Upcoming (Join opens 15m prior)
+                            </button>
+                          )
+                        )}
+                        {s.meetingUrl && (
+                          <button
+                            className="btn btn-secondary"
+                            onClick={() => handleShareLink(s)}
+                            title="Share Meeting Link"
+                            style={{ padding: '8px 12px' }}
+                          >
+                            <Share2 size={15} />
+                          </button>
                         )}
                         <button
                           className="btn btn-secondary"
@@ -858,7 +952,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           </button>
                         ) : (
                           <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '8px' }}>
-                            Recording processing
+                            Recording Unavailable
                           </div>
                         )}
                         {isCreatorOrAdmin && (

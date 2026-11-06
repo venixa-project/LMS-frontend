@@ -54,8 +54,8 @@ export function validateGoogleMeetUrl(
 
   if (trimmed.toLowerCase() === 'new') {
     return {
-      isValid: true,
-      normalizedUrl: 'https://meet.google.com/new',
+      isValid: false,
+      error: 'Cannot use "new" as a meeting link. A specific 3-4-3 Google Meet code (e.g., abc-defg-hij) is required.',
     };
   }
 
@@ -99,8 +99,8 @@ export function validateGoogleMeetUrl(
     // Check for "new" instant meeting room
     if (roomCode === 'new') {
       return {
-        isValid: true,
-        normalizedUrl: 'https://meet.google.com/new',
+        isValid: false,
+        error: 'Cannot use "new" as a meeting link. A specific 3-4-3 Google Meet code (e.g., abc-defg-hij) is required so all attendees join the same room.',
       };
     }
 
@@ -162,8 +162,7 @@ export function isValidGoogleMeetUrl(url?: string | null): boolean {
 /**
  * Safe external link launcher for Google Meet.
  * Opens the verified Google Meet URL in a separate browser tab with security rel attributes.
- * If the URL is missing, placeholder, or invalid, launches https://meet.google.com/new so
- * Google Meet creates a real, live meeting room instantly without throwing "Invalid video call name".
+ * NEVER falls back to meet.google.com/new, which creates isolated, separate meeting rooms.
  */
 export function openGoogleMeetSession(
   url?: string | null,
@@ -172,20 +171,24 @@ export function openGoogleMeetSession(
     onInvalid?: (errorMsg: string) => void;
   }
 ): boolean {
-  let targetUrl = 'https://meet.google.com/new';
-
-  if (url && url.trim()) {
-    const trimmed = url.trim();
-    // If it's a legacy placeholder or ven- link, use https://meet.google.com/new to prevent invalid error
-    if (!trimmed.includes('/ven-')) {
-      const validation = validateGoogleMeetUrl(trimmed, false);
-      if (validation.isValid && validation.normalizedUrl) {
-        targetUrl = validation.normalizedUrl;
-      }
-    }
+  if (!url || !url.trim()) {
+    options?.onMissing?.();
+    return false;
   }
 
-  // Open in new tab with noopener, noreferrer
+  const trimmed = url.trim();
+  if (trimmed === 'https://meet.google.com/new' || trimmed.toLowerCase() === 'new' || trimmed.includes('/ven-')) {
+    options?.onInvalid?.('Cannot join an unconfigured or temporary meeting link. Please contact the administrator.');
+    return false;
+  }
+
+  const validation = validateGoogleMeetUrl(trimmed, false);
+  if (!validation.isValid || !validation.normalizedUrl) {
+    options?.onInvalid?.(validation.error || 'Invalid Google Meet URL format.');
+    return false;
+  }
+
+  const targetUrl = validation.normalizedUrl;
   const openedWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
   if (openedWindow) {
     openedWindow.opener = null;
@@ -197,9 +200,9 @@ export function openGoogleMeetSession(
  * Copy meeting link helper with fallback.
  */
 export async function copyGoogleMeetLink(url?: string | null): Promise<boolean> {
-  const target = url?.trim() || 'https://meet.google.com/new';
+  if (!url || !url.trim() || url.includes('/new')) return false;
   try {
-    await navigator.clipboard.writeText(target);
+    await navigator.clipboard.writeText(url.trim());
     return true;
   } catch {
     return false;
