@@ -259,7 +259,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'weekly-timetable', label: 'My Timetable', icon: 'Clock', path: '/weekly-timetable', group: 'Schedule & Attendance' },
     { id: 'timetable', label: 'Live Sessions', icon: 'Video', path: '/my-sessions', group: 'Schedule & Attendance' },
     { id: 'recorded-classes', label: 'Recorded Classes', icon: 'Play', path: '/recorded-classes', group: 'Schedule & Attendance' },
-    { id: 'momentum', label: 'Learning Momentum', icon: 'Flame', path: '/momentum', group: 'Schedule & Attendance' },
+    { id: 'momentum', label: 'Learning Momentum', icon: 'Zap', path: '/momentum', group: 'Schedule & Attendance' },
 
     // Evaluations & Results
     { id: 'assignments', label: 'My Assignments', icon: 'ClipboardCheck', path: '/assignments', group: 'Assessments & Quizzes' },

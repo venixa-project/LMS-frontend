@@ -6,7 +6,7 @@ import {
   ClipboardCheck, PenTool, Eye, Award, BarChart3, Bell,
   Plug, Settings, Building2, Building, Briefcase, MapPin, Network, Users, UsersRound,
   Shield, Search, Trophy, GraduationCap, Calendar, Clock,
-  UserCheck, User, Megaphone, Compass, Library, Layers, X, Play, Flame,
+  UserCheck, User, Megaphone, Compass, Library, Layers, X, Play, Flame, Zap,
   Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle
 } from 'lucide-react';
 import { getNavigationForRole, type NavItem } from '../lib/permissions';
@@ -48,6 +48,7 @@ const iconMap: Record<string, any> = {
   Layers,
   Play,
   Flame,
+  Zap,
   Link2,
   Share2,
   ChevronDown,
@@ -627,10 +628,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                       fontWeight: active ? 700 : 600,
                       color: active ? '#fff' : 'var(--text-main)',
                       background: active
-                        ? 'linear-gradient(135deg, #2563EB 0%, #818CF8 100%)'
+                        ? (mainItem.id === 'momentum' ? 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)' : 'linear-gradient(135deg, #2563EB 0%, #818CF8 100%)')
                         : 'transparent',
-                      borderLeft: active ? '3px solid #F472B6' : '3px solid transparent',
-                      boxShadow: active ? '0 4px 14px rgba(37, 99, 235, 0.45)' : 'none',
+                      borderLeft: active ? (mainItem.id === 'momentum' ? '3px solid #c084fc' : '3px solid #F472B6') : '3px solid transparent',
+                      boxShadow: active ? (mainItem.id === 'momentum' ? '0 4px 16px rgba(99, 102, 241, 0.45)' : '0 4px 14px rgba(37, 99, 235, 0.45)') : 'none',
                       transition: 'all 0.18s ease',
                       textDecoration: 'none',
                     }}
@@ -860,8 +861,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                             fontSize: '0.81rem',
                             fontWeight: isSubActive ? 700 : 500,
                             color: isSubActive ? '#fff' : 'var(--text-secondary)',
-                            background: isSubActive ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.4) 0%, rgba(244, 114, 182, 0.25) 100%)' : 'transparent',
-                            borderLeft: isSubActive ? '2.5px solid #F472B6' : '2.5px solid transparent',
+                            background: isSubActive ? (sub.id === 'momentum' ? 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)' : 'linear-gradient(135deg, rgba(37, 99, 235, 0.4) 0%, rgba(244, 114, 182, 0.25) 100%)') : 'transparent',
+                            borderLeft: isSubActive ? (sub.id === 'momentum' ? '2.5px solid #c084fc' : '2.5px solid #F472B6') : '2.5px solid transparent',
                             textDecoration: 'none',
                             transition: 'all 0.15s ease',
                           }}
