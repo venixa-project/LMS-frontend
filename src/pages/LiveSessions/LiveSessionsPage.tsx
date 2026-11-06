@@ -79,11 +79,18 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     attachGoogleMeet,
   } = useLiveSessionStore();
 
+  // 10s clock tick to re-evaluate active join window in real-time
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setClockTick((c) => c + 1), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     fetchSessions();
     const interval = setInterval(() => {
       fetchSessions();
-    }, 30000);
+    }, 15000);
     const handleFocus = () => fetchSessions();
     window.addEventListener('focus', handleFocus);
     return () => {
@@ -331,16 +338,34 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     }
   };
 
-  // Check if session is within the permitted 15-minute join window
+  // Check if session is within the permitted 15-minute join window (and not ended)
   const isJoinWindowOpen = (session: LiveSession) => {
     if (session.status === 'live') return true;
     if (session.status === 'ended' || session.status === 'cancelled') return false;
     if (!session.date || !session.startTime) return false;
     try {
-      const targetDate = new Date(`${session.date}T${session.startTime}:00`);
+      const datePart = typeof session.date === 'string'
+        ? session.date.slice(0, 10)
+        : new Date(session.date).toISOString().slice(0, 10);
+
+      const [startH, startM] = (session.startTime || '10:00').split(':').map(Number);
+      const sessionStart = new Date(`${datePart}T${String(startH || 0).padStart(2, '0')}:${String(startM || 0).padStart(2, '0')}:00`);
+
+      let sessionEnd: Date;
+      if (session.endTime) {
+        const [endH, endM] = session.endTime.split(':').map(Number);
+        sessionEnd = new Date(`${datePart}T${String(endH || 0).padStart(2, '0')}:${String(endM || 0).padStart(2, '0')}:00`);
+      } else {
+        sessionEnd = new Date(sessionStart.getTime() + 90 * 60 * 1000);
+      }
+
+      if (isNaN(sessionStart.getTime())) return true;
+
       const now = new Date();
-      const diffMs = targetDate.getTime() - now.getTime();
-      return diffMs <= 15 * 60 * 1000;
+      const windowStart = new Date(sessionStart.getTime() - 15 * 60 * 1000);
+
+      // Permitted join window: 15 minutes before scheduled start time until scheduled end time
+      return now >= windowStart && now <= sessionEnd;
     } catch {
       return true;
     }
@@ -922,14 +947,26 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           </>
                         ) : (
                           isJoinWindowOpen(s) ? (
-                            <GoogleMeetJoinButton
-                              sessionId={s.id}
-                              meetingUrl={s.meetingUrl || s.joinLink}
-                              role="student"
-                              label="Join with Google Meet"
-                              size="md"
-                              style={{ flex: 1, justifyContent: 'center' }}
-                            />
+                            (s.meetingUrl || s.joinLink) ? (
+                              <GoogleMeetJoinButton
+                                sessionId={s.id}
+                                meetingUrl={s.meetingUrl || s.joinLink}
+                                role="student"
+                                label="Join with Google Meet"
+                                size="md"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="btn btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center', opacity: 0.8, cursor: 'not-allowed', fontSize: '0.82rem', gap: '6px' }}
+                                title="The instructor has not added the Google Meet room link yet."
+                              >
+                                <GoogleMeetIcon size={14} /> Meeting Link Pending
+                              </button>
+                            )
                           ) : (
                             <button
                               type="button"

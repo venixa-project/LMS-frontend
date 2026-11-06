@@ -31,6 +31,47 @@ const PROVIDERS = [
   { id: 'VeniLearn Live Classroom (Built-in)', name: 'VeniLearn Live Classroom', desc: 'Interactive browser-based classroom with audio, video, chat & screen share' },
 ];
 
+// Real-time date and time helpers
+function getTodayLocalDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getCurrentLocalTime(): string {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function getEndTimeFromStart(start: string, durationMinutes = 90): string {
+  const [h, m] = (start || '10:00').split(':').map(Number);
+  const totalMins = (h || 0) * 60 + (m || 0) + durationMinutes;
+  const endH = Math.floor((totalMins / 60) % 24);
+  const endM = totalMins % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+function getDayOfWeekFromDate(dateStr: string): 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday' {
+  const dayNames: Array<'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'> = [
+    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+  ];
+  try {
+    const parts = (dateStr || '').slice(0, 10).split('-');
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return dayNames[d.getDay()] || 'Monday';
+    }
+    const d = new Date(dateStr).getDay();
+    return dayNames[d] || 'Monday';
+  } catch {
+    return 'Monday';
+  }
+}
+
 export const ScheduleLiveSessionModal: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -78,23 +119,13 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // --------------------------------------------------------------------------
   // Host & Schedule
   const [instructorId, setInstructorId] = useState(user?.id || 'u-004');
-  const [date, setDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  });
-  const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('11:30');
+  const [date, setDate] = useState(() => getTodayLocalDate());
+  const [startTime, setStartTime] = useState(() => getCurrentLocalTime());
+  const [endTime, setEndTime] = useState(() => getEndTimeFromStart(getCurrentLocalTime(), 90));
   const [room, setRoom] = useState(sessionToEdit?.room || 'Hall 101');
   const [dayOfWeek, setDayOfWeek] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'>(() => {
     if (sessionToEdit?.dayOfWeek) return sessionToEdit.dayOfWeek;
-    const dayNames: Array<'Sunday'|'Monday'|'Tuesday'|'Wednesday'|'Thursday'|'Friday'|'Saturday'> = [
-      'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
-    ];
-    const initialDate = sessionToEdit?.date || new Date().toISOString().split('T')[0];
-    const d = new Date(`${initialDate}T00:00:00`).getDay();
-    const computed = dayNames[d];
-    return computed === 'Sunday' || computed === 'Saturday' ? 'Monday' : computed;
+    return getDayOfWeekFromDate(sessionToEdit?.date || getTodayLocalDate());
   });
 
   // Meeting Provider
@@ -362,11 +393,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       setCohortId(cohorts[0]?.id || '');
       setDescription('');
       setAgenda('');
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setDate(tomorrow.toISOString().split('T')[0]);
-      setStartTime('10:00');
-      setEndTime('11:30');
+      const todayStr = getTodayLocalDate();
+      const currentStart = getCurrentLocalTime();
+      setDate(todayStr);
+      setStartTime(currentStart);
+      setEndTime(getEndTimeFromStart(currentStart, 90));
+      setDayOfWeek(getDayOfWeekFromDate(todayStr));
       setRoom('Hall 101');
       setProvider('Google Meet');
       setGoogleMeetUrl('');
@@ -1097,9 +1129,28 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                       gap: '16px',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Calendar size={18} color="var(--primary)" />
-                      <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>Host & Timetable Schedule</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Calendar size={18} color="var(--primary)" />
+                        <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>Host & Timetable Schedule</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          const today = getTodayLocalDate();
+                          const currentT = getCurrentLocalTime();
+                          setDate(today);
+                          setStartTime(currentT);
+                          setEndTime(getEndTimeFromStart(currentT, 90));
+                          setDayOfWeek(getDayOfWeekFromDate(today));
+                          setIsDirty(true);
+                        }}
+                        style={{ fontSize: '0.74rem', padding: '3px 10px', height: '28px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.35)', gap: '4px' }}
+                        title="Set to today's date and current time to start immediately"
+                      >
+                        ⚡ Set to Current Time (Live Now)
+                      </button>
                     </div>
 
                     {/* Lead Host */}
@@ -1139,13 +1190,10 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                           value={date}
                           onChange={(e) => {
                             setIsDirty(true);
-                            setDate(e.target.value);
-                            const d = new Date(`${e.target.value}T00:00:00`).getDay();
-                            const dayNames: Array<'Sunday'|'Monday'|'Tuesday'|'Wednesday'|'Thursday'|'Friday'|'Saturday'> = [
-                              'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
-                            ];
-                            if (dayNames[d]) {
-                              setDayOfWeek(dayNames[d]);
+                            const val = e.target.value;
+                            setDate(val);
+                            if (val) {
+                              setDayOfWeek(getDayOfWeekFromDate(val));
                             }
                           }}
                           style={{ height: '40px', fontSize: '0.85rem' }}
@@ -1301,24 +1349,11 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                             <span style={{ color: '#38bdf8', fontWeight: 600 }}>
-                              📌 Important: All participants (Admin, Trainer & Students) join this exact same Google Meet room code.
+                              📌 Important: All participants (Admin, Trainer & Students) join this exact same Google Meet room.
                             </span>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                const chars = 'abcdefghijklmnopqrstuvwxyz';
-                                const seg = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-                                const code = `https://meet.google.com/${seg(3)}-${seg(4)}-${seg(3)}`;
-                                setGoogleMeetUrl(code);
-                              }}
-                              style={{ fontSize: '0.75rem', padding: '3px 10px', height: '28px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
-                            >
-                              <Video size={13} /> 1-Click Generate Meet Code
-                            </button>
                           </div>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Click button above to generate a unique canonical meeting code (e.g. <code>https://meet.google.com/abc-defg-hij</code>), or paste an existing one below.
+                            Paste your genuine Google Meet URL below (e.g. <code>https://meet.google.com/abc-defg-hij</code>). If left blank, you can attach it later before the session begins.
                           </span>
                         </>
                       ) : (
