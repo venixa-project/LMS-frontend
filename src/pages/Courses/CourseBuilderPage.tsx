@@ -2,7 +2,7 @@ import { apiClient } from '../../lib/apiClient';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, mapBackendCourseToFrontend } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
@@ -36,13 +36,15 @@ export const CourseBuilderPage: React.FC = () => {
 
   const { user } = useAuthStore();
   const { addCourse, saveCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
-  const { getFaculty, getStudents } = usePeopleStore();
-  const { cohorts } = useCohortStore();
+  const { getFaculty, getStudents, fetchPeople, isLoading: isPeopleLoading } = usePeopleStore();
+  const { cohorts, fetchCohorts } = useCohortStore();
   const { departments, fetchDepartments } = useDepartmentStore();
 
   useEffect(() => {
     fetchDepartments();
-  }, [fetchDepartments]);
+    fetchPeople({ limit: 500 });
+    fetchCohorts();
+  }, [fetchDepartments, fetchPeople, fetchCohorts]);
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
@@ -375,6 +377,18 @@ export const CourseBuilderPage: React.FC = () => {
       const existing = courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
       if (existing) {
         loadCourseIntoForm(existing);
+      } else {
+        // Authoritative load directly from backend PostgreSQL database
+        apiClient.get<any>(`/courses/${editingCourseId}`)
+          .then((res) => {
+            if (res && res.data) {
+              const mapped = mapBackendCourseToFrontend(res.data);
+              loadCourseIntoForm(mapped);
+            }
+          })
+          .catch((err) => {
+            console.warn('[CourseBuilder] Failed to load course directly from backend:', err);
+          });
       }
     } else {
       // Transitioning from Edit mode to Create mode or loading fresh: ensure pristine empty state
@@ -447,12 +461,12 @@ export const CourseBuilderPage: React.FC = () => {
   // STEP 3: Assign Faculty & Students
   // -------------------------------------------------------------
   // Lead Faculty selection state
-  const [facultyDeptFilter, setFacultyDeptFilter] = useState<string>(departmentId);
+  const [facultyDeptFilter, setFacultyDeptFilter] = useState<string>('all');
   const [facultySearchQuery, setFacultySearchQuery] = useState('');
   const [selectedLeadFacultyId, setSelectedLeadFacultyId] = useState<string>('u-004'); // Prof. David Wilson default
 
   // Student assignment state (Optional)
-  const [studentDeptFilter, setStudentDeptFilter] = useState<string>(departmentId);
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('all');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [selectedCohortId, setSelectedCohortId] = useState<string>('all');
@@ -460,8 +474,13 @@ export const CourseBuilderPage: React.FC = () => {
   // Synchronize Step 3 department defaults when Step 1 department changes
   const handleDepartmentChange = (newDeptId: string) => {
     setDepartmentId(newDeptId);
-    setFacultyDeptFilter(newDeptId);
-    setStudentDeptFilter(newDeptId);
+    if (newDeptId) {
+      setFacultyDeptFilter(newDeptId);
+      setStudentDeptFilter(newDeptId);
+    } else {
+      setFacultyDeptFilter('all');
+      setStudentDeptFilter('all');
+    }
   };
 
   // All faculty members from store
@@ -474,8 +493,11 @@ export const CourseBuilderPage: React.FC = () => {
   const filteredFaculty = useMemo(() => {
     return allFaculty.filter((fac) => {
       // Department filter
-      if (facultyDeptFilter !== 'all' && fac.departmentId !== facultyDeptFilter) {
-        return false;
+      if (facultyDeptFilter && facultyDeptFilter !== 'all') {
+        const facDeptId = fac.departmentId || (fac as any).department?.id || (fac as any).department;
+        if (facDeptId !== facultyDeptFilter) {
+          return false;
+        }
       }
       // Search query (name, id, email)
       if (facultySearchQuery.trim()) {
@@ -552,8 +574,11 @@ export const CourseBuilderPage: React.FC = () => {
       }
 
       // Department filter
-      if (studentDeptFilter !== 'all' && st.departmentId !== studentDeptFilter) {
-        return false;
+      if (studentDeptFilter && studentDeptFilter !== 'all') {
+        const stDeptId = st.departmentId || (st as any).department?.id || (st as any).department;
+        if (stDeptId !== studentDeptFilter) {
+          return false;
+        }
       }
       // Cohort filter
       if (selectedCohortId !== 'all') {
@@ -3350,6 +3375,18 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                     </div>
                   );
                 })}
+
+                {filteredFaculty.length === 0 && (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)' }}>
+                    {isPeopleLoading ? (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        <RefreshCw size={14} className="spin-slow" /> Loading faculty records from database...
+                      </div>
+                    ) : (
+                      <div>No faculty members found for the selected department or query.</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -3761,7 +3798,13 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   {filteredStudents.length === 0 && (
                     <tr>
                       <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                        No eligible students found for the current department and search criteria.
+                        {isPeopleLoading ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <RefreshCw size={14} className="spin-slow" /> Loading student records from database...
+                          </div>
+                        ) : (
+                          'No eligible students found for the current department and search criteria.'
+                        )}
                       </td>
                     </tr>
                   )}

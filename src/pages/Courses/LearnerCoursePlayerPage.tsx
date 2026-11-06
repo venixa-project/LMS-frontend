@@ -32,7 +32,13 @@ export function downloadContentFile(
       url = URL.createObjectURL(content);
       isCreatedBlob = true;
     } else if (typeof content === 'string') {
-      if (content.startsWith('data:') || content.startsWith('blob:') || content.startsWith('http://') || content.startsWith('https://')) {
+      if (
+        content.startsWith('data:') ||
+        content.startsWith('blob:') ||
+        content.startsWith('http://') ||
+        content.startsWith('https://') ||
+        content.startsWith('/')
+      ) {
         url = content;
       } else {
         const blob = new Blob([content], { type: mimeType });

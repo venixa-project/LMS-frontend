@@ -266,6 +266,8 @@ export interface UploadedDocumentInfo {
   id: string;
   slug?: string;
   name: string;
+  fileName?: string;
+  storagePath?: string;
   size: number;
   type: string;
   uploadedAt: string;

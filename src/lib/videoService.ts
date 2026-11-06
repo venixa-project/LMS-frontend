@@ -203,7 +203,15 @@ export function uploadVideoFile(params: {
     if (lessonId) formData.append('lessonId', lessonId);
 
     const xhr = new XMLHttpRequest();
-    const endpoint = `${API_BASE_URL}/courses/${courseId || 'course-default'}/videos`;
+    // If courseId is a valid persisted course UUID, upload to course endpoint; otherwise use standalone video upload endpoint
+    const isRealCourseUuid = Boolean(courseId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId));
+    const endpoint = isRealCourseUuid
+      ? `${API_BASE_URL}/courses/${courseId}/videos`
+      : `${API_BASE_URL}/courses/upload-video`;
+
+    xhr.open('POST', endpoint, true);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    if (tenantId) xhr.setRequestHeader('x-tenant-id', tenantId);
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {
@@ -218,30 +226,30 @@ export function uploadVideoFile(params: {
         try {
           const res = JSON.parse(xhr.responseText);
           const v = res.data;
-          const streamUrl = `${API_BASE_URL}/courses/${courseId}/videos/${v.id}/stream?token=${encodeURIComponent(token)}&tenantId=${encodeURIComponent(tenantId)}`;
+          const persistentUrl = v.url || v.playbackUrl || (v.id && isRealCourseUuid ? `${API_BASE_URL}/courses/${courseId}/videos/${v.id}/stream?token=${encodeURIComponent(token)}&tenantId=${encodeURIComponent(tenantId)}` : DEFAULT_LECTURE_STREAM_URL);
           const videoInfo: VideoLessonInfo = {
-            id: v.id,
+            id: v.id || `vid-${Date.now()}`,
             sourceType: 'upload',
-            title: v.title,
-            description: v.description,
+            title: v.title || title || file.name.replace(/\.[^/.]+$/, ''),
+            description: v.description || description,
             fileName: v.fileName || file.name,
             originalName: v.originalName || file.name,
             fileSize: v.fileSize || file.size,
             durationSeconds: v.durationSeconds || durationSeconds,
             durationFormatted: formatVideoDuration(v.durationSeconds || durationSeconds),
             mimeType: v.mimeType || file.type || 'video/mp4',
-            url: streamUrl,
-            embedUrl: streamUrl,
+            url: persistentUrl,
+            embedUrl: persistentUrl,
             videoId: v.id,
             uploadedAt: v.createdAt || new Date().toISOString(),
           };
-          registerVideoFile(v.id, file, streamUrl);
+          registerVideoFile(videoInfo.id, file, persistentUrl);
           resolve(videoInfo);
         } catch (err) {
           fallbackLocalUpload(resolve);
         }
       } else {
-        // Fallback to local object URL if backend endpoint fails
+        // Fallback to local upload with registered buffer
         console.warn(`Video upload endpoint returned ${xhr.status}; falling back to local media buffer`);
         fallbackLocalUpload(resolve);
       }

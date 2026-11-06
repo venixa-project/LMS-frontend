@@ -50,6 +50,35 @@ export const DocumentUploadCard: React.FC<Props> = ({
 
     setIsUploading(true);
 
+    const docId = `doc-${Date.now()}`;
+
+    // 1. Physically upload to backend persistent storage (storage/documents/)
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      const uploadRes = await apiClient.upload<any>('/courses/upload-document', formData);
+      if (uploadRes?.data?.url) {
+        const persistentUrl = uploadRes.data.url;
+        const docInfo: UploadedDocumentInfo = {
+          id: docId,
+          name: uploadRes.data.originalName || file.name,
+          fileName: uploadRes.data.fileName || file.name,
+          size: uploadRes.data.size || file.size,
+          type: uploadRes.data.mimeType || file.type || 'application/pdf',
+          uploadedAt: new Date().toISOString(),
+          url: persistentUrl,
+          storagePath: uploadRes.data.storagePath || persistentUrl,
+          pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
+        };
+        registerDocumentFile(docId, file, persistentUrl);
+        onUpload(docInfo);
+        setIsUploading(false);
+        return;
+      }
+    } catch (uploadErr) {
+      console.warn('Backend document upload fallback to client buffer:', uploadErr);
+    }
+
     const isTextReadable =
       fileName.endsWith('.txt') ||
       fileName.endsWith('.md') ||
@@ -57,7 +86,6 @@ export const DocumentUploadCard: React.FC<Props> = ({
       fileName.endsWith('.java') ||
       file.type.startsWith('text/');
 
-    const docId = `doc-${Date.now()}`;
     const objectUrl = URL.createObjectURL(file);
 
     const fallbackDoc = () => {
