@@ -273,7 +273,7 @@ export const LeaderboardPage: React.FC = () => {
     });
 
     return list;
-  }, [timeframe, selectedCohort, searchQuery, isStudent, isTrainer, trainerAuthorizedCohorts, user?.id]);
+  }, [leaderboard, timeframe, selectedCohort, searchQuery, isStudent, isTrainer, trainerAuthorizedCohorts, user?.id, user?.email]);
 
   // Current logged in user (only applicable for student)
   const currentUserIndex = isStudent ? sortedMembers.findIndex((m) => m.isCurrentUser) : -1;
@@ -292,7 +292,7 @@ export const LeaderboardPage: React.FC = () => {
     if (prevRankRef.current !== null && prevRankRef.current > 1 && currentRank === 1) {
       // Transitioned into #1!
       setIsVictoryModalOpen(true);
-      setHighlightedRowId('u-007');
+      setHighlightedRowId(currentUser?.id || user?.id || null);
       const timer = setTimeout(() => setHighlightedRowId(null), 3000);
       return () => clearTimeout(timer);
     }
@@ -563,9 +563,9 @@ export const LeaderboardPage: React.FC = () => {
       {/* 5B. GAMIFICATION PROGRESSION: RANK ROADMAP - ONLY FOR STUDENTS */}
       {/* ------------------------------------------------------------- */}
       {isStudent && (() => {
-        const activeStudentId = user?.id || 'u-007';
-        const studentProfile = profiles[activeStudentId] || profiles['u-007'];
-        const studentPoints = studentProfile ? studentProfile.totalPoints : (currentUser?.points || 2150);
+        const activeStudentId = user?.id || currentUser?.id || '';
+        const studentProfile = activeStudentId ? profiles[activeStudentId] : null;
+        const studentPoints = currentUser?.points ?? (studentProfile ? studentProfile.totalPoints : 0);
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -597,9 +597,14 @@ export const LeaderboardPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
-            {sortedMembers.slice(0, 6).map((m, idx) => {
-              const maxXP = sortedMembers[0]?.points || 5000;
-              const barPercent = Math.min(100, Math.max(12, Math.round((m.points / maxXP) * 100)));
+            {sortedMembers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Loading verified top performers from academy ledger...
+              </div>
+            ) : (
+              sortedMembers.slice(0, 6).map((m, idx) => {
+                const maxXP = sortedMembers[0]?.points || 5000;
+                const barPercent = Math.min(100, Math.max(12, Math.round((m.points / maxXP) * 100)));
 
               return (
                 <div
@@ -664,7 +669,8 @@ export const LeaderboardPage: React.FC = () => {
                   </div>
                 </div>
               );
-            })}
+            })
+          )}
           </div>
         </div>
 

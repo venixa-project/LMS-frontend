@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useMomentumStore } from '../../lib/momentumStore';
+import { useGamificationStore } from '../../lib/gamificationStore';
 import {
   BookOpen, Clock, Trophy, Flame, BarChart2, Calendar,
   Zap, Timer, Play, Pause, Square, Info, ChevronLeft,
@@ -46,10 +47,14 @@ export const MomentumPage: React.FC = () => {
   const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
   const [localSeconds, setLocalSeconds] = useState<number>(0);
 
-  // Load momentum metrics from backend on mount
+  // Gamification profile & badges
+  const { profiles, leaderboard, fetchLeaderboard } = useGamificationStore();
+
+  // Load momentum metrics and gamification from backend on mount
   useEffect(() => {
     fetchMomentum();
-  }, [fetchMomentum]);
+    fetchLeaderboard();
+  }, [fetchMomentum, fetchLeaderboard]);
 
   // Handle active session ticks
   useEffect(() => {
@@ -105,23 +110,33 @@ export const MomentumPage: React.FC = () => {
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Calculate Course Progress metrics
-  const completedLessons = backendMetrics?.completedLessons ?? 8;
-  const totalLessons = backendMetrics?.totalLessons ?? 10;
-  const progressPercent = backendMetrics?.lessonsPercent ?? (totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 80);
+  // Calculate Course Progress metrics dynamically from backend API
+  const completedLessons = backendMetrics?.completedLessons ?? 0;
+  const totalLessons = backendMetrics?.totalLessons ?? 0;
+  const progressPercent = backendMetrics?.lessonsPercent ?? (totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0);
 
   // In-progress and not started derived counts
   const inProgressLessons = Math.max(0, Math.min(1, totalLessons - completedLessons));
   const notStartedLessons = Math.max(0, totalLessons - completedLessons - inProgressLessons);
 
   // Weekly study time
-  const weekTotalMins = backendMetrics?.weekTotalMinutes ?? 147;
-  const formattedStudyTime = formatDuration(weekTotalMins) || '2h 27m';
+  const weekTotalMins = backendMetrics?.weekTotalMinutes ?? 0;
+  const formattedStudyTime = formatDuration(weekTotalMins) || (weekTotalMins > 0 ? `${weekTotalMins}m` : '0m');
 
-  // Streak data
-  const streakDays = backendMetrics?.currentStreak !== undefined && backendMetrics.currentStreak > 0
-    ? backendMetrics.currentStreak
-    : 5;
+  // Streak data from real activity timestamps
+  const streakDays = backendMetrics?.currentStreak ?? 0;
+
+  // Real Badges count from gamification store
+  const activeStudentId = user?.id || '';
+  const currentMember = leaderboard.find(
+    (m: any) =>
+      m.userId === activeStudentId ||
+      (user?.email && m.email && m.email.toLowerCase() === user.email.toLowerCase())
+  );
+  const badgesCount =
+    currentMember?.badgesCount ||
+    (activeStudentId && profiles[activeStudentId]?.claimedMilestones?.length) ||
+    0;
 
   // Month navigation handlers
   const handlePrevMonth = () => {
@@ -442,7 +457,7 @@ export const MomentumPage: React.FC = () => {
         }}>
           {/* Left: Circular Purple Ring with Trophy */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {renderCircleRing(100, '#8b5cf6', 64, 5)}
+            {renderCircleRing(badgesCount > 0 ? Math.min(100, badgesCount * 25) : 0, '#8b5cf6', 64, 5)}
             <div style={{ position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Trophy size={20} color="#c084fc" />
             </div>
@@ -455,10 +470,10 @@ export const MomentumPage: React.FC = () => {
               <Trophy size={16} color="#8b5cf6" />
             </div>
             <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
-              This Month
+              Verified Credentials
             </span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#c084fc', marginTop: '6px' }}>
-              5 Badges
+              {badgesCount} {badgesCount === 1 ? 'Badge' : 'Badges'}
             </span>
           </div>
         </div>
@@ -603,48 +618,72 @@ export const MomentumPage: React.FC = () => {
             {/* Left: Donut Chart & Legend */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: 'rotate(-90deg)' }}>
-                  {/* Background Track */}
-                  <circle cx="70" cy="70" r="54" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="12" fill="none" />
-                  {/* Green segment (Completed Lessons) */}
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r="54"
-                    stroke="#10b981"
-                    strokeWidth="12"
-                    strokeDasharray={2 * Math.PI * 54}
-                    strokeDashoffset={2 * Math.PI * 54 * (1 - 0.80)}
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                  {/* Blue segment (In Progress) */}
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r="54"
-                    stroke="#00d2ff"
-                    strokeWidth="12"
-                    strokeDasharray={2 * Math.PI * 54}
-                    strokeDashoffset={2 * Math.PI * 54 * (1 - 0.10)}
-                    transform="rotate(288 70 70)"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                  {/* Purple segment (Not Started) */}
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r="54"
-                    stroke="#a855f7"
-                    strokeWidth="12"
-                    strokeDasharray={2 * Math.PI * 54}
-                    strokeDashoffset={2 * Math.PI * 54 * (1 - 0.10)}
-                    transform="rotate(324 70 70)"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                </svg>
+                {(() => {
+                  const circumference = 2 * Math.PI * 54;
+                  const safeTotal = Math.max(1, totalLessons);
+                  const completedRatio = Math.min(1, Math.max(0, completedLessons / safeTotal));
+                  const inProgressRatio = Math.min(1 - completedRatio, Math.max(0, inProgressLessons / safeTotal));
+                  const notStartedRatio = Math.max(0, 1 - completedRatio - inProgressRatio);
+
+                  const greenDash = circumference * completedRatio;
+                  const blueDash = circumference * inProgressRatio;
+                  const purpleDash = circumference * notStartedRatio;
+
+                  const greenRot = 0;
+                  const blueRot = completedRatio * 360;
+                  const purpleRot = (completedRatio + inProgressRatio) * 360;
+
+                  return (
+                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: 'rotate(-90deg)' }}>
+                      {/* Background Track */}
+                      <circle cx="70" cy="70" r="54" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="12" fill="none" />
+                      {/* Green segment (Completed Lessons) */}
+                      {greenDash > 0 && (
+                        <circle
+                          cx="70"
+                          cy="70"
+                          r="54"
+                          stroke="#10b981"
+                          strokeWidth="12"
+                          strokeDasharray={`${greenDash} ${circumference}`}
+                          strokeDashoffset={0}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      )}
+                      {/* Blue segment (In Progress) */}
+                      {blueDash > 0 && (
+                        <circle
+                          cx="70"
+                          cy="70"
+                          r="54"
+                          stroke="#00d2ff"
+                          strokeWidth="12"
+                          strokeDasharray={`${blueDash} ${circumference}`}
+                          strokeDashoffset={0}
+                          transform={`rotate(${blueRot} 70 70)`}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      )}
+                      {/* Purple segment (Not Started) */}
+                      {purpleDash > 0 && (
+                        <circle
+                          cx="70"
+                          cy="70"
+                          r="54"
+                          stroke="#a855f7"
+                          strokeWidth="12"
+                          strokeDasharray={`${purpleDash} ${circumference}`}
+                          strokeDashoffset={0}
+                          transform={`rotate(${purpleRot} 70 70)`}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      )}
+                    </svg>
+                  );
+                })()}
 
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                   <span style={{ fontSize: '24px', fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{progressPercent}%</span>

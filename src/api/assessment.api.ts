@@ -2,6 +2,7 @@
 // LMS - Assessment Backend API Client (PostgreSQL Persistence)
 // ============================================================
 import { QuizAssessmentConfig, QuizQuestionItem } from '../types';
+import { apiClient } from '../lib/apiClient';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
@@ -183,18 +184,8 @@ export function mapBackendResponseToConfig(resp: BackendAssessmentResponse): Qui
 export async function createAssessmentApi(
   payload: BackendAssessmentPayload
 ): Promise<BackendAssessmentResponse> {
-  const res = await fetch(`${API_BASE_URL}/assessments`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to create assessment (status: ${res.status})`);
-  }
-
-  return json.data as BackendAssessmentResponse;
+  const res = await apiClient.post<BackendAssessmentResponse>('/assessments', payload);
+  return res.data;
 }
 
 /**
@@ -204,35 +195,16 @@ export async function updateAssessmentApi(
   id: string,
   payload: Partial<BackendAssessmentPayload>
 ): Promise<BackendAssessmentResponse> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${id}`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to update assessment (status: ${res.status})`);
-  }
-
-  return json.data as BackendAssessmentResponse;
+  const res = await apiClient.patch<BackendAssessmentResponse>(`/assessments/${id}`, payload);
+  return res.data;
 }
 
 /**
  * Get Assessment by ID from PostgreSQL
  */
 export async function getAssessmentApi(id: string): Promise<BackendAssessmentResponse> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${id}`, {
-    method: 'GET',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to retrieve assessment (status: ${res.status})`);
-  }
-
-  return json.data as BackendAssessmentResponse;
+  const res = await apiClient.get<BackendAssessmentResponse>(`/assessments/${id}`);
+  return res.data;
 }
 
 /**
@@ -252,68 +224,33 @@ export async function listAssessmentsApi(params?: {
   if (params?.scope) query.set('scope', params.scope);
   if (params?.status) query.set('status', params.status);
 
-  const res = await fetch(`${API_BASE_URL}/assessments?${query.toString()}`, {
-    method: 'GET',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to list assessments (status: ${res.status})`);
-  }
-
-  return (json.data || []) as BackendAssessmentResponse[];
+  const endpoint = query.toString() ? `/assessments?${query.toString()}` : '/assessments';
+  const res = await apiClient.get<BackendAssessmentResponse[]>(endpoint);
+  return (res.data || []) as BackendAssessmentResponse[];
 }
 
 /**
  * Publish Assessment
  */
 export async function publishAssessmentApi(id: string): Promise<{ success: boolean; status: string }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${id}/publish`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to publish assessment (status: ${res.status})`);
-  }
-
-  return json.data;
+  const res = await apiClient.patch<{ success: boolean; status: string }>(`/assessments/${id}/publish`);
+  return res.data;
 }
 
 /**
  * Unpublish Assessment (Draft)
  */
 export async function unpublishAssessmentApi(id: string): Promise<{ success: boolean; status: string }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${id}/unpublish`, {
-    method: 'PATCH',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to unpublish assessment (status: ${res.status})`);
-  }
-
-  return json.data;
+  const res = await apiClient.patch<{ success: boolean; status: string }>(`/assessments/${id}/unpublish`);
+  return res.data;
 }
 
 /**
  * Delete Assessment (Soft-delete / Archive)
  */
 export async function deleteAssessmentApi(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to delete assessment (status: ${res.status})`);
-  }
-
-  return json.data;
+  const res = await apiClient.delete<{ success: boolean }>(`/assessments/${id}`);
+  return res.data;
 }
 
 /**
@@ -341,17 +278,13 @@ export async function startAttemptApi(assessmentId: string): Promise<{
   };
   startedAt: string;
 }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/${assessmentId}/start`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  });
+  const res = await apiClient.post<{
+    attemptId: string;
+    assessment: any;
+    startedAt: string;
+  }>(`/assessments/${assessmentId}/start`);
 
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to start attempt (status: ${res.status})`);
-  }
-
-  return json.data;
+  return res.data;
 }
 
 /**
@@ -363,18 +296,12 @@ export async function saveAnswerApi(
   answer: string,
   isFlagged = false
 ): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/assessments/attempts/${attemptId}/answer`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ questionId, answer, isFlagged }),
+  const res = await apiClient.post(`/assessments/attempts/${attemptId}/answer`, {
+    questionId,
+    answer,
+    isFlagged,
   });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to save answer (status: ${res.status})`);
-  }
-
-  return json.data;
+  return res.data;
 }
 
 /**
@@ -389,18 +316,17 @@ export async function submitAttemptApi(attemptId: string): Promise<{
   evaluationStatus: string;
   submittedAt: string;
 }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/attempts/${attemptId}/submit`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ attemptId }),
-  });
+  const res = await apiClient.post<{
+    attemptId: string;
+    score: number;
+    totalMarks: number;
+    percentage: number;
+    passed: boolean;
+    evaluationStatus: string;
+    submittedAt: string;
+  }>(`/assessments/attempts/${attemptId}/submit`, { attemptId });
 
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to submit attempt (status: ${res.status})`);
-  }
-
-  return json.data;
+  return res.data;
 }
 
 /**
@@ -429,16 +355,7 @@ export async function getAttemptResultApi(attemptId: string): Promise<{
     options: Array<{ id: string; text: string; isCorrect?: boolean }>;
   }>;
 }> {
-  const res = await fetch(`${API_BASE_URL}/assessments/attempts/${attemptId}/result`, {
-    method: 'GET',
-    headers: getAuthHeaders(),
-  });
-
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || json.message || `Failed to get attempt result (status: ${res.status})`);
-  }
-
-  return json.data;
+  const res = await apiClient.get<any>(`/assessments/attempts/${attemptId}/result`);
+  return res.data;
 }
 

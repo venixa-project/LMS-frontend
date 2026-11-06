@@ -871,7 +871,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
         const submittedAssignments = assignments.filter((a) => a.learnerStatus === 'submitted' || a.learnerStatus === 'graded');
         const gradedAssignments = assignments.filter((a) => a.learnerStatus === 'graded');
         const avgPercentage = myAttempts.length > 0
-          ? Math.round(myAttempts.reduce((acc, a) => acc + (a.percentage || 0), 0) / myAttempts.length)
+          ? Math.round(myAttempts.reduce((acc, a) => acc + (Number(a.percentage) || 0), 0) / myAttempts.length)
           : gradedAssignments.length > 0
             ? Math.round(gradedAssignments.reduce((acc, a) => acc + (((a.learnerScore || 0) / a.totalMarks) * 100), 0) / gradedAssignments.length)
             : 0;
@@ -930,6 +930,42 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                   <p className="text-secondary text-sm" style={{ maxWidth: '460px', margin: '0 auto 20px', lineHeight: 1.5 }}>
                     You have not submitted any course quizzes or project deliverables yet. Complete curriculum checkpoints and assessments to generate your verified academic grade transcript.
                   </p>
+                  {assessments.filter((a) => a.status === 'published').length > 0 && (() => {
+                    const pub = assessments.find((a) => a.status === 'published')!;
+                    return (
+                      <div
+                        style={{
+                          maxWidth: '540px',
+                          margin: '0 auto 24px',
+                          background: 'rgba(99, 102, 241, 0.08)',
+                          border: '1px solid rgba(99, 102, 241, 0.25)',
+                          borderRadius: '12px',
+                          padding: '14px 18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          textAlign: 'left',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div>
+                          <span className="badge badge-primary" style={{ fontSize: '0.65rem', marginBottom: '4px', textTransform: 'uppercase' }}>
+                            Assessment Waiting
+                          </span>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                            {pub.title}
+                          </div>
+                          <div className="text-muted text-xs">
+                            Duration: {pub.durationMinutes}m &bull; Total Marks: {pub.totalMarks}
+                          </div>
+                        </div>
+                        <Link to={`/exam/${pub.id}`} className="btn btn-primary btn-sm" style={{ gap: '6px' }}>
+                          <Play size={13} /> Start Assessment
+                        </Link>
+                      </div>
+                    );
+                  })()}
                   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                     <Link to="/courses" className="btn btn-primary btn-sm" style={{ gap: '6px' }}>
                       <Play size={14} /> Resume Course Lessons

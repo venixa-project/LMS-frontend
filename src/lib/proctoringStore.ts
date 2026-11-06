@@ -639,7 +639,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   getSessionsForLearner: (learnerId: string) => {
-    return get().sessions.filter((s) => s.learnerId === learnerId);
+    return get().sessions.filter((s) => s.learnerId?.toLowerCase() === learnerId?.toLowerCase() || (s as any).userId?.toLowerCase() === learnerId?.toLowerCase());
   },
 
   getSessionsForAssessment: (assessmentId: string) => {
@@ -767,6 +767,9 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   submitStudentExplanation: (sessionId, eventId, explanation) => {
+    if (eventId && eventId.length === 36) {
+      apiClient.post(`/proctoring/events/${eventId}/explanation`, { explanation }).catch(() => {});
+    }
     set((state) => {
       const nextSessions = state.sessions.map((s) => {
         if (s.id !== sessionId) return s;
@@ -786,6 +789,9 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   submitStudentAppeal: (sessionId, explanation) => {
+    if (sessionId && sessionId.length === 36) {
+      apiClient.post(`/proctoring/sessions/${sessionId}/appeal`, { explanation }).catch(() => {});
+    }
     set((state) => {
       const nextSessions: ProctoringSession[] = state.sessions.map((s) => {
         if (s.id !== sessionId) return s;
