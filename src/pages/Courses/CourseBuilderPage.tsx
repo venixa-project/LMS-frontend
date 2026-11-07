@@ -2,7 +2,7 @@ import { apiClient } from '../../lib/apiClient';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, mapBackendCourseToFrontend } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
@@ -35,14 +35,10 @@ export const CourseBuilderPage: React.FC = () => {
   const editingCourseId = searchParams.get('id') || searchParams.get('edit');
 
   const { user } = useAuthStore();
-  const { addCourse, saveCourse, assignStudentsToCourse, courses, enrollments } = useCourseStore();
-  const { getFaculty, getStudents } = usePeopleStore();
-  const { cohorts } = useCohortStore();
-  const { departments, fetchDepartments } = useDepartmentStore();
-
-  useEffect(() => {
-    fetchDepartments();
-  }, [fetchDepartments]);
+  const { addCourse, updateCourse, saveCourse, assignStudentsToCourse, courses, enrollments, fetchCourses } = useCourseStore();
+  const { getFaculty, getStudents, fetchPeople, isLoading: isPeopleLoading } = usePeopleStore();
+  const { cohorts, fetchCohorts, isLoading: isCohortsLoading } = useCohortStore();
+  const { departments, fetchDepartments, isLoading: isDeptsLoading } = useDepartmentStore();
   const { getApprovedSignatories, getDefaultSignatoryForUser, hasConfiguredSignature } = useSignatureStore();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
@@ -55,6 +51,20 @@ export const CourseBuilderPage: React.FC = () => {
 
   // Stepper state (1 to 4)
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  useEffect(() => {
+    fetchDepartments();
+    fetchPeople({ limit: 1000 });
+    fetchCohorts();
+  }, [fetchDepartments, fetchPeople, fetchCohorts]);
+
+  useEffect(() => {
+    if (step === 3) {
+      fetchDepartments();
+      fetchPeople({ limit: 1000 });
+      fetchCohorts();
+    }
+  }, [step, fetchDepartments, fetchPeople, fetchCohorts]);
 
   // -------------------------------------------------------------
   // STEP 1: Basic Information
@@ -251,16 +261,20 @@ export const CourseBuilderPage: React.FC = () => {
     onConfirm: () => { },
   });
 
+  // Dedicated Publication Success Popup state
+  const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
+
   // Resolved existing course for Edit Mode
   const editingCourse = useMemo(() => {
     if (!editingCourseId) return undefined;
-    return courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
+    return (courses || []).find((c) => c?.id && c.id.toLowerCase() === editingCourseId.toLowerCase());
   }, [editingCourseId, courses]);
 
-  const isEditing = Boolean(editingCourseId && editingCourse);
+  const isEditing = Boolean(editingCourseId);
 
   // Helper to populate form when editing an existing course
   const loadCourseIntoForm = useCallback((existing: Course) => {
+    if (!existing) return;
     setStep(1);
     setTitle(existing.title || '');
     setCourseCode(existing.id ? existing.id.toUpperCase().replace('CRS-', 'CRS-2026-') : `CRS-2026-${Math.floor(100 + Math.random() * 900)}`);
@@ -274,8 +288,26 @@ export const CourseBuilderPage: React.FC = () => {
     setEndDate(existing.endDate || '');
     if (existing.completionPolicy) setCompletionPolicy(existing.completionPolicy);
 
-    if (existing.modules && existing.modules.length > 0) {
-      setModules(JSON.parse(JSON.stringify(existing.modules)));
+    if (Array.isArray(existing.modules) && existing.modules.length > 0) {
+      const sanitizedModules = existing.modules.map((m: any, mIdx: number) => ({
+        ...m,
+        id: m.id || `mod-${mIdx + 1}`,
+        title: m.title || `Module ${mIdx + 1}`,
+        order: m.order || mIdx + 1,
+        lessons: Array.isArray(m?.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
+          ...l,
+          id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
+          quizConfig: l.quizConfig ? {
+            ...l.quizConfig,
+            questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
+          } : undefined
+        })) : [],
+        assessment: m.assessment ? {
+          ...m.assessment,
+          questions: Array.isArray(m.assessment.questions) ? m.assessment.questions : []
+        } : undefined
+      }));
+      setModules(sanitizedModules);
       setActiveModuleIndex(0);
     } else {
       setModules([]);
@@ -283,7 +315,9 @@ export const CourseBuilderPage: React.FC = () => {
     }
 
     if (existing.finalAssessment) {
-      setFinalAssessment(JSON.parse(JSON.stringify(existing.finalAssessment)));
+      const parsedFa = JSON.parse(JSON.stringify(existing.finalAssessment));
+      if (!Array.isArray(parsedFa.questions)) parsedFa.questions = [];
+      setFinalAssessment(parsedFa);
     } else {
       setFinalAssessment(undefined);
     }
@@ -304,16 +338,16 @@ export const CourseBuilderPage: React.FC = () => {
       if (existing.certificateConfig.authorizedSignatureImage) setCertSignerSignatureImage(existing.certificateConfig.authorizedSignatureImage);
     }
 
-    if (existing.instructors && existing.instructors.length > 0) {
+    if (Array.isArray(existing.instructors) && existing.instructors.length > 0) {
       setSelectedLeadFacultyId(existing.instructors[0]);
     } else {
-      setSelectedLeadFacultyId(isFaculty ? (user?.id || 'u-004') : (user?.id || 'u-004'));
+      setSelectedLeadFacultyId(isFaculty ? (user?.id || '') : '');
     }
 
     setPublishStatus(existing.status || 'draft');
 
-    const enrolledIds = enrollments
-      .filter((e) => e.courseId?.toLowerCase() === existing.id.toLowerCase())
+    const enrolledIds = (enrollments || [])
+      .filter((e) => e?.courseId && existing?.id && e.courseId.toLowerCase() === existing.id.toLowerCase())
       .map((e) => e.userId);
     setSelectedStudentIds(new Set(enrolledIds));
 
@@ -348,7 +382,7 @@ export const CourseBuilderPage: React.FC = () => {
     setPublishError(null);
     setPublishedCourse(null);
     setSaveDraftNotice(null);
-    setSelectedLeadFacultyId(isFaculty ? (user?.id || 'u-004') : (user?.id || 'u-004'));
+    setSelectedLeadFacultyId(isFaculty ? (user?.id || '') : '');
     setFacultyDeptFilter('all');
     setStudentDeptFilter('all');
     setSelectedCohortId('all');
@@ -372,9 +406,20 @@ export const CourseBuilderPage: React.FC = () => {
 
   useEffect(() => {
     if (editingCourseId) {
-      const existing = courses.find((c) => c.id.toLowerCase() === editingCourseId.toLowerCase());
+      const existing = (courses || []).find((c) => c?.id && c.id.toLowerCase() === editingCourseId.toLowerCase());
       if (existing) {
         loadCourseIntoForm(existing);
+      } else {
+        apiClient.get<any>(`/courses/${editingCourseId}`)
+          .then((res) => {
+            if (res && res.data) {
+              const mapped = mapBackendCourseToFrontend(res.data);
+              loadCourseIntoForm(mapped);
+            }
+          })
+          .catch((err) => {
+            console.warn('Could not fetch course by id:', err);
+          });
       }
     } else {
       // Transitioning from Edit mode to Create mode or loading fresh: ensure pristine empty state
@@ -398,10 +443,10 @@ export const CourseBuilderPage: React.FC = () => {
     if (editingCourseId) {
       listAssessmentsApi({ courseId: editingCourseId })
         .then((pgAssessments) => {
-          if (pgAssessments && pgAssessments.length > 0) {
+          if (Array.isArray(pgAssessments) && pgAssessments.length > 0) {
             setModules((prevModules) => {
               let changed = false;
-              const next = prevModules.map((mod) => {
+              const next = (prevModules || []).map((mod) => {
                 let modChanged = false;
                 let modAssessment = mod.assessment;
                 const matchingModAsm = pgAssessments.find((a: any) => a.moduleId === mod.id && a.scope === 'module_assessment');
@@ -410,7 +455,7 @@ export const CourseBuilderPage: React.FC = () => {
                   modChanged = true;
                 }
 
-                const updatedLessons = mod.lessons.map((lesson) => {
+                const updatedLessons = (mod.lessons || []).map((lesson) => {
                   const matchingLessonAsm = pgAssessments.find((a: any) => a.lessonId === lesson.id && a.scope === 'lesson_quiz');
                   if (matchingLessonAsm) {
                     modChanged = true;
@@ -447,43 +492,66 @@ export const CourseBuilderPage: React.FC = () => {
   // STEP 3: Assign Faculty & Students
   // -------------------------------------------------------------
   // Lead Faculty selection state
-  const [facultyDeptFilter, setFacultyDeptFilter] = useState<string>(departmentId);
+  const [facultyDeptFilter, setFacultyDeptFilter] = useState<string>('all');
   const [facultySearchQuery, setFacultySearchQuery] = useState('');
-  const [selectedLeadFacultyId, setSelectedLeadFacultyId] = useState<string>('u-004'); // Prof. David Wilson default
+  const [selectedLeadFacultyId, setSelectedLeadFacultyId] = useState<string>('');
 
   // Student assignment state (Optional)
-  const [studentDeptFilter, setStudentDeptFilter] = useState<string>(departmentId);
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('all');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
   const [selectedCohortId, setSelectedCohortId] = useState<string>('all');
 
-  // Synchronize Step 3 department defaults when Step 1 department changes
+  // Synchronize Step 1 department changes without locking Step 3 filters
   const handleDepartmentChange = (newDeptId: string) => {
     setDepartmentId(newDeptId);
-    setFacultyDeptFilter(newDeptId);
-    setStudentDeptFilter(newDeptId);
   };
 
   // All faculty members from store
-  const allFaculty = useMemo(() => getFaculty(), [getFaculty]);
+  const allFaculty = useMemo(() => {
+    const list = getFaculty();
+    return Array.isArray(list) ? list : [];
+  }, [getFaculty]);
+
+  // Auto-select lead faculty when faculty list loads if none currently selected
+  useEffect(() => {
+    if (!selectedLeadFacultyId && Array.isArray(allFaculty) && allFaculty.length > 0) {
+      if (isFaculty && user?.id) {
+        setSelectedLeadFacultyId(user.id);
+      } else {
+        setSelectedLeadFacultyId(allFaculty[0].id);
+      }
+    }
+  }, [allFaculty, selectedLeadFacultyId, isFaculty, user]);
 
   // All students from store
-  const allStudents = useMemo(() => getStudents(), [getStudents]);
+  const allStudents = useMemo(() => {
+    const list = getStudents();
+    return Array.isArray(list) ? list : [];
+  }, [getStudents]);
 
   // Filtered faculty for Step 3
   const filteredFaculty = useMemo(() => {
-    return allFaculty.filter((fac) => {
-      // Department filter
-      if (facultyDeptFilter !== 'all' && fac.departmentId !== facultyDeptFilter) {
-        return false;
+    return (allFaculty || []).filter((fac) => {
+      if (!fac) return false;
+      // Department filter - only filter when specific department selected
+      if (facultyDeptFilter && facultyDeptFilter !== 'all') {
+        const facDept = fac.departmentId || (fac as any).department?.id;
+        if (facDept !== facultyDeptFilter) {
+          return false;
+        }
       }
-      // Search query (name, id, email)
+      // Search query (name, id, email, rollNo)
       if (facultySearchQuery.trim()) {
         const q = facultySearchQuery.toLowerCase().trim();
-        const nameMatch = (fac.displayName || `${fac.firstName} ${fac.lastName}`).toLowerCase().includes(q);
-        const emailMatch = fac.email.toLowerCase().includes(q);
-        const idMatch = (fac.rollNo || fac.id).toLowerCase().includes(q);
-        return nameMatch || emailMatch || idMatch;
+        const fullName = `${fac.firstName || ''} ${fac.lastName || ''}`.toLowerCase();
+        const displayName = (fac.displayName || '').toLowerCase();
+        const email = (fac.email || '').toLowerCase();
+        const id = (fac.id || '').toLowerCase();
+        const rollNo = ((fac as any).rollNo || '').toLowerCase();
+        if (!fullName.includes(q) && !displayName.includes(q) && !email.includes(q) && !id.includes(q) && !rollNo.includes(q)) {
+          return false;
+        }
       }
       return true;
     });
@@ -491,26 +559,28 @@ export const CourseBuilderPage: React.FC = () => {
 
   // Selected lead faculty details
   const selectedFacultyMember = useMemo(() => {
-    return allFaculty.find((f) => f.id === selectedLeadFacultyId);
+    return (allFaculty || []).find((f) => f && f.id === selectedLeadFacultyId);
   }, [allFaculty, selectedLeadFacultyId]);
 
   // Trainer authorized academic departments
   const trainerAuthorizedDepartments = useMemo(() => {
-    const list = departments && departments.length > 0 ? departments : [];
+    const list = Array.isArray(departments) && departments.length > 0 ? departments : [];
     if (!isFaculty) return list;
     const userDeptId = user?.departmentId;
     if (!userDeptId) return list;
-    const filtered = list.filter((d) => d.id === userDeptId || (d as any).code === userDeptId);
+    const filtered = list.filter((d) => d && (d.id === userDeptId || (d as any).code === userDeptId));
     return filtered.length > 0 ? filtered : list;
   }, [isFaculty, user, departments]);
 
   // Trainer authorized cohorts/batches
   const trainerAuthorizedCohorts = useMemo(() => {
-    if (!isFaculty) return cohorts;
+    const list = Array.isArray(cohorts) ? cohorts : [];
+    if (!isFaculty) return list;
     const trainerId = user?.id || 'u-004';
-    return cohorts.filter((coh) => {
-      if (coh.instructors && coh.instructors.includes(trainerId)) return true;
-      if (coh.instructorIds && coh.instructorIds.includes(trainerId)) return true;
+    return list.filter((coh) => {
+      if (!coh) return false;
+      if (Array.isArray(coh.instructors) && coh.instructors.includes(trainerId)) return true;
+      if (Array.isArray(coh.instructorIds) && coh.instructorIds.includes(trainerId)) return true;
       if (trainerId === 'u-004' && (coh.id === 'coh-001' || coh.id === 'coh-002')) return true;
       if (trainerId === 'u-003' && (coh.id === 'coh-003' || coh.id === 'coh-005')) return true;
       if (trainerId === 'u-005' && coh.id === 'coh-004') return true;
@@ -523,8 +593,10 @@ export const CourseBuilderPage: React.FC = () => {
   const trainerAuthorizedStudentIds = useMemo(() => {
     if (!isFaculty) return null;
     const ids = new Set<string>();
-    trainerAuthorizedCohorts.forEach((c) => {
-      c.studentIds?.forEach((stId) => ids.add(stId));
+    (trainerAuthorizedCohorts || []).forEach((c) => {
+      if (c && Array.isArray(c.studentIds)) {
+        c.studentIds.forEach((stId) => ids.add(stId));
+      }
     });
     return ids;
   }, [isFaculty, trainerAuthorizedCohorts]);
@@ -532,43 +604,50 @@ export const CourseBuilderPage: React.FC = () => {
   // Already enrolled student IDs (prevents duplicate assignment)
   const alreadyEnrolledStudentIds = useMemo(() => {
     if (!editingCourseId) return new Set<string>();
-    const enrolled = enrollments
-      .filter((e) => e.courseId?.toLowerCase() === editingCourseId.toLowerCase())
+    const enrolled = (enrollments || [])
+      .filter((e) => e?.courseId && e.courseId.toLowerCase() === editingCourseId.toLowerCase())
       .map((e) => e.userId);
     return new Set<string>(enrolled);
   }, [editingCourseId, enrollments]);
 
   // Filtered students for Step 3
   const filteredStudents = useMemo(() => {
-    return allStudents.filter((st) => {
+    return (allStudents || []).filter((st) => {
+      if (!st) return false;
+      const stDept = st.departmentId || (st as any).department?.id;
+
       // Trainer isolation: must belong to trainer's authorized department & cohorts
       if (isFaculty) {
         if (trainerAuthorizedStudentIds && !trainerAuthorizedStudentIds.has(st.id)) {
           return false;
         }
-        if (trainerAuthorizedDepartments.length > 0 && !trainerAuthorizedDepartments.some((d) => d.id === st.departmentId)) {
+        if (Array.isArray(trainerAuthorizedDepartments) && trainerAuthorizedDepartments.length > 0 && !trainerAuthorizedDepartments.some((d) => d && d.id === stDept)) {
           return false;
         }
       }
 
       // Department filter
-      if (studentDeptFilter !== 'all' && st.departmentId !== studentDeptFilter) {
+      if (studentDeptFilter && studentDeptFilter !== 'all' && stDept !== studentDeptFilter) {
         return false;
       }
       // Cohort filter
-      if (selectedCohortId !== 'all') {
-        const targetCohort = cohorts.find((c) => c.id === selectedCohortId);
-        if (!targetCohort || !targetCohort.studentIds?.includes(st.id)) {
+      if (selectedCohortId && selectedCohortId !== 'all') {
+        const targetCohort = (cohorts || []).find((c) => c && c.id === selectedCohortId);
+        if (!targetCohort || !Array.isArray(targetCohort.studentIds) || !targetCohort.studentIds.includes(st.id)) {
           return false;
         }
       }
-      // Search query (name, id, email)
+      // Search query (name, id, email, rollNo)
       if (studentSearchQuery.trim()) {
         const q = studentSearchQuery.toLowerCase().trim();
-        const nameMatch = (st.displayName || `${st.firstName} ${st.lastName}`).toLowerCase().includes(q);
-        const emailMatch = st.email.toLowerCase().includes(q);
-        const idMatch = (st.rollNo || st.id).toLowerCase().includes(q);
-        return nameMatch || emailMatch || idMatch;
+        const fullName = `${st.firstName || ''} ${st.lastName || ''}`.toLowerCase();
+        const displayName = (st.displayName || '').toLowerCase();
+        const email = (st.email || '').toLowerCase();
+        const id = (st.id || '').toLowerCase();
+        const rollNo = ((st as any).rollNo || '').toLowerCase();
+        if (!fullName.includes(q) && !displayName.includes(q) && !email.includes(q) && !id.includes(q) && !rollNo.includes(q)) {
+          return false;
+        }
       }
       return true;
     });
@@ -622,24 +701,26 @@ export const CourseBuilderPage: React.FC = () => {
   // Helper: Department Name
   const getDepartmentName = (deptId?: string) => {
     if (!deptId) return 'General';
-    const dept = departments.find((d) => d.id === deptId || d.name.toLowerCase() === deptId.toLowerCase());
+    const dept = (departments || []).find((d) => d && (d.id === deptId || (d.name && d.name.toLowerCase() === deptId.toLowerCase())));
     return dept ? dept.name : deptId;
   };
 
   // Helper: Cohort Name
   const getStudentCohort = (studentId: string) => {
-    const ch = cohorts.find((c) => c.studentIds?.includes(studentId));
+    const ch = (cohorts || []).find((c) => c && Array.isArray(c.studentIds) && c.studentIds.includes(studentId));
     return ch?.name || 'General Batch';
   };
 
   // Total curriculum statistics
   const totalLessonsCount = useMemo(() => {
-    return modules.reduce((acc, m) => acc + m.lessons.length, 0);
+    if (!Array.isArray(modules)) return 0;
+    return modules.reduce((acc, m) => acc + (Array.isArray(m?.lessons) ? m.lessons.length : 0), 0);
   }, [modules]);
 
   const totalCurriculumMinutes = useMemo(() => {
+    if (!Array.isArray(modules)) return 0;
     return modules.reduce(
-      (acc, m) => acc + m.lessons.reduce((lAcc, l) => lAcc + (l.durationMinutes || 0), 0),
+      (acc, m) => acc + (Array.isArray(m?.lessons) ? m.lessons.reduce((lAcc, l) => lAcc + (l?.durationMinutes || 0), 0) : 0),
       0
     );
   }, [modules]);
@@ -703,7 +784,7 @@ export const CourseBuilderPage: React.FC = () => {
       setStep2Error('Please add at least one module before proceeding.');
       return false;
     }
-    const hasEmptyModule = modules.some((m) => m.lessons.length === 0);
+    const hasEmptyModule = modules.some((m) => (m.lessons?.length || 0) === 0);
     if (hasEmptyModule) {
       setStep2Error('Each module should contain at least one lesson or assessment.');
       return false;
@@ -748,10 +829,10 @@ export const CourseBuilderPage: React.FC = () => {
     const mod = modules[modIndex];
     if (!mod) return;
     if (direction === 'up' && lessonIndex === 0) return;
-    if (direction === 'down' && lessonIndex === mod.lessons.length - 1) return;
+    if (direction === 'down' && lessonIndex === (mod.lessons?.length || 0) - 1) return;
 
     const targetIdx = direction === 'up' ? lessonIndex - 1 : lessonIndex + 1;
-    const updatedLessons = [...mod.lessons];
+    const updatedLessons = [...(mod.lessons || [])];
     const [moved] = updatedLessons.splice(lessonIndex, 1);
     updatedLessons.splice(targetIdx, 0, moved);
 
@@ -784,7 +865,7 @@ export const CourseBuilderPage: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Delete Module',
-      message: `Are you sure you want to delete "${targetModule.title}"? All contained lessons (${targetModule.lessons.length}) and any attached module assessment will be permanently removed.`,
+      message: `Are you sure you want to delete "${targetModule.title}"? All contained lessons (${targetModule.lessons?.length || 0}) and any attached module assessment will be permanently removed.`,
       onConfirm: () => {
         const updated = modules.filter((_, i) => i !== idx).map((m, i) => ({ ...m, order: i + 1 }));
         setModules(updated);
@@ -798,7 +879,8 @@ export const CourseBuilderPage: React.FC = () => {
 
   const handleAddLesson = (modIndex: number, type: 'video' | 'document' | 'quiz') => {
     const targetMod = modules[modIndex];
-    const newLessonIndex = targetMod.lessons.length;
+    if (!targetMod) return;
+    const newLessonIndex = targetMod.lessons?.length || 0;
     const newLesson: Lesson = {
       id: `les-${Date.now()}-${newLessonIndex + 1}`,
       title: `Lesson ${newLessonIndex + 1}: ${type === 'video' ? 'Video Lecture' : type === 'document' ? 'Reading Material' : 'Knowledge Check'
@@ -811,7 +893,7 @@ export const CourseBuilderPage: React.FC = () => {
     const updated = [...modules];
     updated[modIndex] = {
       ...updated[modIndex],
-      lessons: [...updated[modIndex].lessons, newLesson]
+      lessons: [...(updated[modIndex]?.lessons || []), newLesson]
     };
     setModules(updated);
 
@@ -841,7 +923,7 @@ export const CourseBuilderPage: React.FC = () => {
         const updated = [...modules];
         updated[modIndex] = {
           ...updated[modIndex],
-          lessons: updated[modIndex].lessons.filter((_, lI) => lI !== lessonIdx).map((l, i) => ({ ...l, order: i + 1 }))
+          lessons: (updated[modIndex]?.lessons || []).filter((_, lI) => lI !== lessonIdx).map((l, i) => ({ ...l, order: i + 1 }))
         };
         setModules(updated);
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
@@ -854,7 +936,9 @@ export const CourseBuilderPage: React.FC = () => {
     const updated = [...modules];
     updated[modIndex].lessons[lessonIndex] = {
       ...updated[modIndex].lessons[lessonIndex],
-      uploadedDocument: doc
+      uploadedDocument: doc,
+      contentUrl: doc.url || updated[modIndex].lessons[lessonIndex].contentUrl,
+      type: 'document',
     };
     setModules(updated);
   };
@@ -893,6 +977,7 @@ export const CourseBuilderPage: React.FC = () => {
         targetLesson.durationMinutes = Math.max(1, Math.ceil(videoInfo.durationSeconds / 60));
       }
       targetLesson.contentUrl = videoInfo.url || videoInfo.embedUrl;
+      targetLesson.type = 'video';
       setModules(updated);
     }
   };
@@ -1024,11 +1109,12 @@ export const CourseBuilderPage: React.FC = () => {
     if (modules.length === 0) errors.push('At least one module is required.');
 
     modules.forEach((m, mIdx) => {
-      if (m.lessons.length === 0) {
+      const lessonsList = Array.isArray(m.lessons) ? m.lessons : [];
+      if (lessonsList.length === 0) {
         errors.push(`Module ${mIdx + 1} ("${m.title}") contains no lessons.`);
       }
 
-      m.lessons.forEach((l) => {
+      lessonsList.forEach((l) => {
         if (l.type === 'quiz' && (!l.quizConfig || !l.quizConfig.questions || l.quizConfig.questions.length === 0)) {
           warnings.push(`Lesson "${l.title}" in Module ${mIdx + 1} is set as Quiz but has no configured questions.`);
         }
@@ -1068,9 +1154,10 @@ export const CourseBuilderPage: React.FC = () => {
   // Aggregated course documents available across all modules
   const allCourseDocuments = useMemo(() => {
     const docs: UploadedDocumentInfo[] = [];
-    modules.forEach((m) => {
-      m.lessons.forEach((l) => {
-        if (l.uploadedDocument) {
+    (modules || []).forEach((m) => {
+      if (!m) return;
+      (m.lessons || []).forEach((l) => {
+        if (l?.uploadedDocument) {
           docs.push(l.uploadedDocument);
         }
       });
@@ -1085,14 +1172,16 @@ export const CourseBuilderPage: React.FC = () => {
     let totalMarks = 0;
     let totalQuestions = 0;
 
-    modules.forEach((m) => {
-      if (m.assessment && m.assessment.questions && m.assessment.questions.length > 0) {
+    (modules || []).forEach((m) => {
+      if (!m) return;
+      if (m.assessment && Array.isArray(m.assessment.questions) && m.assessment.questions.length > 0) {
         moduleAssessmentsCount += 1;
         totalMarks += m.assessment.totalMarks || 0;
         totalQuestions += m.assessment.questions.length;
       }
-      m.lessons.forEach((l) => {
-        if (l.quizConfig && l.quizConfig.questions && l.quizConfig.questions.length > 0) {
+      (m.lessons || []).forEach((l) => {
+        if (!l) return;
+        if (l.quizConfig && Array.isArray(l.quizConfig.questions) && l.quizConfig.questions.length > 0) {
           lessonQuizzesCount += 1;
           totalMarks += l.quizConfig.totalMarks || 0;
           totalQuestions += l.quizConfig.questions.length;
@@ -1100,8 +1189,8 @@ export const CourseBuilderPage: React.FC = () => {
       });
     });
 
-    const hasFinal = Boolean(finalAssessment && finalAssessment.questions && finalAssessment.questions.length > 0);
-    if (hasFinal && finalAssessment) {
+    const hasFinal = Boolean(finalAssessment && Array.isArray(finalAssessment.questions) && finalAssessment.questions.length > 0);
+    if (hasFinal && finalAssessment && Array.isArray(finalAssessment.questions)) {
       totalMarks += finalAssessment.totalMarks || 0;
       totalQuestions += finalAssessment.questions.length;
     }
@@ -1123,12 +1212,14 @@ export const CourseBuilderPage: React.FC = () => {
     setSaveDraftNotice('Saving course draft to database...');
     try {
       const generatedId = editingCourseId || `crs-${courseCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
-      const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
+      const assignedInstructors = isFaculty
+        ? (user?.id ? [user.id] : [])
+        : (selectedLeadFacultyId ? [selectedLeadFacultyId] : (allFaculty.length > 0 ? [allFaculty[0].id] : []));
       const enrolledCount = selectedStudentIds.size;
 
       const activeOrgId = typeof window !== 'undefined'
-        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || user?.organizationId || 'org-001')
-        : (user?.organizationId || 'org-001');
+        ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id') || user?.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14')
+        : (user?.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14');
 
       const draftCourse: Course = {
         createdBy: user?.id || (isFaculty ? 'u-004' : 'u-001'),
@@ -1177,9 +1268,10 @@ export const CourseBuilderPage: React.FC = () => {
         updatedAt: new Date().toISOString()
       };
 
-      const res = await saveCourse(draftCourse, Array.from(selectedStudentIds));
+      const res = await saveCourse(draftCourse, Array.from(selectedStudentIds), isEditing);
       if (res.success && res.course) {
         setSaveDraftNotice('Course draft successfully saved and persisted to database.');
+        fetchCourses(true);
       } else {
         setSaveDraftNotice(res.error || 'Failed to save draft to database.');
       }
@@ -1205,10 +1297,12 @@ export const CourseBuilderPage: React.FC = () => {
 
     try {
       const generatedId = editingCourseId || `crs-${courseCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
-      const assignedInstructors = isFaculty ? [user?.id || 'u-004'] : (selectedLeadFacultyId ? [selectedLeadFacultyId] : ['u-004']);
+      const assignedInstructors = isFaculty
+        ? (user?.id ? [user.id] : [])
+        : (selectedLeadFacultyId ? [selectedLeadFacultyId] : (allFaculty.length > 0 ? [allFaculty[0].id] : []));
       const enrolledCount = selectedStudentIds.size;
 
-const activeOrgId = (typeof window !== 'undefined'
+      const activeOrgId = (typeof window !== 'undefined'
         ? (sessionStorage.getItem('venilearn_active_org_id') || localStorage.getItem('venilearn_active_tenant_id'))
         : null) || user?.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14';
 
@@ -1225,7 +1319,7 @@ const activeOrgId = (typeof window !== 'undefined'
         durationHours: Number(durationHours) || 1,
         completionPolicy,
         thumbnail: thumbnailUrl,
-        status: publishStatus,
+        status: 'published',
         version: 1,
         modules,
         finalAssessment,
@@ -1259,7 +1353,7 @@ const activeOrgId = (typeof window !== 'undefined'
         updatedAt: new Date().toISOString()
       };
 
-// 1. Persist course with modules, lessons, and assignments to PostgreSQL backend
+      // 1. Persist course with modules, lessons, and assignments to PostgreSQL backend
       const courseSlug = (courseCode || title)
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
@@ -1270,14 +1364,17 @@ const activeOrgId = (typeof window !== 'undefined'
         slug: courseSlug,
       };
 
-      const res = await saveCourse(courseToPersist, Array.from(selectedStudentIds));
+      const res = await saveCourse(courseToPersist, Array.from(selectedStudentIds), isEditing);
       if (!res.success || !res.course) {
         throw new Error(res.error || 'Database persistence failed. Please verify connection and retry.');
       }
 
+      setPublishStatus('published');
       setPublishedCourse(res.course);
       setIsConfirmModalOpen(false);
       setIsPublishing(false);
+      setShowPublishSuccessModal(true);
+      fetchCourses(true);
     } catch (err: any) {
       console.error('Publishing error:', err);
 let errorMsg = err?.message || 'An unexpected error occurred while publishing the course to the database.';
@@ -1362,7 +1459,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
             <div>
               <div className="text-muted text-xs">Curriculum Scope</div>
               <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                {publishedCourse.modules.length} Modules &bull; {totalLessonsCount} Lessons
+                {publishedCourse?.modules?.length || 0} Modules &bull; {totalLessonsCount} Lessons
               </div>
             </div>
           </div>
@@ -2499,7 +2596,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <span className="badge badge-secondary">
-                {modules.length} Modules &bull; {totalLessonsCount} Lessons ({totalCurriculumMinutes} Mins)
+                {(modules || []).length} Modules &bull; {totalLessonsCount} Lessons ({totalCurriculumMinutes} Mins)
               </span>
               <button
                 type="button"
@@ -2537,7 +2634,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
             <div className="card" style={{ padding: '16px', height: 'fit-content', position: 'sticky', top: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>Syllabus Modules</h3>
-                <span className="text-muted text-xs">{modules.length} total</span>
+                <span className="text-muted text-xs">{(modules || []).length} total</span>
               </div>
 
               <div
@@ -2552,7 +2649,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   scrollbarColor: 'var(--border-subtle) transparent'
                 }}
               >
-                {modules.map((m, idx) => (
+                {(modules || []).map((m, idx) => (
                   <div
                     key={m.id}
                     onClick={() => setActiveModuleIndex(idx)}
@@ -2583,8 +2680,8 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       </div>
                       <div className="text-muted text-xs" style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
                         <span>
-                          {m.lessons.length} {m.lessons.length === 1 ? 'lesson' : 'lessons'} &bull;{' '}
-                          {m.lessons.reduce((a, l) => a + (l.durationMinutes || 0), 0)}m
+                          {m.lessons?.length || 0} {(m.lessons?.length || 0) === 1 ? 'lesson' : 'lessons'} &bull;{' '}
+                          {(m.lessons || []).reduce((a, l) => a + (l.durationMinutes || 0), 0)}m
                         </span>
                         {m.assessment && (
                           <span
@@ -2612,10 +2709,10 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       <button
                         type="button"
                         onClick={() => handleMoveModule(idx, 'down')}
-                        disabled={idx === modules.length - 1}
+                        disabled={idx === (modules || []).length - 1}
                         className="btn-icon"
                         title="Move Module Down"
-                        style={{ padding: '3px', opacity: idx === modules.length - 1 ? 0.3 : 1 }}
+                        style={{ padding: '3px', opacity: idx === (modules || []).length - 1 ? 0.3 : 1 }}
                       >
                         <MoveDown size={13} />
                       </button>
@@ -2645,7 +2742,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
 
             {/* Right Column: Active Module Lessons Editor */}
             <div className="card">
-              {modules.length === 0 ? (
+              {(modules || []).length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                   <Layers size={44} style={{ color: 'var(--text-muted)', margin: '0 auto 12px', opacity: 0.6 }} />
                   <h3 style={{ fontSize: '1.1rem', margin: '0 0 8px' }}>Your Curriculum is Empty</h3>
@@ -2727,14 +2824,14 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                           color: 'var(--accent-purple, #a855f7)'
                         }}
                       >
-                        <Award size={13} /> {modules[activeModuleIndex].assessment ? 'Edit Assessment' : '+ Module Assessment'}
+                        <Award size={13} /> {modules[activeModuleIndex]?.assessment ? 'Edit Assessment' : '+ Module Assessment'}
                       </button>
                     </div>
                   </div>
 
                   {/* Lessons List */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {modules[activeModuleIndex].lessons.map((lesson, lIdx) => (
+                    {(modules[activeModuleIndex]?.lessons || []).map((lesson, lIdx) => (
                       <div
                         key={lesson.id}
                         style={{
@@ -2765,10 +2862,10 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                               <button
                                 type="button"
                                 onClick={() => handleMoveLesson(activeModuleIndex, lIdx, 'down')}
-                                disabled={lIdx === modules[activeModuleIndex].lessons.length - 1}
+                                disabled={lIdx === (modules[activeModuleIndex]?.lessons?.length || 0) - 1}
                                 className="btn-icon"
                                 title="Move Lesson Down"
-                                style={{ padding: '2px', opacity: lIdx === modules[activeModuleIndex].lessons.length - 1 ? 0.3 : 1 }}
+                                style={{ padding: '2px', opacity: lIdx === (modules[activeModuleIndex]?.lessons?.length || 0) - 1 ? 0.3 : 1 }}
                               >
                                 <MoveDown size={12} />
                               </button>
@@ -2880,7 +2977,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                         {/* Quiz Configuration Panel when type === 'quiz' */}
                         {lesson.type === 'quiz' && (
                           <div style={{ paddingLeft: '44px' }}>
-                            {lesson.quizConfig && lesson.quizConfig.questions && lesson.quizConfig.questions.length > 0 ? (
+                            {lesson.quizConfig && Array.isArray(lesson.quizConfig.questions) && lesson.quizConfig.questions.length > 0 ? (
                               <div
                                 style={{
                                   padding: '12px 14px',
@@ -2905,7 +3002,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                                   </div>
                                   <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{lesson.quizConfig.title}</div>
                                   <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-                                    <strong>{lesson.quizConfig.questions.length} Questions</strong> &bull; Total Marks: {lesson.quizConfig.totalMarks} &bull; Pass: {lesson.quizConfig.passingPercentage}% &bull; Time: {lesson.quizConfig.timeLimitMinutes}m &bull; Attempts: {lesson.quizConfig.allowedAttempts}
+                                    <strong>{(lesson.quizConfig.questions || []).length} Questions</strong> &bull; Total Marks: {lesson.quizConfig.totalMarks} &bull; Pass: {lesson.quizConfig.passingPercentage}% &bull; Time: {lesson.quizConfig.timeLimitMinutes}m &bull; Attempts: {lesson.quizConfig.allowedAttempts}
                                   </div>
                                 </div>
 
@@ -2970,7 +3067,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       </div>
                     ))}
 
-                    {modules[activeModuleIndex].lessons.length === 0 && (
+                    {(modules[activeModuleIndex]?.lessons?.length || 0) === 0 && (
                       <div
                         style={{
                           textAlign: 'center',
@@ -2998,10 +3095,10 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                           Module Assessment Checkpoint
                         </span>
                       </div>
-                      <span className="text-muted text-xs">Evaluates all lessons in {modules[activeModuleIndex].title}</span>
+                      <span className="text-muted text-xs">Evaluates all lessons in {modules[activeModuleIndex]?.title || 'Active Module'}</span>
                     </div>
 
-                    {modules[activeModuleIndex].assessment ? (
+                    {modules[activeModuleIndex]?.assessment ? (
                       <div
                         style={{
                           padding: '14px 18px',
@@ -3021,17 +3118,17 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                               Module Assessment Active
                             </span>
                             <span className="badge badge-secondary" style={{ fontSize: '0.7rem', textTransform: 'capitalize' }}>
-                              Difficulty: {modules[activeModuleIndex].assessment?.difficulty}
+                              Difficulty: {modules[activeModuleIndex]?.assessment?.difficulty}
                             </span>
                           </div>
                           <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                            {modules[activeModuleIndex].assessment?.title}
+                            {modules[activeModuleIndex]?.assessment?.title}
                           </div>
                           <p className="text-secondary text-xs" style={{ margin: '3px 0 6px', maxWidth: '520px' }}>
-                            {modules[activeModuleIndex].assessment?.description}
+                            {modules[activeModuleIndex]?.assessment?.description}
                           </p>
                           <div className="text-muted text-xs">
-                            <strong>{modules[activeModuleIndex].assessment?.questions?.length || 0} Questions</strong> &bull; Total Marks: {modules[activeModuleIndex].assessment?.totalMarks} &bull; Pass: {modules[activeModuleIndex].assessment?.passingPercentage}% &bull; Time: {modules[activeModuleIndex].assessment?.timeLimitMinutes}m &bull; Max Attempts: {modules[activeModuleIndex].assessment?.allowedAttempts}
+                            <strong>{modules[activeModuleIndex]?.assessment?.questions?.length || 0} Questions</strong> &bull; Total Marks: {modules[activeModuleIndex]?.assessment?.totalMarks} &bull; Pass: {modules[activeModuleIndex]?.assessment?.passingPercentage}% &bull; Time: {modules[activeModuleIndex]?.assessment?.timeLimitMinutes}m &bull; Max Attempts: {modules[activeModuleIndex]?.assessment?.allowedAttempts}
                           </div>
                         </div>
 
@@ -3211,8 +3308,8 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                     onChange={(e) => setFacultyDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 10px', minWidth: '180px' }}
                   >
-                    {!isFaculty && <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>}
-                    {trainerAuthorizedDepartments.map((d) => (
+                    {!isFaculty && <option value="all">All Departments ({(trainerAuthorizedDepartments || []).length})</option>}
+                    {(trainerAuthorizedDepartments || []).map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
@@ -3270,86 +3367,97 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   padding: '4px'
                 }}
               >
-                {filteredFaculty.map((fac) => {
-                  const isSelected = selectedLeadFacultyId === fac.id;
-                  const isInactive = fac.status === 'suspended' || fac.status === 'deactivated';
+                {isPeopleLoading ? (
+                  <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
+                    <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 8px', display: 'block' }} />
+                    Loading faculty members from database...
+                  </div>
+                ) : (filteredFaculty || []).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
+                    No faculty members found for the current department and search criteria.
+                  </div>
+                ) : (
+                  (filteredFaculty || []).map((fac) => {
+                    const isSelected = selectedLeadFacultyId === fac.id;
+                    const isInactive = fac.status === 'suspended' || fac.status === 'deactivated';
 
-                  return (
-                    <div
-                      key={fac.id}
-                      onClick={() => {
-                        if (!isInactive) {
-                          setSelectedLeadFacultyId(fac.id);
-                        }
-                      }}
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        background: isSelected
-                          ? 'var(--primary-light, rgba(99, 102, 241, 0.12))'
-                          : isInactive
-                            ? 'var(--bg-input)'
-                            : 'var(--bg-card)',
-                        border: isSelected
-                          ? '2px solid var(--primary)'
-                          : isInactive
-                            ? '1px dashed var(--border-subtle)'
-                            : '1px solid var(--border-subtle)',
-                        cursor: isInactive ? 'not-allowed' : 'pointer',
-                        opacity: isInactive ? 0.6 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div
-                          style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '50%',
-                            background: isSelected ? 'var(--primary)' : 'var(--bg-input)',
-                            color: isSelected ? '#fff' : 'var(--text-primary)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '0.85rem'
-                          }}
-                        >
-                          {fac.displayName ? fac.displayName.slice(0, 1) : fac.firstName.slice(0, 1)}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                            {fac.displayName || `${fac.firstName} ${fac.lastName}`}
+                    return (
+                      <div
+                        key={fac.id}
+                        onClick={() => {
+                          if (!isInactive) {
+                            setSelectedLeadFacultyId(fac.id);
+                          }
+                        }}
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          background: isSelected
+                            ? 'var(--primary-light, rgba(99, 102, 241, 0.12))'
+                            : isInactive
+                              ? 'var(--bg-input)'
+                              : 'var(--bg-card)',
+                          border: isSelected
+                            ? '2px solid var(--primary)'
+                            : isInactive
+                              ? '1px dashed var(--border-subtle)'
+                              : '1px solid var(--border-subtle)',
+                          cursor: isInactive ? 'not-allowed' : 'pointer',
+                          opacity: isInactive ? 0.6 : 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '50%',
+                              background: isSelected ? 'var(--primary)' : 'var(--bg-input)',
+                              color: isSelected ? '#fff' : 'var(--text-primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            {fac.displayName ? fac.displayName.slice(0, 1) : fac.firstName.slice(0, 1)}
                           </div>
-                          <div className="text-secondary text-xs">
-                            {fac.rollNo || fac.id} &bull; {getDepartmentName(fac.departmentId)}
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
+                              {fac.displayName || `${fac.firstName} ${fac.lastName}`}
+                            </div>
+                            <div className="text-secondary text-xs">
+                              {fac.rollNo || fac.id} &bull; {getDepartmentName(fac.departmentId)}
+                            </div>
+                            <div className="text-muted text-xs">{fac.email}</div>
                           </div>
-                          <div className="text-muted text-xs">{fac.email}</div>
                         </div>
+
+                        {isSelected && (
+                          <span
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '50%',
+                              background: 'var(--primary)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Check size={14} />
+                          </span>
+                        )}
                       </div>
-
-                      {isSelected && (
-                        <span
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            background: 'var(--primary)',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                        >
-                          <Check size={14} />
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
           ) : (
@@ -3486,8 +3594,8 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                     onChange={(e) => setStudentDeptFilter(e.target.value)}
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
-                    <option value="all">All Departments ({trainerAuthorizedDepartments.length})</option>
-                    {trainerAuthorizedDepartments.map((d) => (
+                    <option value="all">All Departments ({(trainerAuthorizedDepartments || []).length})</option>
+                    {(trainerAuthorizedDepartments || []).map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name} {d.id === departmentId ? '(Course Dept)' : ''}
                       </option>
@@ -3506,9 +3614,9 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                     style={{ fontSize: '0.82rem', padding: '5px 8px', minWidth: '150px' }}
                   >
                     <option value="all">
-                      {isFaculty ? `Authorized Cohorts (${trainerAuthorizedCohorts.length})` : 'All Cohorts / Batches'}
+                      {isFaculty ? `Authorized Cohorts (${(trainerAuthorizedCohorts || []).length})` : 'All Cohorts / Batches'}
                     </option>
-                    {trainerAuthorizedCohorts.map((c) => (
+                    {(trainerAuthorizedCohorts || []).map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -3637,7 +3745,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   onClick={handleSelectAllFilteredStudents}
                   style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem' }}
                 >
-                  <CheckSquare size={13} /> Select All Eligible ({filteredStudents.length})
+                  <CheckSquare size={13} /> Select All Eligible ({(filteredStudents || []).length})
                 </button>
 
                 <button
@@ -3680,90 +3788,97 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStudents.map((st) => {
-                    const isAlreadyEnrolled = alreadyEnrolledStudentIds.has(st.id);
-                    const isChecked = selectedStudentIds.has(st.id);
-                    const isInactive = st.status === 'suspended' || st.status === 'deactivated';
-                    const isDisabled = isInactive || isAlreadyEnrolled;
-
-                    return (
-                      <tr
-                        key={st.id}
-                        onClick={() => {
-                          if (!isDisabled) handleToggleStudent(st.id);
-                        }}
-                        style={{
-                          background: isChecked ? 'var(--primary-light, rgba(99, 102, 241, 0.08))' : 'transparent',
-                          cursor: isDisabled ? 'not-allowed' : 'pointer',
-                          opacity: isInactive ? 0.6 : 1,
-                          borderBottom: '1px solid var(--border-subtle)',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        <td style={{ textAlign: 'center', padding: '8px' }}>
-                          <input
-                            type="checkbox"
-                            checked={isChecked || isAlreadyEnrolled}
-                            disabled={isDisabled}
-                            onChange={() => !isDisabled && handleToggleStudent(st.id)}
-                            style={{ accentColor: 'var(--primary)', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
-                          />
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div
-                              style={{
-                                width: '26px',
-                                height: '26px',
-                                borderRadius: '50%',
-                                background: 'var(--bg-input)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.72rem',
-                                fontWeight: 700
-                              }}
-                            >
-                              {st.displayName ? st.displayName.slice(0, 1) : st.firstName.slice(0, 1)}
-                            </div>
-                            <span>{st.displayName || `${st.firstName} ${st.lastName}`}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                          {st.rollNo || st.id}
-                        </td>
-                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>{st.email}</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
-                            {getDepartmentName(st.departmentId)}
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontSize: '0.8rem' }}>{getStudentCohort(st.id)}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                          {isAlreadyEnrolled ? (
-                            <span className="badge badge-primary" style={{ fontSize: '0.68rem' }}>
-                              Already Enrolled
-                            </span>
-                          ) : isInactive ? (
-                            <span className="badge badge-danger" style={{ fontSize: '0.68rem' }}>
-                              Suspended
-                            </span>
-                          ) : (
-                            <span className="badge badge-active" style={{ fontSize: '0.68rem' }}>
-                              Eligible
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {filteredStudents.length === 0 && (
+                  {isPeopleLoading ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                        <RefreshCw size={22} className="animate-spin" style={{ margin: '0 auto 8px', display: 'block' }} />
+                        Loading student roster from database...
+                      </td>
+                    </tr>
+                  ) : (filteredStudents || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
                         No eligible students found for the current department and search criteria.
                       </td>
                     </tr>
+                  ) : (
+                    filteredStudents.map((st) => {
+                      const isAlreadyEnrolled = alreadyEnrolledStudentIds.has(st.id);
+                      const isChecked = selectedStudentIds.has(st.id);
+                      const isInactive = st.status === 'suspended' || st.status === 'deactivated';
+                      const isDisabled = isInactive || isAlreadyEnrolled;
+
+                      return (
+                        <tr
+                          key={st.id}
+                          onClick={() => {
+                            if (!isDisabled) handleToggleStudent(st.id);
+                          }}
+                          style={{
+                            background: isChecked ? 'var(--primary-light, rgba(99, 102, 241, 0.08))' : 'transparent',
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isInactive ? 0.6 : 1,
+                            borderBottom: '1px solid var(--border-subtle)',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          <td style={{ textAlign: 'center', padding: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked || isAlreadyEnrolled}
+                              disabled={isDisabled}
+                              onChange={() => !isDisabled && handleToggleStudent(st.id)}
+                              style={{ accentColor: 'var(--primary)', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 12px', fontWeight: 600 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div
+                                style={{
+                                  width: '26px',
+                                  height: '26px',
+                                  borderRadius: '50%',
+                                  background: 'var(--bg-input)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700
+                                }}
+                              >
+                                {st.displayName ? st.displayName.slice(0, 1) : st.firstName.slice(0, 1)}
+                              </div>
+                              <span>{st.displayName || `${st.firstName} ${st.lastName}`}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            {st.rollNo || st.id}
+                          </td>
+                          <td style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>{st.email}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
+                              {getDepartmentName(st.departmentId)}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 12px', fontSize: '0.8rem' }}>{getStudentCohort(st.id)}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            {isAlreadyEnrolled ? (
+                              <span className="badge badge-primary" style={{ fontSize: '0.68rem' }}>
+                                Already Enrolled
+                              </span>
+                            ) : isInactive ? (
+                              <span className="badge badge-danger" style={{ fontSize: '0.68rem' }}>
+                                Suspended
+                              </span>
+                            ) : (
+                              <span className="badge badge-active" style={{ fontSize: '0.68rem' }}>
+                                Eligible
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -4035,7 +4150,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       <Clock size={14} /> {durationHours} Hours Duration
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Layers size={14} /> {modules.length} Modules &bull; {totalLessonsCount} Lessons
+                      <Layers size={14} /> {(modules || []).length} Modules &bull; {totalLessonsCount} Lessons
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <Award size={14} /> Certificate Eligible
@@ -4059,7 +4174,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                   <span className="text-muted text-xs">Curriculum Units</span>
                   <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                     <Layers size={14} color="var(--primary)" />
-                    {modules.length} Modules &bull; {totalLessonsCount} Lessons
+                    {(modules || []).length} Modules &bull; {totalLessonsCount} Lessons
                   </div>
                 </div>
 
@@ -4112,12 +4227,12 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                             {m.title}
                           </div>
                           <span className="text-muted text-xs">
-                            {m.lessons.length} {m.lessons.length === 1 ? 'lesson' : 'lessons'}
+                            {m.lessons?.length || 0} {(m.lessons?.length || 0) === 1 ? 'lesson' : 'lessons'}
                           </span>
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {m.lessons.map((l) => (
+                          {(m.lessons || []).map((l) => (
                             <div
                               key={l.id}
                               style={{
@@ -4637,9 +4752,33 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="text-muted">Curriculum Content:</span>
-                  <strong>{modules.length} Modules &bull; {totalLessonsCount} Lessons</strong>
+                  <strong>{(modules || []).length} Modules &bull; {totalLessonsCount} Lessons</strong>
                 </div>
               </div>
+
+              {publishError && (
+                <div
+                  style={{
+                    background: 'var(--danger-bg, rgba(239, 68, 68, 0.12))',
+                    border: '1px solid var(--danger, #ef4444)',
+                    color: 'var(--danger, #ef4444)',
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    marginBottom: '18px',
+                    textAlign: 'left'
+                  }}
+                >
+                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong>Publication Failed:</strong>
+                    <div style={{ marginTop: '2px' }}>{publishError}</div>
+                  </div>
+                </div>
+              )}
 
               <p className="text-secondary text-xs" style={{ marginBottom: '24px' }}>
                 Once published, the course will be discoverable in the course catalog. Pre-assigned students will have immediate access to all curriculum modules.
@@ -4676,6 +4815,8 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
         )
       }
 
+
+
       {/* ========================================================= */}
       {/* REUSABLE ASSESSMENT CONFIGURATION MODAL (AI / MANUAL)      */}
       {/* ========================================================= */}
@@ -4706,12 +4847,12 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
               assessmentModalState.scope === 'lesson_quiz' &&
                 assessmentModalState.modIndex !== null &&
                 assessmentModalState.lessonIndex !== null
-                ? modules[assessmentModalState.modIndex]?.lessons[assessmentModalState.lessonIndex]?.uploadedDocument
-                  ? [modules[assessmentModalState.modIndex].lessons[assessmentModalState.lessonIndex].uploadedDocument!]
+                ? modules[assessmentModalState.modIndex]?.lessons?.[assessmentModalState.lessonIndex]?.uploadedDocument?.name
+                  ? [modules[assessmentModalState.modIndex]!.lessons![assessmentModalState.lessonIndex]!.uploadedDocument!]
                   : allCourseDocuments
                 : assessmentModalState.scope === 'module_assessment' && assessmentModalState.modIndex !== null
-                  ? modules[assessmentModalState.modIndex]?.lessons
-                    .filter((l) => Boolean(l.uploadedDocument))
+                  ? (modules[assessmentModalState.modIndex]?.lessons || [])
+                    .filter((l) => Boolean(l.uploadedDocument && l.uploadedDocument.name))
                     .map((l) => l.uploadedDocument!)
                   : allCourseDocuments
             }

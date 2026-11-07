@@ -20,11 +20,11 @@ export interface CompanyBrandingData {
 
 export const defaultCompanyBranding: CompanyBrandingData = {
   id: 'comp-1',
-  name: 'Venixa Private Limited',
-  tradeName: 'Venixa Technologies',
-  code: 'VNX',
+  name: 'RAPA TECH',
+  tradeName: 'RAPA TECH',
+  code: 'RAPA',
   logo: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80',
-  website: 'https://www.venixatech.com',
+  website: 'https://www.rapa.tech',
   status: 'Active',
 };
 
@@ -81,9 +81,7 @@ export function getSavedCompanyBranding(orgId?: string): CompanyBrandingData {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        if (effectiveOrgId === 'org-001') {
-          return { ...fallback, ...parsed };
-        }
+        return { ...fallback, ...parsed };
       }
     }
   } catch (err) {
@@ -171,11 +169,11 @@ export function useOrganisationBranding(orgIdOverride?: string): UseOrganisation
     [effectiveOrgId]
   );
 
-  const companyName = branding.tradeName || branding.name || 'Venixa Technologies';
-  const legalName = branding.name || 'Venixa Private Limited';
+  const companyName = branding.tradeName || branding.name || 'RAPA TECH';
+  const legalName = branding.name || 'RAPA TECH';
   const companyLogo = branding.logo || '';
   const hasCustomLogo = Boolean(companyLogo && companyLogo.trim().length > 0);
-  const companyCode = branding.code || 'VNX';
+  const companyCode = branding.code || 'RAPA';
 
   return {
     companyName,

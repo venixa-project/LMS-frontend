@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, mapBackendCourseToFrontend } from '../../lib/courseStore';
 import { useCertificateStore } from '../../lib/certificateStore';
 import { useMomentumStore } from '../../lib/momentumStore';
 import { apiClient } from '../../lib/apiClient';
 import { generateCertificatePdf } from '../../lib/certificatePdf';
-import { Certificate, QuizAssessmentConfig, UploadedDocumentInfo } from '../../types';
+import { Course, Certificate, QuizAssessmentConfig, UploadedDocumentInfo } from '../../types';
 import { LearnerVideoPlayer } from './components/LearnerVideoPlayer';
 import { LearnerQuizRunner } from './components/LearnerQuizRunner';
 import {
@@ -32,7 +32,7 @@ export function downloadContentFile(
       url = URL.createObjectURL(content);
       isCreatedBlob = true;
     } else if (typeof content === 'string') {
-      if (content.startsWith('data:') || content.startsWith('blob:') || content.startsWith('http://') || content.startsWith('https://')) {
+      if (content.startsWith('data:') || content.startsWith('blob:') || content.startsWith('http://') || content.startsWith('https://') || content.startsWith('/')) {
         url = content;
       } else {
         const blob = new Blob([content], { type: mimeType });
@@ -73,8 +73,24 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const { issueCourseCertificate, getCertificatesByLearner } = useCertificateStore();
   const { id } = useParams<{ id: string }>();
 
-  // Resolve course from store
-  const course = courses.find((c) => c.id === id);
+  // Authoritative course state fetched freshly from backend PostgreSQL database
+  const [courseFromApi, setCourseFromApi] = useState<Course | null>(null);
+
+  useEffect(() => {
+    if (id) {
+      apiClient.get<any>(`/courses/${id}`).then((res) => {
+        if (res?.data) {
+          const mapped = mapBackendCourseToFrontend(res.data);
+          setCourseFromApi(mapped);
+        }
+      }).catch((err) => {
+        console.warn('[LearnerPlayer] Could not fetch single course from API:', err);
+      });
+    }
+  }, [id]);
+
+  // Resolve course from API first (most complete with lessons/docs/media), then fallback to store
+  const course: Course | undefined = courseFromApi || courses.find((c) => c.id === id || (c as any).slug === id);
   const allLessons = useMemo(() => course?.modules?.flatMap((m) => m.lessons) || [], [course]);
 
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
@@ -247,10 +263,32 @@ export const LearnerCoursePlayerPage: React.FC = () => {
     if (currentLesson && localDocMap[currentLesson.id]) {
       return localDocMap[currentLesson.id];
     }
-    if (currentLesson?.uploadedDocument) {
+    if (currentLesson?.uploadedDocument && (currentLesson.uploadedDocument.name || currentLesson.uploadedDocument.url)) {
       return currentLesson.uploadedDocument;
     }
-    const courseDoc = course.modules?.flatMap((m) => m.lessons).find((l) => l.uploadedDocument)?.uploadedDocument;
+    if (
+      currentLesson?.type === 'document' ||
+      (currentLesson?.contentUrl && (
+        currentLesson.contentUrl.includes('/documents/') ||
+        currentLesson.contentUrl.includes('documents%2F') ||
+        ['.pdf', '.docx', '.doc', '.txt', '.md'].some((ext) =>
+          currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext)
+        )
+      ))
+    ) {
+      const cleanUrl = currentLesson?.contentUrl ? currentLesson.contentUrl.split('?')[0] : '';
+      const rawFileName = cleanUrl.split('/').pop() || `${currentLesson?.title || 'Document'}.pdf`;
+      const fileName = currentLesson?.uploadedDocument?.name || decodeURIComponent(rawFileName);
+      return {
+        id: `doc-${currentLesson?.id || 'curriculum'}`,
+        name: fileName,
+        size: currentLesson?.uploadedDocument?.size || 1500000,
+        type: fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+        uploadedAt: course.createdAt || new Date().toISOString(),
+        url: currentLesson?.contentUrl || currentLesson?.uploadedDocument?.url,
+      };
+    }
+    const courseDoc = course.modules?.flatMap((m) => m.lessons).find((l) => l.uploadedDocument && (l.uploadedDocument.name || l.uploadedDocument.url))?.uploadedDocument;
     if (courseDoc) {
       return courseDoc;
     }
@@ -667,7 +705,7 @@ public final class CourseDataService {
                 }
               }}
             />
-          ) : currentLesson.type === 'video' ? (
+          ) : (currentLesson.type === 'video' || (currentLesson.contentUrl && (currentLesson.contentUrl.includes('/videos/') || currentLesson.contentUrl.includes('/storage/videos/') || currentLesson.contentUrl.includes('s3.') || currentLesson.contentUrl.includes('amazonaws.com') || ['.mp4', '.webm', '.mov', '.mkv', '.mp3', '.wav', '.m4a', '.ogg', '.aac'].some((ext) => currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext))))) ? (
             <LearnerVideoPlayer
               videoInfo={currentLesson.videoInfo}
               contentUrl={currentLesson.contentUrl}
@@ -840,7 +878,7 @@ public final class CourseDataService {
                 )}
 
                 {/* Embedded Document Viewer if URL is available */}
-                {activeDoc?.url && (activeDoc.url.startsWith('data:application/pdf') || activeDoc.url.endsWith('.pdf')) && (
+                {activeDoc?.url && (activeDoc.url.startsWith('data:application/pdf') || activeDoc.url.toLowerCase().includes('.pdf') || activeDoc.name?.toLowerCase().endsWith('.pdf')) && (
                   <div style={{ marginBottom: '24px', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                     <iframe
                       src={activeDoc.url}

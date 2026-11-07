@@ -383,8 +383,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
       if (isTrainer && user?.id) {
         setInstructorId(user.id);
+      } else if (allTrainers.length > 0) {
+        setInstructorId(allTrainers[0].id);
+      } else if (user?.id) {
+        setInstructorId(user.id);
       } else {
-        setInstructorId('u-004');
+        setInstructorId('');
       }
     }
   }, [isOpen, sessionToEdit, isTrainer, user?.id]);
@@ -1297,21 +1301,24 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                             <span style={{ color: '#38bdf8', fontWeight: 600 }}>
-                              📌 Important: All participants must join the same Google Meet room code.
+                              📌 Important: All participants (Admin, Trainer & Students) join this exact same Google Meet room code.
                             </span>
                             <button
                               type="button"
                               className="btn btn-secondary btn-sm"
                               onClick={() => {
-                                window.open('https://meet.google.com/new', '_blank');
+                                const chars = 'abcdefghijklmnopqrstuvwxyz';
+                                const seg = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+                                const code = `https://meet.google.com/${seg(3)}-${seg(4)}-${seg(3)}`;
+                                setGoogleMeetUrl(code);
                               }}
                               style={{ fontSize: '0.75rem', padding: '3px 10px', height: '28px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
                             >
-                              <Video size={13} /> 1-Click Create Meet in New Tab ↗
+                              <Video size={13} /> 1-Click Generate Meet Code
                             </button>
                           </div>
                           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Click button above to open a Google Meet room, copy its URL from the address bar (e.g. <code>https://meet.google.com/abc-defg-hij</code>), and paste it below.
+                            Click button above to generate a unique canonical meeting code (e.g. <code>https://meet.google.com/abc-defg-hij</code>), or paste an existing one below.
                           </span>
                         </>
                       ) : (

@@ -38,9 +38,12 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
   const [missingNotice, setMissingNotice] = useState<string | null>(null);
 
   const effectiveHost = isHost || (role ? ['instructor', 'trainer', 'faculty', 'host', 'admin', 'org_admin'].includes(role.toLowerCase()) : false);
+  const isConfigured = isValidGoogleMeetUrl(meetingUrl);
 
   const defaultLabel = label
     ? label
+    : !isConfigured
+    ? (effectiveHost ? 'Configure Google Meet' : 'Meeting Link Pending')
     : effectiveHost
     ? 'Open Google Meet'
     : 'Join with Google Meet';
@@ -48,11 +51,15 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!meetingUrl || !meetingUrl.trim()) {
+    if (!isConfigured) {
       if (onLinkMissing) {
         onLinkMissing();
       } else {
-        setMissingNotice('This session does not have a Google Meet link configured yet.');
+        setMissingNotice(
+          effectiveHost
+            ? 'Please generate or configure a Google Meet room code for this session.'
+            : 'The instructor has not published the Google Meet room link yet. Please check back before class begins.'
+        );
         setTimeout(() => setMissingNotice(null), 3800);
       }
       return;
@@ -77,8 +84,6 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
       },
     });
   };
-
-  const isConfigured = isValidGoogleMeetUrl(meetingUrl);
 
   const getPaddingAndFont = () => {
     switch (size) {

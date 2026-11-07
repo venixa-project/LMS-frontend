@@ -54,7 +54,7 @@ export const Breadcrumbs: React.FC = () => {
   const location = useLocation();
   const pathnames = location.pathname.split('/').filter((x) => x);
 
-  if (pathnames.length === 0 || pathnames[0] === 'dashboard') {
+  if (pathnames.length === 0 || pathnames[0] === 'dashboard' || pathnames[0] === 'momentum') {
     return null;
   }
 

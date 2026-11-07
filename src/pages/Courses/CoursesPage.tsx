@@ -61,9 +61,6 @@ const CoursesManagementPage: React.FC = () => {
     enrollCourse
   } = useCourseStore();
 
-  useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
   const { cohorts, fetchCohorts } = useCohortStore();
   const { getFaculty, getStudents } = usePeopleStore();
   const allFaculty = getFaculty();

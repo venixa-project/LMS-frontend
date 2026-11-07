@@ -12,6 +12,7 @@ import {
   RefreshCw,
   CheckCircle2,
   Upload,
+  Headphones,
 } from 'lucide-react';
 import { VideoLessonInfo } from '../../../types';
 import {
@@ -63,6 +64,21 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
   const isVimeo = videoInfo?.sourceType === 'vimeo' || normalized.sourceType === 'vimeo';
   const isExternalEmbed = isYouTube || isVimeo;
   const embedUrl = videoInfo?.embedUrl || normalized.embedUrl;
+
+  const cleanUrl = (rawUrl || '').split('?')[0].toLowerCase();
+  const isAudioFile =
+    cleanUrl.endsWith('.mp3') ||
+    cleanUrl.endsWith('.wav') ||
+    cleanUrl.endsWith('.m4a') ||
+    cleanUrl.endsWith('.aac') ||
+    cleanUrl.endsWith('.ogg') ||
+    rawUrl.toLowerCase().includes('.mp3') ||
+    rawUrl.toLowerCase().includes('.wav') ||
+    rawUrl.toLowerCase().includes('.m4a') ||
+    Boolean(videoInfo?.mimeType?.startsWith('audio/')) ||
+    Boolean(videoInfo?.fileName?.toLowerCase().endsWith('.mp3')) ||
+    Boolean(videoInfo?.fileName?.toLowerCase().endsWith('.wav')) ||
+    Boolean(videoInfo?.fileName?.toLowerCase().endsWith('.m4a'));
 
   // Local/Direct streaming video URL with guaranteed playable fallback
   const resolvePlayableSource = (): string => {
@@ -233,11 +249,11 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
         boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
       }}
     >
-      {/* Hidden local video file selector */}
+      {/* Hidden local media file selector */}
       <input
         type="file"
         ref={fileInputRef}
-        accept="video/*"
+        accept="video/*,audio/*,.mp4,.webm,.mov,.mkv,.mp3,.wav,.m4a,.aac,.ogg"
         onChange={handleCustomFileUpload}
         style={{ display: 'none' }}
       />
@@ -268,7 +284,11 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
             }}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
-            <Film size={14} color="#818cf8" style={{ flexShrink: 0 }} />
+            {isAudioFile ? (
+              <Headphones size={14} color="#818cf8" style={{ flexShrink: 0 }} />
+            ) : (
+              <Film size={14} color="#818cf8" style={{ flexShrink: 0 }} />
+            )}
             <span
               style={{
                 fontWeight: 600,
@@ -282,7 +302,7 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
               {videoInfo?.fileName || lessonTitle}
             </span>
             <span style={{ color: '#94a3b8', fontSize: '0.74rem', flexShrink: 0 }}>
-              &bull; {duration > 0 ? formatVideoDuration(duration) : 'Interactive Lecture Stream'}
+              &bull; {duration > 0 ? formatVideoDuration(duration) : isAudioFile ? 'Audio Lecture Stream' : 'Interactive Lecture Stream'}
             </span>
           </div>
         </div>
@@ -305,9 +325,9 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
             transition: 'all 0.15s ease',
             flexShrink: 0,
           }}
-          title="Upload or select an MP4 / WebM video file from your computer"
+          title="Upload or select a video or audio file from your computer"
         >
-          <Upload size={12} /> Choose Video File
+          <Upload size={12} /> Choose Media File
         </button>
       </div>
 
@@ -369,6 +389,51 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
           cursor: 'pointer',
         }}
       />
+
+      {/* Audio Visualization Display for Audio / MP3 lessons */}
+      {isAudioFile && (
+        <div
+          onClick={togglePlay}
+          style={{
+            position: 'absolute',
+            top: '46px',
+            bottom: '62px',
+            left: 0,
+            right: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            background: 'radial-gradient(circle at center, rgba(30, 41, 59, 0.85) 0%, rgba(4, 7, 17, 0.98) 100%)',
+            zIndex: 3,
+          }}
+        >
+          <div
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: isPlaying ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+              border: `2px solid ${isPlaying ? '#818cf8' : 'rgba(255, 255, 255, 0.15)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: isPlaying ? '0 0 30px rgba(129, 140, 248, 0.4)' : 'none',
+              transition: 'all 0.3s ease',
+              marginBottom: '12px',
+            }}
+          >
+            <Headphones size={36} color={isPlaying ? '#a5b4fc' : '#94a3b8'} />
+          </div>
+          <div style={{ color: '#f8fafc', fontWeight: 600, fontSize: '0.98rem', marginBottom: '4px' }}>
+            {videoInfo?.fileName || lessonTitle}
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+            {isPlaying ? 'Audio Track Playing • Click to Pause' : 'Audio Track Loaded • Click to Play'}
+          </div>
+        </div>
+      )}
 
       {/* Loading Overlay */}
       {isLoading && !hasError && (

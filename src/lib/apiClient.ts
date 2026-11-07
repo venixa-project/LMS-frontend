@@ -4,7 +4,37 @@
  */
 import { AUTH_SESSION_KEY } from './authConstants';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5000/api/v1';
+export function getApiBaseUrl(): string {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL as string;
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL as string;
+  }
+  if (typeof window !== 'undefined') {
+    // In browser, use relative '/api/v1' so Vite dev proxy forwards requests cleanly
+    // without CORS or Private Network Access issues when accessed via LAN IP (e.g. 192.168.0.15)
+    return '/api/v1';
+  }
+  return 'http://localhost:5000/api/v1';
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+
+export function buildFullUrl(endpoint: string): string {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (cleanEndpoint.startsWith('/api/v1')) {
+    if (API_BASE_URL.endsWith('/api/v1')) {
+      const basePrefix = API_BASE_URL.slice(0, -7);
+      return `${basePrefix}${cleanEndpoint}`;
+    }
+    return cleanEndpoint;
+  }
+  return `${API_BASE_URL}${cleanEndpoint}`;
+}
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -61,6 +91,7 @@ function getStoredToken(): string | null {
 }
 
 let legacyStudentLoginInFlight: Promise<void> | null = null;
+let lastFailedReauthTime = 0;
 
 function isMockAuthToken(token: string | null): boolean {
   if (!token) return false;
@@ -121,7 +152,7 @@ async function reauthenticateSession(): Promise<boolean> {
 
   // 1. Try refresh-token endpoint first
   try {
-    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+    const refreshRes = await fetch(buildFullUrl('/auth/refresh-token'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -145,7 +176,7 @@ async function reauthenticateSession(): Promise<boolean> {
   // 2. Fall back to role/email re-login
   try {
     const creds = getDemoCredentialsForRole(session.activeRole, session.email);
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch(buildFullUrl('/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -175,6 +206,7 @@ async function reauthenticateSession(): Promise<boolean> {
 async function migrateLegacyStudentSession(endpoint: string): Promise<void> {
   if (endpoint.replace(/\/+$/, '').endsWith('/auth/login')) return;
   if (endpoint.replace(/\/+$/, '').endsWith('/auth/refresh-token')) return;
+  if (Date.now() - lastFailedReauthTime < 60000) return;
 
   const rawSession = localStorage.getItem(AUTH_SESSION_KEY);
   if (!rawSession) return;
@@ -189,7 +221,13 @@ async function migrateLegacyStudentSession(endpoint: string): Promise<void> {
   const token = session.token || null;
   if (!token || isMockAuthToken(token) || isJwtExpired(token)) {
     if (!legacyStudentLoginInFlight) {
-      legacyStudentLoginInFlight = reauthenticateSession().then(() => {});
+      legacyStudentLoginInFlight = reauthenticateSession().then((success) => {
+        if (!success) {
+          lastFailedReauthTime = Date.now();
+        } else {
+          lastFailedReauthTime = 0;
+        }
+      });
     }
     await legacyStudentLoginInFlight;
     legacyStudentLoginInFlight = null;
@@ -204,7 +242,15 @@ export function hasBackendAccessToken(): boolean {
 function getStoredTenantId(): string | null {
   try {
     const raw = localStorage.getItem('venilearn_active_tenant_id') || (typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null);
-    return raw || null;
+    if (raw) return raw;
+
+    const authRaw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (authRaw) {
+      const parsed = JSON.parse(authRaw);
+      if (parsed.tenantId) return parsed.tenantId;
+      if (parsed.user?.tenantId) return parsed.user.tenantId;
+    }
+    return '871abf8a-e563-4d0f-afc7-416d8da3df14';
   } catch {
     return '871abf8a-e563-4d0f-afc7-416d8da3df14';
   }
@@ -215,7 +261,7 @@ async function request<T = any>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   await migrateLegacyStudentSession(endpoint);
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const url = buildFullUrl(endpoint);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -325,7 +371,7 @@ export const apiClient = {
     request<T>(endpoint, { method: 'DELETE', headers }),
 
   upload: async <T = any>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> => {
-    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    const url = buildFullUrl(endpoint);
     const headers: Record<string, string> = {};
 
     const token = getStoredToken();

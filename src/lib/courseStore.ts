@@ -55,12 +55,13 @@ interface CourseState {
     message: string;
   };
   fetchCourses: (force?: boolean) => Promise<Course[]>;
-  saveCourse: (course: Course, studentIds?: string[]) => Promise<{
+  saveCourse: (course: Course, studentIds?: string[], isEditMode?: boolean) => Promise<{
     success: boolean;
     course?: Course;
     error?: string;
   }>;
   addCourse: (course: Course) => Promise<Course>;
+  updateCourse: (courseId: string, course: Partial<Course>, studentIds?: string[]) => Promise<Course>;
   deleteCourse: (courseId: string) => Promise<boolean>;
   updateCourseProgress: (courseId: string, progress: number) => void;
   recordLessonProgress: (courseId: string, lessonId: string, timeSpentSeconds?: number) => Promise<any>;
@@ -125,7 +126,10 @@ export function mapBackendCourseToFrontend(item: any): Course {
         title: m.title || `Module ${mIdx + 1}`,
         description: m.description || undefined,
         order: m.order || mIdx + 1,
-        assessment: m.assessment || undefined,
+        assessment: m.assessment ? {
+          ...m.assessment,
+          questions: Array.isArray(m.assessment.questions) ? m.assessment.questions : []
+        } : undefined,
         lessons: Array.isArray(m.lessons)
           ? m.lessons.map((l: any, lIdx: number) => ({
             id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
@@ -139,9 +143,22 @@ export function mapBackendCourseToFrontend(item: any): Course {
             isRequired: l.isRequired !== false,
             isPreview: Boolean(l.isPreview),
             status: l.status || 'published',
-            quizConfig: l.quizConfig || undefined,
-            uploadedDocument: l.uploadedDocument || undefined,
-            videoInfo: l.videoInfo || undefined,
+            quizConfig: l.quizConfig ? {
+              ...l.quizConfig,
+              questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
+            } : undefined,
+            uploadedDocument: (l.uploadedDocument && (l.uploadedDocument.name || l.uploadedDocument.url))
+              ? l.uploadedDocument
+              : (l.type === 'document' && l.contentUrl
+                ? {
+                    id: `doc-${l.id || lIdx + 1}`,
+                    name: l.contentUrl.split('?')[0].split('/').pop() || `${l.title || 'Curriculum'}.pdf`,
+                    url: l.contentUrl,
+                    type: l.contentUrl.toLowerCase().includes('.pdf') ? 'application/pdf' : 'application/octet-stream',
+                    size: 1500000,
+                  }
+                : undefined),
+            videoInfo: l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title, sourceType: 'upload' } : undefined),
           }))
           : [],
       }))
@@ -161,7 +178,12 @@ export function mapBackendCourseToFrontend(item: any): Course {
     endDate: item.endDate || undefined,
     completionPercentageRequired: item.completionPercentageRequired || 80,
     completionPoints: item.completionPoints || 100,
-    finalAssessment: item.finalAssessmentConfig || item.finalAssessment || undefined,
+    finalAssessment: (item.finalAssessmentConfig || item.finalAssessment) ? {
+      ...(item.finalAssessmentConfig || item.finalAssessment),
+      questions: Array.isArray((item.finalAssessmentConfig || item.finalAssessment).questions)
+        ? (item.finalAssessmentConfig || item.finalAssessment).questions
+        : []
+    } : undefined,
     certificateConfig: item.certificateConfig || undefined,
     createdAt: item.createdAt || new Date().toISOString(),
     updatedAt: item.updatedAt || new Date().toISOString(),
@@ -179,6 +201,24 @@ function loadInitialCourses(): Course[] {
         return parsed.map((c: Course) => ({
           ...c,
           organizationId: c.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
+          modules: (c.modules || []).map((m: any) => ({
+            ...m,
+            assessment: m.assessment ? {
+              ...m.assessment,
+              questions: Array.isArray(m.assessment.questions) ? m.assessment.questions : []
+            } : undefined,
+            lessons: Array.isArray(m.lessons) ? m.lessons.map((l: any) => ({
+              ...l,
+              quizConfig: l.quizConfig ? {
+                ...l.quizConfig,
+                questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
+              } : undefined
+            })) : [],
+          })),
+          finalAssessment: c.finalAssessment ? {
+            ...c.finalAssessment,
+            questions: Array.isArray(c.finalAssessment.questions) ? c.finalAssessment.questions : []
+          } : undefined,
         }));
       }
     }
@@ -235,6 +275,8 @@ function loadInitialEnrollments(): Enrollment[] {
   return [];
 }
 
+let inFlightFetchCoursesPromise: Promise<Course[]> | null = null;
+
 export const useCourseStore = create<CourseState>((set, get) => ({
   courses: loadInitialCourses(),
   enrolledCourseIds: loadInitialEnrolled(),
@@ -263,65 +305,89 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   error: null,
 
   fetchCourses: async (force = false) => {
-    set({ isLoading: true, isCoursesLoading: true, error: null });
-    try {
-      const [coursesRes, enrollmentsRes] = await Promise.all([
-        apiClient.get<any>('/courses?limit=200').catch(() => null),
-        apiClient.get<any>('/courses/my-enrollments').catch(() => null),
-      ]);
-
-      let backendCourses: Course[] = [];
-      if (coursesRes && coursesRes.data) {
-        const rawItems = Array.isArray(coursesRes.data)
-          ? coursesRes.data
-          : (coursesRes.data as any).items || [];
-        backendCourses = rawItems.map(mapBackendCourseToFrontend);
-
-        set({ courses: backendCourses, isLoading: false, isCoursesLoading: false });
-        try {
-          localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
-          localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-        } catch (e) { }
-      }
-
-      if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
-        const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
-        const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
-          const completedLids: string[] = Array.isArray(e.lessonProgress)
-            ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
-            : [];
-          if (e.courseId && completedLids.length > 0) {
-            try {
-              localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
-            } catch { }
-          }
-          return {
-            id: e.id,
-            userId: e.userId,
-            courseId: e.courseId,
-            cohortId: e.cohortId,
-            status: e.status || 'active',
-            progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
-            enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
-            completedLessonIds: completedLids,
-          };
-        });
-
-        set({
-          enrolledCourseIds: backendEnrolledIds,
-          enrollments: mappedEnrollments,
-        });
-        try {
-          localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
-          localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
-        } catch (e) { }
-      }
-      return backendCourses;
-    } catch (err: any) {
-      console.warn('[CourseStore] Failed to fetch courses from backend API:', err);
-      set({ isLoading: false, isCoursesLoading: false, error: err.message || 'Failed to load courses' });
-      return get().courses;
+    if (inFlightFetchCoursesPromise && !force) {
+      return inFlightFetchCoursesPromise;
     }
+
+    set({ isLoading: true, isCoursesLoading: true, error: null });
+
+    inFlightFetchCoursesPromise = (async () => {
+      try {
+        const [coursesRes, enrollmentsRes] = await Promise.all([
+          apiClient.get<any>('/courses?limit=200').catch((err) => {
+            console.warn('[CourseStore] Courses request error:', err);
+            return null;
+          }),
+          apiClient.get<any>('/courses/my-enrollments').catch((err) => {
+            console.warn('[CourseStore] Enrollments request error:', err);
+            return null;
+          }),
+        ]);
+
+        let backendCourses: Course[] = [];
+        if (coursesRes && coursesRes.data) {
+          const rawItems = Array.isArray(coursesRes.data)
+            ? coursesRes.data
+            : (coursesRes.data as any).items || [];
+          backendCourses = rawItems.map(mapBackendCourseToFrontend);
+
+          set({ courses: backendCourses });
+          try {
+            localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(backendCourses));
+            localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+          } catch (e) { }
+        } else {
+          // If network failed or rate limited, ensure existing courses or localStorage cache are loaded
+          const cached = loadInitialCourses();
+          if (cached && cached.length > 0 && get().courses.length === 0) {
+            set({ courses: cached });
+          }
+        }
+
+        if (enrollmentsRes && enrollmentsRes.data && Array.isArray(enrollmentsRes.data)) {
+          const backendEnrolledIds = (enrollmentsRes.data as any[]).map((e: any) => e.courseId);
+          const mappedEnrollments: Enrollment[] = (enrollmentsRes.data as any[]).map((e: any) => {
+            const completedLids: string[] = Array.isArray(e.lessonProgress)
+              ? e.lessonProgress.filter((lp: any) => lp.isCompleted).map((lp: any) => lp.lessonId)
+              : [];
+            if (e.courseId && completedLids.length > 0) {
+              try {
+                localStorage.setItem(`venilearn_completed_lessons_${e.courseId}`, JSON.stringify(completedLids));
+              } catch { }
+            }
+            return {
+              id: e.id,
+              userId: e.userId,
+              courseId: e.courseId,
+              cohortId: e.cohortId,
+              status: e.status || 'active',
+              progress: e.progressPercentage || (completedLids.length > 0 ? Math.round((completedLids.length / 10) * 100) : 0),
+              enrolledAt: e.enrolledAt || e.assignedAt || new Date().toISOString(),
+              completedLessonIds: completedLids,
+            };
+          });
+
+          set({
+            enrolledCourseIds: backendEnrolledIds,
+            enrollments: mappedEnrollments,
+          });
+          try {
+            localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(backendEnrolledIds));
+            localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(mappedEnrollments));
+          } catch (e) { }
+        }
+        return get().courses;
+      } catch (err: any) {
+        console.warn('[CourseStore] Failed to fetch courses from backend API:', err);
+        set({ error: err.message || 'Failed to load courses' });
+        return get().courses;
+      } finally {
+        set({ isLoading: false, isCoursesLoading: false });
+        inFlightFetchCoursesPromise = null;
+      }
+    })();
+
+    return inFlightFetchCoursesPromise;
   },
 
   getCourseById: (id: string) => {
@@ -633,15 +699,18 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       completionPoints: course.completionPoints || 100,
       instructors: course.instructors || [],
       modules: (course.modules || []).map((m, mIdx) => ({
+        ...(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id) ? { id: m.id } : {}),
         title: m.title || `Module ${mIdx + 1}`,
         description: m.description,
         order: m.order || mIdx + 1,
+        assessment: m.assessment,
         lessons: (m.lessons || []).map((l, lIdx) => ({
+          ...(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(l.id) ? { id: l.id } : {}),
           title: l.title || `Lesson ${lIdx + 1}`,
           description: l.description,
           type: l.type || 'rich_text',
           content: l.content,
-          contentUrl: l.videoUrl || (l as any).contentUrl,
+          contentUrl: (l as any).videoInfo?.url || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
           durationMinutes: l.durationMinutes || 15,
           order: l.order || lIdx + 1,
           isRequired: l.isRequired ?? true,
@@ -683,13 +752,111 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     return persistedCourse;
   },
 
-  saveCourse: async (course: Course, studentIds: string[] = []) => {
+  updateCourse: async (courseId: string, course: Partial<Course>, studentIds: string[] = []) => {
+    if (!courseId) {
+      throw new Error('Course ID is required for updating an existing course.');
+    }
+
+    const sanitizedDeptId = course.departmentId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.departmentId)
+      ? course.departmentId
+      : undefined;
+
+    const payload = {
+      id: courseId,
+      title: course.title,
+      slug: course.slug,
+      description: course.description,
+      shortDescription: course.shortDescription,
+      category: course.category,
+      departmentId: sanitizedDeptId,
+      level: course.level,
+      durationHours: course.durationHours,
+      status: course.status,
+      thumbnailUrl: course.thumbnail || (course as any).thumbnailUrl,
+      shareableLinkEnabled: course.shareableLinkEnabled,
+      enrollmentCapacity: course.enrollmentCapacity,
+      enrollmentDeadline: course.enrollmentDeadline,
+      enrollmentApprovalRequired: course.enrollmentApprovalRequired,
+      completionPercentageRequired: course.completionPercentageRequired,
+      completionPoints: course.completionPoints,
+      instructors: course.instructors || [],
+      studentIds,
+      modules: (course.modules || []).map((m, mIdx) => ({
+        ...(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id) ? { id: m.id } : {}),
+        title: m.title || `Module ${mIdx + 1}`,
+        description: m.description,
+        order: m.order || mIdx + 1,
+        assessment: m.assessment,
+        lessons: (m.lessons || []).map((l, lIdx) => ({
+          ...(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(l.id) ? { id: l.id } : {}),
+          title: l.title || `Lesson ${lIdx + 1}`,
+          description: l.description,
+          type: l.type || 'rich_text',
+          content: l.content,
+          contentUrl: (l as any).videoInfo?.url || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
+          durationMinutes: l.durationMinutes || 15,
+          order: l.order || lIdx + 1,
+          isRequired: l.isRequired ?? true,
+          isPreview: l.isPreview ?? false,
+          status: l.status || 'published',
+          quizConfig: (l as any).quizConfig || {},
+          uploadedDocument: (l as any).uploadedDocument || {},
+        })),
+      })),
+      finalAssessmentConfig: course.finalAssessmentConfig || course.finalAssessment,
+      certificateConfig: course.certificateConfig,
+      evaluationCriteria: (course as any).evaluationCriteria,
+    };
+
+    // Authoritative update to PostgreSQL
+    const res = await apiClient.put<any>(`/courses/${courseId}`, payload);
+    if (!res || !res.data) {
+      throw new Error('Course update failed: empty response from backend database API');
+    }
+
+    const updatedCourse = mapBackendCourseToFrontend(res.data);
+
+    // Update store state and cache in-place (no duplicates)
+    set((state) => {
+      const exists = state.courses.some((c) => c.id === updatedCourse.id);
+      const updatedCourses = exists
+        ? state.courses.map((c) => (c.id === updatedCourse.id ? updatedCourse : c))
+        : [updatedCourse, ...state.courses];
+      try {
+        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      } catch (e) {
+        console.error('Failed to save updated courses to storage', e);
+      }
+      return { courses: updatedCourses };
+    });
+
+    const safeStudentIds = Array.isArray(studentIds) ? studentIds : [];
+    if (safeStudentIds.length > 0) {
+      await get().assignStudentsToCourse(updatedCourse.id, safeStudentIds);
+    }
+
+    return updatedCourse;
+  },
+
+  saveCourse: async (course: Course, studentIds: string[] = [], isEditMode: boolean = false) => {
     try {
       set({ isLoading: true, error: null });
-      const persisted = await get().addCourse(course);
-      if (studentIds.length > 0) {
-        await get().assignStudentsToCourse(persisted.id, studentIds);
+      const safeStudentIds = Array.isArray(studentIds) ? studentIds : [];
+      const isExistingUuid = Boolean(course.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(course.id));
+      const isKnownInStore = Boolean(course.id && get().courses.some((c) => c?.id && c.id.toLowerCase() === course.id.toLowerCase()));
+      const shouldUpdate = isEditMode || isExistingUuid || isKnownInStore;
+
+      let persisted: Course;
+      if (shouldUpdate && course.id) {
+        persisted = await get().updateCourse(course.id, course, safeStudentIds);
+      } else {
+        persisted = await get().addCourse(course);
+        if (safeStudentIds.length > 0) {
+          await get().assignStudentsToCourse(persisted.id, safeStudentIds);
+        }
       }
+
       set({ isLoading: false });
       return { success: true, course: persisted };
     } catch (err: any) {

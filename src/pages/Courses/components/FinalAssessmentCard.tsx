@@ -153,7 +153,7 @@ export const FinalAssessmentCard: React.FC<Props> = ({
           >
             <div>
               <span className="text-muted text-xs">Questions:</span>
-              <div style={{ fontWeight: 700 }}>{assessment.questions.length} Items</div>
+              <div style={{ fontWeight: 700 }}>{assessment?.questions?.length || 0} Items</div>
             </div>
             <div>
               <span className="text-muted text-xs">Total Marks:</span>

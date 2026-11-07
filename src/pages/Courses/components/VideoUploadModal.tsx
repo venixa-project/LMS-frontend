@@ -139,12 +139,13 @@ export const VideoUploadModal: React.FC<Props> = ({
     }
 
     // Inspect metadata for duration
-    const tempVideo = document.createElement('video');
-    tempVideo.preload = 'metadata';
-    tempVideo.src = objectUrl;
-    tempVideo.onloadedmetadata = () => {
-      if (tempVideo.duration && !isNaN(tempVideo.duration)) {
-        const secs = Math.round(tempVideo.duration);
+    const isAudio = file.type.startsWith('audio/') || ['.mp3', '.wav', '.m4a', '.ogg', '.aac'].some((ext) => file.name.toLowerCase().endsWith(ext));
+    const mediaElem = isAudio ? document.createElement('audio') : document.createElement('video');
+    mediaElem.preload = 'metadata';
+    mediaElem.src = objectUrl;
+    mediaElem.onloadedmetadata = () => {
+      if (mediaElem.duration && !isNaN(mediaElem.duration)) {
+        const secs = Math.round(mediaElem.duration);
         setDetectedDurationSecs(secs);
         setDurationMinutes(Math.max(1, Math.ceil(secs / 60)));
       }
@@ -446,7 +447,7 @@ export const VideoUploadModal: React.FC<Props> = ({
               <input
                 type="file"
                 ref={fileInputRef}
-                accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.mkv"
+                accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.mkv,audio/mpeg,audio/mp3,audio/wav,audio/m4a,audio/aac,audio/ogg,.mp3,.wav,.m4a,.aac,.ogg"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const f = e.target.files?.[0];

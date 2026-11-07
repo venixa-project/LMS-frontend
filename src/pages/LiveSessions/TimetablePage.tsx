@@ -54,11 +54,33 @@ export const TimetablePage: React.FC = () => {
   });
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(0);
 
-  // Student Cohorts
+  const { enrollments: storeEnrollments } = useCourseStore();
+
+  // Dynamic Student Cohorts Resolution
   const studentCohortIds = useMemo(() => {
     if (!isStudent) return [];
-    return ['coh-001', 'coh-002', 'coh-004'];
-  }, [isStudent]);
+    const sId = user?.id;
+    const cohortSet = new Set<string>();
+
+    cohorts.forEach((c) => {
+      const isMember =
+        (c.studentIds && (c.studentIds.includes(sId || '') || c.studentIds.includes(user?.rollNo || ''))) ||
+        (Boolean((c as any).members) && (c as any).members.some((m: any) => m.id === sId || m.userId === sId || m.email === user?.email));
+      if (isMember) {
+        cohortSet.add(c.id);
+        if (c.name) cohortSet.add(c.name);
+      }
+    });
+
+    storeEnrollments.forEach((e) => {
+      if (e.userId === sId) {
+        if (e.cohortId) cohortSet.add(e.cohortId);
+        cohorts.filter((c) => c.courseId === e.courseId).forEach((c) => cohortSet.add(c.id));
+      }
+    });
+
+    return Array.from(cohortSet);
+  }, [cohorts, isStudent, storeEnrollments, user?.email, user?.id, user?.rollNo]);
 
   // Helper to determine weekday for a session
   const getSessionWeekday = (s: LiveSession): string => {
@@ -94,13 +116,20 @@ export const TimetablePage: React.FC = () => {
           return false;
         }
       } else if (isStudent) {
-        const sId = user?.id || 'u-007';
+        const sId = user?.id;
         if (s.audienceScope === 'faculty' || s.targetAudienceType === 'faculty_only') {
           return false;
         }
-        const isTargetedStudent = s.targetStudentIds && s.targetStudentIds.includes(sId);
-        const isInCohort = s.cohortId && studentCohortIds.includes(s.cohortId);
-        if (!isTargetedStudent && !isInCohort) {
+        const isTargetedStudent = Boolean(sId && s.targetStudentIds && s.targetStudentIds.includes(sId));
+        const currentCohortId = s.cohortId;
+        const isInCohort = Boolean(
+          currentCohortId &&
+          (studentCohortIds.includes(currentCohortId) ||
+            studentCohortIds.some((cid) => cid.toLowerCase() === currentCohortId.toLowerCase() || (s.cohortName && cid.toLowerCase() === s.cohortName.toLowerCase())))
+        );
+        const isEnrolledCourse = Boolean(s.courseId && storeEnrollments.some((e) => e.userId === sId && e.courseId === s.courseId));
+        const matchesStudent = isTargetedStudent || isInCohort || isEnrolledCourse || studentCohortIds.length === 0;
+        if (!matchesStudent) {
           return false;
         }
       }

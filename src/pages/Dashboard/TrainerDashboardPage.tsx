@@ -749,7 +749,7 @@ export const TrainerDashboardPage: React.FC = () => {
                     const cohort = assignedCohorts.find((c) => c.id === s.cohortId);
                     const cohortLabel = cohort?.code || (idx === 0 ? 'REACT-ADV' : idx === 1 ? 'ENG-Q4-26' : 'TS-2026');
                     const isLive = s.status === 'live';
-                    const meetUrl = s.joinLink || s.meetingUrl || 'https://meet.google.com/abc-demo-xyz';
+                    const meetUrl = s.meetingUrl || s.joinLink;
 
                     return (
                       <tr key={s.id}>
@@ -798,22 +798,43 @@ export const TrainerDashboardPage: React.FC = () => {
                         </td>
                         <td className="col-actions">
                           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            <a
-                              href={meetUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-primary btn-sm"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                fontSize: '0.75rem',
-                                padding: '4px 10px',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <GoogleMeetIcon size={13} /> {isLive ? 'Join Live' : 'Join Session'}
-                            </a>
+                            {meetUrl ? (
+                              <a
+                                href={meetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-primary btn-sm"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  fontSize: '0.75rem',
+                                  padding: '4px 10px',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <GoogleMeetIcon size={13} /> {isLive ? 'Join Live' : 'Join Session'}
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="btn btn-secondary btn-sm"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  fontSize: '0.75rem',
+                                  padding: '4px 10px',
+                                  whiteSpace: 'nowrap',
+                                  opacity: 0.65,
+                                  cursor: 'not-allowed',
+                                }}
+                                title="Google Meet link pending configuration"
+                              >
+                                <GoogleMeetIcon size={13} /> Link Pending
+                              </button>
+                            )}
                             <Link
                               to="/live-sessions"
                               className="btn btn-secondary btn-sm"

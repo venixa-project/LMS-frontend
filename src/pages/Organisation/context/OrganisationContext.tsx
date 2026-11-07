@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Company,
   Branch,
@@ -111,8 +111,11 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Fetch real data from backend API
+  // Fetch real data from backend API with in-flight deduplication
+  const isRefreshingRef = useRef(false);
   const refreshData = useCallback(async () => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
     setIsLoading(true);
     try {
       const [profileRes, branchesRes, deptsRes, desigsRes, peopleRes] = await Promise.allSettled([
@@ -235,6 +238,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       showToast('Failed to connect to backend server', 'error');
     } finally {
       setIsLoading(false);
+      isRefreshingRef.current = false;
     }
   }, []);
 
@@ -369,11 +373,14 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     costCenter?: string;
     description?: string;
   }): Promise<Department> => {
+    const isValidUuid = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
     const payload = {
       name: deptData.name.trim(),
       code: deptData.code.trim(),
-      parentId: deptData.parentId || undefined,
-      headUserId: deptData.headUserId || undefined,
+      parentId: isValidUuid(deptData.parentId) ? deptData.parentId : undefined,
+      headUserId: isValidUuid(deptData.headUserId) ? deptData.headUserId : undefined,
       costCenter: deptData.costCenter?.trim() || undefined,
       description: deptData.description?.trim() || undefined,
     };
@@ -413,8 +420,10 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const payload: any = {};
     if (updates.name !== undefined) payload.name = updates.name.trim();
     if (updates.code !== undefined) payload.code = updates.code.trim();
-    if (updates.parentId !== undefined) payload.parentId = updates.parentId || null;
-    if (updates.headUserId !== undefined) payload.headUserId = updates.headUserId || null;
+    const isValidUuid = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+    if (updates.parentId !== undefined) payload.parentId = isValidUuid(updates.parentId) ? updates.parentId : null;
+    if (updates.headUserId !== undefined) payload.headUserId = isValidUuid(updates.headUserId) ? updates.headUserId : null;
     if (updates.costCenter !== undefined) payload.costCenter = updates.costCenter?.trim() || null;
     if (updates.description !== undefined) payload.description = updates.description?.trim() || null;
 
