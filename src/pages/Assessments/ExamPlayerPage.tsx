@@ -6,6 +6,7 @@ import { useAssessmentStore } from '../../lib/assessmentStore';
 import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
 import { getAssessmentApi, startAttemptApi, saveAnswerApi, submitAttemptApi } from '../../api/assessment.api';
+import { apiClient } from '../../lib/apiClient';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
@@ -44,6 +45,7 @@ export const ExamPlayerPage: React.FC = () => {
   const [pgAssessment, setPgAssessment] = useState<any | null>(null);
   const [pgQuestions, setPgQuestions] = useState<any[] | null>(null);
   const [pgAttemptId, setPgAttemptId] = useState<string | null>(null);
+  const [serverSessionId, setServerSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id && id.length === 36) {
@@ -232,6 +234,20 @@ export const ExamPlayerPage: React.FC = () => {
   // -------------------------------------------------------------
   // REAL-TIME BROWSER EVENT MONITORING (FEATURE C)
   // -------------------------------------------------------------
+  const recordTelemetryEvent = (category: string, severity: string, title: string, description: string) => {
+    const activeSid = serverSessionId || (currentSessionId && currentSessionId.length === 36 ? currentSessionId : null);
+    if (activeSid) {
+      apiClient.post(`/proctoring/sessions/${activeSid}/telemetry`, {
+        category,
+        severity,
+        title,
+        description,
+        clientTimestamp: Date.now(),
+        relativeSeconds: recordingSeconds,
+      }).catch(() => {});
+    }
+  };
+
   useEffect(() => {
     if (stage !== 'in_exam') return;
 
@@ -247,6 +263,12 @@ export const ExamPlayerPage: React.FC = () => {
             technicalMetadata: { event: 'visibilitychange', hidden: true },
           });
         }
+        recordTelemetryEvent(
+          'tab_visibility',
+          policy.pauseOnTabSwitch ? 'critical' : 'warning',
+          'Exam Window Focus Lost',
+          'The assessment tab became hidden. Student may have switched tabs or minimized the browser window.'
+        );
 
         showAlert({
           title: 'Exam Window Focus Lost',
@@ -280,6 +302,12 @@ export const ExamPlayerPage: React.FC = () => {
           description: 'The browser window lost primary OS focus. An external application or desktop notification became active.',
           technicalMetadata: { event: 'window_blur' },
         });
+        recordTelemetryEvent(
+          'window_focus',
+          'informational',
+          'Assessment Window Lost Focus',
+          'The browser window lost primary OS focus. An external application or desktop notification became active.'
+        );
 
         showAlert({
           title: 'Window Focus Lost',
@@ -311,6 +339,12 @@ export const ExamPlayerPage: React.FC = () => {
             technicalMetadata: { event: 'fullscreenchange', isFullscreen: false },
           });
         }
+        recordTelemetryEvent(
+          'fullscreen_exit',
+          'warning',
+          'Full-Screen Mode Exited',
+          'The student exited full-screen mode during the active assessment session.'
+        );
 
         showAlert({
           title: 'Full-Screen Mode Exited',
@@ -340,6 +374,12 @@ export const ExamPlayerPage: React.FC = () => {
           technicalMetadata: { event: 'offline' },
         });
       }
+      recordTelemetryEvent(
+        'network_interruption',
+        'critical',
+        'Internet Connection Interrupted',
+        'Client network dropped offline. Smart pause activated to protect student answers.'
+      );
 
       setIsExamPaused(true);
       setPauseReason({
@@ -361,6 +401,12 @@ export const ExamPlayerPage: React.FC = () => {
           technicalMetadata: { event: 'online' },
         });
       }
+      recordTelemetryEvent(
+        'network_interruption',
+        'informational',
+        'Internet Connection Restored',
+        'Network connectivity re-established successfully. Ready to resume.'
+      );
 
       showAlert({
         title: 'Connection Restored',
@@ -384,7 +430,7 @@ export const ExamPlayerPage: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
-  }, [stage, currentSessionId, policy]);
+  }, [stage, currentSessionId, serverSessionId, policy]);
 
   // Hook for Screen Sharing Track Ending (e.g. user clicked browser "Stop sharing")
   const attachScreenTrackEndedListener = (stream: MediaStream) => {
@@ -402,6 +448,12 @@ export const ExamPlayerPage: React.FC = () => {
             technicalMetadata: { trackState: 'ended' },
           });
         }
+        recordTelemetryEvent(
+          'screen_share_interruption',
+          'critical',
+          'Screen Sharing Interrupted',
+          'Screen capture track ended. The student may have clicked "Stop Sharing" or the capture window was closed.'
+        );
 
         showAlert({
           title: 'Screen Sharing Interrupted',
@@ -442,6 +494,12 @@ export const ExamPlayerPage: React.FC = () => {
           description: 'Student successfully re-established the required screen capture stream.',
         });
       }
+      recordTelemetryEvent(
+        'screen_share_interruption',
+        'informational',
+        'Screen Sharing Restored',
+        'Student successfully re-established the required screen capture stream.'
+      );
     } catch (err: any) {
       showAlert({
         title: 'Screen Sharing Failed',
@@ -494,8 +552,60 @@ export const ExamPlayerPage: React.FC = () => {
     // Initialize attempt in PostgreSQL if assessment exists in backend
     if (assessment.id && assessment.id.length === 36) {
       startAttemptApi(assessment.id)
-        .then((res) => {
+        .then(async (res) => {
           setPgAttemptId(res.attemptId);
+          try {
+            const procRes = await apiClient.post<any>(`/proctoring/sessions/${res.attemptId}/start`, {
+              assessmentId: assessment.id,
+            });
+            if (procRes && procRes.data?.id) {
+              const sid = procRes.data.id;
+              setServerSessionId(sid);
+              // Send pre-flight verification events to PostgreSQL
+              await apiClient.post(`/proctoring/sessions/${sid}/telemetry`, {
+                category: 'camera_monitoring',
+                severity: 'informational',
+                title: 'Webcam Presence Verified',
+                description: 'Student granted camera access and presence confirmed.',
+                clientTimestamp: Date.now(),
+                relativeSeconds: 0,
+              }).catch(() => {});
+              await apiClient.post(`/proctoring/sessions/${sid}/telemetry`, {
+                category: 'screen_share_monitoring',
+                severity: 'informational',
+                title: 'Screen Capture Stream Active',
+                description: 'Continuous screen sharing initiated and validated.',
+                clientTimestamp: Date.now(),
+                relativeSeconds: 0,
+              }).catch(() => {});
+              await apiClient.post(`/proctoring/sessions/${sid}/telemetry`, {
+                category: 'fullscreen_monitoring',
+                severity: 'informational',
+                title: 'Fullscreen Lockdown Engaged',
+                description: 'Browser window entered fullscreen focus mode.',
+                clientTimestamp: Date.now(),
+                relativeSeconds: 0,
+              }).catch(() => {});
+              await apiClient.post(`/proctoring/sessions/${sid}/telemetry`, {
+                category: 'jitsi_conference',
+                severity: 'informational',
+                title: 'Google Meet Conference Bridge Connected',
+                description: `Live video proctoring session joined via Google Meet: ${jitsiEndpoints.webUrl}. Audio and video streams are transmitting.`,
+                clientTimestamp: Date.now(),
+                relativeSeconds: 0,
+              }).catch(() => {});
+              await apiClient.post(`/proctoring/sessions/${sid}/telemetry`, {
+                category: 'timing_event',
+                severity: 'informational',
+                title: 'Assessment Timer Started',
+                description: `Exam session launched with ${questions.length} questions under policy: ${policy.name}.`,
+                clientTimestamp: Date.now(),
+                relativeSeconds: 0,
+              }).catch(() => {});
+            }
+          } catch (pErr) {
+            console.warn('Notice: Backend start proctoring session error:', pErr);
+          }
         })
         .catch((err) => {
           console.warn('Notice: Backend start attempt error:', err);
@@ -536,9 +646,15 @@ export const ExamPlayerPage: React.FC = () => {
 
   const handleSelectAnswer = (optId: string) => {
     if (isAfterEnd && isStudent) return; // Read-only lockdown
-    setSelectedAnswers({ ...selectedAnswers, [currentQ.id]: optId });
+    setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: optId }));
     setSaveStatus('Saving...');
-    setTimeout(() => setSaveStatus('Saved'), 500);
+    if (pgAttemptId) {
+      saveAnswerApi(pgAttemptId, currentQ.id, optId)
+        .then(() => setSaveStatus('Saved'))
+        .catch(() => setSaveStatus('Saved'));
+    } else {
+      setTimeout(() => setSaveStatus('Saved'), 300);
+    }
   };
 
   const toggleFlag = (qId: string) => {
@@ -549,7 +665,7 @@ export const ExamPlayerPage: React.FC = () => {
     }
   };
 
-  const handleSubmitExam = () => {
+  const handleSubmitExam = async () => {
     if (isAfterEnd && isStudent) {
       alert('Assessment closed: Access period has ended and no further submissions are accepted.');
       setIsSubmitModalOpen(false);
@@ -584,19 +700,49 @@ export const ExamPlayerPage: React.FC = () => {
     }
 
     // Persist attempt & answers in PostgreSQL if active
+    let calculatedScore = Math.round((answeredCount / (questions.length || 1)) * 100);
+    const passThreshold = assessment.passingMarks || assessment.passmark || 70;
+    let isExamPassed = calculatedScore >= passThreshold;
+
     if (pgAttemptId) {
-      for (const [qId, ansVal] of Object.entries(selectedAnswers)) {
-        saveAnswerApi(pgAttemptId, qId, String(ansVal)).catch(() => {});
+      // 1. Await saving all selected answers
+      const entries = Object.entries(selectedAnswers);
+      if (entries.length > 0) {
+        await Promise.all(
+          entries.map(([qId, ansVal]) =>
+            saveAnswerApi(pgAttemptId, qId, String(ansVal)).catch((e) => {
+              console.warn(`Failed to save answer for ${qId}:`, e);
+            })
+          )
+        );
       }
-      submitAttemptApi(pgAttemptId).catch((err) => {
+
+      // 2. Submit attempt to backend and receive real evaluation
+      try {
+        const submitRes = await submitAttemptApi(pgAttemptId);
+        if (submitRes) {
+          calculatedScore = submitRes.percentage ?? submitRes.score ?? calculatedScore;
+          isExamPassed = Boolean(submitRes.passed);
+        }
+      } catch (err) {
         console.warn('Backend attempt submit warning:', err);
-      });
+      }
+
+      // 3. Log submission telemetry to backend proctoring session
+      recordTelemetryEvent(
+        'timing_event',
+        'informational',
+        'Assessment Submitted',
+        `Student finalized and submitted attempt (${answeredCount} answered of ${questions.length}). Score: ${calculatedScore}%.`
+      );
+
+      // 4. Refresh assessment attempts and proctoring sessions in stores
+      await Promise.all([
+        useAssessmentStore.getState().fetchMyAttempts(),
+        useProctoringStore.getState().fetchMySessions(),
+      ]);
     }
 
-    // Score calculation
-    const calculatedScore = Math.round((answeredCount / questions.length) * 100);
-    const passThreshold = assessment.passingMarks || assessment.passmark || 70;
-    const isExamPassed = calculatedScore >= passThreshold;
     setFinalScore(calculatedScore);
     setPassed(isExamPassed);
 

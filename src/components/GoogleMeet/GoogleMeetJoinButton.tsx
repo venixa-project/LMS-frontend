@@ -40,13 +40,9 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
   const effectiveHost = isHost || (role ? ['instructor', 'trainer', 'faculty', 'host', 'admin', 'org_admin'].includes(role.toLowerCase()) : false);
   const isConfigured = isValidGoogleMeetUrl(meetingUrl);
 
-  const defaultLabel = label
-    ? label
-    : !isConfigured
+  const defaultLabel = !isConfigured
     ? (effectiveHost ? 'Configure Google Meet' : 'Meeting Link Pending')
-    : effectiveHost
-    ? 'Open Google Meet'
-    : 'Join with Google Meet';
+    : label || (effectiveHost ? 'Open Google Meet' : 'Join with Google Meet');
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();

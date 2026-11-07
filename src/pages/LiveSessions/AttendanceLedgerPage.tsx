@@ -1,16 +1,14 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useCourseStore } from '../../lib/courseStore';
-import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
 import { apiClient } from '../../lib/apiClient';
 import {
-  Download, Users, Clock, AlertTriangle, ShieldCheck,
-  Search, Filter, Calendar as CalendarIcon, Video, CheckCircle2,
-  X, Play, ArrowUpRight, Check, AlertCircle, Sparkles
+  Download, Users, Clock, Search, Calendar as CalendarIcon,
+  Video, CheckCircle2, X, RefreshCw
 } from 'lucide-react';
 
 interface ParticipantParticipationRow {
@@ -36,21 +34,27 @@ interface ParticipantParticipationRow {
 export const AttendanceLedgerPage: React.FC = () => {
   const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { sessions } = useLiveSessionStore();
+  const { sessions, fetchSessions } = useLiveSessionStore();
   const { cohorts } = useCohortStore();
 
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
-  const isAdmin = user?.activeRole === 'org_admin' || user?.activeRole === 'platform_admin' || user?.activeRole === 'lms_admin';
 
-  // 1. Scope sessions strictly by role permissions
-  // Trainers see attendance ONLY for their assigned courses and sessions.
-  // Institution Admins see authorized institution-wide live-session attendance.
+  // 1. Fetch live sessions on mount and keep polling every 15s
+  useEffect(() => {
+    fetchSessions();
+    const interval = setInterval(() => {
+      fetchSessions();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchSessions]);
+
+  // 2. Scope sessions strictly by role permissions
   const authorizedSessions = useMemo(() => {
     if (isTrainer) {
       const trainerCourseIds = user?.eligibleCourseIds && user.eligibleCourseIds.length > 0
         ? user.eligibleCourseIds
-        : ['crs-001', 'crs-002', 'crs-004']; // default assigned courses for faculty persona
+        : ['crs-001', 'crs-002', 'crs-004'];
 
       return sessions.filter((s) => {
         const matchesInstructor = s.instructorId === user?.id || s.instructorName === user?.displayName;
@@ -77,155 +81,166 @@ export const AttendanceLedgerPage: React.FC = () => {
     if (querySessionId && authorizedSessions.some((s) => s.id === querySessionId)) {
       return querySessionId;
     }
-    // Default to the most relevant session (first ended or live session with attendance records)
     const sessionWithAttendance = authorizedSessions.find(
       (s) => s.attendance && s.attendance.length > 0
     );
-    return sessionWithAttendance?.id || authorizedSessions[0]?.id || 'ls-003';
+    return sessionWithAttendance?.id || authorizedSessions[0]?.id || '';
   });
 
+  // Keep selectedSessionId synced when sessions list loads
+  useEffect(() => {
+    if (querySessionId && authorizedSessions.some((s) => s.id === querySessionId)) {
+      setSelectedSessionId(querySessionId);
+    } else if (!selectedSessionId && authorizedSessions.length > 0) {
+      setSelectedSessionId(authorizedSessions[0].id);
+    }
+  }, [querySessionId, authorizedSessions, selectedSessionId]);
+
   // Filters state
-  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all');
-  const [selectedCohortFilter, setSelectedCohortFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'late' | 'left_early' | 'absent'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [dbRoster, setDbRoster] = useState<any[]>([]);
-
-  // Sync with URL query parameter
-  useEffect(() => {
-    if (querySessionId && authorizedSessions.some((s) => s.id === querySessionId)) {
-      setSelectedSessionId(querySessionId);
-    }
-  }, [querySessionId, authorizedSessions]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // The active session object
   const activeSession: LiveSession | undefined = useMemo(() => {
     return authorizedSessions.find((s) => s.id === selectedSessionId) || authorizedSessions[0];
   }, [authorizedSessions, selectedSessionId]);
 
-
-  useEffect(() => {
+  // Fetch actual attendance roster from database API and poll every 8 seconds
+  const loadAttendanceRoster = useCallback(() => {
     if (!activeSession?.id) return;
-    apiClient.get(`/live-sessions/${activeSession.id}/attendance`).then((res) => {
-      if (res && res.data) {
-        const data = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
-        setDbRoster(data);
-      }
-    }).catch(() => {});
+    setIsRefreshing(true);
+    apiClient
+      .get(`/live-sessions/${activeSession.id}/attendance`)
+      .then((res) => {
+        if (res && res.data) {
+          const data = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
+          setDbRoster(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsRefreshing(false));
   }, [activeSession?.id]);
 
-
+  useEffect(() => {
+    loadAttendanceRoster();
+    const interval = setInterval(loadAttendanceRoster, 8000);
+    return () => clearInterval(interval);
+  }, [loadAttendanceRoster]);
 
   // Registered students roster for the active live session
   const activeRosterData = useMemo<ParticipantParticipationRow[]>(() => {
     if (!activeSession) return [];
 
-    const targetStudentIds = activeSession.targetStudentIds || ['st-1', 'st-2', 'st-3', 'st-4', 'st-5', 'u-007', 'u-009', 'u-010'];
-    const sessionAttendance = activeSession.attendance || [];
-    const courseObj = useCourseStore.getState().courses.find((c) => c.id === activeSession.courseId);
-    const cohortObj = cohorts.find((c) => c.id === activeSession.cohortId);
+    const sessionDuration = activeSession.durationMinutes || 60;
+    const sessionStartTime = activeSession.startTime || '10:00';
+    const sessionEndTime = activeSession.endTime || '11:00';
+    const sessionDate = activeSession.date
+      ? (typeof activeSession.date === 'string' ? activeSession.date.slice(0, 10) : new Date(activeSession.date).toISOString().slice(0, 10))
+      : new Date().toISOString().slice(0, 10);
+    const courseTitle = activeSession.courseTitle || 'Live Academic Course';
+    const cohortName = activeSession.cohortName || 'Target Cohort';
 
-    const sessionDuration = activeSession.durationMinutes || activeSession.duration || 60;
-    const sessionStartTime = activeSession.startTime || '09:00';
-    const sessionEndTime = activeSession.endTime || '10:00';
-    const sessionDate = activeSession.date || '2026-10-15';
+    // If backend dbRoster returned records, prioritize them directly
+    if (dbRoster && dbRoster.length > 0) {
+      return dbRoster.map((item) => {
+        let joinTime = 'Did Not Join';
+        let leaveTime = 'Did Not Join';
+        let durationMinutes = 0;
+        let participationStatus: 'present' | 'late' | 'left_early' | 'absent' = (item.status as any) || 'absent';
 
-    // Build unique participant list from target IDs and actual joined records
-    const allParticipantIds = Array.from(new Set([
-      ...targetStudentIds,
-      ...sessionAttendance.map((a) => a.userId),
-    ]));
-
-    return allParticipantIds.map((studentId) => {
-      // Find matching mock user or synthesize consistent scholar details
-      const userObj = usePeopleStore.getState().users.find((u) => u.id === studentId || u.rollNo === studentId);
-      const studentName = userObj?.displayName || (studentId === user?.id ? (user.displayName || 'You') : 'Enrolled Student');
-      const rollNo = userObj?.rollNo || `STU-2026-${studentId.replace(/\D/g, '').padStart(3, '0') || '001'}`;
-      const email = userObj?.email || `${studentName.toLowerCase().replace(/\s+/g, '.')}@acmelearning.com`;
-      const department = userObj?.departmentId || 'Computer Science & Engineering';
-
-      // Check attendance record from actual session participation
-      const record = sessionAttendance.find((a) => a.userId === studentId);
-
-      let joinTime = '—';
-      let leaveTime = '—';
-      let durationMinutes = 0;
-      let participationStatus: 'present' | 'late' | 'left_early' | 'absent' = 'absent';
-
-      if (record && record.status !== 'absent') {
-        if (record.joinedAt) {
-          try {
-            const jDate = new Date(record.joinedAt);
-            joinTime = jDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } catch {
+        if (item.status && item.status !== 'absent') {
+          if (item.joinedAt) {
+            try {
+              const jDate = new Date(item.joinedAt);
+              joinTime = jDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch {
+              joinTime = sessionStartTime;
+            }
+          } else {
             joinTime = sessionStartTime;
           }
-        } else {
-          joinTime = sessionStartTime;
-        }
 
-        if (record.leftAt) {
-          try {
-            const lDate = new Date(record.leftAt);
-            leaveTime = lDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } catch {
-            leaveTime = sessionEndTime;
+          if (item.leftAt) {
+            try {
+              const lDate = new Date(item.leftAt);
+              leaveTime = lDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch {
+              leaveTime = sessionEndTime;
+            }
+          } else {
+            leaveTime = activeSession.status === 'live'
+              ? 'Active in Session'
+              : (activeSession.status === 'ended' ? 'Session Concluded' : sessionEndTime);
           }
-        } else {
-          leaveTime = activeSession.status === 'live' ? 'Active in Session' : sessionEndTime;
-        }
 
-        // Calculate attendance duration based on timestamps or session duration
-        if (record.joinedAt && record.leftAt) {
-          try {
-            const diffMs = new Date(record.leftAt).getTime() - new Date(record.joinedAt).getTime();
+          if (item.joinedAt && item.leftAt) {
+            try {
+              const diffMs = new Date(item.leftAt).getTime() - new Date(item.joinedAt).getTime();
+              durationMinutes = Math.max(1, Math.min(sessionDuration, Math.round(diffMs / (1000 * 60))));
+            } catch {
+              durationMinutes = sessionDuration;
+            }
+          } else if (item.joinedAt && activeSession.status === 'live') {
+            const diffMs = Date.now() - new Date(item.joinedAt).getTime();
             durationMinutes = Math.max(1, Math.min(sessionDuration, Math.round(diffMs / (1000 * 60))));
-          } catch {
+          } else {
             durationMinutes = sessionDuration;
           }
-        } else if (record.status === 'late') {
-          durationMinutes = Math.max(15, sessionDuration - 18);
-        } else {
-          durationMinutes = sessionDuration;
         }
 
-        // Determine derived participation status
-        if (record.status === 'late') {
-          participationStatus = 'late';
-        } else if (durationMinutes < sessionDuration * 0.75 && activeSession.status === 'ended') {
-          participationStatus = 'left_early';
-        } else {
-          participationStatus = 'present';
-        }
-      } else {
-        participationStatus = 'absent';
-        joinTime = 'Did Not Join';
-        leaveTime = 'Did Not Join';
-        durationMinutes = 0;
-      }
+        return {
+          studentId: item.userId,
+          name: item.name || 'Scholar',
+          email: item.email || '',
+          rollNo: item.rollNo || 'STU-001',
+          department: item.department || 'Computer Science & Engineering',
+          avatar: item.avatarUrl,
+          sessionTitle: activeSession.title,
+          sessionDate,
+          courseTitle,
+          cohortName,
+          joinTime,
+          leaveTime,
+          durationMinutes,
+          totalSessionDuration: sessionDuration,
+          participationStatus,
+          rawJoinIso: item.joinedAt,
+          rawLeaveIso: item.leftAt,
+        };
+      });
+    }
 
-      return {
-        studentId,
-        name: studentName,
-        email,
-        rollNo,
-        department,
-        avatar: userObj?.avatar,
-        sessionTitle: activeSession.title,
-        sessionDate,
-        courseTitle: activeSession.courseTitle || courseObj?.title || 'Advanced Software Architecture',
-        cohortName: activeSession.cohortName || cohortObj?.name || 'Full Stack Web Dev - Cohort Alpha',
-        joinTime,
-        leaveTime,
-        durationMinutes,
-        totalSessionDuration: sessionDuration,
-        participationStatus,
-        rawJoinIso: record?.joinedAt,
-        rawLeaveIso: record?.leftAt,
-      };
-    });
-  }, [activeSession, cohorts, dbRoster]);
+    // Fallback if dbRoster is loading or empty
+    const sessionAttendance = activeSession.attendance || [];
+    if (sessionAttendance.length > 0) {
+      return sessionAttendance.map((att) => {
+        return {
+          studentId: att.userId,
+          name: (att as any).user?.displayName || 'Scholar',
+          email: (att as any).user?.email || '',
+          rollNo: (att as any).user?.rollNo || 'STU-001',
+          department: 'Computer Science & Engineering',
+          avatar: (att as any).user?.avatarUrl,
+          sessionTitle: activeSession.title,
+          sessionDate,
+          courseTitle,
+          cohortName,
+          joinTime: att.joinedAt ? new Date(att.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : sessionStartTime,
+          leaveTime: activeSession.status === 'live' ? 'Active in Session' : (activeSession.status === 'ended' ? 'Session Concluded' : sessionEndTime),
+          durationMinutes: sessionDuration,
+          totalSessionDuration: sessionDuration,
+          participationStatus: (att.status as any) || 'present',
+          rawJoinIso: att.joinedAt,
+          rawLeaveIso: att.leftAt,
+        };
+      });
+    }
+
+    return [];
+  }, [activeSession, dbRoster]);
 
   // Filtered roster according to UI search and status filters
   const filteredRoster = useMemo(() => {
@@ -284,15 +299,15 @@ export const AttendanceLedgerPage: React.FC = () => {
     let totalCapacityCount = 0;
 
     authorizedSessions.forEach((s) => {
-      const reg = s.targetStudentIds?.length || s.enrolledCount || 20;
-      const joined = s.attendance?.filter((a) => a.status === 'present' || a.status === 'late').length || 0;
+      const reg = (s.enrolledCount && s.enrolledCount > 0) ? s.enrolledCount : 2;
+      const joined = s.attendance?.filter((a) => a.status === 'present' || a.status === 'late').length || ((s as any)._count?.attendance || 0);
       totalCapacityCount += reg;
       totalJoinedCount += joined;
     });
 
     const avgAttendance = totalCapacityCount > 0
       ? Math.round((totalJoinedCount / totalCapacityCount) * 100)
-      : 88;
+      : 0;
 
     return {
       totalSessions,
@@ -328,7 +343,7 @@ export const AttendanceLedgerPage: React.FC = () => {
       `"${r.cohortName.replace(/"/g, '""')}"`,
       r.rollNo,
       `"${r.name.replace(/"/g, '""')}"`,
-      r.email,
+      `"${r.email.replace(/"/g, '""')}"`,
       r.joinTime,
       r.leaveTime,
       r.durationMinutes,
@@ -347,7 +362,7 @@ export const AttendanceLedgerPage: React.FC = () => {
     link.click();
     document.body.removeChild(link);
 
-    setExportNotice(`Exported ${filteredRoster.length} live attendance records for "${activeSession.title}" to CSV.`);
+    setExportNotice(`Exported ${filteredRoster.length} attendance records for "${activeSession.title}" to CSV.`);
     setTimeout(() => setExportNotice(null), 4500);
   };
 
@@ -387,43 +402,44 @@ export const AttendanceLedgerPage: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Video size={13} /> Live Classroom Attendance
+            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <Video size={13} /> Live Attendance Ledger
             </span>
-            <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>
-              {isTrainer ? 'Trainer Scope: Assigned Sessions' : isAdmin ? 'Institution-Wide Audit' : 'Student Participation'}
-            </span>
-            {isTrainer && (
-              <span className="text-muted text-xs">
-                {user?.displayName || 'Dr. James Wilson'} &bull; Assigned Courses
-              </span>
-            )}
           </div>
           <h1 style={{ fontSize: '1.85rem', margin: '0 0 4px 0', fontWeight: 800 }}>
             Live Session Attendance
           </h1>
-          <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '820px' }}>
-            Track attendance derived exclusively from live classroom session participation, join and leave timestamps, and active engagement duration.
+          <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '780px' }}>
+            Real-time participation tracking and attendance compliance for scheduled live sessions.
           </p>
         </div>
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <button
+            onClick={loadAttendanceRoster}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+            title="Refresh attendance records"
+          >
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Refresh
+          </button>
+
+          <button
             onClick={handleExportCSV}
             className="btn btn-secondary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
             title="Download CSV export of live session attendance"
           >
-            <Download size={14} /> Export Live Attendance CSV
+            <Download size={14} /> Export CSV
           </button>
 
           <Link
-            to="/live-sessions"
+            to="/live_sessions"
             className="btn btn-primary btn-sm"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
           >
-            <Video size={14} /> Live Sessions Hub &rarr;
+            <Video size={14} /> Live Sessions &rarr;
           </Link>
         </div>
       </div>
@@ -432,25 +448,25 @@ export const AttendanceLedgerPage: React.FC = () => {
       <div className="grid-4" style={{ gap: '16px' }}>
         <div className="card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--primary)', margin: 0 }}>
           <div className="text-muted text-xs font-semibold" style={{ marginBottom: '4px', textTransform: 'uppercase' }}>
-            Tracked Live Sessions
+            Tracked Sessions
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)' }}>
             {overallStats.totalSessions}
           </div>
           <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-            {isTrainer ? 'In your assigned courses' : 'Institution-wide catalog'}
+            Scheduled & conducted
           </div>
         </div>
 
         <div className="card" style={{ padding: '16px 20px', borderLeft: '4px solid #6366f1', margin: 0 }}>
           <div className="text-muted text-xs font-semibold" style={{ marginBottom: '4px', textTransform: 'uppercase' }}>
-            Registered Cohort Scholars
+            Cohort Scholars
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-main)' }}>
             {sessionStats.totalRegistered}
           </div>
           <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-            Target audience for active session
+            Target audience for session
           </div>
         </div>
 
@@ -462,19 +478,19 @@ export const AttendanceLedgerPage: React.FC = () => {
             {sessionStats.joinedCount} / {sessionStats.totalRegistered}
           </div>
           <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-            {sessionStats.presentCount} on-time &bull; {sessionStats.lateCount} late
+            {sessionStats.presentCount} on-time{sessionStats.lateCount > 0 ? ` • ${sessionStats.lateCount} late` : ''}
           </div>
         </div>
 
         <div className="card" style={{ padding: '16px 20px', borderLeft: '4px solid #ec4899', margin: 0 }}>
           <div className="text-muted text-xs font-semibold" style={{ marginBottom: '4px', textTransform: 'uppercase' }}>
-            Live Participation Rate
+            Participation Rate
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ec4899' }}>
             {sessionStats.participationRate}%
           </div>
           <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-            Avg {sessionStats.avgMinutes} mins attended
+            {sessionStats.avgMinutes > 0 ? `Avg ${sessionStats.avgMinutes} mins in room` : 'Session attendance compliance'}
           </div>
         </div>
       </div>
@@ -497,18 +513,18 @@ export const AttendanceLedgerPage: React.FC = () => {
                   activeSession.status === 'live' ? 'badge-danger' :
                   activeSession.status === 'ended' ? 'badge-success' : 'badge-primary'
                 }`} style={{ fontWeight: 800, fontSize: '0.72rem' }}>
-                  {activeSession.status === 'live' ? '● BROADCASTING LIVE' :
-                   activeSession.status === 'ended' ? '✓ SESSION CONCLUDED' : 'SCHEDULED'}
+                  {activeSession.status === 'live' ? '● LIVE NOW' :
+                   activeSession.status === 'ended' ? '✓ CONCLUDED' : 'UPCOMING'}
                 </span>
-                <span className="badge badge-secondary">{activeSession.provider || 'VeniLearn Live'}</span>
-                <span className="text-muted text-xs font-semibold">Session ID: {activeSession.id}</span>
+                <span className="badge badge-secondary">{activeSession.provider || 'Google Meet'}</span>
+                <span className="text-muted text-xs font-mono">ID: {activeSession.id.slice(0, 8)}...</span>
               </div>
 
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 6px 0' }}>
                 {activeSession.title}
               </h2>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--text-secondary)', fontSize: '0.85rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: 'var(--text-secondary)', fontSize: '0.85rem', flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <CalendarIcon size={14} color="var(--primary)" />
                   <strong>Date:</strong> {activeSession.date} ({activeSession.startTime} – {activeSession.endTime})
@@ -523,12 +539,12 @@ export const AttendanceLedgerPage: React.FC = () => {
                 </span>
                 <span>&bull;</span>
                 <span>
-                  <strong>Instructor:</strong> {activeSession.instructorName || 'Dr. James Wilson'}
+                  <strong>Instructor:</strong> {activeSession.instructorName || 'Faculty'}
                 </span>
               </div>
             </div>
 
-            {/* Attendance Progress Meter */}
+            {/* Attendance Compliance Meter */}
             <div style={{ minWidth: '220px', background: 'var(--bg-input)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <span className="text-muted text-xs font-semibold">ATTENDANCE COMPLIANCE</span>
@@ -623,11 +639,10 @@ export const AttendanceLedgerPage: React.FC = () => {
               }}
             >
               {[
-                { id: 'all', label: 'All Scholars' },
-                { id: 'present', label: 'Attended' },
-                { id: 'late', label: 'Late' },
-                { id: 'left_early', label: 'Left Early' },
-                { id: 'absent', label: 'Did Not Join' },
+                { id: 'all', label: `All Scholars (${activeRosterData.length})` },
+                { id: 'present', label: `Attended (${sessionStats.presentCount})` },
+                { id: 'late', label: `Late (${sessionStats.lateCount})` },
+                { id: 'absent', label: `Did Not Join (${sessionStats.absentCount})` },
               ].map((st) => (
                 <button
                   key={st.id}
@@ -664,14 +679,14 @@ export const AttendanceLedgerPage: React.FC = () => {
         >
           <div>
             <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>
-              {activeSession?.title || 'Live Classroom Session'} — Scholar Attendance Roster
+              {activeSession?.title || 'Live Classroom Session'} — Attendance Roster
             </h3>
             <span className="text-secondary text-xs">
-              Showing {filteredRoster.length} of {activeRosterData.length} registered students for this session
+              Showing {filteredRoster.length} of {activeRosterData.length} registered students
             </span>
           </div>
           <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
-            Live Stream Participation Data
+            Live Attendance
           </span>
         </div>
 

@@ -343,7 +343,42 @@ export const useGamificationStore = create<GamificationStoreState>((set, get) =>
     try {
       const res = await apiClient.get<any[]>('/gamification/leaderboard');
       if (res && res.data && Array.isArray(res.data)) {
-        set({ leaderboard: res.data, isLoadingLeaderboard: false });
+        const currentProfiles = { ...get().profiles };
+        const authUser = useAuthStore.getState().user;
+        res.data.forEach((item: any) => {
+          if (item.userId) {
+            const isMatch =
+              authUser?.id === item.userId ||
+              (authUser?.email && item.email && authUser.email.toLowerCase() === item.email.toLowerCase());
+            const targetKey = item.userId;
+            const existing = currentProfiles[targetKey] || (isMatch && authUser?.id ? currentProfiles[authUser.id] : null);
+            const pts = Number(item.totalPoints || 0);
+            const rankTier = getRankForPoints(pts).tier;
+            currentProfiles[targetKey] = {
+              ...(existing || {}),
+              studentId: targetKey,
+              totalPoints: pts,
+              currentRank: rankTier,
+              currentStreak: item.streakDays || existing?.currentStreak || 0,
+              bestStreak: item.streakDays || existing?.bestStreak || 0,
+              lastLoginDate: existing?.lastLoginDate || new Date().toISOString(),
+              history: existing?.history || [],
+              events: existing?.events || [],
+              streakData: existing?.streakData || {
+                currentStreak: item.streakDays || 0,
+                bestStreak: item.streakDays || 0,
+                lastLoginDate: null,
+              },
+              claimedMilestones: existing?.claimedMilestones || [],
+              completedQuizzes: existing?.completedQuizzes || {},
+            };
+            if (isMatch && authUser?.id && authUser.id !== targetKey) {
+              currentProfiles[authUser.id] = currentProfiles[targetKey];
+            }
+          }
+        });
+        persistProfiles(currentProfiles);
+        set({ leaderboard: res.data, profiles: currentProfiles, isLoadingLeaderboard: false });
         return res.data;
       }
     } catch (err) {

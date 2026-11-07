@@ -293,6 +293,9 @@ export const App: React.FC = () => {
           <Route path="my-results" element={<AssessmentsPage defaultTab="results" />} />
           <Route path="my_results" element={<AssessmentsPage defaultTab="results" />} />
           <Route path="my-proctoring-reports" element={<MyProctoringReportPage />} />
+          <Route path="my_proctoring_reports" element={<MyProctoringReportPage />} />
+          <Route path="my_proctoring_report" element={<MyProctoringReportPage />} />
+          <Route path="my_proctoring_report/:sessionId" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report" element={<MyProctoringReportPage />} />
           <Route path="my-proctoring-report/:sessionId" element={<MyProctoringReportPage />} />
 

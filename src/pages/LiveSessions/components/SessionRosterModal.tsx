@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LiveSession } from '../../../types';
+import { apiClient } from '../../../lib/apiClient';
 import { usePeopleStore } from '../../../lib/peopleStore';
 import {
-  Users, X, Search, CheckCircle2, Clock, XCircle, ShieldCheck, Download
+  Users, X, Search, CheckCircle2, Clock
 } from 'lucide-react';
 
 interface Props {
@@ -11,29 +12,59 @@ interface Props {
   onClose: () => void;
 }
 
+interface RosterScholar {
+  userId: string;
+  name: string;
+  email: string;
+  rollNo: string;
+  status: string;
+  joinedAt: string | null;
+}
+
 export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }) => {
   const [search, setSearch] = useState('');
+  const [roster, setRoster] = useState<RosterScholar[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !session?.id) return;
+    setLoading(true);
+    apiClient
+      .get(`/live-sessions/${session.id}/attendance`)
+      .then((res) => {
+        if (res && res.data) {
+          const data = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
+          setRoster(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [isOpen, session?.id]);
 
   if (!isOpen || !session) return null;
 
-  const targetIds = session.targetStudentIds || [];
-  const students = usePeopleStore.getState().users.filter(
-    (u) =>
-      (u.activeRole === 'student' || u.activeRole === 'learner') &&
-      (targetIds.length === 0 || targetIds.includes(u.id) || targetIds.includes(u.rollNo || ''))
-  );
+  // Use db roster if available, otherwise fallback to store
+  const scholars: RosterScholar[] = roster.length > 0
+    ? roster
+    : usePeopleStore.getState().users
+        .filter((u) => u.activeRole === 'student' || u.activeRole === 'learner')
+        .map((u) => ({
+          userId: u.id,
+          name: u.displayName || 'Scholar',
+          email: u.email || '',
+          rollNo: u.rollNo || 'STU-001',
+          status: session.attendance?.find((a) => a.userId === u.id)?.status || 'absent',
+          joinedAt: session.attendance?.find((a) => a.userId === u.id)?.joinedAt || null,
+        }));
 
-  const filtered = students.filter(
+  const filtered = scholars.filter(
     (s) =>
-      s.displayName?.toLowerCase().includes(search.toLowerCase()) ||
+      s.name?.toLowerCase().includes(search.toLowerCase()) ||
       s.email?.toLowerCase().includes(search.toLowerCase()) ||
       s.rollNo?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Present count from session.attendance
-  const presentIds = new Set(
-    session.attendance?.filter((a) => a.status === 'present').map((a) => a.userId) || []
-  );
+  const presentCount = scholars.filter((s) => s.status === 'present' || s.status === 'late').length;
 
   return (
     <div
@@ -93,10 +124,10 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
-                Target Audience & Student Roster
+                Live Session Audience & Attendance
               </h3>
               <p className="text-secondary text-xs" style={{ margin: '2px 0 0 0' }}>
-                {session.title} &bull; {session.date}
+                {session.title} &bull; {session.date} ({session.startTime} - {session.endTime})
               </p>
             </div>
           </div>
@@ -122,18 +153,16 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
           }}
         >
           <div>
-            <span className="text-secondary">Audience Policy: </span>
-            <strong style={{ textTransform: 'capitalize' }}>
-              {session.targetAudienceType === 'selected_students'
-                ? 'Tailored Selected Students'
-                : 'All Enrolled Cohort Members'}
+            <span className="text-secondary">Cohort: </span>
+            <strong style={{ color: 'var(--text-main)' }}>
+              {session.cohortName || 'Target Cohort'}
             </strong>
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <span className="badge badge-primary">{students.length} Total Eligible</span>
-            {session.status === 'live' || session.status === 'ended' ? (
-              <span className="badge badge-active">{presentIds.size} Present in Room</span>
-            ) : null}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <span className="badge badge-primary">{scholars.length} Registered</span>
+            <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <CheckCircle2 size={12} /> {presentCount} Attended
+            </span>
           </div>
         </div>
 
@@ -147,7 +176,7 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
             <input
               type="text"
               className="input"
-              placeholder="Search enrolled student by name, email, or student ID..."
+              placeholder="Search scholar by name, email, or roll number..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ paddingLeft: '32px', fontSize: '0.85rem' }}
@@ -158,16 +187,20 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
         {/* Roster List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                Loading session attendance roster...
+              </div>
+            ) : filtered.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                No matching students found in this session audience.
+                No matching scholars found.
               </div>
             ) : (
               filtered.map((st) => {
-                const isPresent = presentIds.has(st.id);
+                const isAttended = st.status === 'present' || st.status === 'late';
                 return (
                   <div
-                    key={st.id}
+                    key={st.userId}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -193,29 +226,25 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
                           fontSize: '0.8rem',
                         }}
                       >
-                        {st.displayName?.slice(0, 2).toUpperCase() || 'ST'}
+                        {st.name?.charAt(0).toUpperCase() || 'S'}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{st.displayName}</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{st.name}</div>
                         <div className="text-secondary text-xs">{st.email}</div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="font-mono text-muted text-xs">{st.rollNo || 'STU-2026'}</span>
-                      {session.status === 'live' || session.status === 'ended' ? (
-                        isPresent ? (
-                          <span
-                            className="badge badge-active"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <CheckCircle2 size={11} /> Joined
-                          </span>
-                        ) : (
-                          <span className="badge badge-draft">Absent</span>
-                        )
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span className="font-mono text-muted text-xs">{st.rollNo}</span>
+                      {isAttended ? (
+                        <span
+                          className="badge badge-success"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <CheckCircle2 size={11} /> {st.status === 'late' ? 'Late' : 'Attended'}
+                        </span>
                       ) : (
-                        <span className="badge badge-secondary">Invited</span>
+                        <span className="badge badge-danger">Absent</span>
                       )}
                     </div>
                   </div>
@@ -235,7 +264,7 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
             justifyContent: 'flex-end',
           }}
         >
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>
             Close
           </button>
         </div>

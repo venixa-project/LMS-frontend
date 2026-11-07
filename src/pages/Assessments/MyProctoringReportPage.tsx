@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useProctoringStore } from '../../lib/proctoringStore';
+import { useAssessmentStore } from '../../lib/assessmentStore';
 import { ProctoringEvent, ProctoringSeverity, ProctoringSession } from '../../types';
 import {
   Shield, Clock, Calendar, CheckCircle2, AlertTriangle, AlertCircle,
@@ -19,19 +20,29 @@ export const MyProctoringReportPage: React.FC = () => {
     submitStudentAppeal,
     fetchMySessions,
   } = useProctoringStore();
+  const { assessments, fetchAssessments } = useAssessmentStore();
 
   React.useEffect(() => {
     fetchMySessions();
-  }, [fetchMySessions]);
+    fetchAssessments();
+  }, [fetchMySessions, fetchAssessments]);
 
   // Filter sessions for currently authenticated student
-  const studentSessions = user ? getSessionsForLearner(user.id) : sessions;
+  const studentSessions = user
+    ? (getSessionsForLearner(user.id).length > 0 ? getSessionsForLearner(user.id) : sessions)
+    : sessions;
   const currentSession = sessionId
     ? sessions.find((s) => s.id === sessionId)
     : studentSessions[0] || sessions[0];
 
   // Selected session in case learner has multiple attempts
   const [activeSession, setActiveSession] = useState<ProctoringSession | undefined>(currentSession);
+
+  React.useEffect(() => {
+    if (!activeSession && currentSession) {
+      setActiveSession(currentSession);
+    }
+  }, [currentSession, activeSession]);
 
   // Explanation submission form state
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -101,17 +112,70 @@ export const MyProctoringReportPage: React.FC = () => {
   };
 
   if (!displaySession) {
+    const upcomingAssessment = assessments.find((a) => a.status === 'published');
     return (
       <div style={{ maxWidth: '800px', margin: '40px auto', textAlign: 'center' }}>
-        <div className="card" style={{ padding: '40px' }}>
-          <Shield size={48} color="#3B82F6" style={{ margin: '0 auto 16px' }} />
-          <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>No Proctoring Reports Found</h2>
-          <p className="text-secondary text-sm" style={{ marginBottom: '24px' }}>
-            You haven't completed any proctored assessments yet.
+        <div className="card" style={{ padding: '40px', borderRadius: '20px' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(59, 130, 246, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+            }}
+          >
+            <Shield size={36} color="#3B82F6" />
+          </div>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', fontWeight: 800 }}>No Proctoring Reports Found</h2>
+          <p className="text-secondary text-sm" style={{ maxWidth: '520px', margin: '0 auto 24px', lineHeight: 1.6 }}>
+            You haven't completed any proctored assessments yet. VeniGuard AI proctoring logs (webcam telemetry, audio
+            verification, and tab-switch records) are automatically generated and preserved here once you take a proctored
+            exam.
           </p>
-          <Link to="/assessments" className="btn btn-primary">
-            Browse Assessments
-          </Link>
+
+          {upcomingAssessment ? (
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '14px',
+                padding: '16px 20px',
+                marginBottom: '24px',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <span
+                  className="badge badge-primary"
+                  style={{ fontSize: '0.65rem', marginBottom: '4px', textTransform: 'uppercase' }}
+                >
+                  Available Assessment
+                </span>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>
+                  {upcomingAssessment.title}
+                </div>
+                <div className="text-muted text-xs">
+                  Duration: {upcomingAssessment.durationMinutes} mins &bull; Total Marks: {upcomingAssessment.totalMarks}
+                </div>
+              </div>
+              <Link to={`/exam/${upcomingAssessment.id}`} className="btn btn-primary" style={{ gap: '8px' }}>
+                <Shield size={16} /> Start Proctored Exam
+              </Link>
+            </div>
+          ) : (
+            <Link to="/my-assessments" className="btn btn-primary" style={{ gap: '8px' }}>
+              Browse Assessments
+            </Link>
+          )}
         </div>
       </div>
     );
