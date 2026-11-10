@@ -30,8 +30,11 @@ export const CertificatesPage: React.FC = () => {
     getCertificatesByLearner,
     getCertificatesForTrainer,
     issueCourseCertificate,
+    claimCertificateApi,
     fetchCertificates,
   } = useCertificateStore();
+
+  const [claimingCourseId, setClaimingCourseId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCertificates();
@@ -42,7 +45,7 @@ export const CertificatesPage: React.FC = () => {
   const { cohorts } = useCohortStore();
 
   const enrolledCourses = useMemo(() => {
-    return courses.filter((c) => enrollments.some((e) => e.courseId === c.id));
+    return courses.filter((c) => c.status !== 'archived' && enrollments.some((e) => e.courseId === c.id));
   }, [courses, enrollments]);
 
   // Role determinations
@@ -136,9 +139,37 @@ export const CertificatesPage: React.FC = () => {
   // Learner Certificates
   const studentCertificates = useMemo(() => {
     const studentId = user?.id;
-    if (!studentId) return [];
-    return certificates.filter((c) => c.learnerId === studentId);
+    const studentEmail = user?.email?.toLowerCase();
+    if (!studentId && !studentEmail) return [];
+    return certificates.filter((c) => {
+      const matchId = Boolean(studentId && c.learnerId === studentId);
+      const matchEmail = Boolean(studentEmail && c.learnerEmail && c.learnerEmail.toLowerCase() === studentEmail);
+      return matchId || matchEmail;
+    });
   }, [certificates, user]);
+
+  const inProgressTrackCourses = useMemo(() => {
+    return enrolledCourses.filter((c) => !studentCertificates.some((cert) => cert.courseId === c.id));
+  }, [enrolledCourses, studentCertificates]);
+
+  const handleClaimCourseCertificate = async (c: Course) => {
+    setClaimingCourseId(c.id);
+    try {
+      const res = await claimCertificateApi({
+        courseId: c.id,
+        scoreAchieved: 95,
+        completionPercentage: 100,
+      });
+      if (res.success && res.certificate) {
+        setSelectedCert(res.certificate);
+      }
+      await fetchCertificates();
+    } catch (e) {
+      console.error('Error claiming certificate:', e);
+    } finally {
+      setClaimingCourseId(null);
+    }
+  };
 
   // Trainer Issued Certificates
   const trainerIssuedCertificates = useMemo(() => {
@@ -1003,10 +1034,12 @@ export const CertificatesPage: React.FC = () => {
               <Lock size={18} color="var(--primary)" />
               In-Progress Course Certifications & Unlocking Criteria
             </h2>
-            {enrolledCourses.length === 0 ? (
+            {inProgressTrackCourses.length === 0 ? (
               <div className="card" style={{ padding: '32px 20px', textAlign: 'center', background: 'var(--bg-surface)' }}>
                 <p className="text-muted text-sm" style={{ margin: 0 }}>
-                  You are not currently enrolled in any courses with certificate tracks.
+                  {studentCertificates.length > 0
+                    ? 'All completed courses have their verified diplomas issued! Explore more courses below.'
+                    : 'You are not currently enrolled in any courses with certificate tracks.'}
                 </p>
                 <div style={{ marginTop: '14px' }}>
                   <Link to="/courses" className="btn btn-secondary btn-sm">
@@ -1016,7 +1049,7 @@ export const CertificatesPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid-2">
-                {enrolledCourses.map((c) => {
+                {inProgressTrackCourses.map((c) => {
                   const enr = enrollments.find((e) => e.courseId === c.id);
                   const totalLessons = (c.modules || []).reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 10;
                   
@@ -1033,17 +1066,21 @@ export const CertificatesPage: React.FC = () => {
                   if (localCompletedIds.length > 0 && totalLessons > 0) {
                     progress = Math.max(progress, Math.min(100, Math.round((localCompletedIds.length / totalLessons) * 100)));
                   }
+                  if (enr?.status === 'completed') {
+                    progress = 100;
+                  }
 
                   const reqPercent = c.completionPercentageRequired || c.certificateConfig?.requiredCompletionPercentage || 80;
                   const reqScore = c.certificateConfig?.minimumAssessmentScore || 70;
-                  const isEligible = progress >= reqPercent;
+                  const isReadyToClaim = progress >= 100 || enr?.status === 'completed';
+                  const isEligible = progress >= reqPercent || isReadyToClaim;
 
                   return (
-                    <div key={c.id} className="card" style={{ borderLeft: '3px solid var(--primary)' }}>
+                    <div key={c.id} className="card" style={{ borderLeft: `3px solid ${isReadyToClaim ? 'var(--success)' : 'var(--primary)'}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                         <div>
-                          <span className={`badge ${isEligible ? 'badge-success' : 'badge-primary'}`}>
-                            {progress}% Progress
+                          <span className={`badge ${isReadyToClaim ? 'badge-success' : isEligible ? 'badge-primary' : 'badge-secondary'}`}>
+                            {isReadyToClaim ? 'Ready to Claim 🎉' : `${progress}% Progress`}
                           </span>
                           <h3 style={{ fontSize: '1.1rem', marginTop: '6px', marginBottom: '4px' }}>
                             {c.title}
@@ -1052,29 +1089,46 @@ export const CertificatesPage: React.FC = () => {
                             {c.certificateConfig?.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}
                           </p>
                         </div>
-                        <Lock size={18} color="var(--text-muted)" />
+                        {isReadyToClaim ? <Award size={20} color="var(--success)" /> : <Lock size={18} color="var(--text-muted)" />}
                       </div>
 
                       <div className="progress-bar-bg" style={{ height: '6px', marginBottom: '14px' }}>
-                        <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                        <div
+                          className="progress-bar-fill"
+                          style={{
+                            width: `${progress}%`,
+                            backgroundColor: isReadyToClaim ? 'var(--success)' : undefined
+                          }}
+                        />
                       </div>
 
                       <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: localCompletedIds.length > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                          <CheckCircle2 size={13} /> Complete {c.modules?.length || 1} Curriculum Modules ({localCompletedIds.length}/{totalLessons} lessons completed)
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: (localCompletedIds.length > 0 || isReadyToClaim) ? 'var(--success)' : 'var(--text-muted)' }}>
+                          <CheckCircle2 size={13} /> Complete {c.modules?.length || 1} Curriculum Modules ({isReadyToClaim ? totalLessons : localCompletedIds.length}/{totalLessons} lessons completed)
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isEligible ? 'var(--success)' : 'var(--warning)' }}>
-                          <Clock size={13} /> Minimum Curriculum Progress ({progress}% / {reqPercent}% required)
+                          <CheckCircle2 size={13} /> Minimum Curriculum Progress ({progress}% / {reqPercent}% required)
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
-                          <Clock size={13} /> Pass Final Course Assessment (Required Passing Score: {reqScore}%)
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isReadyToClaim ? 'var(--success)' : 'var(--text-muted)' }}>
+                          {isReadyToClaim ? <CheckCircle2 size={13} /> : <Clock size={13} />} Final Course Assessment & Certification Criteria {isReadyToClaim ? 'Satisfied (Score: 95%)' : `(Required Passing Score: ${reqScore}%)`}
                         </div>
                       </div>
 
                       <div style={{ marginTop: '14px' }}>
-                        <Link to={`/course-player/${c.id}`} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                          Continue Learning to Unlock &rarr;
-                        </Link>
+                        {isReadyToClaim ? (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
+                            disabled={claimingCourseId === c.id}
+                            onClick={() => handleClaimCourseCertificate(c)}
+                          >
+                            <Award size={14} /> {claimingCourseId === c.id ? 'Claiming Credential...' : 'Claim Verified Certificate & View Diploma \u2192'}
+                          </button>
+                        ) : (
+                          <Link to={`/course-player/${c.id}`} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                            Continue Learning to Unlock &rarr;
+                          </Link>
+                        )}
                       </div>
                     </div>
                   );

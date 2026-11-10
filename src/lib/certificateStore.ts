@@ -72,6 +72,14 @@ interface CertificateState {
   verifyCertificate: (idOrHash: string) => PublicVerificationResult;
 
   // Eligibility & Issuance
+  claimCertificateApi: (params: {
+    courseId?: string;
+    assessmentId?: string;
+    scoreAchieved?: number;
+    completionPercentage?: number;
+    templateId?: string;
+  }) => Promise<{ success: boolean; certificate?: Certificate; message?: string }>;
+
   checkCourseEligibility: (
     course: Course,
     learnerId: string,
@@ -159,20 +167,26 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
           learnerName: c.learner?.displayName || c.learnerName || 'Student',
           learnerEmail: c.learner?.email || c.learnerEmail,
           courseId: c.courseId,
-          courseTitle: c.course?.title || c.courseTitle || 'Certified Course',
-          issueDate: c.issueDate || c.createdAt,
+          courseName: c.course?.title || c.courseTitle || c.title || 'Certified Course',
+          courseTitle: c.course?.title || c.courseTitle || c.title || 'Certified Course',
+          issueDate: c.issueDate ? String(c.issueDate).slice(0, 10) : new Date().toISOString().slice(0, 10),
+          issuedAt: c.issueDate || c.createdAt,
           expiryDate: c.expiryDate,
           verificationHash: c.verificationHash,
+          verificationUrl: c.verificationUrl || `/verify-certificate/${c.verificationHash || c.id}`,
           status: c.status || 'active',
-          templateId: c.templateId || 'tpl-default',
-          authorizedSignerName: c.authorizedSignerName || 'Academic Director',
-          authorizedSignerTitle: c.authorizedSignerTitle || 'Head of Academics',
+          templateId: c.templateId || 'standard',
+          authorizedSignerName: c.authorizedSignerName || 'Dr. James Wilson',
+          authorizedSignerTitle: c.authorizedSignerTitle || 'Dean of Academic Affairs',
           organizationId: c.tenantId,
-          issuingOrganization: c.issuingOrganization || 'VeniLearn LMS',
-          scoreAchieved: c.scoreAchieved,
+          issuingOrganization: c.issuingOrganization || 'RAPA TECH',
+          scoreAchieved: c.scoreAchieved ? Number(c.scoreAchieved) : 100,
+          completionPercentage: c.completionPercentage || 100,
         }));
         set({ certificates: mapped, isLoading: false });
-        localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(mapped));
+        try {
+          localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(mapped));
+        } catch {}
         return;
       }
     } catch (e) {
@@ -181,6 +195,55 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
     set({ isLoading: false });
   },
   certificates: loadInitialCertificates(),
+
+  claimCertificateApi: async (params: {
+    courseId?: string;
+    assessmentId?: string;
+    scoreAchieved?: number;
+    completionPercentage?: number;
+    templateId?: string;
+  }) => {
+    try {
+      const res = await apiClient.post<any>('/certificates/claim', params);
+      if (res && res.data) {
+        const c = res.data;
+        const cert: Certificate = {
+          id: c.id,
+          type: c.type || 'course',
+          learnerId: c.learnerId,
+          learnerName: c.learner?.displayName || 'Student',
+          learnerEmail: c.learner?.email,
+          courseId: c.courseId,
+          courseName: c.course?.title || c.title || 'Certified Course',
+          courseTitle: c.course?.title || c.title || 'Certified Course',
+          issueDate: c.issueDate ? String(c.issueDate).slice(0, 10) : new Date().toISOString().slice(0, 10),
+          issuedAt: c.issueDate || c.createdAt,
+          expiryDate: c.expiryDate,
+          verificationHash: c.verificationHash,
+          verificationUrl: c.verificationUrl || `/verify-certificate/${c.verificationHash || c.id}`,
+          status: c.status || 'active',
+          templateId: c.templateId || 'standard',
+          authorizedSignerName: c.authorizedSignerName || 'Dr. James Wilson',
+          authorizedSignerTitle: c.authorizedSignerTitle || 'Dean of Academic Affairs',
+          organizationId: c.tenantId,
+          issuingOrganization: c.issuingOrganization || 'RAPA TECH',
+          scoreAchieved: c.scoreAchieved ? Number(c.scoreAchieved) : 100,
+          completionPercentage: c.completionPercentage || 100,
+        };
+        const existing = get().certificates.filter((x) => x.id !== cert.id && x.courseId !== cert.courseId);
+        const next = [cert, ...existing];
+        set({ certificates: next });
+        try {
+          localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(next));
+        } catch {}
+        return { success: true, certificate: cert, message: 'Certificate successfully claimed!' };
+      }
+    } catch (err: any) {
+      console.error('Failed to claim certificate from backend:', err);
+      return { success: false, message: err?.message || 'Failed to claim certificate' };
+    }
+    return { success: false, message: 'Failed to claim certificate' };
+  },
 
   getCertificates: () => get().certificates,
 
@@ -192,7 +255,11 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
 
   getCertificatesByLearner: (learnerId: string) => {
     const list = get().certificates;
-    return list.filter((c) => c.learnerId === learnerId);
+    const user = useAuthStore.getState().user;
+    return list.filter((c) =>
+      c.learnerId === learnerId ||
+      (user?.id && (c.learnerId === user.id || (user.email && c.learnerEmail?.toLowerCase() === user.email.toLowerCase())))
+    );
   },
 
   getCertificatesByCourse: (courseId: string) => {
@@ -421,6 +488,30 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
       console.warn('Failed to persist certificates to storage:', err);
     }
 
+    // Persist to PostgreSQL backend asynchronously
+    if (course.id) {
+      apiClient.post<any>('/certificates/claim', {
+        courseId: course.id,
+        scoreAchieved,
+        completionPercentage,
+        templateId: course.certificateConfig?.templateId || 'standard',
+      }).then((res) => {
+        if (res && res.data && res.data.id) {
+          const sc = res.data;
+          const updated = get().certificates.map(item => item.id === newCert.id ? {
+            ...item,
+            id: sc.id,
+            verificationHash: sc.verificationHash || item.verificationHash,
+            verificationUrl: sc.verificationUrl || item.verificationUrl,
+          } : item);
+          set({ certificates: updated });
+          try {
+            localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(updated));
+          } catch {}
+        }
+      }).catch((e) => console.warn('[CertificateStore] Background claim sync:', e));
+    }
+
     // Award course completion reward points (deduplicated)
     if (pointsAwarded > 0) {
       try {
@@ -554,6 +645,30 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
       localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(nextCertificates));
     } catch (err) {
       console.warn('Failed to persist certificates to storage:', err);
+    }
+
+    // Persist to PostgreSQL backend asynchronously
+    if (assessment.id) {
+      apiClient.post<any>('/certificates/claim', {
+        assessmentId: assessment.id,
+        scoreAchieved,
+        completionPercentage,
+        templateId: assessment.certificateConfig?.templateId || 'standard',
+      }).then((res) => {
+        if (res && res.data && res.data.id) {
+          const sc = res.data;
+          const updated = get().certificates.map(item => item.id === newCert.id ? {
+            ...item,
+            id: sc.id,
+            verificationHash: sc.verificationHash || item.verificationHash,
+            verificationUrl: sc.verificationUrl || item.verificationUrl,
+          } : item);
+          set({ certificates: updated });
+          try {
+            localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(updated));
+          } catch {}
+        }
+      }).catch((e) => console.warn('[CertificateStore] Background claim sync:', e));
     }
 
     // Award assessment completion reward points (deduplicated)

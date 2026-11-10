@@ -147,11 +147,16 @@ export const LearnerQuizRunner: React.FC<LearnerQuizRunnerProps> = ({
       if (targetId && targetId.length === 36) {
         // Start live attempt in PostgreSQL
         const startRes = await startAttemptApi(targetId);
-        setCurrentAttemptId(startRes.attemptId);
-        if (startRes.assessment && startRes.assessment.questions && startRes.assessment.questions.length > 0) {
-          // Questions returned with answers stripped for student security
+        const resolvedAttempt = (startRes && typeof startRes === 'object' && 'data' in startRes && (startRes as any).data)
+          ? (startRes as any).data
+          : startRes;
+
+        if (resolvedAttempt?.attemptId) {
+          setCurrentAttemptId(resolvedAttempt.attemptId);
+        }
+        if (resolvedAttempt?.assessment?.questions?.length > 0) {
           setQuestions(
-            startRes.assessment.questions.map((q) => ({
+            resolvedAttempt.assessment.questions.map((q: any) => ({
               id: q.id,
               prompt: q.prompt,
               type: q.type as any,
@@ -159,15 +164,18 @@ export const LearnerQuizRunner: React.FC<LearnerQuizRunnerProps> = ({
               difficulty: (q.difficulty as any) || 'medium',
               topic: q.topic,
               source: 'ai',
-              options: (q.options || []).map((o: any) => ({ id: o.id, text: o.text, isCorrect: false })),
+              options: (q.options || []).map((o: any) => ({ id: o.id, text: o.text, isCorrect: Boolean(o.isCorrect) })),
             }))
           );
         }
       }
     } catch (err: any) {
-      console.warn('Backend attempt start failed, running locally:', err);
+      console.warn('Backend attempt start notice:', err);
+      if (err?.message) {
+        setErrorMessage(err.message);
+      }
       // Fallback: generate local attempt id
-      setCurrentAttemptId(`local-att-${Date.now()}`);
+      setCurrentAttemptId('local-att-' + Date.now());
     }
 
     // Set time limit
@@ -189,14 +197,18 @@ export const LearnerQuizRunner: React.FC<LearnerQuizRunnerProps> = ({
   const handleAnswerSelect = (questionId: string, value: string, isMultiSelect = false) => {
     if (readOnly) return;
 
+    let updatedVal: string | string[];
+
     setAnswers((prev) => {
       if (isMultiSelect) {
         const currentVals = Array.isArray(prev[questionId]) ? (prev[questionId] as string[]) : [];
         const nextVals = currentVals.includes(value)
           ? currentVals.filter((v) => v !== value)
           : [...currentVals, value];
+        updatedVal = nextVals;
         return { ...prev, [questionId]: nextVals };
       } else {
+        updatedVal = value;
         return { ...prev, [questionId]: value };
       }
     });
@@ -204,11 +216,7 @@ export const LearnerQuizRunner: React.FC<LearnerQuizRunnerProps> = ({
     // Fire non-blocking background save to PostgreSQL attempt if active
     if (currentAttemptId && !currentAttemptId.startsWith('local-')) {
       const payloadAnswer = isMultiSelect
-        ? JSON.stringify(
-            Array.isArray(answers[questionId])
-              ? [...(answers[questionId] as string[]), value]
-              : [value]
-          )
+        ? JSON.stringify(updatedVal!)
         : value;
       saveAnswerApi(currentAttemptId, questionId, payloadAnswer).catch(() => {});
     }
@@ -245,24 +253,34 @@ export const LearnerQuizRunner: React.FC<LearnerQuizRunnerProps> = ({
     try {
       if (currentAttemptId && !currentAttemptId.startsWith('local-')) {
         // 1. Submit answers to PostgreSQL
-        for (const [qId, ansVal] of Object.entries(answers)) {
-          const stringVal = Array.isArray(ansVal) ? JSON.stringify(ansVal) : String(ansVal);
-          await saveAnswerApi(currentAttemptId, qId, stringVal).catch(() => {});
+        const answerEntries = Object.entries(answers);
+        if (answerEntries.length > 0) {
+          await Promise.all(
+            answerEntries.map(([qId, ansVal]) => {
+              const stringVal = Array.isArray(ansVal) ? JSON.stringify(ansVal) : String(ansVal);
+              return saveAnswerApi(currentAttemptId, qId, stringVal).catch(() => {});
+            })
+          );
         }
 
         // 2. Submit attempt in PostgreSQL
         const submitRes = await submitAttemptApi(currentAttemptId);
-        finalScore = submitRes.score;
-        finalTotal = submitRes.totalMarks || finalTotal;
-        finalPercent = submitRes.percentage;
-        isPassed = submitRes.passed;
+        const resolvedData = (submitRes && typeof submitRes === 'object' && 'data' in submitRes && (submitRes as any).data)
+          ? (submitRes as any).data
+          : submitRes;
+
+        finalScore = resolvedData?.score ?? 0;
+        finalTotal = resolvedData?.totalMarks ?? finalTotal;
+        finalPercent = resolvedData?.percentage ?? Math.round((finalScore / (finalTotal || 1)) * 100);
+        isPassed = Boolean(resolvedData?.passed);
 
         // 3. Fetch detailed review from PostgreSQL
         try {
           const resultReview = await getAttemptResultApi(currentAttemptId);
-          if (resultReview && resultReview.questions) {
-            detailedReview = resultReview.questions.map((q: any) => ({
-              questionId: q.questionId,
+          const reviewData = (resultReview && (resultReview as any).data) ? (resultReview as any).data : resultReview;
+          if (reviewData && reviewData.questions) {
+            detailedReview = reviewData.questions.map((q: any) => ({
+              questionId: q.id || q.questionId,
               prompt: q.prompt || '',
               type: q.type || 'single_choice',
               points: q.points || 1,

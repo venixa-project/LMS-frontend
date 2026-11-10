@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useCertificateStore, PublicVerificationResult } from '../../lib/certificateStore';
+import { apiClient } from '../../lib/apiClient';
 import { printCertificateDiploma } from '../../lib/certificatePdf';
 import {
   ShieldCheck, ShieldAlert, Award, Search, CheckCircle2,
@@ -33,11 +34,31 @@ export const VerifyCertificatePage: React.FC = () => {
     return null;
   });
 
+  const checkVerification = async (query: string) => {
+    if (!query) {
+      setResult(null);
+      return;
+    }
+    const localRes = verifyCertificate(query);
+    if (localRes && localRes.isValid) {
+      setResult(localRes);
+      return;
+    }
+    try {
+      const apiRes = await apiClient.get<any>(`/certificates/verify/${encodeURIComponent(query)}`);
+      if (apiRes && apiRes.data) {
+        setResult(apiRes.data as PublicVerificationResult);
+        return;
+      }
+    } catch {}
+    setResult(localRes);
+  };
+
   useEffect(() => {
     if (initialQuery.trim()) {
       setSearchInput(initialQuery.trim());
       setSearchedQuery(initialQuery.trim());
-      setResult(verifyCertificate(initialQuery.trim()));
+      checkVerification(initialQuery.trim());
     }
   }, [initialQuery]);
 
@@ -45,12 +66,7 @@ export const VerifyCertificatePage: React.FC = () => {
     if (e) e.preventDefault();
     const query = searchInput.trim();
     setSearchedQuery(query);
-    if (!query) {
-      setResult(null);
-      return;
-    }
-    const res = verifyCertificate(query);
-    setResult(res);
+    checkVerification(query);
   };
 
   const handleCopyLink = () => {

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useCertificateStore } from '../../lib/certificateStore';
+import { useAssessmentStore } from '../../lib/assessmentStore';
 import { useMomentumStore } from '../../lib/momentumStore';
 import { apiClient } from '../../lib/apiClient';
 import { generateCertificatePdf } from '../../lib/certificatePdf';
@@ -445,10 +446,22 @@ public final class CourseDataService {
           completionPercentage: newPercent,
         });
 
-        if (issueResult.success && issueResult.certificate) {
-          setUnlockedCert(issueResult.certificate);
-          setShowCertModal(true);
-        }
+                  apiClient.patch(`/courses/enrollments/${course.id}/progress`, {
+                    progressPercentage: 100,
+                    status: 'completed',
+                    completedAt: new Date().toISOString(),
+                  }).catch(() => {});
+
+                  if (issueResult.success && issueResult.certificate) {
+                    setUnlockedCert(issueResult.certificate);
+                    setShowCertModal(true);
+                  } else {
+                    const found = getCertificatesByLearner(student.id).find((c) => c.courseId === course.id);
+                    if (found) {
+                      setUnlockedCert(found);
+                      setShowCertModal(true);
+                    }
+                  }
       }
     }
   };
@@ -485,6 +498,91 @@ public final class CourseDataService {
     }
   };
 
+  const handleCompleteCourseAndClaimCert = async () => {
+    if (!course || !currentLesson) return;
+
+    // 1. Mark current lesson completed
+    if (!completedLessonIds.includes(currentLesson.id)) {
+      await handleToggleLessonComplete(currentLesson.id);
+    }
+
+    const nextCompleted = Array.from(new Set([...completedLessonIds, currentLesson.id]));
+    const nextPercent = allLessons.length > 0
+      ? Math.min(100, Math.round((nextCompleted.length / allLessons.length) * 100))
+      : 100;
+
+    // 2. Check if final assessment is required
+    const finalAssessment =
+      course.finalAssessment ||
+      course.finalAssessmentConfig ||
+      (course as any).assessments?.find((a: any) => a.scope === 'final_assessment') ||
+      course.modules?.flatMap((m) => m.lessons).find((l) => (l as any).quizConfig?.scope === 'final_assessment')?.quizConfig ||
+      ((course as any).assessments && (course as any).assessments.length > 0 ? (course as any).assessments[0] : null);
+
+    const requiresAssessment = Boolean(
+      course.certificateConfig?.requirePassingAssessment ||
+      (finalAssessment && course.certificateConfig?.requirePassingAssessment !== false)
+    );
+
+    let isAssessmentPassed = false;
+    if (finalAssessment) {
+      const myAttempts = useAssessmentStore.getState().myAttempts;
+      isAssessmentPassed = myAttempts.some(
+        (att) => att.passed && (att.assessmentId === finalAssessment.id || (att as any).assessment?.title === finalAssessment.title)
+      );
+    }
+
+    if (requiresAssessment && finalAssessment && !isAssessmentPassed) {
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 2200);
+      setSelectedAssessment({
+        scope: 'final_assessment',
+        config: finalAssessment as any,
+      });
+      return;
+    }
+
+    // 3. Issue certificate
+    const student = user || {
+      id: 'u-current',
+      displayName: 'Enrolled Learner',
+      email: 'learner@venilearn.lms',
+    };
+
+    const issueResult = issueCourseCertificate({
+      course,
+      learner: {
+        id: student.id,
+        name: student.displayName || 'Enrolled Learner',
+        email: student.email,
+      },
+      scoreAchieved: 95,
+      completionPercentage: nextPercent,
+    });
+
+    // 4. Update enrollment in PostgreSQL database
+    try {
+      await apiClient.patch(`/courses/enrollments/${course.id}/progress`, {
+        progressPercentage: 100,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      });
+    } catch {}
+
+    setShowCelebration(true);
+    setTimeout(() => setShowCelebration(false), 2500);
+
+    if (issueResult.success && issueResult.certificate) {
+      setUnlockedCert(issueResult.certificate);
+      setShowCertModal(true);
+    } else {
+      const existing = getCertificatesByLearner(student.id).find((c) => c.courseId === course.id);
+      if (existing) {
+        setUnlockedCert(existing);
+        setShowCertModal(true);
+      }
+    }
+  };
   const lessonDuration = currentLesson.duration || (currentLesson as any).durationMinutes || 15;
 
   // RULE 1: Before Start Date - Blocked Access for Students
@@ -965,7 +1063,7 @@ public final class CourseDataService {
             </div>
           )}
 
-          {/* Action Row & Navigation Controls (No manual Mark as Complete button) */}
+          {/* Action Row & Navigation Controls */}
           <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', flexWrap: 'wrap', gap: '12px' }}>
             <button
               className="btn btn-secondary"
@@ -974,6 +1072,39 @@ public final class CourseDataService {
               style={{ gap: '6px' }}
             >
               <ChevronLeft size={16} /> Previous Lesson
+            </button>
+
+            {/* Central Dedicated Lesson Completion Toggle */}
+            <button
+              type="button"
+              onClick={toggleComplete}
+              disabled={isAfterEnd}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 20px',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 600,
+                fontSize: '0.88rem',
+                cursor: isAfterEnd ? 'not-allowed' : 'pointer',
+                background: isCompleted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(37, 99, 235, 0.08)',
+                border: isCompleted ? '1.5px solid #10b981' : '1px solid #3b82f6',
+                color: isCompleted ? '#10b981' : '#3b82f6',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {isCompleted ? (
+                <>
+                  <CheckCircle2 size={18} color="#10b981" />
+                  <span>Lesson Completed</span>
+                </>
+              ) : (
+                <>
+                  <Circle size={18} />
+                  <span>Mark Lesson as Completed</span>
+                </>
+              )}
             </button>
 
             {isAfterEnd && (
@@ -994,22 +1125,19 @@ public final class CourseDataService {
                 Next Lesson <ChevronRight size={16} />
               </button>
             ) : (
-              <Link
-                to="/my-certificates"
+              <button
+                type="button"
                 className="btn btn-primary"
-                style={{ gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                onClick={() => {
-                  const currentCompleted = courseCompletionMap[course.id] || [];
-                  if (!currentCompleted.includes(currentLesson.id)) {
-                    setCourseCompletionMap({
-                      ...courseCompletionMap,
-                      [course.id]: [...currentCompleted, currentLesson.id]
-                    });
-                  }
+                onClick={handleCompleteCourseAndClaimCert}
+                style={{
+                  gap: '6px',
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)',
                 }}
               >
-                <Award size={16} /> Complete Course & View Certificate &rarr;
-              </Link>
+                <Award size={16} /> Complete Course & Claim Certificate &rarr;
+              </button>
             )}
           </div>
 

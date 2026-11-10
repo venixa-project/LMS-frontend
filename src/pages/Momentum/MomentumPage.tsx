@@ -119,9 +119,11 @@ export const MomentumPage: React.FC = () => {
   const inProgressLessons = Math.max(0, Math.min(1, totalLessons - completedLessons));
   const notStartedLessons = Math.max(0, totalLessons - completedLessons - inProgressLessons);
 
-  // Weekly study time
+  // Weekly study time and progress metrics
   const weekTotalMins = backendMetrics?.weekTotalMinutes ?? 0;
   const formattedStudyTime = formatDuration(weekTotalMins) || (weekTotalMins > 0 ? `${weekTotalMins}m` : '0m');
+  const weekGoalMinutes = backendMetrics?.weekGoalMinutes ?? (settings?.weeklyGoalHours ? settings.weeklyGoalHours * 60 : 600);
+  const weekPercent = backendMetrics?.weekPercent ?? (weekGoalMinutes > 0 ? Math.min(100, Math.round((weekTotalMins / weekGoalMinutes) * 100)) : 0);
 
   // Streak data from real activity timestamps
   const streakDays = backendMetrics?.currentStreak ?? 0;
@@ -164,9 +166,133 @@ export const MomentumPage: React.FC = () => {
 
   const monthNameShort = new Date(currentYear, currentMonthIndex, 1).toLocaleDateString('en-US', { month: 'short' });
 
-  // Selected date record
+  // Selected date record (without fake 45m fallback!)
   const selectedRecord: DayStudyRecord | undefined = studyDatabase[selectedDateStr];
-  const selectedMinutes = selectedRecord?.minutes ?? (selectedDateStr === todayDate ? (studyDatabase[todayDate]?.minutes || 45) : 0);
+  const selectedMinutes = selectedRecord?.minutes ?? (studyDatabase[selectedDateStr]?.minutes ?? 0);
+
+  // Dynamic Chart Points based on timeFilter ('This Month' | 'This Week' | 'All Time')
+  const chartPoints = useMemo(() => {
+    const xCoords = [40, 75, 110, 145, 180, 215, 250];
+
+    if (timeFilter === 'This Week') {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + mondayOffset);
+      monday.setHours(0, 0, 0, 0);
+
+      const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      return dayLabels.map((label, idx) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + idx);
+        const dateStr = formatDate(d);
+        const rec = studyDatabase[dateStr];
+        const minutes = rec?.minutes ?? 0;
+        const dailyGoal = rec?.dailyGoalMinutes || settings?.dailyGoalMinutes || 45;
+        const percent = Math.min(100, Math.round((minutes / Math.max(1, dailyGoal)) * 100));
+        const y = 160 - (percent / 100) * 140;
+
+        return {
+          label,
+          dateStr,
+          minutes,
+          percent,
+          x: xCoords[idx],
+          y,
+        };
+      });
+    }
+
+    if (timeFilter === 'This Month') {
+      const daysInMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
+      const step = Math.max(1, Math.floor(daysInMonth / 6));
+
+      return [0, 1, 2, 3, 4, 5, 6].map((idx) => {
+        const dayNum = Math.min(daysInMonth, 1 + idx * step);
+        const d = new Date(currentYear, currentMonthIndex, dayNum);
+        const dateStr = formatDate(d);
+        const rec = studyDatabase[dateStr];
+        const minutes = rec?.minutes ?? 0;
+        const dailyGoal = rec?.dailyGoalMinutes || settings?.dailyGoalMinutes || 45;
+        const percent = Math.min(100, Math.round((minutes / Math.max(1, dailyGoal)) * 100));
+        const y = 160 - (percent / 100) * 140;
+
+        return {
+          label: `${monthNameShort} ${dayNum}`,
+          dateStr,
+          minutes,
+          percent,
+          x: xCoords[idx],
+          y,
+        };
+      });
+    }
+
+    // All Time / Trend: 7 weekly progress buckets
+    const now = new Date();
+    return [6, 5, 4, 3, 2, 1, 0].map((weeksAgo, idx) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - weeksAgo * 7);
+      const dateStr = formatDate(d);
+      const rec = studyDatabase[dateStr];
+      const minutes = rec?.minutes ?? 0;
+      const dailyGoal = rec?.dailyGoalMinutes || settings?.dailyGoalMinutes || 45;
+      const percent = Math.min(100, Math.round((minutes / Math.max(1, dailyGoal)) * 100));
+      const y = 160 - (percent / 100) * 140;
+
+      return {
+        label: weeksAgo === 0 ? 'Now' : `-${weeksAgo}w`,
+        dateStr,
+        minutes,
+        percent,
+        x: xCoords[idx],
+        y,
+      };
+    });
+  }, [timeFilter, studyDatabase, settings, currentYear, currentMonthIndex, monthNameShort]);
+
+  // Compute smooth SVG paths
+  const { linePath, areaPath } = useMemo(() => {
+    if (!chartPoints || chartPoints.length === 0) {
+      return { linePath: '', areaPath: '' };
+    }
+
+    let d = `M ${chartPoints[0].x} ${chartPoints[0].y}`;
+    for (let i = 1; i < chartPoints.length; i++) {
+      const prev = chartPoints[i - 1];
+      const curr = chartPoints[i];
+      const midX = (prev.x + curr.x) / 2;
+      d += ` C ${midX} ${prev.y}, ${midX} ${curr.y}, ${curr.x} ${curr.y}`;
+    }
+
+    const firstX = chartPoints[0].x;
+    const lastX = chartPoints[chartPoints.length - 1].x;
+    const area = `${d} L ${lastX} 160 L ${firstX} 160 Z`;
+
+    return { linePath: d, areaPath: area };
+  }, [chartPoints]);
+
+  // Real recent activities from backend studyDatabase
+  const displayedActivities = useMemo(() => {
+    if (selectedRecord?.activities && selectedRecord.activities.length > 0) {
+      return selectedRecord.activities;
+    }
+
+    const allActs: any[] = [];
+    Object.values(studyDatabase).forEach((d) => {
+      if (d.activities && d.activities.length > 0) {
+        allActs.push(...d.activities);
+      }
+    });
+
+    return allActs.sort((a, b) => {
+      const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return tB - tA;
+    }).slice(0, 5);
+  }, [selectedRecord, studyDatabase]);
 
   // SVG Circular Ring calculation helper
   const renderCircleRing = (percentage: number, color: string, size = 64, strokeWidth = 5) => {
@@ -423,7 +549,7 @@ export const MomentumPage: React.FC = () => {
         }}>
           {/* Left: Circular Ring with Duration */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {renderCircleRing(65, '#10b981', 64, 5)}
+            {renderCircleRing(weekPercent, '#10b981', 64, 5)}
             <span style={{ position: 'absolute', fontSize: '11px', fontWeight: 700, color: '#ffffff', textAlign: 'center' }}>
               {formattedStudyTime}
             </span>
@@ -439,7 +565,7 @@ export const MomentumPage: React.FC = () => {
               This Week
             </span>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', marginTop: '6px' }}>
-              ↑ +12%
+              {weekPercent}% of weekly goal
             </span>
           </div>
         </div>
@@ -491,7 +617,7 @@ export const MomentumPage: React.FC = () => {
         }}>
           {/* Left: Circular Ring with Streak Days */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {renderCircleRing(streakDays > 0 ? Math.min(100, streakDays * 20) : 40, '#f97316', 64, 5)}
+            {renderCircleRing(streakDays > 0 ? Math.min(100, streakDays * 20) : 0, '#f97316', 64, 5)}
             <span style={{ position: 'absolute', fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>
               {streakDays}
             </span>
@@ -745,44 +871,42 @@ export const MomentumPage: React.FC = () => {
                   ))}
 
                   {/* Area fill under curve */}
-                  <path
-                    d="M 40 96 Q 75 75 110 73 T 180 50 T 250 42 L 250 160 L 40 160 Z"
-                    fill="url(#blueLineArea)"
-                  />
+                  {areaPath && (
+                    <path
+                      d={areaPath}
+                      fill="url(#blueLineArea)"
+                    />
+                  )}
 
                   {/* Glowing Blue Line Path */}
-                  <path
-                    d="M 40 96 Q 75 75 110 73 T 180 50 T 250 42"
-                    fill="none"
-                    stroke="#00d2ff"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 6px rgba(0, 210, 255, 0.6))' }}
-                  />
+                  {linePath && (
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke="#00d2ff"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      style={{ filter: 'drop-shadow(0 0 6px rgba(0, 210, 255, 0.6))' }}
+                    />
+                  )}
 
                   {/* Data Points on Line */}
-                  {[
-                    { x: 40, y: 96 },
-                    { x: 75, y: 80 },
-                    { x: 110, y: 73 },
-                    { x: 145, y: 62 },
-                    { x: 180, y: 50 },
-                    { x: 215, y: 46 },
-                    { x: 250, y: 42 },
-                  ].map((pt, i) => (
+                  {chartPoints.map((pt, i) => (
                     <circle
                       key={i}
                       cx={pt.x}
                       cy={pt.y}
-                      r="4"
-                      fill="#00d2ff"
+                      r={pt.minutes > 0 ? 5 : 3.5}
+                      fill={pt.minutes > 0 ? '#00d2ff' : '#64748b'}
                       stroke="#ffffff"
-                      strokeWidth="1.5"
-                    />
+                      strokeWidth={pt.minutes > 0 ? 1.5 : 1}
+                    >
+                      <title>{`${pt.label} (${pt.dateStr}): ${pt.minutes}m studied (${pt.percent}% of daily goal)`}</title>
+                    </circle>
                   ))}
                 </svg>
 
-                {/* X-Axis Weekday Labels */}
+                {/* X-Axis Dynamic Labels */}
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -790,9 +914,9 @@ export const MomentumPage: React.FC = () => {
                   paddingRight: '12px',
                   marginTop: '4px'
                 }}>
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                    <span key={day} style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>
-                      {day}
+                  {chartPoints.map((pt, idx) => (
+                    <span key={idx} style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>
+                      {pt.label}
                     </span>
                   ))}
                 </div>
@@ -948,8 +1072,8 @@ export const MomentumPage: React.FC = () => {
 
           {/* Bottom Encouraging Banner */}
           <div style={{
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.22)',
+            background: selectedMinutes > 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.06)',
+            border: `1px solid ${selectedMinutes > 0 ? 'rgba(16, 185, 129, 0.22)' : 'rgba(56, 189, 248, 0.16)'}`,
             borderRadius: '12px',
             padding: '12px 14px',
             marginTop: '16px',
@@ -958,7 +1082,7 @@ export const MomentumPage: React.FC = () => {
             gap: '12px'
           }}>
             <div style={{
-              background: '#10b981',
+              background: selectedMinutes > 0 ? '#10b981' : '#38bdf8',
               color: '#ffffff',
               borderRadius: '50%',
               width: '24px',
@@ -968,14 +1092,22 @@ export const MomentumPage: React.FC = () => {
               justifyContent: 'center',
               flexShrink: 0
             }}>
-              <Check size={14} strokeWidth={3} />
+              {selectedMinutes > 0 ? <Check size={14} strokeWidth={3} /> : <Zap size={14} strokeWidth={2.5} />}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>
-                You studied {selectedMinutes > 0 ? formatDuration(selectedMinutes) : '45m'} today!
+                {selectedMinutes > 0
+                  ? `You studied ${formatDuration(selectedMinutes)} ${selectedDateStr === todayDate ? 'today' : 'on ' + new Date(selectedDateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}!`
+                  : selectedDateStr === todayDate
+                  ? 'No study recorded yet today.'
+                  : `No study recorded on ${new Date(selectedDateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`}
               </span>
-              <span style={{ fontSize: '11px', color: '#a7f3d0', marginTop: '2px' }}>
-                Keep the momentum going! 🚀
+              <span style={{ fontSize: '11px', color: selectedMinutes > 0 ? '#a7f3d0' : '#94a3b8', marginTop: '2px' }}>
+                {selectedMinutes > 0
+                  ? 'Keep the momentum going! 🚀'
+                  : selectedDateStr === todayDate
+                  ? 'Start a lesson or the study timer below to build your streak! ⏳'
+                  : 'Select an active date with a dot to view recorded sessions.'}
               </span>
             </div>
           </div>
@@ -1033,93 +1165,85 @@ export const MomentumPage: React.FC = () => {
           </div>
 
           {/* Timeline Items */}
-          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '18px', paddingLeft: '8px' }}>
-            {/* Connecting Vertical Line */}
+          {displayedActivities.length > 0 ? (
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '18px', paddingLeft: '8px' }}>
+              {/* Connecting Vertical Line */}
+              <div style={{
+                position: 'absolute',
+                left: '21px',
+                top: '16px',
+                bottom: '16px',
+                width: '2px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                zIndex: 1
+              }} />
+
+              {displayedActivities.map((act: any, index: number) => {
+                const isLesson = act.type === 'lesson';
+                const isQuiz = act.type === 'quiz' || act.type === 'assignment';
+                const isStudy = act.type === 'study';
+
+                const iconBg = isLesson ? '#10b981' : isQuiz ? '#0284c7' : isStudy ? '#06b6d4' : '#8b5cf6';
+                const dateLabel = act.timestamp
+                  ? new Date(act.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                  : 'Logged';
+                const timeLabel = act.timestamp
+                  ? new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '';
+
+                return (
+                  <div key={act.id || index} style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: iconBg,
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isLesson ? (
+                        <Check size={16} strokeWidth={2.5} />
+                      ) : isQuiz ? (
+                        <FileText size={14} strokeWidth={2.5} />
+                      ) : isStudy ? (
+                        <Timer size={14} strokeWidth={2.5} />
+                      ) : (
+                        <Play size={14} fill="#ffffff" strokeWidth={0} />
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {act.title}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                        {act.courseTitle ? `${act.courseTitle} • ` : ''}{dateLabel}{timeLabel ? ` ${timeLabel}` : ''} • {formatDuration(act.durationMinutes || 15)}{act.score ? ` • Score: ${act.score}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
             <div style={{
-              position: 'absolute',
-              left: '21px',
-              top: '16px',
-              bottom: '16px',
-              width: '2px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              zIndex: 1
-            }} />
-
-            {/* Timeline Item 1: Completed Lesson */}
-            <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: '#10b981',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <Check size={16} strokeWidth={2.5} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
-                  Completed: Java – Lesson 1: Introduction to Java
-                </span>
-                <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  Today • 10:30 AM • 45m
-                </span>
-              </div>
+              padding: '28px 16px',
+              textAlign: 'center',
+              background: 'rgba(255, 255, 255, 0.02)',
+              borderRadius: '12px',
+              border: '1px dashed rgba(255, 255, 255, 0.08)',
+              margin: 'auto 0'
+            }}>
+              <Clock size={24} color="#64748b" style={{ margin: '0 auto 8px', opacity: 0.7 }} />
+              <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
+                No study activity recorded {selectedDateStr === todayDate ? 'today' : 'on this date'}
+              </p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+                Complete a course lesson or start the study timer to record your learning momentum.
+              </p>
             </div>
-
-            {/* Timeline Item 2: Watched Video */}
-            <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: '#8b5cf6',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <Play size={14} fill="#ffffff" strokeWidth={0} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
-                  Watched: Java – Video Lecture
-                </span>
-                <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  Today • 09:15 AM • 30m
-                </span>
-              </div>
-            </div>
-
-            {/* Timeline Item 3: Passed Quiz */}
-            <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-              <div style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: '#0284c7',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <FileText size={14} strokeWidth={2.5} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
-                  Passed: Java Quiz – Basics
-                </span>
-                <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
-                  Yesterday • 04:20 PM • 92%
-                </span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Card 2: Study Timer */}

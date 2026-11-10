@@ -522,7 +522,7 @@ export const StudentDashboard: React.FC = () => {
   const metricCards = [
     { label: 'Enrolled Courses', value: data.stats.enrolledCourses, detail: `${data.stats.inProgressCourses} in progress`, icon: BookOpen, color: 'var(--primary)' },
     { label: 'In-Progress Courses', value: data.stats.inProgressCourses, detail: 'Active curriculum tracks', icon: Clock, color: 'var(--accent-cyan)' },
-    { label: 'Completed Courses', value: data.stats.completedCourses, detail: `${data.stats.completedCertificates} certificates earned`, icon: Award, color: 'var(--success)' },
+    { label: 'Completed Courses', value: data.stats.completedCourses, detail: `${data.stats.completedCertificates} ${data.stats.completedCertificates === 1 ? 'certificate' : 'certificates'} earned`, icon: Award, color: 'var(--success)' },
     { label: 'Curriculum Progress', value: `${data.stats.curriculumProgressPercentage}%`, detail: `${data.stats.completedLessons} of ${data.stats.totalLessons} lessons completed`, icon: Activity, color: 'var(--accent-purple)' },
   ];
 
@@ -620,9 +620,18 @@ export const StudentDashboard: React.FC = () => {
             )}
 
             {displayCohorts.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {displayCohorts.slice(0, 2).map((co: any) => {
-                  const courseTitle = co.courseTitle || co.course?.title || courses.find((c) => c.id === co.courseId)?.title || 'Assigned Course';
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  maxHeight: '340px',
+                  overflowY: 'auto',
+                  paddingRight: '4px',
+                }}
+              >
+                {displayCohorts.map((co: any) => {
+                  const courseTitle = co.courseTitle || co.course?.title || courses.find((c) => c.id === co.courseId)?.title || 'Integrated Curriculum Track';
                   const trainerName = co.leadTrainer || (co.trainers && co.trainers[0]) || (co.instructors?.[0] ? (peopleUsers?.find((u) => u.id === co.instructors[0])?.displayName || 'Assigned Faculty') : 'Assigned Faculty');
 
                   return (

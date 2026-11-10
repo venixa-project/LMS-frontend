@@ -10,7 +10,7 @@ import { apiClient } from '../../lib/apiClient';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
-  FileText, Video, Mic, Download, Lock
+  FileText, Video, Mic, Download, Lock, Send
 } from 'lucide-react';
 import { VeniGuardSetup } from './components/VeniGuardSetup';
 import { VeniGuardStatusPanel } from './components/VeniGuardStatusPanel';
@@ -155,6 +155,15 @@ export const ExamPlayerPage: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'Saved' | 'Saving...'>('Saved');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [forcedSubmissionReason, setForcedSubmissionReason] = useState<string | null>(null);
+  const textSaveTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (textSaveTimeoutRef.current) {
+        clearTimeout(textSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Live media streams
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -641,10 +650,22 @@ export const ExamPlayerPage: React.FC = () => {
   };
 
   const currentQ = questions[currentQIndex];
-  const answeredCount = Object.keys(selectedAnswers).length;
+
+  const isQuestionAnswered = (qId: string) => {
+    const val = selectedAnswers[qId];
+    if (val === undefined || val === null) return false;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed || trimmed === '[]') return false;
+      return true;
+    }
+    return Boolean(val);
+  };
+
+  const answeredCount = questions.filter((q) => isQuestionAnswered(q.id)).length;
   const unansweredCount = questions.length - answeredCount;
 
-  const handleSelectAnswer = (optId: string) => {
+  const handleSelectSingleAnswer = (optId: string) => {
     if (isAfterEnd && isStudent) return; // Read-only lockdown
     setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: optId }));
     setSaveStatus('Saving...');
@@ -656,6 +677,58 @@ export const ExamPlayerPage: React.FC = () => {
       setTimeout(() => setSaveStatus('Saved'), 300);
     }
   };
+
+  const handleToggleMultipleChoiceAnswer = (optId: string) => {
+    if (isAfterEnd && isStudent) return;
+    let existing: string[] = [];
+    try {
+      const val = selectedAnswers[currentQ.id];
+      if (val) {
+        const parsed = JSON.parse(val);
+        existing = Array.isArray(parsed) ? parsed : [val];
+      }
+    } catch {
+      existing = (selectedAnswers[currentQ.id] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
+    const updated = existing.includes(optId)
+      ? existing.filter((id) => id !== optId)
+      : [...existing, optId];
+
+    const serialized = JSON.stringify(updated);
+    setSelectedAnswers((prev) => ({
+      ...prev,
+      [currentQ.id]: updated.length > 0 ? serialized : '',
+    }));
+    setSaveStatus('Saving...');
+    if (pgAttemptId) {
+      saveAnswerApi(pgAttemptId, currentQ.id, serialized)
+        .then(() => setSaveStatus('Saved'))
+        .catch(() => setSaveStatus('Saved'));
+    } else {
+      setTimeout(() => setSaveStatus('Saved'), 300);
+    }
+  };
+
+  const handleTextAnswerChange = (text: string) => {
+    if (isAfterEnd && isStudent) return;
+    setSelectedAnswers((prev) => ({ ...prev, [currentQ.id]: text }));
+    setSaveStatus('Saving...');
+    if (textSaveTimeoutRef.current) {
+      clearTimeout(textSaveTimeoutRef.current);
+    }
+    textSaveTimeoutRef.current = setTimeout(() => {
+      if (pgAttemptId) {
+        saveAnswerApi(pgAttemptId, currentQ.id, text)
+          .then(() => setSaveStatus('Saved'))
+          .catch(() => setSaveStatus('Saved'));
+      } else {
+        setSaveStatus('Saved');
+      }
+    }, 600);
+  };
+
+  const handleSelectAnswer = handleSelectSingleAnswer;
 
   const toggleFlag = (qId: string) => {
     if (flaggedQIds.includes(qId)) {
@@ -1136,47 +1209,140 @@ export const ExamPlayerPage: React.FC = () => {
                 {currentQ.prompt}
               </h2>
 
-              {/* Answer options */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {currentQ.options?.map((opt: any) => {
-                  const isChecked = selectedAnswers[currentQ.id] === opt.id;
+              {/* Answer options / text response area */}
+              {(!currentQ.options || currentQ.options.length === 0 || currentQ.type === 'short_answer' || currentQ.type === 'essay') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                      Your Written Response / Case Study Solution:
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {(selectedAnswers[currentQ.id] || '').trim().length} characters &bull; {(selectedAnswers[currentQ.id] || '').trim().split(/\s+/).filter(Boolean).length} words
+                    </span>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={selectedAnswers[currentQ.id] || ''}
+                    onChange={(e) => handleTextAnswerChange(e.target.value)}
+                    placeholder="Type your comprehensive answer, case study solution, or analysis here..."
+                    disabled={isAfterEnd && isStudent}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.95rem',
+                      fontFamily: 'inherit',
+                      lineHeight: 1.6,
+                      resize: 'vertical',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease',
+                      boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
+                    onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
+                  />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Your response is automatically saved as you type.
+                  </span>
+                </div>
+              ) : currentQ.type === 'multiple_choice' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <span style={{ fontSize: '0.82rem', color: '#60A5FA', fontWeight: 600, marginBottom: '2px' }}>
+                    Select all options that apply:
+                  </span>
+                  {currentQ.options?.map((opt: any) => {
+                    let isChecked = false;
+                    try {
+                      const val = selectedAnswers[currentQ.id];
+                      if (val) {
+                        const parsed = JSON.parse(val);
+                        isChecked = Array.isArray(parsed) ? parsed.includes(opt.id) : parsed === opt.id;
+                      }
+                    } catch {
+                      isChecked = (selectedAnswers[currentQ.id] || '').split(',').map((s) => s.trim()).includes(opt.id);
+                    }
 
-                  return (
-                    <label
-                      key={opt.id}
-                      onClick={() => handleSelectAnswer(opt.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '14px 18px',
-                        borderRadius: 'var(--radius-md)',
-                        background: isChecked ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
-                        border: isChecked ? '2px solid #2563EB' : '1px solid var(--border-subtle)',
-                        cursor: 'pointer',
-                        transition: 'var(--transition)',
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={`question-${currentQ.id}`}
-                        checked={isChecked}
-                        onChange={() => {}}
-                        style={{ accentColor: '#2563EB', width: '16px', height: '16px' }}
-                      />
-                      <span
+                    return (
+                      <label
+                        key={opt.id}
+                        onClick={() => handleToggleMultipleChoiceAnswer(opt.id)}
                         style={{
-                          fontSize: '0.92rem',
-                          color: isChecked ? '#3B82F6' : 'var(--text-main)',
-                          fontWeight: isChecked ? 700 : 400,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '14px 18px',
+                          borderRadius: 'var(--radius-md)',
+                          background: isChecked ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
+                          border: isChecked ? '2px solid #2563EB' : '1px solid var(--border-subtle)',
+                          cursor: 'pointer',
+                          transition: 'var(--transition)',
                         }}
                       >
-                        {opt.text}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+                        <input
+                          type="checkbox"
+                          name={`question-${currentQ.id}`}
+                          checked={isChecked}
+                          onChange={() => {}}
+                          style={{ accentColor: '#2563EB', width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <span
+                          style={{
+                            fontSize: '0.92rem',
+                            color: isChecked ? '#3B82F6' : 'var(--text-main)',
+                            fontWeight: isChecked ? 700 : 400,
+                          }}
+                        >
+                          {opt.text}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {currentQ.options?.map((opt: any) => {
+                    const isChecked = selectedAnswers[currentQ.id] === opt.id;
+
+                    return (
+                      <label
+                        key={opt.id}
+                        onClick={() => handleSelectSingleAnswer(opt.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '14px 18px',
+                          borderRadius: 'var(--radius-md)',
+                          background: isChecked ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
+                          border: isChecked ? '2px solid #2563EB' : '1px solid var(--border-subtle)',
+                          cursor: 'pointer',
+                          transition: 'var(--transition)',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name={`question-${currentQ.id}`}
+                          checked={isChecked}
+                          onChange={() => {}}
+                          style={{ accentColor: '#2563EB', width: '16px', height: '16px' }}
+                        />
+                        <span
+                          style={{
+                            fontSize: '0.92rem',
+                            color: isChecked ? '#3B82F6' : 'var(--text-main)',
+                            fontWeight: isChecked ? 700 : 400,
+                          }}
+                        >
+                          {opt.text}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div
@@ -1197,13 +1363,29 @@ export const ExamPlayerPage: React.FC = () => {
                 <ChevronLeft size={16} /> Previous
               </button>
 
-              <button
-                className="btn btn-secondary"
-                onClick={() => setCurrentQIndex(currentQIndex + 1)}
-                disabled={currentQIndex === questions.length - 1}
-              >
-                Next <ChevronRight size={16} />
-              </button>
+              {currentQIndex === questions.length - 1 ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setIsSubmitModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                    boxShadow: '0 2px 10px rgba(37, 99, 235, 0.35)',
+                  }}
+                >
+                  <Send size={16} /> Submit Exam
+                </button>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setCurrentQIndex(currentQIndex + 1)}
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1221,7 +1403,7 @@ export const ExamPlayerPage: React.FC = () => {
             >
               {questions.map((q, idx) => {
                 const isCurrent = idx === currentQIndex;
-                const isAnswered = selectedAnswers[q.id] !== undefined;
+                const isAnswered = isQuestionAnswered(q.id);
                 const isFlagged = flaggedQIds.includes(q.id);
 
                 return (

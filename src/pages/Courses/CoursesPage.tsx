@@ -707,7 +707,7 @@ const CoursesManagementPage: React.FC = () => {
               className={`tab-btn ${learnerTab === 'completed' ? 'active' : ''}`}
               onClick={() => setLearnerTab('completed')}
             >
-              <Award size={14} /> Completed &bull; Certificate Issued ({completedCourses.length})
+              <Award size={14} /> Completed ({completedCourses.length})
             </button>
           </div>
         </div>

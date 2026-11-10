@@ -75,7 +75,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   // Consent & accommodations
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showAccommodationModal, setShowAccommodationModal] = useState(false);
-  const [autoLaunchJitsi, setAutoLaunchJitsi] = useState(true);
+  const [autoLaunchJitsi, setAutoLaunchJitsi] = useState(false);
 
   // Authenticated candidate details for Jitsi Meet
   const { user } = useAuthStore();
@@ -915,7 +915,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 style={{ accentColor: '#10B981', width: '15px', height: '15px' }}
               />
               <span>
-                Automatically launch Google Meet live conference in a new tab when starting assessment
+                (Optional) Launch external Google Meet live conference in a new tab when starting assessment
               </span>
             </label>
           </div>
@@ -1013,7 +1013,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
               gap: '8px',
             }}
           >
-            <span>Start Assessment & Open Google Meet</span>
+            <span>Start Assessment</span>
             <ChevronRight size={18} />
           </button>
         </div>
