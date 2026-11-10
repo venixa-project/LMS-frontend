@@ -79,17 +79,15 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     attachGoogleMeet,
   } = useLiveSessionStore();
 
-<<<<<<< HEAD
   const { cohorts, fetchCohorts } = useCohortStore();
   const { courses, enrollments, fetchCourses } = useCourseStore();
-=======
+
   // 10s clock tick to re-evaluate active join window in real-time
   const [, setClockTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setClockTick((c) => c + 1), 10000);
     return () => clearInterval(timer);
   }, []);
->>>>>>> a18b7cc79bfaea89f19b070a29fc31e02d053f32
 
   useEffect(() => {
     fetchSessions();
@@ -97,17 +95,12 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     fetchCourses();
     const interval = setInterval(() => {
       fetchSessions();
-<<<<<<< HEAD
-    }, 30000);
+    }, 15000);
     const handleFocus = () => {
       fetchSessions();
       fetchCohorts();
       fetchCourses();
     };
-=======
-    }, 15000);
-    const handleFocus = () => fetchSessions();
->>>>>>> a18b7cc79bfaea89f19b070a29fc31e02d053f32
     window.addEventListener('focus', handleFocus);
     return () => {
       clearInterval(interval);

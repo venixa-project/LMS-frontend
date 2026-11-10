@@ -156,7 +156,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
       if (currentPath === '/my-learning') return false;
       return (
         ['/courses', '/catalog', '/join-course'].some((p) => currentPath === p || currentPath.startsWith(`${p}/`)) ||
-        (currentPath.startsWith('/course/') && !currentPath.startsWith('/course-builder'))
+        (currentPath.startsWith('/course/') && !currentPath.startsWith('/course-builder')) ||
+        (currentPath.startsWith('/course-player') && !activeNav.some((n) => n.id === 'my-learning'))
       );
     }
     if (item.id === 'my-learning') {
