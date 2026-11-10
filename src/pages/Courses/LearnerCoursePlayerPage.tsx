@@ -10,6 +10,7 @@ import { generateCertificatePdf } from '../../lib/certificatePdf';
 import { Course, Certificate, QuizAssessmentConfig, UploadedDocumentInfo } from '../../types';
 import { LearnerVideoPlayer } from './components/LearnerVideoPlayer';
 import { LearnerQuizRunner } from './components/LearnerQuizRunner';
+import { AILessonSummaryPanel } from './components/AILessonSummaryPanel';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
   ChevronRight, ChevronLeft, ChevronDown, Bookmark, Share2, Sparkles, Award,
@@ -736,44 +737,6 @@ public final class CourseDataService {
     )
   );
 
-  // Humanized, friendly, mentor-style lesson summary
-  const humanizedSummary = useMemo(() => {
-    if (!currentLesson || !course) return null;
-
-    const isDoc = isDocumentLesson;
-    const lessonTitle = currentLesson.title || 'Lesson';
-    const courseTitle = course.title || 'Course';
-    const moduleTitle = currentModule?.title || 'Core Curriculum';
-    const docName = activeDoc?.name || 'Curriculum Document';
-
-    if (isDoc) {
-      return {
-        title: `Summary of ${docName}`,
-        badge: 'Document Reference',
-        overview: currentLesson.content
-          ? currentLesson.content
-          : `This reading material covers the required specifications and study notes for "${lessonTitle}" in ${courseTitle}. It is organized to help you grasp the essentials clearly and efficiently.`,
-        points: [
-          `Key Topic: Core reference guidelines for ${moduleTitle}.`,
-          `Practical Application: Connects theoretical principles to real-world ${courseTitle} practices.`,
-          `Study Goal: Review the document sections thoroughly before starting the module assessment.`,
-        ],
-        practicalTip: `💡 Pro-tip: You can download this document or open it in Fullscreen anytime for offline study.`,
-      };
-    }
-
-    return {
-      title: `Summary of ${lessonTitle}`,
-      badge: 'Video Lecture',
-      overview: `In this lecture, the instructor walks through "${lessonTitle}" step-by-step. The lesson breaks down complex topics into clear, understandable concepts with real-world context.`,
-      points: [
-        `Main Focus: Understand the core architecture and workflow demonstrated in the video.`,
-        `Industry Standard: See how modern enterprise solutions implement these components.`,
-        `Practical Practice: Try following along and pausing to experiment with each step.`,
-      ],
-      practicalTip: `💡 Pro-tip: Adjust the video playback speed (1.25x or 1.5x) or re-watch key sections to match your learning pace.`,
-    };
-  }, [currentLesson, course, currentModule, isDocumentLesson, activeDoc]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -915,103 +878,16 @@ public final class CourseDataService {
                 }}
               />
 
-              {/* Humanized AI Lesson Summary Toggle Button under Video */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowLessonSummary(!showLessonSummary)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 600,
-                    padding: '8px 16px',
-                    background: showLessonSummary ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-card)',
-                    borderColor: showLessonSummary ? 'var(--primary)' : 'var(--border-subtle)',
-                    color: showLessonSummary ? 'var(--primary)' : 'var(--text-main)',
-                    borderRadius: 'var(--radius-md)',
-                    transition: 'all 0.18s ease',
-                  }}
-                >
-                  <Sparkles size={14} color="var(--accent-purple)" />
-                  <span>{showLessonSummary ? 'Hide Lesson Summary' : '✨ View Lesson Summary'}</span>
-                  <ChevronDown size={14} style={{ transform: showLessonSummary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
-                </button>
-              </div>
-
-              {/* Humanized AI Lesson Summary Collapsible Panel */}
-              {showLessonSummary && humanizedSummary && (
-                <div style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid rgba(99, 102, 241, 0.25)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '20px 24px',
-                  boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '7px',
-                        background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                      }}>
-                        <Sparkles size={14} />
-                      </div>
-                      <div>
-                        <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-main)' }}>
-                          {humanizedSummary.title}
-                        </span>
-                        <span className="text-muted text-xs" style={{ display: 'block' }}>
-                          Explained in friendly, mentor-guided language
-                        </span>
-                      </div>
-                    </div>
-                    <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
-                      {humanizedSummary.badge}
-                    </span>
-                  </div>
-
-                  <div style={{ background: 'var(--bg-input)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.86rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>🎯 What You Need to Know:</strong>
-                    {humanizedSummary.overview}
-                  </div>
-
-                  <div style={{ marginBottom: '14px' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.84rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <CheckCircle2 size={14} color="var(--success)" /> Key Takeaways in Simple Words:
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {humanizedSummary.points.map((point, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.83rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{idx + 1}.</span>
-                          <span>{point}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{
-                    background: 'rgba(99, 102, 241, 0.08)',
-                    border: '1px solid rgba(99, 102, 241, 0.2)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '10px 14px',
-                    fontSize: '0.82rem',
-                    color: 'var(--text-main)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}>
-                    <Sparkles size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
-                    <span>{humanizedSummary.practicalTip}</span>
-                  </div>
-                </div>
+              {/* Real AI-Powered Lesson Summary Panel */}
+              {course && currentLesson && (
+                <AILessonSummaryPanel
+                  courseId={course.id}
+                  lessonId={currentLesson.id}
+                  lessonTitle={currentLesson.title}
+                  lessonType={currentLesson.type || 'video'}
+                  isOpen={showLessonSummary}
+                  onToggle={() => setShowLessonSummary(!showLessonSummary)}
+                />
               )}
             </div>
           ) : isQuizLesson ? (
@@ -1121,104 +997,16 @@ public final class CourseDataService {
                   </div>
                 ) : null}
 
-                {/* Humanized AI Summary Toggle Button under Document */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginTop: '14px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setShowLessonSummary(!showLessonSummary)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      padding: '8px 16px',
-                      background: showLessonSummary ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-input)',
-                      borderColor: showLessonSummary ? 'var(--primary)' : 'var(--border-subtle)',
-                      color: showLessonSummary ? 'var(--primary)' : 'var(--text-main)',
-                      borderRadius: 'var(--radius-md)',
-                      transition: 'all 0.18s ease',
-                    }}
-                  >
-                    <Sparkles size={14} color="var(--accent-purple)" />
-                    <span>{showLessonSummary ? 'Hide Document Summary' : '✨ View Document Summary'}</span>
-                    <ChevronDown size={14} style={{ transform: showLessonSummary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
-                  </button>
-                </div>
-
-                {/* Humanized AI Summary Collapsible Card */}
-                {showLessonSummary && humanizedSummary && (
-                  <div style={{
-                    marginTop: '14px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    borderRadius: 'var(--radius-lg)',
-                    padding: '20px 22px',
-                    boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{
-                          width: '28px',
-                          height: '28px',
-                          borderRadius: '7px',
-                          background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                        }}>
-                          <Sparkles size={14} />
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-main)' }}>
-                            {humanizedSummary.title}
-                          </span>
-                          <span className="text-muted text-xs" style={{ display: 'block' }}>
-                            Explained in friendly, mentor-guided language
-                          </span>
-                        </div>
-                      </div>
-                      <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
-                        {humanizedSummary.badge}
-                      </span>
-                    </div>
-
-                    <div style={{ background: 'var(--bg-input)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.86rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                      <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>🎯 What You Need to Know:</strong>
-                      {humanizedSummary.overview}
-                    </div>
-
-                    <div style={{ marginBottom: '14px' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.84rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <CheckCircle2 size={14} color="var(--success)" /> Key Takeaways in Simple Words:
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {humanizedSummary.points.map((point, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.83rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{idx + 1}.</span>
-                            <span>{point}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div style={{
-                      background: 'rgba(99, 102, 241, 0.08)',
-                      border: '1px solid rgba(99, 102, 241, 0.2)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '10px 14px',
-                      fontSize: '0.82rem',
-                      color: 'var(--text-main)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}>
-                      <Sparkles size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
-                      <span>{humanizedSummary.practicalTip}</span>
-                    </div>
-                  </div>
+                {/* Real AI-Powered Lesson Summary Panel */}
+                {course && currentLesson && (
+                  <AILessonSummaryPanel
+                    courseId={course.id}
+                    lessonId={currentLesson.id}
+                    lessonTitle={currentLesson.title}
+                    lessonType={currentLesson.type || 'document'}
+                    isOpen={showLessonSummary}
+                    onToggle={() => setShowLessonSummary(!showLessonSummary)}
+                  />
                 )}
               </div>
             </div>
