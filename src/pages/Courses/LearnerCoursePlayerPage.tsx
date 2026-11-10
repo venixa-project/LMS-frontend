@@ -12,10 +12,10 @@ import { LearnerVideoPlayer } from './components/LearnerVideoPlayer';
 import { LearnerQuizRunner } from './components/LearnerQuizRunner';
 import {
   ArrowLeft, CheckCircle2, Circle, Play, FileText, Download,
-  ChevronRight, ChevronLeft, Bookmark, Share2, Sparkles, Award,
+  ChevronRight, ChevronLeft, ChevronDown, Bookmark, Share2, Sparkles, Award,
   ShieldCheck, X, ExternalLink, Clock, Lock, AlertTriangle, Eye,
   Pause, Video, HelpCircle, BookOpen, Check, Layers, Code,
-  Upload, Printer, RefreshCw
+  Upload, Printer, RefreshCw, Info
 } from 'lucide-react';
 import { getActiveDocumentFile, registerDocumentFile } from '../../lib/videoService';
 
@@ -170,6 +170,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const [downloadingCert, setDownloadingCert] = useState(false);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
   const [localDocMap, setLocalDocMap] = useState<Record<string, UploadedDocumentInfo>>({});
+  const [showLessonSummary, setShowLessonSummary] = useState(false);
 
   // Persistent notes per lesson
   const [lessonNotes, setLessonNotes] = useState<Record<string, string>>(() => {
@@ -248,7 +249,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
   const now = new Date();
   const isBeforeStart = Boolean(course.startDate && new Date(course.startDate) > now);
   const isAfterEnd = Boolean(course.endDate && new Date(course.endDate) < now);
-  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || (user as any)?.role === 'student' || (user as any)?.role === 'learner';
   const isPrivileged = !isStudent; // Admins and Trainers
   const exitLink = isStudent ? '/my-learning' : '/courses';
 
@@ -261,18 +262,19 @@ export const LearnerCoursePlayerPage: React.FC = () => {
 
   // Active document resolution for reading material
   const activeDoc: UploadedDocumentInfo = useMemo(() => {
+    let resolvedDoc: UploadedDocumentInfo | undefined;
+
     if (currentLesson && localDocMap[currentLesson.id]) {
-      return localDocMap[currentLesson.id];
-    }
-    if (currentLesson?.uploadedDocument && (currentLesson.uploadedDocument.name || currentLesson.uploadedDocument.url)) {
-      return currentLesson.uploadedDocument;
-    }
-    if (
+      resolvedDoc = { ...localDocMap[currentLesson.id] };
+    } else if (currentLesson?.uploadedDocument && (currentLesson.uploadedDocument.name || currentLesson.uploadedDocument.url)) {
+      resolvedDoc = { ...currentLesson.uploadedDocument };
+    } else if (
       currentLesson?.type === 'document' ||
-      (currentLesson?.contentUrl && (
+      currentLesson?.type === 'rich_text' ||
+      Boolean(currentLesson?.contentUrl && (
         currentLesson.contentUrl.includes('/documents/') ||
         currentLesson.contentUrl.includes('documents%2F') ||
-        ['.pdf', '.docx', '.doc', '.txt', '.md'].some((ext) =>
+        ['.pdf', '.docx', '.doc', '.txt', '.md', '.pptx', '.xlsx'].some((ext) =>
           currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext)
         )
       ))
@@ -280,7 +282,7 @@ export const LearnerCoursePlayerPage: React.FC = () => {
       const cleanUrl = currentLesson?.contentUrl ? currentLesson.contentUrl.split('?')[0] : '';
       const rawFileName = cleanUrl.split('/').pop() || `${currentLesson?.title || 'Document'}.pdf`;
       const fileName = currentLesson?.uploadedDocument?.name || decodeURIComponent(rawFileName);
-      return {
+      resolvedDoc = {
         id: `doc-${currentLesson?.id || 'curriculum'}`,
         name: fileName,
         size: currentLesson?.uploadedDocument?.size || 1500000,
@@ -289,6 +291,15 @@ export const LearnerCoursePlayerPage: React.FC = () => {
         url: currentLesson?.contentUrl || currentLesson?.uploadedDocument?.url,
       };
     }
+
+    if (resolvedDoc) {
+      if (!resolvedDoc.name || resolvedDoc.name === 'undefined') {
+        const clean = (resolvedDoc.url || '').split('?')[0];
+        resolvedDoc.name = clean.split('/').pop() || `${currentLesson?.title || 'Curriculum_Document'}.pdf`;
+      }
+      return resolvedDoc;
+    }
+
     const courseDoc = course.modules?.flatMap((m) => m.lessons).find((l) => l.uploadedDocument && (l.uploadedDocument.name || l.uploadedDocument.url))?.uploadedDocument;
     if (courseDoc) {
       return courseDoc;
@@ -677,6 +688,93 @@ public final class CourseDataService {
     );
   }
 
+  // Robust determination of lesson content type
+  const isDocumentLesson = Boolean(
+    currentLesson && (
+      (currentLesson.type as any) === 'document' ||
+      (currentLesson.type as any) === 'reading' ||
+      currentLesson.type === 'rich_text' ||
+      currentLesson.type === 'downloadable' ||
+      currentLesson.title?.toLowerCase().includes('reading') ||
+      currentLesson.title?.toLowerCase().includes('document') ||
+      (currentLesson.uploadedDocument && (currentLesson.uploadedDocument.url || currentLesson.uploadedDocument.name)) ||
+      (currentLesson.contentUrl && (
+        currentLesson.contentUrl.includes('/documents/') ||
+        currentLesson.contentUrl.includes('documents%2F') ||
+        ['.pdf', '.docx', '.doc', '.txt', '.md', '.pptx', '.xlsx'].some((ext) =>
+          currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext)
+        )
+      ))
+    )
+  );
+
+  const isQuizLesson = Boolean(
+    !isDocumentLesson &&
+    currentLesson &&
+    (currentLesson.type === 'quiz' || (
+      currentLesson.quizConfig &&
+      Array.isArray(currentLesson.quizConfig.questions) &&
+      currentLesson.quizConfig.questions.length > 0
+    ))
+  );
+
+  const isVideoLesson = Boolean(
+    !isDocumentLesson &&
+    !isQuizLesson &&
+    currentLesson &&
+    (
+      currentLesson.type === 'video' ||
+      Boolean(currentLesson.videoInfo?.url) ||
+      Boolean((currentLesson as any).videoUrl) ||
+      Boolean(currentLesson.contentUrl && (
+        currentLesson.contentUrl.includes('/videos/') ||
+        currentLesson.contentUrl.includes('/storage/videos/') ||
+        ['.mp4', '.webm', '.mov', '.mkv', '.mp3', '.wav', '.m4a', '.ogg', '.aac'].some((ext) =>
+          currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext)
+        )
+      ))
+    )
+  );
+
+  // Humanized, friendly, mentor-style lesson summary
+  const humanizedSummary = useMemo(() => {
+    if (!currentLesson || !course) return null;
+
+    const isDoc = isDocumentLesson;
+    const lessonTitle = currentLesson.title || 'Lesson';
+    const courseTitle = course.title || 'Course';
+    const moduleTitle = currentModule?.title || 'Core Curriculum';
+    const docName = activeDoc?.name || 'Curriculum Document';
+
+    if (isDoc) {
+      return {
+        title: `Summary of ${docName}`,
+        badge: 'Document Reference',
+        overview: currentLesson.content
+          ? currentLesson.content
+          : `This reading material covers the required specifications and study notes for "${lessonTitle}" in ${courseTitle}. It is organized to help you grasp the essentials clearly and efficiently.`,
+        points: [
+          `Key Topic: Core reference guidelines for ${moduleTitle}.`,
+          `Practical Application: Connects theoretical principles to real-world ${courseTitle} practices.`,
+          `Study Goal: Review the document sections thoroughly before starting the module assessment.`,
+        ],
+        practicalTip: `💡 Pro-tip: You can download this document or open it in Fullscreen anytime for offline study.`,
+      };
+    }
+
+    return {
+      title: `Summary of ${lessonTitle}`,
+      badge: 'Video Lecture',
+      overview: `In this lecture, the instructor walks through "${lessonTitle}" step-by-step. The lesson breaks down complex topics into clear, understandable concepts with real-world context.`,
+      points: [
+        `Main Focus: Understand the core architecture and workflow demonstrated in the video.`,
+        `Industry Standard: See how modern enterprise solutions implement these components.`,
+        `Practical Practice: Try following along and pausing to experiment with each step.`,
+      ],
+      practicalTip: `💡 Pro-tip: Adjust the video playback speed (1.25x or 1.5x) or re-watch key sections to match your learning pace.`,
+    };
+  }, [currentLesson, course, currentModule, isDocumentLesson, activeDoc]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Banner Navigation */}
@@ -766,8 +864,8 @@ public final class CourseDataService {
         </div>
       )}
 
-      {/* Main Player Grid: Content on Left (75%), Curriculum on Right (25%) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
+      {/* Main Player Grid: Content on Left, Sticky Locked Playlist on Right */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 290px', gap: '20px', alignItems: 'start' }}>
         {/* Main Content Area */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Video / Interactive Player / Quiz Box */}
@@ -803,19 +901,120 @@ public final class CourseDataService {
                 }
               }}
             />
-          ) : (currentLesson.type === 'video' || (currentLesson.contentUrl && (currentLesson.contentUrl.includes('/videos/') || currentLesson.contentUrl.includes('/storage/videos/') || currentLesson.contentUrl.includes('s3.') || currentLesson.contentUrl.includes('amazonaws.com') || ['.mp4', '.webm', '.mov', '.mkv', '.mp3', '.wav', '.m4a', '.ogg', '.aac'].some((ext) => currentLesson.contentUrl!.split('?')[0].toLowerCase().endsWith(ext))))) ? (
-            <LearnerVideoPlayer
-              videoInfo={currentLesson.videoInfo}
-              contentUrl={currentLesson.contentUrl}
-              lessonTitle={currentLesson.title}
-              courseId={course?.id || id || ''}
-              onComplete={() => {
-                if (currentLesson && !completedLessonIds.includes(currentLesson.id)) {
-                  handleToggleLessonComplete(currentLesson.id);
-                }
-              }}
-            />
-          ) : currentLesson.type === 'quiz' || Boolean(currentLesson.quizConfig) ? (
+          ) : isVideoLesson ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <LearnerVideoPlayer
+                videoInfo={currentLesson.videoInfo}
+                contentUrl={currentLesson.contentUrl}
+                lessonTitle={currentLesson.title}
+                courseId={course?.id || id || ''}
+                onComplete={() => {
+                  if (currentLesson && !completedLessonIds.includes(currentLesson.id)) {
+                    handleToggleLessonComplete(currentLesson.id);
+                  }
+                }}
+              />
+
+              {/* Humanized AI Lesson Summary Toggle Button under Video */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowLessonSummary(!showLessonSummary)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    padding: '8px 16px',
+                    background: showLessonSummary ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-card)',
+                    borderColor: showLessonSummary ? 'var(--primary)' : 'var(--border-subtle)',
+                    color: showLessonSummary ? 'var(--primary)' : 'var(--text-main)',
+                    borderRadius: 'var(--radius-md)',
+                    transition: 'all 0.18s ease',
+                  }}
+                >
+                  <Sparkles size={14} color="var(--accent-purple)" />
+                  <span>{showLessonSummary ? 'Hide Lesson Summary' : '✨ View Lesson Summary'}</span>
+                  <ChevronDown size={14} style={{ transform: showLessonSummary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                </button>
+              </div>
+
+              {/* Humanized AI Lesson Summary Collapsible Panel */}
+              {showLessonSummary && humanizedSummary && (
+                <div style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px 24px',
+                  boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '7px',
+                        background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                      }}>
+                        <Sparkles size={14} />
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-main)' }}>
+                          {humanizedSummary.title}
+                        </span>
+                        <span className="text-muted text-xs" style={{ display: 'block' }}>
+                          Explained in friendly, mentor-guided language
+                        </span>
+                      </div>
+                    </div>
+                    <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
+                      {humanizedSummary.badge}
+                    </span>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-input)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.86rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                    <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>🎯 What You Need to Know:</strong>
+                    {humanizedSummary.overview}
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.84rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={14} color="var(--success)" /> Key Takeaways in Simple Words:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {humanizedSummary.points.map((point, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.83rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{idx + 1}.</span>
+                          <span>{point}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '10px 14px',
+                    fontSize: '0.82rem',
+                    color: 'var(--text-main)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}>
+                    <Sparkles size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+                    <span>{humanizedSummary.practicalTip}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : isQuizLesson ? (
             <LearnerQuizRunner
               quizConfig={currentLesson.quizConfig}
               assessmentId={currentLesson.quizConfig?.id}
@@ -837,11 +1036,12 @@ public final class CourseDataService {
               borderRadius: 'var(--radius-xl)',
               overflow: 'hidden',
               border: '1px solid var(--border-subtle)',
-              position: 'relative'
+              position: 'relative',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)'
             }}>
-              <div style={{ padding: '32px 36px', minHeight: '420px', background: 'var(--bg-card)' }}>
-                {/* Header & Meta Bar */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+              <div style={{ padding: '24px 28px', background: 'var(--bg-card)' }}>
+                {/* Clean Top Header & Actions Bar */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                       <span className="badge badge-primary" style={{ fontSize: '0.72rem', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -851,252 +1051,175 @@ public final class CourseDataService {
                         <Clock size={12} /> {currentLesson.durationMinutes || 20} mins reading
                       </span>
                     </div>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
                       {currentLesson.title}
                     </h2>
+                    {activeDoc?.name && (
+                      <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                        <FileText size={12} color="var(--accent-cyan)" />
+                        <span>{activeDoc.name}</span>
+                        {activeDoc.size ? (
+                          <span>&bull; {activeDoc.size < 1024 * 1024 ? `${(activeDoc.size / 1024).toFixed(1)} KB` : `${(activeDoc.size / (1024 * 1024)).toFixed(1)} MB`}</span>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
-                  {!isCompleted && !isAfterEnd && (
+                  {/* Single Clean Action Group (No edit access for students, no duplicate download buttons) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {activeDoc?.url && (
+                      <a
+                        href={activeDoc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', textDecoration: 'none' }}
+                        title="Open document in a new tab"
+                      >
+                        <ExternalLink size={13} /> Fullscreen
+                      </a>
+                    )}
                     <button
                       type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={toggleComplete}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderColor: 'var(--accent-cyan)' }}
+                      className="btn btn-primary btn-sm"
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
+                      onClick={handleDownloadActiveDoc}
+                      title="Download curriculum document"
                     >
-                      <Check size={14} color="var(--accent-cyan)" /> Mark Reading as Completed
+                      <Download size={13} /> Download Document
                     </button>
-                  )}
-                  {isCompleted && (
-                    <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.78rem' }}>
-                      <CheckCircle2 size={14} /> Completed
-                    </span>
-                  )}
+                    {!isCompleted && !isAfterEnd && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={toggleComplete}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderColor: 'var(--accent-cyan)' }}
+                      >
+                        <Check size={14} color="var(--accent-cyan)" /> Mark as Completed
+                      </button>
+                    )}
+                    {isCompleted && (
+                      <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px', fontSize: '0.78rem' }}>
+                        <CheckCircle2 size={14} /> Completed
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Hidden Local Document Picker for Reading Lesson */}
-                <input
-                  type="file"
-                  ref={docFileInputRef}
-                  accept=".pdf,.doc,.docx,.txt,.md,.java,.json"
-                  onChange={handleCustomDocSelect}
-                  style={{ display: 'none' }}
-                />
+                {/* Embedded Document Viewer Box */}
+                {activeDoc?.url && (activeDoc.url.startsWith('data:application/pdf') || activeDoc.url.toLowerCase().includes('.pdf') || activeDoc.name?.toLowerCase().endsWith('.pdf') || activeDoc.url.includes('/documents/')) ? (
+                  <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: '#ffffff', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+                    <iframe
+                      src={activeDoc.url.includes('#') ? activeDoc.url : `${activeDoc.url}#toolbar=1&navpanes=0`}
+                      title={activeDoc.name || 'Document Viewer'}
+                      style={{ width: '100%', height: '540px', border: 'none', background: '#ffffff', display: 'block' }}
+                    />
+                  </div>
+                ) : activeDoc?.text ? (
+                  <div style={{ background: 'var(--bg-input)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap', maxHeight: '480px', overflowY: 'auto' }}>
+                    {activeDoc.text}
+                  </div>
+                ) : null}
 
-                {/* Attached Document Card (Always available for reading materials) */}
-                {activeDoc && (
-                  <div
+                {/* Humanized AI Summary Toggle Button under Document */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', marginTop: '14px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setShowLessonSummary(!showLessonSummary)}
                     style={{
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '16px 20px',
-                      borderRadius: 'var(--radius-lg)',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-subtle)',
-                      marginBottom: '24px',
-                      flexWrap: 'wrap',
-                      gap: '14px',
+                      gap: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      padding: '8px 16px',
+                      background: showLessonSummary ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-input)',
+                      borderColor: showLessonSummary ? 'var(--primary)' : 'var(--border-subtle)',
+                      color: showLessonSummary ? 'var(--primary)' : 'var(--text-main)',
+                      borderRadius: 'var(--radius-md)',
+                      transition: 'all 0.18s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                      <div
-                        style={{
-                          width: '44px',
-                          height: '44px',
-                          borderRadius: '10px',
-                          background: 'rgba(6, 182, 212, 0.12)',
-                          color: 'var(--accent-cyan)',
+                    <Sparkles size={14} color="var(--accent-purple)" />
+                    <span>{showLessonSummary ? 'Hide Document Summary' : '✨ View Document Summary'}</span>
+                    <ChevronDown size={14} style={{ transform: showLessonSummary ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                  </button>
+                </div>
+
+                {/* Humanized AI Summary Collapsible Card */}
+                {showLessonSummary && humanizedSummary && (
+                  <div style={{
+                    marginTop: '14px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '20px 22px',
+                    boxShadow: '0 4px 18px rgba(0, 0, 0, 0.08)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '7px',
+                          background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FileText size={22} />
-                      </div>
-                      <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: '0.95rem',
-                            color: 'var(--text-main)',
-                            wordBreak: 'break-all',
-                          }}
-                          title={activeDoc.name}
-                        >
-                          {activeDoc.name}
-                        </div>
-                        <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
-                          <span>
-                            {activeDoc.size
-                              ? activeDoc.size < 1024 * 1024
-                                ? `${(activeDoc.size / 1024).toFixed(1)} KB`
-                                : `${(activeDoc.size / (1024 * 1024)).toFixed(1)} MB`
-                              : '2.4 MB'}
-                          </span>
-                          <span>&bull;</span>
-                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>Verified Curriculum Source</span>
-                          <span>&bull;</span>
-                          <span>Ready for Offline Study</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => docFileInputRef.current?.click()}
-                        className="btn btn-secondary btn-sm"
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                        title="Upload or replace with a local document from your computer"
-                      >
-                        <Upload size={13} /> Choose / Replace Doc
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => window.print()}
-                        className="btn btn-secondary btn-sm"
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                        title="Print or save as PDF"
-                      >
-                        <Printer size={13} /> Print / Save PDF
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
-                        onClick={handleDownloadActiveDoc}
-                      >
-                        <Download size={13} /> Download Document
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Embedded Document Viewer if URL is available */}
-                {activeDoc?.url && (activeDoc.url.startsWith('data:application/pdf') || activeDoc.url.toLowerCase().includes('.pdf') || activeDoc.name?.toLowerCase().endsWith('.pdf')) && (
-                  <div style={{ marginBottom: '24px', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                    <iframe
-                      src={activeDoc.url}
-                      title={activeDoc.name}
-                      style={{ width: '100%', height: '480px', border: 'none', background: '#ffffff' }}
-                    />
-                  </div>
-                )}
-
-                {/* Document Body Content */}
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.8, display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                  {activeDoc?.text ? (
-                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                      {activeDoc.text}
-                    </div>
-                  ) : currentLesson.content ? (
-                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                      {currentLesson.content}
-                    </div>
-                  ) : course.title.toLowerCase().includes('java') ? (
-                    /* Deep-dive Enterprise Java Curriculum Notes */
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                      <p>
-                        Welcome to <strong>{currentLesson.title}</strong> for the <strong>{course.title}</strong> curriculum. This reading unit covers the foundational architecture, object-oriented paradigms, memory lifecycle, and clean code conventions required to architect robust, scalable enterprise Java applications.
-                      </p>
-
-                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 12px', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Layers size={18} /> 1. JVM Architecture & Runtime Memory Model
-                        </h3>
-                        <p style={{ margin: '0 0 12px' }}>
-                          The Java Virtual Machine (JVM) abstracts underlying hardware architectures through bytecode execution, providing cross-platform portability (&ldquo;Write Once, Run Anywhere&rdquo;). Key memory segments include:
-                        </p>
-                        <ul style={{ margin: '0 0 10px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <li><strong>Heap Memory:</strong> Shared runtime data area where all class instances and arrays are allocated. Partitioned into the Young Generation (Eden and Survivor spaces) and Old/Tenured Generation.</li>
-                          <li><strong>JVM Stack:</strong> Thread-isolated memory holding stack frames for active method invocations, primitive local variables, and object references.</li>
-                          <li><strong>Metaspace:</strong> Off-heap native memory containing class metadata, static variables, and runtime constant pools (replacing the legacy PermGen in Java 8+).</li>
-                          <li><strong>Garbage Collection (GC):</strong> Generational automated memory reclamation (e.g., G1 GC, ZGC) identifying unreachable objects via root set traversal.</li>
-                        </ul>
-                      </div>
-
-                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 12px', color: 'var(--accent-purple)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Code size={18} /> 2. Object-Oriented Principles & Modern Syntax
-                        </h3>
-                        <p style={{ margin: '0 0 12px' }}>
-                          Enterprise Java enforces strict type safety and object-oriented encapsulation. Core architectural pillars include:
-                        </p>
-                        <ul style={{ margin: '0 0 12px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <li><strong>Dynamic Method Dispatch:</strong> Runtime polymorphism where overridden method resolution occurs dynamically according to the actual runtime instance type.</li>
-                          <li><strong>Interfaces vs Abstract Classes:</strong> Interfaces define contracts with support for <code>default</code> and <code>static</code> methods since Java 8, enabling flexible multiple-interface composition without class hierarchy coupling.</li>
-                          <li><strong>Resource Management:</strong> Always employ <code>try-with-resources</code> with objects implementing <code>AutoCloseable</code> to prevent resource and socket leaks.</li>
-                        </ul>
-
-                        <div style={{
-                          background: '#040711',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '16px',
-                          fontFamily: 'var(--font-mono, monospace)',
-                          fontSize: '0.85rem',
-                          color: '#e2e8f0',
-                          lineHeight: 1.6,
-                          overflowX: 'auto',
+                          color: '#fff',
                         }}>
-                          <span style={{ color: '#818cf8' }}>// Enterprise Java Pattern: Safe Resource Management & Streams</span><br />
-                          <span style={{ color: '#ec4899' }}>public</span> <span style={{ color: '#ec4899' }}>final</span> <span style={{ color: '#ec4899' }}>class</span> <span style={{ color: '#38bdf8' }}>DataPipelineService</span> &#123;<br />
-                          &nbsp;&nbsp;<span style={{ color: '#ec4899' }}>public</span> List&lt;String&gt; <span style={{ color: '#34d399' }}>processValidRecords</span>(Path path) <span style={{ color: '#ec4899' }}>throws</span> IOException &#123;<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#94a3b8' }}>// Deterministic automatic resource cleanup via try-with-resources</span><br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#ec4899' }}>try</span> (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) &#123;<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style={{ color: '#ec4899' }}>return</span> reader.lines()<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.filter(line -&gt; !line.isBlank() &amp;&amp; !line.startsWith(<span style={{ color: '#f59e0b' }}>&quot;#&quot;</span>))<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.map(String::trim)<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.distinct()<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.collect(Collectors.toUnmodifiableList());<br />
-                          &nbsp;&nbsp;&nbsp;&nbsp;&#125;<br />
-                          &nbsp;&nbsp;&#125;<br />
-                          &#125;
+                          <Sparkles size={14} />
+                        </div>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-main)' }}>
+                            {humanizedSummary.title}
+                          </span>
+                          <span className="text-muted text-xs" style={{ display: 'block' }}>
+                            Explained in friendly, mentor-guided language
+                          </span>
                         </div>
                       </div>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>
+                        {humanizedSummary.badge}
+                      </span>
+                    </div>
 
-                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 10px', color: 'var(--text-main)' }}>
-                          3. Study Checkpoints & Assessment Preparation
-                        </h3>
-                        <p style={{ margin: '0 0 10px' }}>
-                          Ensure you have mastered these concepts prior to launching the module assessment:
-                        </p>
-                        <ol style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <li>Distinguish clearly between Checked exceptions (compile-time enforced) and Unchecked RuntimeExceptions.</li>
-                          <li>Understand how <code>HashMap</code> resolves hash collisions via bucket linked lists and treeification to red-black trees when threshold &gt; 8.</li>
-                          <li>Understand the <code>volatile</code> keyword ensuring CPU cache coherency and preventing instruction reordering in multithreaded environments.</li>
-                        </ol>
+                    <div style={{ background: 'var(--bg-input)', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: '14px', fontSize: '0.86rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                      <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>🎯 What You Need to Know:</strong>
+                      {humanizedSummary.overview}
+                    </div>
+
+                    <div style={{ marginBottom: '14px' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.84rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <CheckCircle2 size={14} color="var(--success)" /> Key Takeaways in Simple Words:
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {humanizedSummary.points.map((point, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.83rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{idx + 1}.</span>
+                            <span>{point}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ) : (
-                    /* General Curriculum Reading Notes */
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                      <p>
-                        In this lesson, we study the core curriculum guidelines and operational standards for <strong>{course.title}</strong> &mdash; <em>{currentLesson.title}</em>.
-                      </p>
-                      <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '20px 24px' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 10px', color: 'var(--text-main)' }}>
-                          Curriculum Foundations & Objectives
-                        </h3>
-                        <p style={{ margin: '0 0 10px' }}>
-                          Mastery of this module requires deep conceptual understanding and practical implementation rigor:
-                        </p>
-                        <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <li>Systematic adherence to architectural design specifications and enterprise patterns.</li>
-                          <li>Implementation of comprehensive error handling, input validation, and boundary verification.</li>
-                          <li>Reproducible testing methodologies and observability instrumentation.</li>
-                        </ul>
-                      </div>
-                      <p>
-                        Review the supplementary downloadable materials below before taking the module knowledge assessment.
-                      </p>
+
+                    <div style={{
+                      background: 'rgba(99, 102, 241, 0.08)',
+                      border: '1px solid rgba(99, 102, 241, 0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '10px 14px',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-main)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}>
+                      <Sparkles size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+                      <span>{humanizedSummary.practicalTip}</span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1179,23 +1302,66 @@ public final class CourseDataService {
             )}
           </div>
 
-          {/* Downloadable Resources & Lesson Notes */}
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={18} color="var(--primary)" />
-                <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>Curriculum Materials & Lesson Notes</h3>
+          {/* Downloadable Resources & Lesson Notes (Only shown for video lessons to avoid duplicate download buttons on reading lessons) */}
+          {!isDocumentLesson && (
+            <div className="card" style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} color="var(--primary)" />
+                  <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>Curriculum Materials & Lesson Notes</h3>
+                </div>
+                <span className="text-muted text-xs">Synchronized with course progress</span>
               </div>
-              <span className="text-muted text-xs">Synchronized with course progress</span>
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-              {/* Actual Uploaded / Active Curriculum Document */}
-              {activeDoc && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                {/* Actual Uploaded / Active Curriculum Document */}
+                {activeDoc && (
+                  <div
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--accent-cyan, #06b6d4)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                      <FileText size={18} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+                      <div style={{ overflow: 'hidden' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
+                          title={activeDoc.name}
+                        >
+                          {activeDoc.name}
+                        </div>
+                        <div className="text-muted text-xs">
+                          {activeDoc.size
+                            ? activeDoc.size < 1024 * 1024
+                              ? `${(activeDoc.size / 1024).toFixed(1)} KB`
+                              : `${(activeDoc.size / (1024 * 1024)).toFixed(1)} MB`
+                            : '2.4 MB'} &bull; Uploaded Curriculum Doc
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      style={{ fontSize: '0.75rem', padding: '4px 10px', flexShrink: 0 }}
+                      onClick={handleDownloadActiveDoc}
+                    >
+                      <Download size={13} /> Download
+                    </button>
+                  </div>
+                )}
+
                 <div
                   style={{
                     background: 'var(--bg-input)',
-                    border: '1px solid var(--accent-cyan, #06b6d4)',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 'var(--radius-md)',
                     padding: '12px 16px',
                     display: 'flex',
@@ -1205,156 +1371,145 @@ public final class CourseDataService {
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-                    <FileText size={18} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
-                    <div style={{ overflow: 'hidden' }}>
-                      <div
-                        style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}
-                        title={activeDoc.name}
-                      >
-                        {activeDoc.name}
-                      </div>
-                      <div className="text-muted text-xs">
-                        {activeDoc.size
-                          ? activeDoc.size < 1024 * 1024
-                            ? `${(activeDoc.size / 1024).toFixed(1)} KB`
-                            : `${(activeDoc.size / (1024 * 1024)).toFixed(1)} MB`
-                          : '2.4 MB'} &bull; Uploaded Curriculum Doc
-                      </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Download size={18} color="var(--primary)" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{currentLesson.title.slice(0, 24)}-StudyGuide.md</div>
+                      <div className="text-muted text-xs">1.8 MB &bull; Lecture Guide</div>
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
-                    style={{ fontSize: '0.75rem', padding: '4px 10px', flexShrink: 0 }}
-                    onClick={handleDownloadActiveDoc}
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    onClick={() => {
+                      const notes = `# ${course.title} - ${currentLesson.title}\n\n` +
+                        `## Module: ${currentModule?.title || 'Core Concepts'}\n` +
+                        `Estimated Study Duration: ${currentLesson.durationMinutes || 20} minutes\n\n` +
+                        `### Core Curriculum Principles\n` +
+                        `1. Architectural integrity, JVM memory management, and enterprise software standards.\n` +
+                        `2. Rigorous object-oriented patterns, strict type safety, and defensive encapsulation.\n` +
+                        `3. Automated deterministic resource management via try-with-resources and exception boundaries.\n\n` +
+                        `Official Study Material for ${course.title}.\nGenerated by VeniLearn LMS.`;
+                      downloadContentFile(notes, `${currentLesson.title.replace(/\s+/g, '_')}_StudyGuide.md`, 'text/markdown;charset=utf-8');
+                    }}
                   >
                     <Download size={13} /> Download
                   </button>
                 </div>
-              )}
 
-              <div
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Download size={18} color="var(--primary)" />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{currentLesson.title.slice(0, 24)}-StudyGuide.md</div>
-                    <div className="text-muted text-xs">1.8 MB &bull; Lecture Guide</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                  onClick={() => {
-                    const notes = `# ${course.title} - ${currentLesson.title}\n\n` +
-                      `## Module: ${currentModule?.title || 'Core Concepts'}\n` +
-                      `Estimated Study Duration: ${currentLesson.durationMinutes || 20} minutes\n\n` +
-                      `### Core Curriculum Principles\n` +
-                      `1. Architectural integrity, JVM memory management, and enterprise software standards.\n` +
-                      `2. Rigorous object-oriented patterns, strict type safety, and defensive encapsulation.\n` +
-                      `3. Automated deterministic resource management via try-with-resources and exception boundaries.\n\n` +
-                      `Official Study Material for ${course.title}.\nGenerated by VeniLearn LMS.`;
-                    downloadContentFile(notes, `${currentLesson.title.replace(/\s+/g, '_')}_StudyGuide.md`, 'text/markdown;charset=utf-8');
+                <div
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  <Download size={13} /> Download
-                </button>
-              </div>
-
-              <div
-                style={{
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <FileText size={18} color="var(--accent-purple)" />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                      {course.title.toLowerCase().includes('java') ? 'Java-Exercise-Template.java' : 'Lesson-Starter-Code.js'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <FileText size={18} color="var(--accent-purple)" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                        {course.title.toLowerCase().includes('java') ? 'Java-Exercise-Template.java' : 'Lesson-Starter-Code.js'}
+                      </div>
+                      <div className="text-muted text-xs">650 KB &bull; Source Exercises</div>
                     </div>
-                    <div className="text-muted text-xs">650 KB &bull; Source Exercises</div>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    onClick={() => {
+                      const isJava = course.title.toLowerCase().includes('java');
+                      const code = isJava
+                        ? `// Practical Exercises for ${course.title}: ${currentLesson.title}\n\npublic class PracticeExercise {\n    public static void main(String[] args) {\n        System.out.println("Starting exercises for ${currentLesson.title}...");\n    }\n}\n`
+                        : `// Starter exercises for ${currentLesson.title}\nconsole.log("Ready to practice for ${course.title}!");\n`;
+                      downloadContentFile(
+                        code,
+                        isJava ? 'PracticeExercise.java' : `${currentLesson.title.replace(/\s+/g, '_')}_starter.js`,
+                        isJava ? 'text/x-java-source' : 'text/javascript'
+                      );
+                    }}
+                  >
+                    <Download size={13} /> Download
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                  onClick={() => {
-                    const isJava = course.title.toLowerCase().includes('java');
-                    const code = isJava
-                      ? `// Practical Exercises for ${course.title}: ${currentLesson.title}\n\npublic class PracticeExercise {\n    public static void main(String[] args) {\n        System.out.println("Starting exercises for ${currentLesson.title}...");\n    }\n}\n`
-                      : `// Starter exercises for ${currentLesson.title}\nconsole.log("Ready to practice for ${course.title}!");\n`;
-                    downloadContentFile(
-                      code,
-                      isJava ? 'PracticeExercise.java' : `${currentLesson.title.replace(/\s+/g, '_')}_starter.js`,
-                      isJava ? 'text/x-java-source' : 'text/javascript'
-                    );
-                  }}
-                >
-                  <Download size={13} /> Download
-                </button>
               </div>
             </div>
+          )}
 
-            {/* Interactive Personal Notes Box */}
-            <div style={{ background: 'var(--bg-input)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  Personal Study Notes ({currentLesson.title})
-                </label>
-                <span className="text-muted text-xs">Auto-saved to your profile</span>
-              </div>
-              <textarea
-                rows={3}
-                className="form-textarea"
-                style={{ width: '100%', fontSize: '0.85rem', resize: 'vertical' }}
-                placeholder="Jot down key takeaways, questions, or architectural ideas for this lesson..."
-                value={lessonNotes[currentLesson.id] || ''}
-                onChange={(e) => handleSaveNote(e.target.value)}
-              />
+          {/* Interactive Personal Notes Box */}
+          <div className="card" style={{ padding: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Personal Study Notes ({currentLesson.title})
+              </label>
+              <span className="text-muted text-xs">Auto-saved to your profile</span>
             </div>
+            <textarea
+              rows={2}
+              className="form-textarea"
+              style={{ width: '100%', fontSize: '0.85rem', resize: 'vertical' }}
+              placeholder="Jot down key takeaways or thoughts for this lesson..."
+              value={lessonNotes[currentLesson.id] || ''}
+              onChange={(e) => handleSaveNote(e.target.value)}
+            />
           </div>
         </div>
 
-        {/* 4. RIGHT SIDEBAR: Module Curriculum Playlist for Selected Course */}
-        <div className="card" style={{ padding: '20px', height: 'fit-content' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <h3 style={{ fontSize: '1.05rem', margin: 0 }}>Curriculum Playlist</h3>
-            <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>
-              {course.modules.length} Modules
+        {/* 4. RIGHT SIDEBAR: Module Curriculum Playlist (Locked & Compact) */}
+        <div className="card" style={{
+          padding: '16px',
+          position: 'sticky',
+          top: '16px',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 'var(--radius-xl)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
+          border: '1px solid var(--border-subtle)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookOpen size={16} color="var(--primary)" />
+              <h3 style={{ fontSize: '0.98rem', margin: 0, fontWeight: 700 }}>Curriculum Playlist</h3>
+            </div>
+            <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '2px 6px' }}>
+              {completedLessonIds.length}/{allLessons.length} Done
             </span>
           </div>
 
-          <p className="text-muted text-xs" style={{ marginBottom: '16px' }}>
-            {completedLessonIds.length} of {allLessons.length} items completed ({progressPercent}%)
-          </p>
+          <div style={{ marginBottom: '14px' }}>
+            <div className="progress-bar-bg" style={{ height: '5px', borderRadius: '4px' }}>
+              <div className="progress-bar-fill" style={{ width: `${progressPercent}%`, height: '5px', borderRadius: '4px' }} />
+            </div>
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {course.modules.map((module, mIdx) => (
               <div key={module.id}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.04em' }}>
-                  Module {mIdx + 1}: {module.title}
+                <div style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  marginBottom: '6px',
+                  letterSpacing: '0.04em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'var(--bg-input)',
+                  padding: '4px 8px',
+                  borderRadius: 'var(--radius-sm)'
+                }}>
+                  <span>{module.title || `Module ${mIdx + 1}`}</span>
+                  <span>{module.lessons.length} {module.lessons.length === 1 ? 'lesson' : 'lessons'}</span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1371,17 +1526,18 @@ public final class CourseDataService {
                           setSelectedAssessment(null);
                           setCurrentLessonIndex(lIndex);
                           setIsPlaying(false);
+                          setShowLessonSummary(false);
                         }}
                         style={{
-                          padding: '10px 12px',
-                          borderRadius: 'var(--radius-sm)',
-                          background: isSelected ? 'var(--primary-light)' : 'transparent',
+                          padding: '7px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          background: isSelected ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(99, 102, 241, 0.12) 100%)' : 'transparent',
                           border: isSelected ? '1px solid var(--primary)' : '1px solid transparent',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '10px',
+                          gap: '8px',
                           cursor: 'pointer',
-                          transition: 'var(--transition)'
+                          transition: 'all 0.15s ease',
                         }}
                       >
                         <button
@@ -1391,29 +1547,29 @@ public final class CourseDataService {
                           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                         >
                           {isDone ? (
-                            <CheckCircle2 size={16} color="var(--success)" style={{ flexShrink: 0 }} />
+                            <CheckCircle2 size={15} color="var(--success)" style={{ flexShrink: 0 }} />
                           ) : (
-                            <Circle size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                            <Circle size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                           )}
                         </button>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
                             fontWeight: isSelected ? 700 : 500,
-                            fontSize: '0.825rem',
+                            fontSize: '0.8rem',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            color: isSelected ? 'var(--primary)' : 'var(--text-main)'
+                            color: isSelected ? 'var(--primary)' : 'var(--text-main)',
                           }}>
                             {lesson.title}
                           </div>
-                          <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem' }}>
                             {lesson.type === 'video' ? (
-                              <Video size={11} color="var(--primary)" />
-                            ) : lesson.type === 'quiz' || Boolean(lesson.quizConfig) ? (
-                              <HelpCircle size={11} color="var(--primary)" />
+                              <Video size={10} color="var(--primary)" />
+                            ) : (lesson.type === 'quiz' && lesson.quizConfig && Array.isArray(lesson.quizConfig.questions) && lesson.quizConfig.questions.length > 0) ? (
+                              <HelpCircle size={10} color="var(--primary)" />
                             ) : (
-                              <FileText size={11} color="var(--accent-cyan)" />
+                              <FileText size={10} color="var(--accent-cyan)" />
                             )}
                             <span>{durationVal} mins</span>
                           </div>
@@ -1435,7 +1591,7 @@ public final class CourseDataService {
                     }
                     style={{
                       marginTop: '6px',
-                      padding: '8px 12px',
+                      padding: '7px 10px',
                       borderRadius: 'var(--radius-sm)',
                       background:
                         selectedAssessment?.config?.id === module.assessment.id
@@ -1451,12 +1607,12 @@ public final class CourseDataService {
                       cursor: 'pointer',
                     }}
                   >
-                    <HelpCircle size={14} color="var(--primary)" />
+                    <HelpCircle size={13} color="var(--primary)" />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
                           fontWeight: 600,
-                          fontSize: '0.8rem',
+                          fontSize: '0.78rem',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -1465,7 +1621,7 @@ public final class CourseDataService {
                       >
                         {module.assessment.title || `Module ${mIdx + 1} Assessment`}
                       </div>
-                      <div className="text-muted text-xs">
+                      <div className="text-muted text-xs" style={{ fontSize: '0.7rem' }}>
                         {module.assessment.questions?.length || 0} Questions &bull; Checkpoint
                       </div>
                     </div>
@@ -1476,14 +1632,14 @@ public final class CourseDataService {
 
             {/* Course Final Assessment */}
             {course.finalAssessment && (
-              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
                 <div
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: '0.72rem',
                     fontWeight: 700,
                     color: 'var(--accent-purple)',
                     textTransform: 'uppercase',
-                    marginBottom: '8px',
+                    marginBottom: '6px',
                     letterSpacing: '0.04em',
                   }}
                 >
@@ -1497,29 +1653,30 @@ public final class CourseDataService {
                     })
                   }
                   style={{
-                    padding: '12px',
+                    padding: '9px 12px',
                     borderRadius: 'var(--radius-md)',
                     background:
                       selectedAssessment?.scope === 'final_assessment'
-                        ? 'rgba(168, 85, 247, 0.15)'
+                        ? 'rgba(168, 85, 247, 0.18)'
                         : 'var(--bg-input)',
                     border:
                       selectedAssessment?.scope === 'final_assessment'
-                        ? '2px solid var(--accent-purple)'
+                        ? '1px solid var(--accent-purple)'
                         : '1px solid var(--border-subtle)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
+                    gap: '8px',
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  <Award size={20} color="var(--accent-purple)" />
+                  <Award size={16} color="var(--accent-purple)" style={{ flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>
                       {course.finalAssessment.title || 'Comprehensive Final Assessment'}
                     </div>
-                    <div className="text-muted text-xs">
-                      {course.finalAssessment.questions?.length || 0} Questions &bull; Passing{' '}
+                    <div className="text-muted text-xs" style={{ fontSize: '0.72rem' }}>
+                      {course.finalAssessment.questions?.length || 0} Questions &bull; Pass{' '}
                       {course.finalAssessment.passingPercentage || 70}%
                     </div>
                   </div>

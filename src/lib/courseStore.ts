@@ -131,35 +131,53 @@ export function mapBackendCourseToFrontend(item: any): Course {
           questions: Array.isArray(m.assessment.questions) ? m.assessment.questions : []
         } : undefined,
         lessons: Array.isArray(m.lessons)
-          ? m.lessons.map((l: any, lIdx: number) => ({
-            id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
-            title: l.title || `Lesson ${lIdx + 1}`,
-            type: l.type || 'video',
-            content: l.content || undefined,
-            contentUrl: l.contentUrl || undefined,
-            duration: l.durationMinutes || l.duration || 15,
-            durationMinutes: l.durationMinutes || l.duration || 15,
-            order: l.order || lIdx + 1,
-            isRequired: l.isRequired !== false,
-            isPreview: Boolean(l.isPreview),
-            status: l.status || 'published',
-            quizConfig: l.quizConfig ? {
-              ...l.quizConfig,
-              questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
-            } : undefined,
-            uploadedDocument: (l.uploadedDocument && (l.uploadedDocument.name || l.uploadedDocument.url))
-              ? l.uploadedDocument
-              : (l.type === 'document' && l.contentUrl
-                ? {
-                    id: `doc-${l.id || lIdx + 1}`,
-                    name: l.contentUrl.split('?')[0].split('/').pop() || `${l.title || 'Curriculum'}.pdf`,
-                    url: l.contentUrl,
-                    type: l.contentUrl.toLowerCase().includes('.pdf') ? 'application/pdf' : 'application/octet-stream',
-                    size: 1500000,
-                  }
-                : undefined),
-            videoInfo: l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title, sourceType: 'upload' } : undefined),
-          }))
+          ? m.lessons.map((l: any, lIdx: number) => {
+            const isDoc =
+              l.type === 'document' ||
+              l.type === 'reading' ||
+              l.type === 'rich_text' ||
+              Boolean(l.uploadedDocument && (l.uploadedDocument.url || l.uploadedDocument.name)) ||
+              Boolean(l.contentUrl && (
+                l.contentUrl.includes('/documents/') ||
+                l.contentUrl.includes('documents%2F') ||
+                ['.pdf', '.docx', '.doc', '.txt', '.md', '.pptx', '.xlsx'].some((ext: string) =>
+                  l.contentUrl.split('?')[0].toLowerCase().endsWith(ext)
+                )
+              ));
+            const lessonType = isDoc ? 'document' : (l.type || 'video');
+
+            return {
+              id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
+              title: l.title || `Lesson ${lIdx + 1}`,
+              type: lessonType,
+              content: l.content || undefined,
+              contentUrl: l.contentUrl || undefined,
+              duration: l.durationMinutes || l.duration || 15,
+              durationMinutes: l.durationMinutes || l.duration || 15,
+              order: l.order || lIdx + 1,
+              isRequired: l.isRequired !== false,
+              isPreview: Boolean(l.isPreview),
+              status: l.status || 'published',
+              quizConfig: (l.quizConfig && Array.isArray(l.quizConfig.questions) && l.quizConfig.questions.length > 0) ? {
+                ...l.quizConfig,
+                questions: l.quizConfig.questions
+              } : undefined,
+              uploadedDocument: (l.uploadedDocument && (l.uploadedDocument.name || l.uploadedDocument.url))
+                ? l.uploadedDocument
+                : (isDoc && l.contentUrl)
+                  ? {
+                      id: `doc-${l.id || lIdx + 1}`,
+                      name: l.uploadedDocument?.name || decodeURIComponent(l.contentUrl.split('?')[0].split('/').pop() || `${l.title || 'Curriculum'}.pdf`),
+                      url: l.contentUrl,
+                      type: l.contentUrl.toLowerCase().includes('.pdf') ? 'application/pdf' : 'application/octet-stream',
+                      size: l.uploadedDocument?.size || 1500000,
+                    }
+                  : undefined,
+              videoInfo: isDoc
+                ? undefined
+                : (l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title, sourceType: 'upload' } : undefined)),
+            };
+          })
           : [],
       }))
       : [],
