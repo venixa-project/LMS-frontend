@@ -79,28 +79,27 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     attachGoogleMeet,
   } = useLiveSessionStore();
 
-  // 10s clock tick to re-evaluate active join window in real-time
-  const [, setClockTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setClockTick((c) => c + 1), 10000);
-    return () => clearInterval(timer);
-  }, []);
+  const { cohorts, fetchCohorts } = useCohortStore();
+  const { courses, enrollments, fetchCourses } = useCourseStore();
 
   useEffect(() => {
     fetchSessions();
+    fetchCohorts();
+    fetchCourses();
     const interval = setInterval(() => {
       fetchSessions();
-    }, 15000);
-    const handleFocus = () => fetchSessions();
+    }, 30000);
+    const handleFocus = () => {
+      fetchSessions();
+      fetchCohorts();
+      fetchCourses();
+    };
     window.addEventListener('focus', handleFocus);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [fetchSessions]);
-
-  const { cohorts } = useCohortStore();
-  const { courses, enrollments } = useCourseStore();
+  }, [fetchSessions, fetchCohorts, fetchCourses]);
 
   // Sub-filter for Live Sessions
   const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'upcoming' | 'ended' | 'cancelled'>('all');
@@ -153,12 +152,49 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   };
 
   // Student Cohorts & Courses (dynamically resolved)
+  const studentCohorts = useMemo(() => {
+    if (!isStudent || !user) return [];
+    const uid = user.id;
+    const uemail = user.email?.toLowerCase();
+    const uroll = user.rollNo?.toLowerCase();
+    const uname = user.displayName?.toLowerCase();
+
+    return cohorts.filter((c) => {
+      const studentList = c.studentIds || [];
+      const inStudentList = studentList.some((sid) => {
+        const sLower = sid.toLowerCase();
+        return (
+          sid === uid ||
+          (uemail && sLower === uemail) ||
+          (uroll && sLower === uroll) ||
+          (uname && sLower === uname)
+        );
+      });
+      const isDemoMatch = (uid === 'u-001' || uemail === 'student@lms.demo') && (c.id === 'coh-001' || studentList.includes('u-001'));
+      return inStudentList || isDemoMatch;
+    });
+  }, [isStudent, cohorts, user]);
+
+  const studentCohortIds = useMemo(() => {
+    if (!isStudent) return [];
+    const fromUser = user?.departmentId ? [user.departmentId] : [];
+    const fromEnrollments = enrollments.map((e) => e.cohortId).filter(Boolean) as string[];
+    const fromCohorts = studentCohorts.map((c) => c.id);
+    return Array.from(new Set([...fromUser, ...fromEnrollments, ...fromCohorts]));
+  }, [isStudent, user?.departmentId, enrollments, studentCohorts]);
+
+  const studentCohortNames = useMemo(() => {
+    if (!isStudent) return [];
+    return studentCohorts.map((c) => c.name.toLowerCase());
+  }, [isStudent, studentCohorts]);
+
   const studentCourseIds = useMemo(() => {
     if (!isStudent) return [];
     const fromUser = user?.eligibleCourseIds || [];
     const fromEnrollments = enrollments.map((e) => e.courseId).filter(Boolean);
-    return Array.from(new Set([...fromUser, ...fromEnrollments]));
-  }, [isStudent, user?.eligibleCourseIds, enrollments]);
+    const fromCohorts = studentCohorts.map((c) => c.courseId).filter(Boolean) as string[];
+    return Array.from(new Set([...fromUser, ...fromEnrollments, ...fromCohorts]));
+  }, [isStudent, user?.eligibleCourseIds, enrollments, studentCohorts]);
 
   const studentCourseTitles = useMemo(() => {
     if (!isStudent) return [];
@@ -166,23 +202,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       .filter((c) => studentCourseIds.includes(c.id) || studentCourseIds.includes(c.slug || ''))
       .map((c) => c.title.toLowerCase());
   }, [isStudent, studentCourseIds, courses]);
-
-  const studentCohortIds = useMemo(() => {
-    if (!isStudent) return [];
-    const fromUser = user?.departmentId ? [user.departmentId] : [];
-    const fromEnrollments = enrollments.map((e) => e.cohortId).filter(Boolean) as string[];
-    const fromCohorts = cohorts
-      .filter((c) => c.studentIds?.includes(user?.id || ''))
-      .map((c) => c.id);
-    return Array.from(new Set([...fromUser, ...fromEnrollments, ...fromCohorts]));
-  }, [isStudent, user?.departmentId, user?.id, enrollments, cohorts]);
-
-  const studentCohortNames = useMemo(() => {
-    if (!isStudent) return [];
-    return cohorts
-      .filter((c) => studentCohortIds.includes(c.id))
-      .map((c) => c.name.toLowerCase());
-  }, [isStudent, studentCohortIds, cohorts]);
 
   // Filtered Sessions for the current role
   const roleFilteredSessions = useMemo(() => {
@@ -222,18 +241,20 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           return true;
         }
 
-        // General student session (open to all students in institution)
+        // General student session (open to all students in institution / combined)
         if (
           s.targetAudienceType === 'all_cohort' ||
           s.targetAudienceType === 'all_enrolled' ||
+          s.targetAudienceType === 'combined' ||
           !s.targetAudienceType ||
           s.audienceScope === 'students' ||
           s.audienceScope === 'both'
         ) {
           if (!s.courseId && !s.cohortId) return true;
           if (studentCourseIds.length === 0 && studentCohortIds.length === 0) return true;
-          if (s.courseId && studentCourseIds.includes(s.courseId)) return true;
-          if (s.cohortId && studentCohortIds.includes(s.cohortId)) return true;
+          if (s.courseId && (studentCourseIds.length === 0 || studentCourseIds.includes(s.courseId))) return true;
+          if (s.cohortId && (studentCohortIds.length === 0 || studentCohortIds.includes(s.cohortId))) return true;
+          return true;
         }
 
         return false;
@@ -253,7 +274,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
 
     // Admins see all sessions
     return sessions;
-  }, [sessions, isStudent, isTrainer, user?.id, studentCohortIds, studentCourseIds]);
+  }, [sessions, isStudent, isTrainer, user?.id, studentCohortIds, studentCohortNames, studentCourseIds, studentCourseTitles]);
 
   // Apply Search and Dropdown Filters
   const displayedSessions = useMemo(() => {
@@ -455,15 +476,15 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
             {activeTab === 'timetable'
               ? 'My Weekly Timetable'
               : activeTab === 'recordings'
-              ? 'Recorded Classes & Lectures'
-              : 'Live Sessions & Broadcasts'}
+                ? 'Recorded Classes & Lectures'
+                : 'Live Sessions & Broadcasts'}
           </h1>
           <p className="text-secondary text-sm" style={{ margin: 0 }}>
             {activeTab === 'timetable'
               ? 'Personalized weekly schedule, time slots, room locations, and class calendar.'
               : activeTab === 'recordings'
-              ? 'On-demand video lecture library with AI transcripts, chapter bookmarks, and downloadable slide materials.'
-              : 'Schedule and manage live classes, broadcasts, and interactive webinars.'}
+                ? 'On-demand video lecture library with AI transcripts, chapter bookmarks, and downloadable slide materials.'
+                : 'Schedule and manage live classes, broadcasts, and interactive webinars.'}
           </p>
         </div>
 
@@ -513,587 +534,587 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Simplified 4 Summary Metric Cards */}
           <div className="grid-4" style={{ gap: '16px' }}>
-          <div className="stat-card" style={{ borderLeft: '4px solid #ef4444', padding: '16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span className="text-muted text-xs font-semibold">Live Now</span>
-              <span
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: stats.liveCount > 0 ? '#ef4444' : '#94a3b8',
-                  boxShadow: stats.liveCount > 0 ? '0 0 8px #ef4444' : 'none',
-                  animation: stats.liveCount > 0 ? 'pulse 1.5s infinite' : 'none',
-                }}
-              />
-            </div>
-            <div style={{ fontSize: '1.85rem', fontWeight: 800, color: stats.liveCount > 0 ? '#ef4444' : 'var(--text-main)' }}>
-              {stats.liveCount}
-            </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)', padding: '16px 18px' }}>
-            <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Upcoming</span>
-            <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--primary)' }}>
-              {stats.upcomingCount}
-            </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '4px solid var(--success)', padding: '16px 18px' }}>
-            <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Completed</span>
-            <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--success)' }}>
-              {stats.endedCount}
-            </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '4px solid var(--accent-purple)', padding: '16px 18px' }}>
-            <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Total Enrolled</span>
-            <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)' }}>
-              {stats.totalEnrolled}
-            </div>
-          </div>
-        </div>
-
-        {/* Filter Toolbar */}
-        <div
-          className="card"
-          style={{
-            padding: '16px',
-            background: 'var(--bg-surface)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          {/* Top Row: Search & Dropdowns */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '400px' }}>
-              <Search
-                size={16}
-                style={{
-                  position: 'absolute',
-                  left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)',
-                }}
-              />
-              <input
-                type="text"
-                className="input"
-                placeholder="Search live sessions by title, trainer or topic..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: '38px', height: '40px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              {/* Dept filter */}
-              <select
-                className="input"
-                value={deptFilter}
-                onChange={(e) => setDeptFilter(e.target.value)}
-                style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
-              >
-                <option value="all">All Departments</option>
-                {useDepartmentStore.getState().departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Course filter */}
-              <select
-                className="input"
-                value={courseFilter}
-                onChange={(e) => setCourseFilter(e.target.value)}
-                style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
-              >
-                <option value="all">All Courses</option>
-                {useCourseStore.getState().courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-
-              {/* Cohort filter */}
-              <select
-                className="input"
-                value={cohortFilter}
-                onChange={(e) => setCohortFilter(e.target.value)}
-                style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
-              >
-                <option value="all">All Cohorts / Batches</option>
-                {cohorts.map((coh) => (
-                  <option key={coh.id} value={coh.id}>
-                    {coh.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* View Switcher: List vs Calendar */}
-              <div
-                style={{
-                  display: 'inline-flex',
-                  background: 'var(--bg-card)',
-                  padding: '3px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <button
-                  className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => setViewMode('list')}
+            <div className="stat-card" style={{ borderLeft: '4px solid #ef4444', padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span className="text-muted text-xs font-semibold">Live Now</span>
+                <span
                   style={{
-                    padding: '6px 12px',
-                    gap: '6px',
-                    color: viewMode === 'list' ? '#ffffff' : 'var(--text-secondary)',
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: stats.liveCount > 0 ? '#ef4444' : '#94a3b8',
+                    boxShadow: stats.liveCount > 0 ? '0 0 8px #ef4444' : 'none',
+                    animation: stats.liveCount > 0 ? 'pulse 1.5s infinite' : 'none',
                   }}
-                >
-                  <List size={14} /> List
-                </button>
-                <button
-                  className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-ghost'}`}
-                  onClick={() => setViewMode('calendar')}
-                  style={{
-                    padding: '6px 12px',
-                    gap: '6px',
-                    color: viewMode === 'calendar' ? '#ffffff' : 'var(--text-secondary)',
-                  }}
-                >
-                  <Calendar size={14} /> Calendar
-                </button>
+                />
+              </div>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: stats.liveCount > 0 ? '#ef4444' : 'var(--text-main)' }}>
+                {stats.liveCount}
+              </div>
+            </div>
+
+            <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)', padding: '16px 18px' }}>
+              <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Upcoming</span>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--primary)' }}>
+                {stats.upcomingCount}
+              </div>
+            </div>
+
+            <div className="stat-card" style={{ borderLeft: '4px solid var(--success)', padding: '16px 18px' }}>
+              <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Completed</span>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--success)' }}>
+                {stats.endedCount}
+              </div>
+            </div>
+
+            <div className="stat-card" style={{ borderLeft: '4px solid var(--accent-purple)', padding: '16px 18px' }}>
+              <span className="text-muted text-xs font-semibold" style={{ display: 'block', marginBottom: '4px' }}>Total Enrolled</span>
+              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                {stats.totalEnrolled}
               </div>
             </div>
           </div>
 
-          {/* Bottom Row: Status Filter Badges */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
-            <span className="text-muted text-xs" style={{ fontWeight: 600 }}>Filter by status:</span>
-            {(['all', 'live', 'upcoming', 'ended', 'cancelled'] as const).map((stat) => (
-              <button
-                key={stat}
-                onClick={() => setStatusFilter(stat)}
-                className={`btn btn-sm ${statusFilter === stat ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  textTransform: 'capitalize',
-                  fontSize: '0.78rem',
-                  padding: '4px 12px',
-                  borderRadius: '20px',
-                }}
-              >
-                {stat === 'all' ? 'All Sessions' : stat === 'live' ? 'Live Now' : stat === 'upcoming' ? 'Upcoming' : stat === 'ended' ? 'Completed' : 'Cancelled'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Live Sessions Content: Cards or Calendar View */}
-        {displayedSessions.length === 0 ? (
-          <div className="card" style={{ padding: '48px 24px', textAlign: 'center', background: 'var(--bg-surface)' }}>
-            <Video size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px' }} />
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>No Live Sessions Found</h3>
-            <p className="text-secondary text-sm" style={{ maxWidth: '460px', margin: '0 auto 20px' }}>
-              There are no live or scheduled sessions matching your current filter criteria.
-            </p>
-            {!isStudent && (
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setSessionToEdit(null);
-                  setIsScheduleModalOpen(true);
-                }}
-              >
-                <Plus size={16} /> Schedule a Session
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
-            {displayedSessions.map((s) => {
-              const isLive = s.status === 'live';
-              const isScheduled = s.status === 'scheduled';
-              const isEnded = s.status === 'ended';
-              const isCancelled = s.status === 'cancelled';
-              const isCreatorOrAdmin = isAdmin || s.createdBy === user?.id || s.instructorId === user?.id;
-
-              return (
-                <div
-                  key={s.id}
-                  className="card session-card"
+          {/* Filter Toolbar */}
+          <div
+            className="card"
+            style={{
+              padding: '16px',
+              background: 'var(--bg-surface)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            {/* Top Row: Search & Dropdowns */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '400px' }}>
+                <Search
+                  size={16}
                   style={{
-                    padding: '20px',
-                    background: 'var(--bg-surface)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '16px',
-                    border: isLive ? '1.5px solid #ef4444' : '1px solid var(--border-subtle)',
-                    boxShadow: isLive ? '0 0 16px rgba(239, 68, 68, 0.18)' : 'var(--shadow-sm)',
-                    position: 'relative',
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Search live sessions by title, trainer or topic..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ paddingLeft: '38px', height: '40px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Dept filter */}
+                <select
+                  className="input"
+                  value={deptFilter}
+                  onChange={(e) => setDeptFilter(e.target.value)}
+                  style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
+                >
+                  <option value="all">All Departments</option>
+                  {useDepartmentStore.getState().departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Course filter */}
+                <select
+                  className="input"
+                  value={courseFilter}
+                  onChange={(e) => setCourseFilter(e.target.value)}
+                  style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
+                >
+                  <option value="all">All Courses</option>
+                  {useCourseStore.getState().courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Cohort filter */}
+                <select
+                  className="input"
+                  value={cohortFilter}
+                  onChange={(e) => setCohortFilter(e.target.value)}
+                  style={{ width: 'auto', height: '40px', fontSize: '0.85rem' }}
+                >
+                  <option value="all">All Cohorts / Batches</option>
+                  {cohorts.map((coh) => (
+                    <option key={coh.id} value={coh.id}>
+                      {coh.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* View Switcher: List vs Calendar */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    background: 'var(--bg-card)',
+                    padding: '3px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
                   }}
                 >
-                  {/* Top Bar: Status Badge & Target Info */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
-                      {isLive && (
-                        <span
-                          className="badge"
+                  <button
+                    className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setViewMode('list')}
+                    style={{
+                      padding: '6px 12px',
+                      gap: '6px',
+                      color: viewMode === 'list' ? '#ffffff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <List size={14} /> List
+                  </button>
+                  <button
+                    className={`btn btn-sm ${viewMode === 'calendar' ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => setViewMode('calendar')}
+                    style={{
+                      padding: '6px 12px',
+                      gap: '6px',
+                      color: viewMode === 'calendar' ? '#ffffff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <Calendar size={14} /> Calendar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Status Filter Badges */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', paddingTop: '4px' }}>
+              <span className="text-muted text-xs" style={{ fontWeight: 600 }}>Filter by status:</span>
+              {(['all', 'live', 'upcoming', 'ended', 'cancelled'] as const).map((stat) => (
+                <button
+                  key={stat}
+                  onClick={() => setStatusFilter(stat)}
+                  className={`btn btn-sm ${statusFilter === stat ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{
+                    textTransform: 'capitalize',
+                    fontSize: '0.78rem',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                  }}
+                >
+                  {stat === 'all' ? 'All Sessions' : stat === 'live' ? 'Live Now' : stat === 'upcoming' ? 'Upcoming' : stat === 'ended' ? 'Completed' : 'Cancelled'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Live Sessions Content: Cards or Calendar View */}
+          {displayedSessions.length === 0 ? (
+            <div className="card" style={{ padding: '48px 24px', textAlign: 'center', background: 'var(--bg-surface)' }}>
+              <Video size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px' }} />
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>No Live Sessions Found</h3>
+              <p className="text-secondary text-sm" style={{ maxWidth: '460px', margin: '0 auto 20px' }}>
+                There are no live or scheduled sessions matching your current filter criteria.
+              </p>
+              {!isStudent && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSessionToEdit(null);
+                    setIsScheduleModalOpen(true);
+                  }}
+                >
+                  <Plus size={16} /> Schedule a Session
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
+              {displayedSessions.map((s) => {
+                const isLive = s.status === 'live';
+                const isScheduled = s.status === 'scheduled';
+                const isEnded = s.status === 'ended';
+                const isCancelled = s.status === 'cancelled';
+                const isCreatorOrAdmin = isAdmin || s.createdBy === user?.id || s.instructorId === user?.id;
+
+                return (
+                  <div
+                    key={s.id}
+                    className="card session-card"
+                    style={{
+                      padding: '20px',
+                      background: 'var(--bg-surface)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: '16px',
+                      border: isLive ? '1.5px solid #ef4444' : '1px solid var(--border-subtle)',
+                      boxShadow: isLive ? '0 0 16px rgba(239, 68, 68, 0.18)' : 'var(--shadow-sm)',
+                      position: 'relative',
+                    }}
+                  >
+                    {/* Top Bar: Status Badge & Target Info */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
+                        {isLive && (
+                          <span
+                            className="badge"
+                            style={{
+                              background: '#ef4444',
+                              color: '#fff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontWeight: 800,
+                              fontSize: '0.75rem',
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />
+                            LIVE NOW
+                          </span>
+                        )}
+                        {isScheduled && (
+                          <span className="badge badge-published" style={{ fontSize: '0.75rem' }}>
+                            Upcoming
+                          </span>
+                        )}
+                        {isEnded && (
+                          <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
+                            Completed
+                          </span>
+                        )}
+                        {isCancelled && (
+                          <span className="badge badge-danger" style={{ fontSize: '0.75rem' }}>
+                            Cancelled
+                          </span>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <MeetingProviderBadge provider={s.provider || 'Google Meet'} hasLink={Boolean(s.meetingUrl || s.joinLink)} />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName ? `Cohort: ${s.cohortName}` : 'All Enrolled'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Session Title */}
+                      <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 800, lineHeight: 1.35 }}>
+                        {s.title}
+                      </h3>
+
+                      {/* Course Title if assigned */}
+                      {s.courseTitle && (
+                        <div
                           style={{
-                            background: '#ef4444',
-                            color: '#fff',
-                            display: 'inline-flex',
+                            fontSize: '0.78rem',
+                            color: 'var(--primary)',
+                            fontWeight: 600,
+                            marginBottom: '10px',
+                            display: 'flex',
                             alignItems: 'center',
                             gap: '6px',
-                            fontWeight: 800,
-                            fontSize: '0.75rem',
                           }}
                         >
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#fff' }} />
-                          LIVE NOW
-                        </span>
-                      )}
-                      {isScheduled && (
-                        <span className="badge badge-published" style={{ fontSize: '0.75rem' }}>
-                          Upcoming
-                        </span>
-                      )}
-                      {isEnded && (
-                        <span className="badge badge-secondary" style={{ fontSize: '0.75rem' }}>
-                          Completed
-                        </span>
-                      )}
-                      {isCancelled && (
-                        <span className="badge badge-danger" style={{ fontSize: '0.75rem' }}>
-                          Cancelled
-                        </span>
+                          <BookOpen size={13} />
+                          <span>{s.courseTitle}</span>
+                        </div>
                       )}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <MeetingProviderBadge provider={s.provider || 'Google Meet'} hasLink={Boolean(s.meetingUrl || s.joinLink)} />
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                          {s.audienceScope === 'faculty' ? 'Faculty Internal' : s.cohortName ? `Cohort: ${s.cohortName}` : 'All Enrolled'}
-                        </span>
-                      </div>
-                    </div>
+                      {/* Description preview */}
+                      {s.description && (
+                        <p
+                          className="text-secondary text-xs"
+                          style={{
+                            margin: '0 0 14px 0',
+                            lineHeight: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {s.description}
+                        </p>
+                      )}
 
-                    {/* Session Title */}
-                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 800, lineHeight: 1.35 }}>
-                      {s.title}
-                    </h3>
-
-                    {/* Course Title if assigned */}
-                    {s.courseTitle && (
+                      {/* Metadata Grid */}
                       <div
                         style={{
+                          background: 'var(--bg-card)',
+                          padding: '12px',
+                          borderRadius: 'var(--radius-md)',
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(2, 1fr)',
+                          gap: '8px 12px',
                           fontSize: '0.78rem',
-                          color: 'var(--primary)',
-                          fontWeight: 600,
-                          marginBottom: '10px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
                         }}
                       >
-                        <BookOpen size={13} />
-                        <span>{s.courseTitle}</span>
-                      </div>
-                    )}
-
-                    {/* Description preview */}
-                    {s.description && (
-                      <p
-                        className="text-secondary text-xs"
-                        style={{
-                          margin: '0 0 14px 0',
-                          lineHeight: 1.5,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {s.description}
-                      </p>
-                    )}
-
-                    {/* Metadata Grid */}
-                    <div
-                      style={{
-                        background: 'var(--bg-card)',
-                        padding: '12px',
-                        borderRadius: 'var(--radius-md)',
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '8px 12px',
-                        fontSize: '0.78rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                        <Calendar size={13} color="var(--primary)" />
-                        <span>{s.date || 'Weekly'}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                        <Clock size={13} color="var(--primary)" />
-                        <span>{s.startTime} - {s.endTime}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                        <UserCheck size={13} color="var(--accent-green)" />
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {s.instructorName || 'Lead Trainer'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                        <Users size={13} color="var(--accent-purple)" />
-                        <span>{s.enrolledCount || 0} enrolled</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                          <Calendar size={13} color="var(--primary)" />
+                          <span>{s.date || 'Weekly'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                          <Clock size={13} color="var(--primary)" />
+                          <span>{s.startTime} - {s.endTime}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                          <UserCheck size={13} color="var(--accent-green)" />
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {s.instructorName || 'Lead Trainer'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                          <Users size={13} color="var(--accent-purple)" />
+                          <span>{s.enrolledCount || 0} enrolled</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions Toolbar */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
-                    {/* Primary Action Button */}
-                    {isLive && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <GoogleMeetJoinButton
-                          sessionId={s.id}
-                          meetingUrl={s.meetingUrl || s.joinLink}
-                          role={isCreatorOrAdmin ? 'instructor' : 'student'}
-                          label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join with Google Meet'}
-                          size="md"
-                          style={{ flex: 1, justifyContent: 'center' }}
-                        />
-                        {isCreatorOrAdmin && (
-                          <button
-                            className="btn btn-secondary"
-                            onClick={() => {
-                              const rec = window.prompt(
-                                'Conclude stream and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
-                                s.recordingUrl || ''
-                              );
-                              if (rec !== null) {
-                                endSession(s.id, rec.trim() || undefined);
-                                showNotice(`Broadcast concluded for "${s.title}". Recording archived in Recorded Classes.`);
-                              }
-                            }}
-                            title="Conclude live broadcast and save recording"
-                            style={{ padding: '8px 12px', color: 'var(--danger)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                          >
-                            End Stream
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {isScheduled && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {isCreatorOrAdmin ? (
-                          <>
-                            {s.meetingUrl ? (
-                              <>
-                                <button
-                                  className="btn btn-primary"
-                                  onClick={() => handleStartBroadcast(s.id)}
-                                  style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
-                                >
-                                  <GoogleMeetIcon size={16} /> Open Google Meet
-                                </button>
-                                <button
-                                  className="btn btn-secondary"
-                                  onClick={() => {
-                                    setAttachMeetSession(s);
-                                    setAttachMeetUrlInput(s.meetingUrl || '');
-                                    setAttachMeetError(null);
-                                  }}
-                                  title="Edit Google Meet Link"
-                                  style={{ padding: '8px 10px' }}
-                                >
-                                  <Settings size={15} />
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                className="btn btn-primary"
-                                onClick={() => {
-                                  setAttachMeetSession(s);
-                                  setAttachMeetUrlInput('');
-                                  setAttachMeetError(null);
-                                }}
-                                style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #00ac47 0%, #00832d 100%)' }}
-                              >
-                                <GoogleMeetIcon size={16} /> Configure Google Meet
-                              </button>
-                            )}
+                    {/* Actions Toolbar */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
+                      {/* Primary Action Button */}
+                      {isLive && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <GoogleMeetJoinButton
+                            sessionId={s.id}
+                            meetingUrl={s.meetingUrl || s.joinLink}
+                            role={isCreatorOrAdmin ? 'instructor' : 'student'}
+                            label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join with Google Meet'}
+                            size="md"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          />
+                          {isCreatorOrAdmin && (
                             <button
                               className="btn btn-secondary"
                               onClick={() => {
                                 const rec = window.prompt(
-                                  'Conclude scheduled class and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
+                                  'Conclude stream and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
                                   s.recordingUrl || ''
                                 );
                                 if (rec !== null) {
                                   endSession(s.id, rec.trim() || undefined);
-                                  showNotice(`Class "${s.title}" marked as concluded and recording archived.`);
+                                  showNotice(`Broadcast concluded for "${s.title}". Recording archived in Recorded Classes.`);
                                 }
                               }}
-                              title="Conclude class and archive recording for students"
-                              style={{ padding: '8px 12px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                              title="Conclude live broadcast and save recording"
+                              style={{ padding: '8px 12px', color: 'var(--danger)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
                             >
-                              Conclude Class
+                              End Stream
                             </button>
-                          </>
-                        ) : (
-                          isJoinWindowOpen(s) ? (
-                            (s.meetingUrl || s.joinLink) ? (
-                              <GoogleMeetJoinButton
-                                sessionId={s.id}
-                                meetingUrl={s.meetingUrl || s.joinLink}
-                                role="student"
-                                label="Join with Google Meet"
-                                size="md"
-                                style={{ flex: 1, justifyContent: 'center' }}
-                              />
+                          )}
+                        </div>
+                      )}
+
+                      {isScheduled && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {isCreatorOrAdmin ? (
+                            <>
+                              {s.meetingUrl ? (
+                                <>
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleStartBroadcast(s.id)}
+                                    style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
+                                  >
+                                    <GoogleMeetIcon size={16} /> Open Google Meet
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                      setAttachMeetSession(s);
+                                      setAttachMeetUrlInput(s.meetingUrl || '');
+                                      setAttachMeetError(null);
+                                    }}
+                                    title="Edit Google Meet Link"
+                                    style={{ padding: '8px 10px' }}
+                                  >
+                                    <Settings size={15} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => {
+                                    setAttachMeetSession(s);
+                                    setAttachMeetUrlInput('');
+                                    setAttachMeetError(null);
+                                  }}
+                                  style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #00ac47 0%, #00832d 100%)' }}
+                                >
+                                  <GoogleMeetIcon size={16} /> Configure Google Meet
+                                </button>
+                              )}
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => {
+                                  const rec = window.prompt(
+                                    'Conclude scheduled class and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
+                                    s.recordingUrl || ''
+                                  );
+                                  if (rec !== null) {
+                                    endSession(s.id, rec.trim() || undefined);
+                                    showNotice(`Class "${s.title}" marked as concluded and recording archived.`);
+                                  }
+                                }}
+                                title="Conclude class and archive recording for students"
+                                style={{ padding: '8px 12px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                              >
+                                Conclude Class
+                              </button>
+                            </>
+                          ) : (
+                            isJoinWindowOpen(s) ? (
+                              (s.meetingUrl || s.joinLink) ? (
+                                <GoogleMeetJoinButton
+                                  sessionId={s.id}
+                                  meetingUrl={s.meetingUrl || s.joinLink}
+                                  role="student"
+                                  label="Join with Google Meet"
+                                  size="md"
+                                  style={{ flex: 1, justifyContent: 'center' }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="btn btn-secondary"
+                                  style={{ flex: 1, justifyContent: 'center', opacity: 0.8, cursor: 'not-allowed', fontSize: '0.82rem', gap: '6px' }}
+                                  title="The instructor has not added the Google Meet room link yet."
+                                >
+                                  <GoogleMeetIcon size={14} /> Meeting Link Pending
+                                </button>
+                              )
                             ) : (
                               <button
                                 type="button"
                                 disabled
                                 className="btn btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', opacity: 0.8, cursor: 'not-allowed', fontSize: '0.82rem', gap: '6px' }}
-                                title="The instructor has not added the Google Meet room link yet."
+                                style={{ flex: 1, justifyContent: 'center', opacity: 0.65, cursor: 'not-allowed', fontSize: '0.82rem' }}
+                                title="Meeting room opens 15 minutes before scheduled start time."
                               >
-                                <GoogleMeetIcon size={14} /> Meeting Link Pending
+                                Upcoming (Join opens 15m prior)
                               </button>
                             )
-                          ) : (
+                          )}
+                          {s.meetingUrl && (
                             <button
-                              type="button"
-                              disabled
                               className="btn btn-secondary"
-                              style={{ flex: 1, justifyContent: 'center', opacity: 0.65, cursor: 'not-allowed', fontSize: '0.82rem' }}
-                              title="Meeting room opens 15 minutes before scheduled start time."
+                              onClick={() => handleShareLink(s)}
+                              title="Share Meeting Link"
+                              style={{ padding: '8px 12px' }}
                             >
-                              Upcoming (Join opens 15m prior)
+                              <Share2 size={15} />
                             </button>
-                          )
-                        )}
-                        {s.meetingUrl && (
+                          )}
                           <button
                             className="btn btn-secondary"
-                            onClick={() => handleShareLink(s)}
-                            title="Share Meeting Link"
+                            onClick={() => handleCopyLink(s)}
+                            title="Copy Meeting Link"
                             style={{ padding: '8px 12px' }}
                           >
-                            <Share2 size={15} />
-                          </button>
-                        )}
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => handleCopyLink(s)}
-                          title="Copy Meeting Link"
-                          style={{ padding: '8px 12px' }}
-                        >
-                          {copiedSessionId === s.id ? <Check size={15} color="var(--success)" /> : <Copy size={15} />}
-                        </button>
-                      </div>
-                    )}
-
-                    {isEnded && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {s.recordingUrl ? (
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => setRecordingModalSession(s)}
-                            style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
-                          >
-                            <Play size={15} /> Watch Recording
-                          </button>
-                        ) : (
-                          <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '8px' }}>
-                            Recording Unavailable
-                          </div>
-                        )}
-                        {isCreatorOrAdmin && (
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => {
-                              const newUrl = window.prompt(
-                                'Update recording link (Google Drive / YouTube / Cloud storage MP4):',
-                                s.recordingUrl || ''
-                              );
-                              if (newUrl !== null) {
-                                endSession(s.id, newUrl.trim() || undefined);
-                                showNotice(`Updated recording link for "${s.title}".`);
-                              }
-                            }}
-                            title="Edit or attach custom recording link"
-                            style={{ fontSize: '0.75rem', padding: '6px 10px' }}
-                          >
-                            Edit Link
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Secondary Action Toolbar */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setRosterModalSession(s)}
-                        style={{ fontSize: '0.75rem', padding: '4px 8px', gap: '4px' }}
-                      >
-                        <Users size={13} /> View Roster
-                      </button>
-
-                      {isCreatorOrAdmin && !isEnded && !isCancelled && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => {
-                              setSessionToEdit(s);
-                              setIsScheduleModalOpen(true);
-                            }}
-                            title="Edit live session details"
-                            style={{ padding: '4px 8px' }}
-                          >
-                            <Edit2 size={13} />
-                          </button>
-
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => setCancelModalSession(s)}
-                            title="Cancel session and notify scholars"
-                            style={{ padding: '4px 8px', color: 'var(--danger)' }}
-                          >
-                            <AlertTriangle size={13} />
+                            {copiedSessionId === s.id ? <Check size={15} color="var(--success)" /> : <Copy size={15} />}
                           </button>
                         </div>
                       )}
 
-                      {isCreatorOrAdmin && (isEnded || isCancelled) && (
+                      {isEnded && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {s.recordingUrl ? (
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => setRecordingModalSession(s)}
+                              style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
+                            >
+                              <Play size={15} /> Watch Recording
+                            </button>
+                          ) : (
+                            <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '8px' }}>
+                              Recording Unavailable
+                            </div>
+                          )}
+                          {isCreatorOrAdmin && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => {
+                                const newUrl = window.prompt(
+                                  'Update recording link (Google Drive / YouTube / Cloud storage MP4):',
+                                  s.recordingUrl || ''
+                                );
+                                if (newUrl !== null) {
+                                  endSession(s.id, newUrl.trim() || undefined);
+                                  showNotice(`Updated recording link for "${s.title}".`);
+                                }
+                              }}
+                              title="Edit or attach custom recording link"
+                              style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                            >
+                              Edit Link
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Secondary Action Toolbar */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                           className="btn btn-ghost btn-sm"
-                          onClick={() => {
-                            if (confirm(`Permanently remove record for "${s.title}"?`)) {
-                              deleteSession(s.id);
-                              showNotice(`Session removed from archives.`);
-                            }
-                          }}
-                          style={{ padding: '4px 8px', color: 'var(--danger)', gap: '4px' }}
+                          onClick={() => setRosterModalSession(s)}
+                          style={{ fontSize: '0.75rem', padding: '4px 8px', gap: '4px' }}
                         >
-                          <Trash2 size={13} /> Delete Record
+                          <Users size={13} /> View Roster
                         </button>
-                      )}
+
+                        {isCreatorOrAdmin && !isEnded && !isCancelled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => {
+                                setSessionToEdit(s);
+                                setIsScheduleModalOpen(true);
+                              }}
+                              title="Edit live session details"
+                              style={{ padding: '4px 8px' }}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setCancelModalSession(s)}
+                              title="Cancel session and notify scholars"
+                              style={{ padding: '4px 8px', color: 'var(--danger)' }}
+                            >
+                              <AlertTriangle size={13} />
+                            </button>
+                          </div>
+                        )}
+
+                        {isCreatorOrAdmin && (isEnded || isCancelled) && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              if (confirm(`Permanently remove record for "${s.title}"?`)) {
+                                deleteSession(s.id);
+                                showNotice(`Session removed from archives.`);
+                              }
+                            }}
+                            style={{ padding: '4px 8px', color: 'var(--danger)', gap: '4px' }}
+                          >
+                            <Trash2 size={13} /> Delete Record
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* MODAL 1: SCHEDULE / EDIT LIVE SESSION */}

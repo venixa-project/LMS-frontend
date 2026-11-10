@@ -54,8 +54,6 @@ export const AssessmentConfigModal: React.FC<Props> = ({
   onSave,
   onClose,
 }) => {
-  if (!isOpen) return null;
-
   // Active view tab
   const [activeTab, setActiveTab] = useState<TabType>(
     (initialConfig?.creationMode as TabType) || 'excel_csv'
@@ -120,7 +118,9 @@ export const AssessmentConfigModal: React.FC<Props> = ({
   const [aiSource, setAiSource] = useState<'lessons' | 'modules' | 'documents' | 'question_bank'>('documents');
   const [selectedDocs, setSelectedDocs] = useState<string[]>(
     initialConfig?.sourceDocumentNames ||
-      (availableDocuments.length > 0 ? [availableDocuments[0].name] : [])
+      (Array.isArray(availableDocuments) && availableDocuments.length > 0 && availableDocuments[0]?.name
+        ? [availableDocuments[0].name]
+        : [])
   );
   const [aiQuestionCount, setAiQuestionCount] = useState<number>(
     scope === 'final_assessment' ? 6 : scope === 'module_assessment' ? 4 : 3
@@ -492,6 +492,8 @@ export const AssessmentConfigModal: React.FC<Props> = ({
         Final Course Assessment
       </span>
     );
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -1118,7 +1120,7 @@ export const AssessmentConfigModal: React.FC<Props> = ({
                             {q.prompt}
                           </div>
 
-                          {q.options.length > 0 && (
+                          {Array.isArray(q.options) && q.options.length > 0 && (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '4px', marginTop: '6px' }}>
                               {q.options.map((opt) => (
                                 <div

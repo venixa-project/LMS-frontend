@@ -88,11 +88,17 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               fontFamily: 'monospace',
               textAlign: 'left',
               wordBreak: 'break-word',
-              marginBottom: '24px',
+              marginBottom: '16px',
               maxHeight: '180px',
               overflowY: 'auto'
             }}>
-              {this.state.error?.message || 'Unknown runtime error'}
+              <div><strong>Error:</strong> {this.state.error?.message || 'Unknown runtime error'}</div>
+              {this.state.error?.stack && (
+                <details style={{ marginTop: '8px', whiteSpace: 'pre-wrap', fontSize: '0.72rem', color: '#cbd5e1' }}>
+                  <summary style={{ cursor: 'pointer', color: '#f87171' }}>Stack Trace Details</summary>
+                  <pre style={{ margin: '6px 0 0', overflowX: 'auto' }}>{this.state.error.stack}</pre>
+                </details>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
@@ -109,6 +115,21 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 }}
               >
                 Reload Page
+              </button>
+              <button
+                onClick={() => { window.location.href = '/courses'; }}
+                style={{
+                  padding: '9px 18px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-main, #f8fafc)',
+                  border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.15))',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Back to Courses
               </button>
               <button
                 onClick={this.handleReset}

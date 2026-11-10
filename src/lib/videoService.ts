@@ -44,7 +44,10 @@ export function getActiveDocumentFile(idOrName: string): { file: File; objectUrl
   return activeDocumentFileRegistry.get(idOrName);
 }
 
-export const ALLOWED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv', '.m4v'];
+export const ALLOWED_VIDEO_EXTENSIONS = [
+  '.mp4', '.webm', '.mov', '.mkv', '.m4v',
+  '.mp3', '.wav', '.m4a', '.ogg', '.aac'
+];
 export const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
 
 export interface NormalizedUrlResult {
@@ -147,20 +150,27 @@ export function normalizeVideoUrl(rawUrl: string): NormalizedUrlResult {
  * Retrieve auth token and active tenant from localStorage session
  */
 function getAuthContext(): { token: string; tenantId: string } {
+  let token = 'venilearn-token-admin-dev';
+  let tenantId = '871abf8a-e563-4d0f-afc7-416d8da3df14';
+
   try {
     const raw = localStorage.getItem('venilearn_auth_session');
     if (raw) {
       const parsed = JSON.parse(raw);
-      return {
-        token: parsed.token || 'venilearn-token-admin-dev',
-        tenantId: '66206e39-2029-4ce6-8be1-cfa7176fb79f',
-      };
+      if (parsed.token) token = parsed.token;
+      if (parsed.tenantId) tenantId = parsed.tenantId;
+      else if (parsed.user?.tenantId) tenantId = parsed.user.tenantId;
+      else if (parsed.user?.organizationId) tenantId = parsed.user.organizationId;
+    }
+    const explicitTenant =
+      localStorage.getItem('venilearn_active_tenant_id') ||
+      (typeof window !== 'undefined' ? sessionStorage.getItem('venilearn_active_org_id') : null);
+    if (explicitTenant && explicitTenant !== 'org-001') {
+      tenantId = explicitTenant;
     }
   } catch {}
-  return {
-    token: 'venilearn-token-trainer-dev',
-    tenantId: '66206e39-2029-4ce6-8be1-cfa7176fb79f',
-  };
+
+  return { token, tenantId };
 }
 
 /**
@@ -181,7 +191,7 @@ export function uploadVideoFile(params: {
     // Validate size
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
       return reject(
-        new Error(`Video exceeds maximum allowed size of 500 MB (selected: ${formatVideoFileSize(file.size)})`)
+        new Error(`Media exceeds maximum allowed size of 500 MB (selected: ${formatVideoFileSize(file.size)})`)
       );
     }
 
@@ -190,7 +200,7 @@ export function uploadVideoFile(params: {
     const hasValidExt = ALLOWED_VIDEO_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
     if (!hasValidExt) {
       return reject(
-        new Error(`Unsupported video format. Allowed formats: ${ALLOWED_VIDEO_EXTENSIONS.join(', ')}`)
+        new Error(`Unsupported media format. Allowed formats: ${ALLOWED_VIDEO_EXTENSIONS.join(', ')}`)
       );
     }
 
@@ -218,7 +228,7 @@ export function uploadVideoFile(params: {
         try {
           const res = JSON.parse(xhr.responseText);
           const v = res.data;
-          const streamUrl = `${API_BASE_URL}/courses/${courseId}/videos/${v.id}/stream?token=${encodeURIComponent(token)}&tenantId=${encodeURIComponent(tenantId)}`;
+          const streamUrl = v.playbackUrl || v.url || `/storage/videos/${v.storageKey || v.fileName}`;
           const videoInfo: VideoLessonInfo = {
             id: v.id,
             sourceType: 'upload',
@@ -241,7 +251,6 @@ export function uploadVideoFile(params: {
           fallbackLocalUpload(resolve);
         }
       } else {
-        // Fallback to local object URL if backend endpoint fails
         console.warn(`Video upload endpoint returned ${xhr.status}; falling back to local media buffer`);
         fallbackLocalUpload(resolve);
       }

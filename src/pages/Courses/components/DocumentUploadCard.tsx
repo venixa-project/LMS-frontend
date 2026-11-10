@@ -60,66 +60,48 @@ export const DocumentUploadCard: React.FC<Props> = ({
     const docId = `doc-${Date.now()}`;
     const objectUrl = URL.createObjectURL(file);
 
-    const fallbackDoc = () => {
-      registerDocumentFile(docId, file, objectUrl);
-      const docInfo: UploadedDocumentInfo = {
-        id: docId,
-        name: file.name,
-        size: file.size,
-        type: file.type || 'application/pdf',
-        uploadedAt: new Date().toISOString(),
-        url: objectUrl,
-        pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
-      };
-      onUpload(docInfo);
-      setIsUploading(false);
+    let textContent: string | undefined = undefined;
+    if (isTextReadable) {
+      try {
+        textContent = await file.text();
+      } catch (e) {
+        console.warn('Could not read file as text', e);
+      }
+    }
+
+    let serverUrl: string | undefined = undefined;
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      const res = await apiClient.upload<{ url: string; storagePath: string; fileName: string }>('/courses/upload-document', formData);
+      if (res?.data?.url) {
+        serverUrl = res.data.url;
+      } else if (res?.data?.storagePath) {
+        serverUrl = res.data.storagePath;
+      }
+    } catch (err: any) {
+      console.warn('Backend document upload failed; using fallback object URL', err);
+    }
+
+    const finalUrl = serverUrl || objectUrl;
+    registerDocumentFile(docId, file, finalUrl, textContent);
+
+    const words = textContent ? textContent.split(/\s+/).filter(Boolean).length : 0;
+    const docInfo: UploadedDocumentInfo = {
+      id: docId,
+      name: file.name,
+      size: file.size,
+      type: file.type || 'application/pdf',
+      uploadedAt: new Date().toISOString(),
+      url: finalUrl,
+      text: textContent,
+      wordCount: words || undefined,
+      charCount: textContent?.length,
+      pageCount: words > 0 ? Math.max(1, Math.ceil(words / 350)) : Math.max(1, Math.ceil(file.size / (120 * 1024))),
     };
 
-    if (isTextReadable) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = (e.target?.result as string) || '';
-        const words = text.split(/\s+/).filter(Boolean).length;
-        registerDocumentFile(docId, file, objectUrl, text);
-        const docInfo: UploadedDocumentInfo = {
-          id: docId,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'text/plain',
-          uploadedAt: new Date().toISOString(),
-          text,
-          url: objectUrl,
-          wordCount: words,
-          charCount: text.length,
-          pageCount: Math.max(1, Math.ceil(words / 350)),
-        };
-        onUpload(docInfo);
-        setIsUploading(false);
-      };
-      reader.onerror = fallbackDoc;
-      reader.readAsText(file);
-    } else if (file.size <= 15 * 1024 * 1024) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = (e.target?.result as string) || '';
-        registerDocumentFile(docId, file, objectUrl, undefined, dataUrl);
-        const docInfo: UploadedDocumentInfo = {
-          id: docId,
-          name: file.name,
-          size: file.size,
-          type: file.type || 'application/pdf',
-          uploadedAt: new Date().toISOString(),
-          url: dataUrl,
-          pageCount: Math.max(1, Math.ceil(file.size / (120 * 1024))),
-        };
-        onUpload(docInfo);
-        setIsUploading(false);
-      };
-      reader.onerror = fallbackDoc;
-      reader.readAsDataURL(file);
-    } else {
-      setTimeout(fallbackDoc, 200);
-    }
+    onUpload(docInfo);
+    setIsUploading(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
