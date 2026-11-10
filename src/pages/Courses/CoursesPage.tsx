@@ -594,8 +594,8 @@ const CoursesManagementPage: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 480px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="badge badge-primary">
               {isCatalog
@@ -620,7 +620,7 @@ const CoursesManagementPage: React.FC = () => {
                   ? 'My Courses'
                   : 'Course Management & Curriculum Catalog'}
           </h1>
-          <p className="text-secondary text-sm">
+          <p className="text-secondary text-sm" style={{ margin: '4px 0 0 0' }}>
             {isCatalog
               ? 'Explore open curriculum courses, preview syllabi, and enroll directly in academic programs.'
               : isLearner
@@ -632,33 +632,19 @@ const CoursesManagementPage: React.FC = () => {
         </div>
 
         {isCatalog || isMyLearning ? (
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
             <Link to="/join-course" className="btn btn-primary">
               <Link2 size={16} /> Join with Link
             </Link>
           </div>
         ) : !isLearner ? (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {isFaculty ? (
-              <Link to="/course-builder" className="btn btn-primary">
-                <Plus size={16} /> Create New Course
-              </Link>
-            ) : (
-              <>
-                <Link to="/enrollments" className="btn btn-secondary">
-                  <Users size={16} /> View Enrollments
-                </Link>
-                <Link to="/learning-paths" className="btn btn-secondary">
-                  <Layers size={16} /> Learning Paths
-                </Link>
-                <Link to="/course-builder" className="btn btn-primary">
-                  <Plus size={16} /> Author New Course
-                </Link>
-              </>
-            )}
+          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
+            <Link to="/course-builder" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+              <Plus size={16} /> Add New Course
+            </Link>
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexShrink: 0 }}>
             <Link to="/join-course" className="btn btn-primary">
               <Link2 size={16} /> Join with Link
             </Link>

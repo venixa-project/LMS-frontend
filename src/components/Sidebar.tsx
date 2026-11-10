@@ -117,6 +117,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (isStudentUser && (item.id === 'cohorts' || item.path === '/cohorts' || (item.label && item.label.toLowerCase().includes('cohort')))) {
       return false;
     }
+    // Remove Course Builder from navigation sidebar as requested (accessed via Add New Course button)
+    if (item.id === 'course-builder' || item.path === '/course-builder') {
+      return false;
+    }
     return true;
   });
 
@@ -155,8 +159,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
     if (item.id === 'courses' || item.id === 'my-courses') {
       if (currentPath === '/my-learning') return false;
       return (
-        ['/courses', '/catalog', '/join-course'].some((p) => currentPath === p || currentPath.startsWith(`${p}/`)) ||
-        (currentPath.startsWith('/course/') && !currentPath.startsWith('/course-builder')) ||
+        ['/courses', '/catalog', '/join-course', '/course-builder'].some((p) => currentPath === p || currentPath.startsWith(`${p}/`)) ||
+        currentPath.startsWith('/course/') ||
         (currentPath.startsWith('/course-player') && !activeNav.some((n) => n.id === 'my-learning'))
       );
     }

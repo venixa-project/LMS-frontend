@@ -506,17 +506,6 @@ export const WeeklyTimetableView: React.FC<Props> = ({
             >
               <Printer size={15} />
             </button>
-
-            {/* Admin or Trainer Create Button */}
-            {(isAdmin || isTrainer) && onOpenScheduleModal && (
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={onOpenScheduleModal}
-                style={{ gap: '6px', fontWeight: 700 }}
-              >
-                <Plus size={15} /> Add Class
-              </button>
-            )}
           </div>
         </div>
 

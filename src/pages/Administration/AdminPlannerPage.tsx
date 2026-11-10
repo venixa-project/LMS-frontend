@@ -508,24 +508,6 @@ export const AdminPlannerPage: React.FC = () => {
         gap: '14px'
       }}>
         <div>
-          <nav aria-label="Breadcrumb" style={{ marginBottom: '4px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.75rem',
-              color: 'var(--text-muted)'
-            }}>
-              <Link to="/dashboard" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
-                Home
-              </Link>
-              <span>/</span>
-              <span>Schedule &amp; Attendance</span>
-              <span>/</span>
-              <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Activity Planner</span>
-            </div>
-          </nav>
-
           <h1 style={{
             fontSize: '1.6rem',
             margin: 0,
@@ -1348,23 +1330,6 @@ export const AdminPlannerPage: React.FC = () => {
                 </span>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => handleOpenAddForDate(selectedDateStr)}
-              className="btn btn-primary btn-sm"
-              style={{
-                fontSize: '0.7rem',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                flexShrink: 0
-              }}
-            >
-              <Plus size={11} /> Add
-            </button>
           </div>
 
           {/* Activity Cards List */}
