@@ -1,4 +1,5 @@
-import { VideoLessonInfo } from '../types';
+import { VideoLessonInfo, VideoCropMetadata, VideoQualityOption } from '../types';
+import { generateQualityVariants } from './videoProcessingService';
 
 export const getApiBaseUrl = (): string => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
@@ -95,8 +96,8 @@ export function normalizeVideoUrl(rawUrl: string): NormalizedUrlResult {
 
   const trimmed = rawUrl.trim();
 
-  // YouTube match: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/...
-  const ytRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+  // YouTube match: youtube.com/watch?v=..., youtu.be/..., youtube.com/embed/..., shorts/..., live/...
+  const ytRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
   const ytMatch = trimmed.match(ytRegex);
   if (ytMatch && ytMatch[1]) {
     const videoId = ytMatch[1];
@@ -147,6 +148,96 @@ export function normalizeVideoUrl(rawUrl: string): NormalizedUrlResult {
 }
 
 /**
+ * Resiliently infer and normalize video information for lessons across the LMS
+ * Ensures YouTube, Vimeo, and local uploads always resolve their proper source type,
+ * player embed URL, and thumbnail.
+ */
+export function inferVideoInfo(
+  source: string | Partial<VideoLessonInfo> | undefined,
+  fallbackTitle: string = 'Video Lecture',
+  fallbackDurationMinutes: number = 10
+): VideoLessonInfo | undefined {
+  if (!source) return undefined;
+
+  let rawUrl = '';
+  let existingTitle = fallbackTitle;
+  let existingDuration = fallbackDurationMinutes * 60;
+  let existingCrop = undefined;
+  let existingSourceType = undefined;
+  let existingId = undefined;
+
+  if (typeof source === 'string') {
+    rawUrl = source.trim();
+  } else {
+    rawUrl = (source.url || source.embedUrl || '').trim();
+    if (source.title) existingTitle = source.title;
+    if (source.durationSeconds) existingDuration = source.durationSeconds;
+    if (source.cropMetadata) existingCrop = source.cropMetadata;
+    if (source.sourceType) existingSourceType = source.sourceType;
+    if (source.id) existingId = source.id;
+  }
+
+  if (!rawUrl) return undefined;
+
+  const normalized = normalizeVideoUrl(rawUrl);
+
+  let finalSourceType: 'upload' | 'youtube' | 'vimeo' | 'external' = 'upload';
+  let embedUrl = rawUrl;
+  let thumbnailUrl = undefined;
+  let videoId = undefined;
+
+  if (normalized.isValid && (normalized.sourceType === 'youtube' || /youtu\.?be/i.test(rawUrl))) {
+    finalSourceType = 'youtube';
+    embedUrl = normalized.embedUrl || rawUrl;
+    thumbnailUrl = normalized.thumbnailUrl;
+    videoId = normalized.videoId;
+  } else if (normalized.isValid && (normalized.sourceType === 'vimeo' || /vimeo\.com/i.test(rawUrl))) {
+    finalSourceType = 'vimeo';
+    embedUrl = normalized.embedUrl || rawUrl;
+    thumbnailUrl = normalized.thumbnailUrl;
+    videoId = normalized.videoId;
+  } else if (
+    existingSourceType === 'upload' &&
+    !rawUrl.startsWith('http://') &&
+    !rawUrl.startsWith('https://')
+  ) {
+    finalSourceType = 'upload';
+    embedUrl = rawUrl;
+  } else if (rawUrl.startsWith('blob:') || rawUrl.startsWith('/uploads/') || rawUrl.startsWith('/storage/')) {
+    finalSourceType = 'upload';
+    embedUrl = rawUrl;
+  } else if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    if (/youtu\.?be/i.test(rawUrl)) {
+      finalSourceType = 'youtube';
+      embedUrl = normalized.embedUrl || rawUrl;
+      thumbnailUrl = normalized.thumbnailUrl;
+      videoId = normalized.videoId;
+    } else if (/vimeo\.com/i.test(rawUrl)) {
+      finalSourceType = 'vimeo';
+      embedUrl = normalized.embedUrl || rawUrl;
+      thumbnailUrl = normalized.thumbnailUrl;
+      videoId = normalized.videoId;
+    } else {
+      finalSourceType = 'external';
+      embedUrl = normalized.embedUrl || rawUrl;
+    }
+  }
+
+  return {
+    id: existingId || `vid-${Date.now()}`,
+    sourceType: finalSourceType,
+    title: existingTitle,
+    url: rawUrl,
+    embedUrl: embedUrl,
+    videoId: videoId,
+    thumbnailUrl: thumbnailUrl,
+    durationSeconds: existingDuration,
+    durationFormatted: formatVideoDuration(existingDuration),
+    cropMetadata: existingCrop,
+  };
+}
+
+/**
  * Retrieve auth token and active tenant from localStorage session
  */
 function getAuthContext(): { token: string; tenantId: string } {
@@ -183,10 +274,11 @@ export function uploadVideoFile(params: {
   description?: string;
   durationSeconds?: number;
   lessonId?: string;
+  cropMetadata?: VideoCropMetadata;
   onProgress?: (percent: number) => void;
 }): Promise<VideoLessonInfo> {
   return new Promise((resolve, reject) => {
-    const { courseId, file, title, description, durationSeconds, lessonId, onProgress } = params;
+    const { courseId, file, title, description, durationSeconds, lessonId, cropMetadata, onProgress } = params;
 
     // Validate size
     if (file.size > MAX_VIDEO_SIZE_BYTES) {
@@ -211,6 +303,7 @@ export function uploadVideoFile(params: {
     if (description) formData.append('description', description);
     if (durationSeconds) formData.append('durationSeconds', durationSeconds.toString());
     if (lessonId) formData.append('lessonId', lessonId);
+    if (cropMetadata) formData.append('cropMetadata', JSON.stringify(cropMetadata));
 
     const xhr = new XMLHttpRequest();
     const endpoint = `${API_BASE_URL}/courses/${courseId || 'course-default'}/videos`;
@@ -222,13 +315,17 @@ export function uploadVideoFile(params: {
       }
     };
 
-    xhr.onload = () => {
+    xhr.onload = async () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         if (onProgress) onProgress(100);
         try {
           const res = JSON.parse(xhr.responseText);
           const v = res.data;
           const streamUrl = v.playbackUrl || v.url || `/storage/videos/${v.storageKey || v.fileName}`;
+          
+          // Generate 360p and 420p compressed stream endpoints
+          const qualityData = await generateQualityVariants(file, v.id, file.size);
+
           const videoInfo: VideoLessonInfo = {
             id: v.id,
             sourceType: 'upload',
@@ -244,6 +341,9 @@ export function uploadVideoFile(params: {
             embedUrl: streamUrl,
             videoId: v.id,
             uploadedAt: v.createdAt || new Date().toISOString(),
+            qualities: qualityData.qualities,
+            qualityOptions: qualityData.qualityOptions,
+            cropMetadata,
           };
           registerVideoFile(v.id, file, streamUrl);
           resolve(videoInfo);
@@ -261,7 +361,7 @@ export function uploadVideoFile(params: {
       fallbackLocalUpload(resolve);
     };
 
-    function fallbackLocalUpload(resCb: (val: VideoLessonInfo) => void) {
+    async function fallbackLocalUpload(resCb: (val: VideoLessonInfo) => void) {
       if (onProgress) onProgress(100);
       const generatedId = `vid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       let localUrl = '';
@@ -271,6 +371,10 @@ export function uploadVideoFile(params: {
       } catch (e) {
         localUrl = DEFAULT_LECTURE_STREAM_URL;
       }
+
+      // Generate 360p and 420p compressed stream endpoints
+      const qualityData = await generateQualityVariants(file, generatedId, file.size);
+
       const fallbackInfo: VideoLessonInfo = {
         id: generatedId,
         sourceType: 'upload',
@@ -285,6 +389,9 @@ export function uploadVideoFile(params: {
         url: localUrl,
         embedUrl: localUrl,
         uploadedAt: new Date().toISOString(),
+        qualities: qualityData.qualities,
+        qualityOptions: qualityData.qualityOptions,
+        cropMetadata,
       };
       resCb(fallbackInfo);
     }

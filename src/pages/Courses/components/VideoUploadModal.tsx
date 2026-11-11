@@ -13,8 +13,10 @@ import {
   Trash2,
   ExternalLink,
   Play,
+  Scissors,
+  Sliders,
 } from 'lucide-react';
-import { VideoLessonInfo } from '../../../types';
+import { VideoLessonInfo, VideoCropMetadata } from '../../../types';
 import {
   normalizeVideoUrl,
   uploadVideoFile,
@@ -24,6 +26,8 @@ import {
   ALLOWED_VIDEO_EXTENSIONS,
   MAX_VIDEO_SIZE_BYTES,
 } from '../../../lib/videoService';
+import { formatTimeCode } from '../../../lib/videoProcessingService';
+import { VideoCropModal } from '../../../components/video/VideoCropModal';
 
 interface Props {
   isOpen: boolean;
@@ -44,15 +48,26 @@ export const VideoUploadModal: React.FC<Props> = ({
   initialTitle = '',
   initialVideo,
 }) => {
+  const isExistingExternal =
+    initialVideo?.sourceType === 'youtube' ||
+    initialVideo?.sourceType === 'vimeo' ||
+    initialVideo?.sourceType === 'external' ||
+    Boolean(
+      initialVideo?.url &&
+      /^(https?:\/\/)?(?:www\.|m\.)?(youtube\.com|youtu\.be|vimeo\.com)/i.test(initialVideo.url)
+    ) ||
+    Boolean(
+      initialVideo?.embedUrl &&
+      /^(https?:\/\/)?(?:www\.|m\.)?(youtube\.com|youtu\.be|vimeo\.com)/i.test(initialVideo.embedUrl)
+    );
+
   const [sourceType, setSourceType] = useState<'upload' | 'url'>(
-    initialVideo?.sourceType === 'youtube' || initialVideo?.sourceType === 'vimeo' || initialVideo?.sourceType === 'external'
-      ? 'url'
-      : 'upload'
+    isExistingExternal ? 'url' : 'upload'
   );
 
   const [title, setTitle] = useState(initialTitle || initialVideo?.title || 'Video Lecture');
   const [description, setDescription] = useState(initialVideo?.description || '');
-  const [urlInput, setUrlInput] = useState(initialVideo?.url || '');
+  const [urlInput, setUrlInput] = useState(initialVideo?.url || initialVideo?.embedUrl || '');
   const [durationMinutes, setDurationMinutes] = useState<number>(
     initialVideo?.durationSeconds ? Math.ceil(initialVideo.durationSeconds / 60) : 10
   );
@@ -61,7 +76,9 @@ export const VideoUploadModal: React.FC<Props> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hiddenVideoRef = useRef<HTMLVideoElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(initialVideo?.url || null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(
+    isExistingExternal ? null : (initialVideo?.url || null)
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [detectedDurationSecs, setDetectedDurationSecs] = useState<number>(
@@ -70,26 +87,40 @@ export const VideoUploadModal: React.FC<Props> = ({
   const [dragOver, setDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Video Crop & Trim State
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [currentCropMetadata, setCurrentCropMetadata] = useState<VideoCropMetadata | undefined>(
+    initialVideo?.cropMetadata
+  );
+
   // URL normalization state
   const normalizedUrl = normalizeVideoUrl(urlInput);
 
   useEffect(() => {
     if (isOpen) {
+      const isExt =
+        initialVideo?.sourceType === 'youtube' ||
+        initialVideo?.sourceType === 'vimeo' ||
+        initialVideo?.sourceType === 'external' ||
+        Boolean(
+          initialVideo?.url &&
+          /^(https?:\/\/)?(?:www\.|m\.)?(youtube\.com|youtu\.be|vimeo\.com)/i.test(initialVideo.url)
+        ) ||
+        Boolean(
+          initialVideo?.embedUrl &&
+          /^(https?:\/\/)?(?:www\.|m\.)?(youtube\.com|youtu\.be|vimeo\.com)/i.test(initialVideo.embedUrl)
+        );
+
       setTitle(initialTitle || initialVideo?.title || 'Video Lecture');
       setDescription(initialVideo?.description || '');
-      setUrlInput(initialVideo?.url || '');
+      setUrlInput(initialVideo?.url || initialVideo?.embedUrl || '');
       setDurationMinutes(
         initialVideo?.durationSeconds ? Math.ceil(initialVideo.durationSeconds / 60) : 10
       );
       setDetectedDurationSecs(initialVideo?.durationSeconds || 0);
-      setSourceType(
-        initialVideo?.sourceType === 'youtube' ||
-          initialVideo?.sourceType === 'vimeo' ||
-          initialVideo?.sourceType === 'external'
-          ? 'url'
-          : 'upload'
-      );
-      setPreviewBlobUrl(initialVideo?.url || null);
+      setCurrentCropMetadata(initialVideo?.cropMetadata);
+      setSourceType(isExt ? 'url' : 'upload');
+      setPreviewBlobUrl(isExt ? null : (initialVideo?.url || null));
       setSelectedFile(null);
       setUploadProgress(initialVideo ? 100 : 0);
       setErrorMessage(null);
@@ -186,6 +217,7 @@ export const VideoUploadModal: React.FC<Props> = ({
             title: title.trim(),
             description: description.trim() || undefined,
             durationSeconds: detectedDurationSecs || durationMinutes * 60,
+            cropMetadata: currentCropMetadata,
             onProgress: (p) => setUploadProgress(p),
           });
           setIsUploading(false);
@@ -203,6 +235,7 @@ export const VideoUploadModal: React.FC<Props> = ({
           description: description.trim() || undefined,
           durationSeconds: durationMinutes * 60,
           durationFormatted: formatVideoDuration(durationMinutes * 60),
+          cropMetadata: currentCropMetadata || initialVideo.cropMetadata,
         };
         onSave(updated, title.trim());
         onClose();
@@ -567,6 +600,25 @@ export const VideoUploadModal: React.FC<Props> = ({
                     <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                       <button
                         type="button"
+                        onClick={() => setIsCropModalOpen(true)}
+                        disabled={isUploading}
+                        className="btn btn-secondary btn-sm"
+                        style={{
+                          fontSize: '0.78rem',
+                          padding: '5px 10px',
+                          color: '#4f46e5',
+                          borderColor: 'rgba(79, 70, 229, 0.4)',
+                          background: 'rgba(79, 70, 229, 0.08)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                        title="Crop aspect ratio, trim duration, and compress video"
+                      >
+                        <Scissors size={13} /> Edit / Crop
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
                         className="btn btn-secondary btn-sm"
@@ -580,6 +632,7 @@ export const VideoUploadModal: React.FC<Props> = ({
                           setSelectedFile(null);
                           setPreviewBlobUrl(null);
                           setDetectedDurationSecs(0);
+                          setCurrentCropMetadata(undefined);
                         }}
                         disabled={isUploading}
                         className="btn btn-secondary btn-sm"
@@ -588,6 +641,64 @@ export const VideoUploadModal: React.FC<Props> = ({
                         <Trash2 size={12} />
                       </button>
                     </div>
+                  </div>
+
+                  {/* Multi-Quality & Crop Badges */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      background: 'rgba(79, 70, 229, 0.05)',
+                      border: '1px solid rgba(79, 70, 229, 0.15)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        color: '#0284c7',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                      }}
+                    >
+                      <Sliders size={11} /> Auto-Compress: 420p SD Stream
+                    </span>
+
+                    {currentCropMetadata?.isCropped ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#059669',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                        }}
+                      >
+                        <CheckCircle2 size={11} /> Cropped (
+                        {formatTimeCode(currentCropMetadata.startTime || 0)} -{' '}
+                        {formatTimeCode(currentCropMetadata.endTime || detectedDurationSecs)}
+                        {currentCropMetadata.aspectRatio && currentCropMetadata.aspectRatio !== 'original' ? ` • ${currentCropMetadata.aspectRatio}` : ''}
+                        )
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                        Original Framing &bull; Click "Edit / Crop" to trim or adjust aspect ratio
+                      </span>
+                    )}
                   </div>
 
                   {/* Progress Bar during upload */}
@@ -820,6 +931,30 @@ export const VideoUploadModal: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      {/* Video Crop & Trim Studio Modal */}
+      {isCropModalOpen && (selectedFile || previewBlobUrl) && (
+        <VideoCropModal
+          isOpen={isCropModalOpen}
+          onClose={() => setIsCropModalOpen(false)}
+          videoSrc={selectedFile || previewBlobUrl!}
+          initialCrop={currentCropMetadata}
+          onApplyCrop={(result) => {
+            if (result.file && result.file.size > 0) {
+              setSelectedFile(result.file);
+            }
+            if (result.blobUrl) {
+              setPreviewBlobUrl(result.blobUrl);
+            }
+            if (result.durationSeconds > 0) {
+              setDetectedDurationSecs(result.durationSeconds);
+              setDurationMinutes(Math.max(1, Math.ceil(result.durationSeconds / 60)));
+            }
+            setCurrentCropMetadata(result.cropMetadata);
+            setIsCropModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

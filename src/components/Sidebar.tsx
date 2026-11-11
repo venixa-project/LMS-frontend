@@ -520,9 +520,9 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                   <span
                     style={{
-                      fontSize: '0.9rem',
+                      fontSize: '0.92rem',
                       fontWeight: 700,
-                      color: 'var(--text-main)',
+                      color: '#FFFFFF',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -534,15 +534,16 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                   </span>
                   <span
                     style={{
-                      fontSize: '0.68rem',
-                      fontWeight: 600,
-                      color: 'var(--brand-indigo, #5447FF)',
-                      letterSpacing: '0.02em',
+                      fontSize: '0.64rem',
+                      fontWeight: 700,
+                      color: '#818CF8',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
                       lineHeight: 1.2,
-                      marginTop: '1px',
+                      marginTop: '2px',
                     }}
                   >
-                    LMS Workspace
+                    ADMIN PORTAL
                   </span>
                 </div>
               </div>
@@ -627,22 +628,24 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '9px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.85rem',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      fontSize: '0.88rem',
                       fontWeight: active ? 700 : 600,
-                      color: active ? '#fff' : 'var(--text-main)',
+                      color: active ? '#ffffff' : '#CBD5E1',
                       background: active
-                        ? (mainItem.id === 'momentum' ? 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)' : 'linear-gradient(135deg, #2563EB 0%, #818CF8 100%)')
+                        ? 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)'
                         : 'transparent',
-                      borderLeft: active ? (mainItem.id === 'momentum' ? '3px solid #c084fc' : '3px solid #F472B6') : '3px solid transparent',
-                      boxShadow: active ? (mainItem.id === 'momentum' ? '0 4px 16px rgba(99, 102, 241, 0.45)' : '0 4px 14px rgba(37, 99, 235, 0.45)') : 'none',
+                      boxShadow: active
+                        ? '0 4px 18px rgba(236, 72, 153, 0.45), 0 2px 6px rgba(37, 99, 235, 0.3)'
+                        : 'none',
                       transition: 'all 0.18s ease',
                       textDecoration: 'none',
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
-                        e.currentTarget.style.background = 'var(--bg-card-hover)';
+                        e.currentTarget.style.background = 'rgba(37, 99, 235, 0.14)';
+                        e.currentTarget.style.color = '#ffffff';
                       }
                       if (hasHover) {
                         if (leaveTimerRef.current) {
@@ -655,6 +658,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                     onMouseLeave={(e) => {
                       if (!active) {
                         e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#CBD5E1';
                       }
                     }}
                   >
@@ -662,7 +666,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                       <Icon
                         size={18}
                         style={{
-                          color: active ? '#fff' : 'var(--primary)',
+                          color: active ? '#ffffff' : '#818CF8',
                           flexShrink: 0,
                         }}
                       />
@@ -728,17 +732,17 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                     fontSize: '0.85rem',
                     fontWeight: hasActiveChild ? 700 : 600,
                     color: hasActiveChild
-                      ? '#818CF8'
+                      ? '#FFFFFF'
                       : isExpanded
-                        ? 'var(--text-main)'
-                        : 'var(--text-secondary)',
+                        ? '#FFFFFF'
+                        : '#CBD5E1',
                     background: hasActiveChild
-                      ? 'rgba(37, 99, 235, 0.18)'
+                      ? 'rgba(37, 99, 235, 0.22)'
                       : isExpanded
-                        ? 'var(--bg-input)'
+                        ? 'rgba(255, 255, 255, 0.05)'
                         : 'transparent',
                     border: 'none',
-                    borderLeft: hasActiveChild ? '3px solid #F472B6' : '3px solid transparent',
+                    borderLeft: hasActiveChild ? '3px solid #EC4899' : '3px solid transparent',
                     width: '100%',
                     cursor: 'pointer',
                     textAlign: 'left',
@@ -748,14 +752,14 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                   }}
                   onMouseEnter={(e) => {
                     if (!hasActiveChild) {
-                      e.currentTarget.style.background = 'var(--bg-card-hover)';
-                      e.currentTarget.style.color = 'var(--text-main)';
+                      e.currentTarget.style.background = 'rgba(37, 99, 235, 0.14)';
+                      e.currentTarget.style.color = '#FFFFFF';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!hasActiveChild) {
-                      e.currentTarget.style.background = isExpanded ? 'var(--bg-input)' : 'transparent';
-                      e.currentTarget.style.color = isExpanded ? 'var(--text-main)' : 'var(--text-secondary)';
+                      e.currentTarget.style.background = isExpanded ? 'rgba(255, 255, 255, 0.05)' : 'transparent';
+                      e.currentTarget.style.color = isExpanded ? '#FFFFFF' : '#CBD5E1';
                     }
                   }}
                 >
@@ -765,10 +769,10 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                       style={{
                         flexShrink: 0,
                         color: hasActiveChild
-                          ? 'var(--primary)'
+                          ? '#EC4899'
                           : isExpanded
-                            ? 'var(--text-main)'
-                            : 'var(--text-muted)',
+                            ? '#FFFFFF'
+                            : '#818CF8',
                         transition: 'color 0.18s ease',
                       }}
                     />
@@ -808,7 +812,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                         justifyContent: 'center',
                         transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
                         transition: 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-                        color: hasActiveChild ? 'var(--primary)' : 'var(--text-muted)',
+                        color: hasActiveChild ? '#EC4899' : '#818CF8',
                       }}
                     >
                       <ChevronRight size={15} />
@@ -861,26 +865,28 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            padding: '7px 10px',
-                            borderRadius: 'var(--radius-md)',
-                            fontSize: '0.81rem',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            fontSize: '0.82rem',
                             fontWeight: isSubActive ? 700 : 500,
-                            color: isSubActive ? '#fff' : 'var(--text-secondary)',
-                            background: isSubActive ? (sub.id === 'momentum' ? 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)' : 'linear-gradient(135deg, rgba(37, 99, 235, 0.4) 0%, rgba(244, 114, 182, 0.25) 100%)') : 'transparent',
-                            borderLeft: isSubActive ? (sub.id === 'momentum' ? '2.5px solid #c084fc' : '2.5px solid #F472B6') : '2.5px solid transparent',
+                            color: isSubActive ? '#ffffff' : '#94A3B8',
+                            background: isSubActive
+                              ? 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)'
+                              : 'transparent',
+                            boxShadow: isSubActive ? '0 4px 14px rgba(236, 72, 153, 0.4)' : 'none',
                             textDecoration: 'none',
                             transition: 'all 0.15s ease',
                           }}
                           onMouseEnter={(e) => {
                             if (!isSubActive) {
-                              e.currentTarget.style.background = 'var(--bg-card-hover)';
-                              e.currentTarget.style.color = 'var(--text-main)';
+                              e.currentTarget.style.background = 'rgba(37, 99, 235, 0.14)';
+                              e.currentTarget.style.color = '#ffffff';
                             }
                           }}
                           onMouseLeave={(e) => {
                             if (!isSubActive) {
                               e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.color = 'var(--text-secondary)';
+                              e.currentTarget.style.color = '#94A3B8';
                             }
                           }}
                         >
@@ -896,7 +902,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                               size={15}
                               style={{
                                 flexShrink: 0,
-                                color: isSubActive ? 'var(--primary)' : 'var(--text-muted)',
+                                color: isSubActive ? '#ffffff' : '#818CF8',
                               }}
                             />
                             <span
@@ -941,8 +947,8 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
         <div
           style={{
             padding: '14px 16px',
-            borderTop: '1px solid var(--border-subtle)',
-            background: 'var(--bg-surface)',
+            borderTop: '1px solid rgba(129, 140, 248, 0.15)',
+            background: '#07071F',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
@@ -973,7 +979,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                     whiteSpace: 'nowrap',
                     textOverflow: 'ellipsis',
                     overflow: 'hidden',
-                    color: 'var(--text-main)',
+                    color: '#FFFFFF',
                   }}
                 >
                   {user?.displayName || 'User'}
@@ -981,7 +987,7 @@ export const Sidebar: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div
                   style={{
                     fontSize: '0.72rem',
-                    color: 'var(--text-secondary)',
+                    color: '#818CF8',
                     textTransform: 'capitalize',
                     fontWeight: 500,
                   }}

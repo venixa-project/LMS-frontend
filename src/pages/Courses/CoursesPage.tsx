@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, getDefaultCourseCover } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
@@ -880,7 +880,7 @@ const CoursesManagementPage: React.FC = () => {
                       borderRadius: 'var(--radius-md)',
                       background: c.thumbnail
                         ? `url(${c.thumbnail}) center/cover no-repeat`
-                        : 'linear-gradient(135deg, rgba(37, 99, 235, 0.45) 0%, rgba(84, 71, 255, 0.35) 50%, rgba(244, 114, 182, 0.25) 100%)',
+                        : `url(${getDefaultCourseCover(c.category, c.title)}) center/cover no-repeat`,
                       marginBottom: '14px',
                       display: 'flex',
                       alignItems: 'center',

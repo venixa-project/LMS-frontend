@@ -243,6 +243,26 @@ export interface QuizQuestionItem {
   source?: 'manual' | 'ai' | 'excel_csv' | 'pdf_word' | 'question_bank';
 }
 
+export interface VideoQualityOption {
+  label: string; // '360p', '420p', '720p HD', 'Auto'
+  resolution: string; // '640x360', '746x420', '1280x720'
+  url: string;
+  fileSize?: number;
+}
+
+export interface VideoCropMetadata {
+  startTime?: number; // In seconds
+  endTime?: number; // In seconds
+  aspectRatio?: 'original' | '16:9' | '4:3' | '1:1' | '9:16' | 'free';
+  isCropped?: boolean;
+  cropBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
 export interface VideoLessonInfo {
   id: string;
   slug?: string;
@@ -260,6 +280,14 @@ export interface VideoLessonInfo {
   videoId?: string;
   thumbnailUrl?: string;
   uploadedAt?: string;
+  qualities?: {
+    '360p'?: string;
+    '420p'?: string;
+    '720p'?: string;
+    'original'?: string;
+  };
+  qualityOptions?: VideoQualityOption[];
+  cropMetadata?: VideoCropMetadata;
 }
 
 export interface UploadedDocumentInfo {
@@ -430,10 +458,11 @@ export interface LiveSession {
   recordingEnabled?: boolean;
   recordingUrl?: string;
   agenda?: string;
-  materials?: string[];
+  materials?: any[];
   departmentId?: string;
   description?: string;
   targetAudienceType?: 'all_cohort' | 'selected_students' | 'faculty_only' | 'combined' | string;
+  targetCohortIds?: string[];
   targetStudentIds?: string[];
   targetStaffIds?: string[];
   audienceScope?: 'students' | 'faculty' | 'both';

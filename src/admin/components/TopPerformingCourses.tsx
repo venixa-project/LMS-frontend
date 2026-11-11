@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Award, ArrowUpRight, Star, Users, Code2, LineChart, Database, Atom, BookOpen, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '../../lib/apiClient';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, getDefaultCourseCover } from '../../lib/courseStore';
 import { Course } from '../../types';
 
 interface DisplayCourse {
@@ -18,14 +18,15 @@ interface DisplayCourse {
   icon: React.ComponentType<{ size?: number; color?: string }>;
   gradient: string;
   glyph: string;
+  thumbnail?: string;
 }
 
 const GRADIENTS = [
-  'linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #4f46e5 100%)',
-  'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #059669 100%)',
-  'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)',
-  'linear-gradient(135deg, #0c4a6e 0%, #0369a1 50%, #0284c7 100%)',
-  'linear-gradient(135deg, #4c1d95 0%, #6d28d9 50%, #7c3aed 100%)',
+  'linear-gradient(135deg, #2563EB 0%, #F472B6 100%)', // Royal Blue to Soft Pink
+  'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)', // Royal Blue to Hot Pink
+  'linear-gradient(135deg, #5447FF 0%, #F232A9 100%)', // Electric Blue to Neon Pink
+  'linear-gradient(135deg, #2563EB 0%, #818CF8 50%, #F472B6 100%)', // 3-Color Flow
+  'linear-gradient(135deg, #1D4ED8 0%, #DB2777 100%)', // Deep Blue to Deep Rose Pink
 ];
 
 function getCourseIcon(category?: string) {
@@ -110,6 +111,8 @@ export const TopPerformingCourses: React.FC = () => {
             ? c.estimatedHours
             : 0;
 
+        const thumbnail = c.thumbnailUrl || c.thumbnail || c.coverImage || getDefaultCourseCover(c.category, c.title);
+
         return {
           id: c.id,
           title: c.title,
@@ -122,6 +125,7 @@ export const TopPerformingCourses: React.FC = () => {
           icon: getCourseIcon(c.category),
           gradient: GRADIENTS[index % GRADIENTS.length],
           glyph: getGlyph(c.title),
+          thumbnail,
         };
       });
 
@@ -156,6 +160,7 @@ export const TopPerformingCourses: React.FC = () => {
           icon: getCourseIcon(c.category),
           gradient: GRADIENTS[idx % GRADIENTS.length],
           glyph: getGlyph(c.title),
+          thumbnail: c.thumbnail || (c as any).thumbnailUrl || getDefaultCourseCover(c.category, c.title),
         }));
         mapped.sort((a, b) => b.enrolledLearners - a.enrolledLearners);
         setCourses(mapped.slice(0, 4));
@@ -313,14 +318,33 @@ export const TopPerformingCourses: React.FC = () => {
                     boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
                   }}
                 >
-                  {/* Visual Icon & Glyph Watermark */}
+                  {/* Real Course Cover Image */}
+                  {crs.thumbnail && (
+                    <img
+                      src={crs.thumbnail}
+                      alt={crs.title}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        zIndex: 1,
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+
+                  {/* Visual Icon & Glyph Watermark (Fallback when image isn't loaded) */}
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '4px',
-                      zIndex: 1,
+                      zIndex: 0,
                     }}
                   >
                     <IconComp size={20} color="#ffffff" />
@@ -336,8 +360,19 @@ export const TopPerformingCourses: React.FC = () => {
                     </span>
                   </div>
 
+                  {/* Subtle dark gradient overlay so corner badges remain crisp */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)',
+                      pointerEvents: 'none',
+                      zIndex: 2,
+                    }}
+                  />
+
                   {/* Status Badge in corner */}
-                  <div style={{ position: 'absolute', top: '4px', right: '4px', zIndex: 2 }}>
+                  <div style={{ position: 'absolute', top: '4px', right: '4px', zIndex: 3 }}>
                     <span
                       style={{
                         background: 'rgba(16, 185, 129, 0.9)',
@@ -356,7 +391,7 @@ export const TopPerformingCourses: React.FC = () => {
 
                   {/* Duration chip in corner */}
                   {crs.durationHours > 0 && (
-                    <div style={{ position: 'absolute', bottom: '3px', left: '4px', zIndex: 2 }}>
+                    <div style={{ position: 'absolute', bottom: '3px', left: '4px', zIndex: 3 }}>
                       <span
                         style={{
                           background: 'rgba(0,0,0,0.65)',
@@ -371,19 +406,6 @@ export const TopPerformingCourses: React.FC = () => {
                       </span>
                     </div>
                   )}
-
-                  {/* Background decorative ring */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '50%',
-                      border: '1px dashed rgba(255,255,255,0.15)',
-                      top: '-10px',
-                      right: '-10px',
-                    }}
-                  />
                 </div>
 
                 {/* Title & Metadata */}

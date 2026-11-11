@@ -390,6 +390,89 @@ export const TrainerDashboardPage: React.FC = () => {
   return (
     <div className="trainer-dashboard-container">
       {/* ================================================================= */}
+      {/* 0. SIGNATURE HERO BANNER (Official Gradient Flow)                 */}
+      {/* ================================================================= */}
+      <div
+        style={{
+          background: 'linear-gradient(90deg, #F232A9 0%, #EC4899 22%, #818CF8 65%, #2563EB 100%)',
+          borderRadius: '16px',
+          padding: '24px 28px',
+          color: '#FFFFFF',
+          boxShadow: '0 10px 30px -5px rgba(236, 72, 153, 0.32), 0 6px 16px -4px rgba(37, 99, 235, 0.28)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: '20px',
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: '1.9rem',
+              fontWeight: 800,
+              margin: '0 0 4px 0',
+              letterSpacing: '-0.02em',
+              color: '#FFFFFF',
+            }}
+          >
+            Trainer Dashboard
+          </h1>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.88rem',
+              color: 'rgba(255, 255, 255, 0.94)',
+              fontWeight: 500,
+            }}
+          >
+            Welcome back, {trainerName} &bull; Manage student cohorts, live lectures, and grading
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <Link
+            to="/assessments"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              borderRadius: '9999px',
+              background: 'rgba(255, 255, 255, 0.18)',
+              border: '1px solid rgba(255, 255, 255, 0.45)',
+              color: '#FFFFFF',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            + New Assessment
+          </Link>
+          <Link
+            to="/courses"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              borderRadius: '9999px',
+              background: '#FFFFFF',
+              color: '#1D4ED8',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)',
+            }}
+          >
+            <BookOpen size={14} color="#1D4ED8" /> Course Catalog
+          </Link>
+        </div>
+      </div>
+
+      {/* ================================================================= */}
       {/* 1. TOP HEADER & COMPACT RESPONSIVE FILTER BAR                     */}
       {/* ================================================================= */}
       <div

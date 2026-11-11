@@ -40,22 +40,46 @@ interface PeopleState {
   inviteUser: (id: string) => Promise<{ success: boolean; message: string }>;
 }
 
+const STORAGE_KEY_PEOPLE = 'venilearn_cached_people';
+
+function getInitialUsers(): User[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_PEOPLE);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch { }
+  }
+  return [];
+}
+
 export const usePeopleStore = create<PeopleState>((set, get) => ({
-  users: [],
+  users: getInitialUsers(),
   isLoading: false,
-  totalUsers: 0,
+  totalUsers: getInitialUsers().length,
 
   fetchPeople: async (params?: ListPeopleParams) => {
     set({ isLoading: true });
     try {
       const res = await peopleApi.list(params);
+      const fetched = res.users || [];
+      if (fetched.length > 0 && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(STORAGE_KEY_PEOPLE, JSON.stringify(fetched));
+        } catch { }
+      }
       set({
-        users: res.users || [],
-        totalUsers: res.meta?.total || (res.users || []).length,
+        users: fetched.length > 0 ? fetched : get().users,
+        totalUsers: res.meta?.total || (fetched.length > 0 ? fetched.length : get().totalUsers),
         isLoading: false,
       });
     } catch (err: any) {
       console.error('Failed to fetch people:', err);
+      // Preserve existing cached users rather than wiping to empty array
       set({ isLoading: false });
     }
   },

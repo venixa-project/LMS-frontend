@@ -24,6 +24,7 @@ export interface VideoProcessResponse {
   language: string;
   languageProbability?: number;
   wordCount: number;
+  summary?: string;
   transcript: string;
   segments: VideoSegmentItem[];
   questions: GeneratedQuestionSchema[];
@@ -41,8 +42,29 @@ export interface VideoProcessingParams {
   onProgress?: (stage: string, percent: number) => void;
 }
 
-export const AI_SERVICE_URL =
-  import.meta.env.VITE_AI_SERVICE_URL || 'http://127.0.0.1:8000';
+/**
+ * Dynamically resolves the AI service URL.
+ * 1. Respects VITE_AI_SERVICE_URL environment override if defined.
+ * 2. If the frontend is accessed from localhost / 127.0.0.1, uses http://127.0.0.1:8000.
+ * 3. If accessed through a LAN IP (e.g., http://192.168.0.13:5173), dynamically targets http://192.168.0.13:8000
+ *    so cross-device requests and LAN browsers can connect without Private Network Access blocks.
+ */
+export function getAiServiceUrl(): string {
+  if (import.meta.env.VITE_AI_SERVICE_URL) {
+    return (import.meta.env.VITE_AI_SERVICE_URL as string).replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${hostname}:8000`;
+    }
+  }
+
+  return 'http://127.0.0.1:8000';
+}
+
+export const AI_SERVICE_URL = getAiServiceUrl();
 
 const ALLOWED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'];
 const MAX_VIDEO_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
@@ -82,7 +104,8 @@ export function validateVideoFile(file: File): { valid: boolean; error?: string 
 }
 
 /**
- * Checks connectivity with the local Python AI processing service
+ * Checks connectivity with the local Python AI processing service.
+ * Uses 8,000ms timeout and reports detailed errors on timeout, connection refusal, or PNA blocks.
  */
 export async function checkAIServiceHealth(): Promise<{
   available: boolean;
@@ -90,12 +113,15 @@ export async function checkAIServiceHealth(): Promise<{
   whisper: boolean;
   ollama: boolean;
   message: string;
+  errorDetail?: string;
 }> {
+  const targetUrl = getAiServiceUrl();
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const response = await fetch(`${AI_SERVICE_URL}/health`, {
+    const response = await fetch(`${targetUrl}/health`, {
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -107,20 +133,37 @@ export async function checkAIServiceHealth(): Promise<{
         ffmpeg: data.ffmpeg?.available ?? true,
         whisper: true,
         ollama: data.ollama?.available ?? false,
-        message: `Local AI Service is online (${data.whisper?.configured_model} Whisper, ${data.ollama?.available ? 'Ollama active' : 'Local grounded engine active'})`
+        message: `Local AI Service is online (${data.whisper?.configured_model || 'tiny'} Whisper, ${data.ollama?.available ? 'Ollama active' : 'Local grounded engine active'})`
+      };
+    } else {
+      return {
+        available: false,
+        ffmpeg: false,
+        whisper: false,
+        ollama: false,
+        message: `AI service returned HTTP ${response.status} from ${targetUrl}`,
+        errorDetail: `Status: ${response.status} (${response.statusText})`
       };
     }
   } catch (e: any) {
-    // Service offline
-  }
+    let errMsg = `Cannot connect to AI service at ${targetUrl}`;
+    if (e.name === 'AbortError') {
+      errMsg = `Health ping timed out after 8s at ${targetUrl}. Service may be slow or busy.`;
+    } else if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
+      errMsg = `Connection refused at ${targetUrl}. Ensure the AI service is running on host 0.0.0.0 port 8000.`;
+    } else if (e.message) {
+      errMsg = `Connection failed at ${targetUrl}: ${e.message}`;
+    }
 
-  return {
-    available: false,
-    ffmpeg: false,
-    whisper: false,
-    ollama: false,
-    message: 'Local AI processing service not detected at ' + AI_SERVICE_URL
-  };
+    return {
+      available: false,
+      ffmpeg: false,
+      whisper: false,
+      ollama: false,
+      message: errMsg,
+      errorDetail: e.message || String(e)
+    };
+  }
 }
 
 /**
@@ -149,15 +192,18 @@ export async function processVideoForAssessment(
   // Setup simulated progress updates while waiting for faster-whisper
   let currentPct = 25;
   const progressTimer = setInterval(() => {
-    if (currentPct < 55) {
+    if (currentPct < 50) {
       currentPct += 5;
       onProgress?.('Extracting audio track via FFmpeg...', currentPct);
-    } else if (currentPct < 85) {
+    } else if (currentPct < 75) {
       currentPct += 3;
-      onProgress?.('Transcribing speech segments with faster-whisper...', currentPct);
-    } else if (currentPct < 95) {
+      onProgress?.('Transcribing speech segments across full video with faster-whisper...', currentPct);
+    } else if (currentPct < 88) {
+      currentPct += 2;
+      onProgress?.('Synthesizing whole-video executive summary & verifying filters...', currentPct);
+    } else if (currentPct < 96) {
       currentPct += 1;
-      onProgress?.('Generating grounded questions and verifying timestamps...', currentPct);
+      onProgress?.('Generating distributed assessment questions across full video timeline...', currentPct);
     }
   }, 900);
 
@@ -166,7 +212,8 @@ export async function processVideoForAssessment(
     // 3 minute timeout for long videos
     const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-    const response = await fetch(`${AI_SERVICE_URL}/api/video/process`, {
+    const targetUrl = getAiServiceUrl();
+    const response = await fetch(`${targetUrl}/api/video/process`, {
       method: 'POST',
       body: formData,
       signal: controller.signal
@@ -215,9 +262,10 @@ export async function processVideoForAssessment(
     }
 
     if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+      const targetUrl = getAiServiceUrl();
       throw new Error(
-        `Unable to reach local AI processing service at ${AI_SERVICE_URL}. ` +
-        `Please ensure the backend is running (run: python -m uvicorn main:app --port 8000 in the ai-service folder).`
+        `Unable to reach local AI processing service at ${targetUrl}. ` +
+        `Please ensure the backend is running on 0.0.0.0:8000 (run: python -m uvicorn main:app --host 0.0.0.0 --port 8000 in the ai-service folder).`
       );
     }
 

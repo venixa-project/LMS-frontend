@@ -538,23 +538,28 @@ export const StudentDashboard: React.FC = () => {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 20,
-          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(84, 71, 255, 0.18), rgba(244, 114, 182, 0.15))',
-          borderColor: 'rgba(129, 140, 248, 0.32)',
-          padding: '22px 24px'
+          background: 'linear-gradient(90deg, #F232A9 0%, #EC4899 22%, #818CF8 65%, #2563EB 100%)',
+          borderRadius: '16px',
+          boxShadow: '0 10px 30px -5px rgba(236, 72, 153, 0.32), 0 6px 16px -4px rgba(37, 99, 235, 0.28)',
+          border: 'none',
+          padding: '24px 28px',
+          color: '#FFFFFF'
         }}
       >
         <div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-            <span className="badge badge-primary">{data.gamification.rank}</span>
+            <span style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#FFFFFF', padding: '3px 10px', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700 }}>
+              {data.gamification.rank}
+            </span>
             {isDemoPreview && <span className="badge badge-warning">Demo Preview</span>}
-            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', color: '#f59e0b', fontWeight: 700, fontSize: '0.8rem' }}>
+            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', color: '#FFE066', fontWeight: 700, fontSize: '0.8rem' }}>
               <Flame size={15} /> {data.gamification.streakDays} Day Streak
             </span>
           </div>
-          <h1 id="student-dashboard-title" style={{ margin: '0 0 4px', fontSize: '1.65rem', fontWeight: 800 }}>
+          <h1 id="student-dashboard-title" style={{ margin: '0 0 4px', fontSize: '1.9rem', fontWeight: 800, color: '#FFFFFF' }}>
             Welcome back, {firstName}!
           </h1>
-          <p className="text-secondary text-sm" style={{ margin: 0 }}>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'rgba(255, 255, 255, 0.92)' }}>
             Overview of your active cohort batches, coursework, and milestones.
           </p>
         </div>

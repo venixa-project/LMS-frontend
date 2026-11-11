@@ -6,6 +6,7 @@ import { useCohortStore } from '../../lib/cohortStore';
 import { Assessment } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CreateAssessmentModal } from './components/CreateAssessmentModal';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
@@ -76,6 +77,19 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('all');
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Custom Delete Confirmation Modal State
+  const [deleteModalConfig, setDeleteModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // Student assignment submission modal state
   const [submittingAssignment, setSubmittingAssignment] = useState<CourseAssignment | null>(null);
@@ -262,20 +276,20 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   };
 
   const filteredAssessments = assessments.filter((a) => {
-    const matchesCourse = selectedCourseFilter === 'all' || a.courseId === selectedCourseFilter;
-    const matchesFaculty = !isFaculty || assignedCourses.some((c) => c.id === a.courseId);
+    const matchesCourse = selectedCourseFilter === 'all' || a.courseId === selectedCourseFilter || a.courseId === 'all';
+    const matchesFaculty = !isFaculty || a.courseId === 'all' || assignedCourses.some((c) => c.id === a.courseId);
     return matchesCourse && matchesFaculty;
   });
 
   const filteredDrafts = drafts.filter((d) => {
-    const matchesCourse = selectedCourseFilter === 'all' || d.courseId === selectedCourseFilter;
-    const matchesFaculty = !isFaculty || assignedCourses.some((c) => c.id === d.courseId);
+    const matchesCourse = selectedCourseFilter === 'all' || d.courseId === selectedCourseFilter || d.courseId === 'all';
+    const matchesFaculty = !isFaculty || d.courseId === 'all' || assignedCourses.some((c) => c.id === d.courseId);
     return matchesCourse && matchesFaculty;
   });
 
   const filteredAssignments = assignments.filter((asg) => {
-    const matchesCourse = selectedCourseFilter === 'all' || asg.courseId === selectedCourseFilter;
-    const matchesFaculty = !isFaculty || assignedCourses.some((c) => c.id === asg.courseId);
+    const matchesCourse = selectedCourseFilter === 'all' || asg.courseId === selectedCourseFilter || asg.courseId === 'all';
+    const matchesFaculty = !isFaculty || asg.courseId === 'all' || assignedCourses.some((c) => c.id === asg.courseId);
     const matchesLearnerStatus = !isLearner || assignmentFilter === 'all' || asg.learnerStatus === assignmentFilter;
     return matchesCourse && matchesFaculty && matchesLearnerStatus;
   });
@@ -593,8 +607,10 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             ) : (
               <div className="grid-3">
                 {filteredDrafts.map((d) => {
-                  const course = useCourseStore.getState().courses.find((c) => c.id === d.courseId);
-                  const qCount = d.questionIds?.length || d.questionsData?.length || d.questions?.length || 0;
+                  const course = d.courseId === 'all'
+                    ? { title: '🌐 All Courses (All Students)' }
+                    : (useCourseStore.getState().courses.find((c) => c.id === d.courseId || c.title?.toLowerCase() === d.courseId?.toLowerCase()) || (d as any).course || (d.courseId ? { title: d.courseId } : undefined));
+                  const qCount = d.questionsData?.length || d.questionIds?.length || (Array.isArray(d.questions) ? d.questions.length : 0);
 
                   return (
                     <div
@@ -681,10 +697,15 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                           type="button"
                           className="btn btn-secondary btn-sm"
                           onClick={() => {
-                            if (window.confirm(`Delete draft "${d.title}"?`)) {
-                              deleteDraft(d.id);
-                              showNotice('Draft removed.');
-                            }
+                            setDeleteModalConfig({
+                              isOpen: true,
+                              title: 'Delete Assessment Draft',
+                              message: `Are you sure you want to permanently remove the draft "${d.title}"? This action cannot be undone.`,
+                              onConfirm: () => {
+                                deleteDraft(d.id);
+                                showNotice('Draft removed.');
+                              },
+                            });
                           }}
                           title="Delete draft"
                         >
@@ -700,10 +721,12 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             /* PUBLISHED ASSESSMENTS GRID */
             <div className="grid-3">
               {filteredAssessments.map((a) => {
-                const course = assignedCourses.find((c) => c.id === a.courseId);
+                const course = a.courseId === 'all'
+                  ? { title: '🌐 All Courses (All Students)' }
+                  : (assignedCourses.find((c) => c.id === a.courseId || c.title?.toLowerCase() === a.courseId?.toLowerCase()) || (a as any).course || (a.courseId ? { title: a.courseId } : undefined));
                 const learnerAttempt = myAttempts.find((at) => at.assessmentId === a.id || at.assessment?.id === a.id);
                 const isCompletedByLearner = !!learnerAttempt;
-                const qCount = a.questionIds?.length || a.questionsData?.length || a.questions?.length || 5;
+                const qCount = a.questionsData?.length || a.questionIds?.length || (Array.isArray(a.questions) ? a.questions.length : 0);
 
                 return (
                   <div
@@ -846,10 +869,15 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                             type="button"
                             className="btn btn-secondary btn-sm"
                             onClick={() => {
-                              if (window.confirm(`Delete assessment "${a.title}"?`)) {
-                                deleteAssessment(a.id);
-                                showNotice(`Assessment "${a.title}" deleted.`);
-                              }
+                              setDeleteModalConfig({
+                                isOpen: true,
+                                title: 'Delete Assessment',
+                                message: `Are you sure you want to permanently delete "${a.title}"? All associated questions, rubrics, and learner examination records will be removed. This action cannot be undone.`,
+                                onConfirm: () => {
+                                  deleteAssessment(a.id);
+                                  showNotice(`Assessment "${a.title}" deleted.`);
+                                },
+                              });
                             }}
                             title="Delete assessment"
                           >
@@ -1406,6 +1434,19 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           </div>
         </div>
       )}
+
+      {/* Styled Confirmation Popup Modal */}
+      <ConfirmationModal
+        isOpen={deleteModalConfig.isOpen}
+        title={deleteModalConfig.title}
+        message={deleteModalConfig.message}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        icon="trash"
+        onConfirm={deleteModalConfig.onConfirm}
+        onCancel={() => setDeleteModalConfig((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

@@ -29,16 +29,18 @@ import {
 
 export const AssignStudentsPage: React.FC = () => {
   const { departments, fetchDepartments } = useDepartmentStore();
+  const { getStudents, fetchPeople } = usePeopleStore();
 
   useEffect(() => {
     fetchDepartments();
-  }, [fetchDepartments]);
+    fetchPeople();
+  }, [fetchDepartments, fetchPeople]);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const { user } = useAuthStore();
   const { courses, getCourseById, enrollments, assignStudentsToCourse } = useCourseStore();
-  const { getStudents } = usePeopleStore();
+
   const { cohorts } = useCohortStore();
 
   // Role permissions check

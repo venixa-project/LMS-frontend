@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Video,
   Play,
@@ -11,9 +11,18 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Scissors,
+  Sliders,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { VideoLessonInfo } from '../../../types';
-import { formatVideoDuration, formatVideoFileSize } from '../../../lib/videoService';
+import {
+  formatVideoDuration,
+  formatVideoFileSize,
+  normalizeVideoUrl,
+  getActiveVideoFile,
+} from '../../../lib/videoService';
 
 interface Props {
   videoInfo?: VideoLessonInfo;
@@ -29,6 +38,75 @@ export const VideoLessonCard: React.FC<Props> = ({
   onRemove,
 }) => {
   const [showPreview, setShowPreview] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const videoPlayerRef = useRef<HTMLVideoElement | null>(null);
+
+  // Dynamic source detection to ensure YouTube / Vimeo links are never misidentified as local uploads
+  const rawUrl = (videoInfo?.url || videoInfo?.embedUrl || '').trim();
+  const normalized = normalizeVideoUrl(rawUrl);
+
+  const isYouTube =
+    videoInfo?.sourceType === 'youtube' ||
+    normalized.sourceType === 'youtube' ||
+    /youtu\.?be/i.test(rawUrl);
+
+  const isVimeo =
+    videoInfo?.sourceType === 'vimeo' ||
+    normalized.sourceType === 'vimeo' ||
+    /vimeo\.com/i.test(rawUrl);
+
+  const isExternalStream =
+    videoInfo?.sourceType === 'external' ||
+    (normalized.sourceType === 'external' && !isYouTube && !isVimeo);
+
+  const isLocal =
+    !isYouTube &&
+    !isVimeo &&
+    !isExternalStream &&
+    (videoInfo?.sourceType === 'upload' ||
+      rawUrl.startsWith('blob:') ||
+      rawUrl.startsWith('/uploads/') ||
+      rawUrl.startsWith('/storage/'));
+
+  // Resolve best local playable stream URL (active blob from memory, or 420p variant, or storage path)
+  const resolveLocalSource = (): string => {
+    if (!videoInfo) return '';
+    if (videoInfo.id) {
+      const reg = getActiveVideoFile(videoInfo.id) || (videoInfo.fileName ? getActiveVideoFile(videoInfo.fileName) : undefined);
+      if (reg?.objectUrl) return reg.objectUrl;
+    }
+    if (videoInfo.qualities?.['420p']) {
+      return videoInfo.qualities['420p'];
+    }
+    return videoInfo.url || videoInfo.embedUrl || '';
+  };
+
+  const localPlaySource = resolveLocalSource();
+
+  // Reset video error on source changes
+  useEffect(() => {
+    setVideoError(null);
+  }, [localPlaySource, rawUrl, showPreview]);
+
+  // Handle trim boundary cues when metadata is loaded
+  const handleLoadedMetadata = () => {
+    setVideoError(null);
+    if (!videoPlayerRef.current || !videoInfo?.cropMetadata) return;
+    const start = videoInfo.cropMetadata.startTime || 0;
+    if (start > 0) {
+      videoPlayerRef.current.currentTime = start;
+    }
+  };
+
+  // Handle clip playback bounds (auto pause/loop at endTime)
+  const handleTimeUpdate = () => {
+    if (!videoPlayerRef.current || !videoInfo?.cropMetadata) return;
+    const { startTime = 0, endTime } = videoInfo.cropMetadata;
+    if (endTime && endTime > startTime && videoPlayerRef.current.currentTime >= endTime) {
+      videoPlayerRef.current.pause();
+      videoPlayerRef.current.currentTime = startTime;
+    }
+  };
 
   if (!videoInfo || (!videoInfo.url && !videoInfo.embedUrl)) {
     return (
@@ -92,15 +170,17 @@ export const VideoLessonCard: React.FC<Props> = ({
     );
   }
 
-  const isLocal = videoInfo.sourceType === 'upload';
-  const isYouTube = videoInfo.sourceType === 'youtube';
-  const isVimeo = videoInfo.sourceType === 'vimeo';
+  const resolvedEmbedUrl = isYouTube || isVimeo
+    ? (normalized.embedUrl || videoInfo.embedUrl || rawUrl)
+    : (videoInfo.embedUrl || videoInfo.url);
 
   const badgeColor = isYouTube
-    ? { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', border: 'rgba(239, 68, 68, 0.25)' }
+    ? { bg: 'rgba(239, 68, 68, 0.12)', text: '#dc2626', border: 'rgba(239, 68, 68, 0.3)' }
     : isVimeo
-    ? { bg: 'rgba(6, 182, 212, 0.1)', text: '#0891b2', border: 'rgba(6, 182, 212, 0.25)' }
-    : { bg: 'rgba(99, 102, 241, 0.1)', text: '#4f46e5', border: 'rgba(99, 102, 241, 0.25)' };
+    ? { bg: 'rgba(6, 182, 212, 0.12)', text: '#0891b2', border: 'rgba(6, 182, 212, 0.3)' }
+    : isExternalStream
+    ? { bg: 'rgba(14, 165, 233, 0.12)', text: '#0284c7', border: 'rgba(14, 165, 233, 0.3)' }
+    : { bg: 'rgba(99, 102, 241, 0.12)', text: '#4f46e5', border: 'rgba(99, 102, 241, 0.3)' };
 
   return (
     <div
@@ -138,7 +218,15 @@ export const VideoLessonCard: React.FC<Props> = ({
               flexShrink: 0,
             }}
           >
-            {isLocal ? <Video size={18} /> : <Globe size={18} />}
+            {isYouTube ? (
+              <Play size={18} fill="currentColor" />
+            ) : isVimeo ? (
+              <Play size={18} />
+            ) : isLocal ? (
+              <Video size={18} />
+            ) : (
+              <Globe size={18} />
+            )}
           </div>
 
           <div style={{ minWidth: 0 }}>
@@ -156,7 +244,7 @@ export const VideoLessonCard: React.FC<Props> = ({
                   letterSpacing: '0.03em',
                 }}
               >
-                {isLocal ? 'Local Upload' : isYouTube ? 'YouTube' : isVimeo ? 'Vimeo' : 'Web Stream'}
+                {isYouTube ? 'YouTube' : isVimeo ? 'Vimeo' : isExternalStream ? 'Web Stream' : 'Local Upload'}
               </span>
 
               <span
@@ -189,6 +277,44 @@ export const VideoLessonCard: React.FC<Props> = ({
                   &bull; {formatVideoFileSize(videoInfo.fileSize)}
                 </span>
               )}
+
+              {videoInfo.cropMetadata && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: 'rgba(99, 102, 241, 0.1)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    color: '#4f46e5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                  }}
+                  title={`Cropped: ${videoInfo.cropMetadata.startTime || 0}s to ${videoInfo.cropMetadata.endTime || 'end'}s`}
+                >
+                  <Scissors size={10} /> Cropped ({videoInfo.cropMetadata.aspectRatio || 'Custom'})
+                </span>
+              )}
+
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  color: '#059669',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                }}
+                title="Optimized and compressed in 420p Standard SD"
+              >
+                <Sliders size={10} /> 420p Compressed
+              </span>
             </div>
 
             <div
@@ -251,24 +377,46 @@ export const VideoLessonCard: React.FC<Props> = ({
       {showPreview && (
         <div
           style={{
-            marginTop: '8px',
+            marginTop: '10px',
             borderRadius: '8px',
             overflow: 'hidden',
             backgroundColor: '#000000',
             border: '1px solid var(--border-color, #e2e8f0)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
           }}
         >
-          {isLocal ? (
-            <video
-              src={videoInfo.url}
-              controls
-              style={{ width: '100%', maxHeight: '280px', display: 'block' }}
-            />
-          ) : (
-            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+          {videoError ? (
+            <div
+              style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: '#f87171',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AlertCircle size={24} />
+              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Video Preview Unavailable</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '380px' }}>
+                {videoError}
+              </div>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="btn btn-secondary btn-sm"
+                style={{ marginTop: '6px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Edit2 size={12} /> Re-configure or Re-upload Video
+              </button>
+            </div>
+          ) : isYouTube || isVimeo ? (
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, width: '100%' }}>
               <iframe
-                src={videoInfo.embedUrl || videoInfo.url}
-                title="Lesson Video Preview"
+                src={resolvedEmbedUrl}
+                title={videoInfo.title || 'Lesson Video Preview'}
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -277,7 +425,73 @@ export const VideoLessonCard: React.FC<Props> = ({
                   height: '100%',
                   border: 'none',
                 }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          ) : isLocal ? (
+            <div style={{ position: 'relative', width: '100%', backgroundColor: '#000000' }}>
+              <video
+                ref={videoPlayerRef}
+                src={localPlaySource}
+                controls
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={handleLoadedMetadata}
+                onTimeUpdate={handleTimeUpdate}
+                onError={() => {
+                  setVideoError(
+                    'The media stream could not be loaded. Please click Edit to re-upload or select your video.'
+                  );
+                }}
+                style={{
+                  width: '100%',
+                  maxHeight: '360px',
+                  display: 'block',
+                  margin: '0 auto',
+                  objectFit: videoInfo.cropMetadata?.aspectRatio && videoInfo.cropMetadata.aspectRatio !== 'original'
+                    ? 'cover'
+                    : 'contain',
+                }}
+              />
+              {videoInfo.cropMetadata?.isCropped && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '8px',
+                    background: 'rgba(0,0,0,0.7)',
+                    backdropFilter: 'blur(4px)',
+                    color: '#a5b4fc',
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <Scissors size={10} />
+                  Trimmed: {Math.round(videoInfo.cropMetadata.startTime || 0)}s - {videoInfo.cropMetadata.endTime ? `${Math.round(videoInfo.cropMetadata.endTime)}s` : 'end'}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, width: '100%' }}>
+              <iframe
+                src={resolvedEmbedUrl}
+                title={videoInfo.title || 'Lesson Video Preview'}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
             </div>

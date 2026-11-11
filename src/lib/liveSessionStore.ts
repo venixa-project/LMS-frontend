@@ -70,6 +70,19 @@ function persistSessions(sessions: LiveSession[]) {
 
 /** Map a backend LiveSession row to the frontend LiveSession type */
 function mapBackendSession(item: any): LiveSession {
+  let room = item.room;
+  let dayOfWeek = item.dayOfWeek;
+
+  if (Array.isArray(item.materials)) {
+    const meta = item.materials.find(
+      (m: any) => m && (m.type === 'timetable_meta' || m.room !== undefined || m.dayOfWeek !== undefined)
+    );
+    if (meta) {
+      if (!room && meta.room) room = meta.room;
+      if (!dayOfWeek && meta.dayOfWeek) dayOfWeek = meta.dayOfWeek;
+    }
+  }
+
   return {
     id: item.id,
     title: item.title,
@@ -77,7 +90,7 @@ function mapBackendSession(item: any): LiveSession {
     courseId: item.courseId || undefined,
     courseTitle: item.course?.title || item.courseTitle || undefined,
     cohortId: item.cohortId || undefined,
-    cohortName: item.cohortName || undefined,
+    cohortName: item.cohort?.name || item.cohortName || undefined,
     departmentId: item.departmentId || undefined,
     date: item.date
       ? (typeof item.date === 'string' ? item.date.slice(0, 10) : new Date(item.date).toISOString().slice(0, 10))
@@ -94,7 +107,7 @@ function mapBackendSession(item: any): LiveSession {
       : '11:00',
     durationMinutes: item.durationMinutes || 60,
     status: item.status || 'scheduled',
-    provider: item.provider || 'Google Meet',
+    provider: item.provider || 'In-Person Class',
     meetingUrl: item.meetingUrl || '',
     joinLink: item.joinLink || item.meetingUrl || '',
     recordingUrl: item.recordingUrl || '',
@@ -107,6 +120,8 @@ function mapBackendSession(item: any): LiveSession {
     audienceScope: item.audienceScope || 'students',
     enrolledCount: item._count?.attendance ?? item.enrolledCount ?? 0,
     attendance: item.attendance || [],
+    room: room || (item.provider === 'In-Person Class' ? 'Campus Hall' : 'Online'),
+    dayOfWeek: dayOfWeek || undefined,
     createdAt: item.createdAt || new Date().toISOString(),
     updatedAt: item.updatedAt || new Date().toISOString(),
   };

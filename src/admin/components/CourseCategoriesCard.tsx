@@ -28,12 +28,12 @@ interface CategoryItem {
 }
 
 const CATEGORY_PALETTES = [
-  { icon: Code2, color: '#6366f1', bgLight: 'rgba(99, 102, 241, 0.12)' },
-  { icon: LineChart, color: '#10b981', bgLight: 'rgba(16, 185, 129, 0.12)' },
-  { icon: Database, color: '#06b6d4', bgLight: 'rgba(6, 182, 212, 0.12)' },
-  { icon: Cloud, color: '#f59e0b', bgLight: 'rgba(245, 158, 11, 0.12)' },
-  { icon: Atom, color: '#8b5cf6', bgLight: 'rgba(139, 92, 246, 0.12)' },
-  { icon: Layers, color: '#ec4899', bgLight: 'rgba(236, 72, 153, 0.12)' },
+  { icon: Code2, color: '#2563EB', bgLight: 'rgba(37, 99, 235, 0.12)' },      /* Royal Blue */
+  { icon: LineChart, color: '#10b981', bgLight: 'rgba(16, 185, 129, 0.12)' },  /* Success Green */
+  { icon: Database, color: '#3B82F6', bgLight: 'rgba(59, 130, 246, 0.12)' },   /* Sky Blue */
+  { icon: Cloud, color: '#5447FF', bgLight: 'rgba(84, 71, 255, 0.12)' },       /* Electric Indigo */
+  { icon: Atom, color: '#818CF8', bgLight: 'rgba(129, 140, 248, 0.12)' },      /* Soft Indigo */
+  { icon: Layers, color: '#EC4899', bgLight: 'rgba(236, 72, 153, 0.12)' },     /* Hot Pink */
 ];
 
 function getCategoryPalette(categoryName: string, index: number) {

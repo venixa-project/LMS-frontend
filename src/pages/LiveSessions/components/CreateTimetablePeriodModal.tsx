@@ -202,13 +202,13 @@ export const CreateTimetablePeriodModal: React.FC<Props> = ({
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 120 }}>
       <div
         className="modal-card"
-        style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh' }}
+        style={{ maxWidth: '640px', width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="modal-header" style={{ padding: '18px 24px' }}>
+        <div className="modal-header" style={{ padding: '16px 24px', flexShrink: 0 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
               <span className="badge badge-primary" style={{ fontSize: '0.72rem' }}>
                 <Clock size={12} style={{ marginRight: '4px' }} /> Timetable Period
               </span>
@@ -217,7 +217,7 @@ export const CreateTimetablePeriodModal: React.FC<Props> = ({
             <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700, color: 'var(--text-main)' }}>
               Schedule Timetable Period
             </h3>
-            <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
               Assign a day of the week, period slot, course, instructor, and classroom to the timetable.
             </p>
           </div>
@@ -230,8 +230,8 @@ export const CreateTimetablePeriodModal: React.FC<Props> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div className="modal-body" style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {errorMessage && (
               <div style={{
                 background: 'rgba(239, 68, 68, 0.1)',
@@ -585,13 +585,35 @@ export const CreateTimetablePeriodModal: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="modal-footer" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ fontWeight: 700 }}>
-              {isSubmitting ? 'Saving...' : 'Add Period to Timetable'}
-            </button>
+          <div
+            className="modal-footer"
+            style={{
+              padding: '14px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px',
+              borderTop: '1px solid var(--border-subtle)',
+              background: 'var(--bg-surface)',
+              flexShrink: 0
+            }}
+          >
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Scheduled for {selectedDay} ({startTime} – {endTime})
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isSubmitting}
+                style={{ fontWeight: 700, padding: '8px 20px', minWidth: '160px' }}
+              >
+                {isSubmitting ? 'Saving...' : 'Save & Schedule Period'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
