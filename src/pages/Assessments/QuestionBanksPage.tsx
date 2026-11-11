@@ -113,12 +113,17 @@ export const QuestionBanksPage: React.FC = () => {
     loadBankQuestions();
   }, [selectedBank?.id]);
 
+  const [isClearBankModalOpen, setIsClearBankModalOpen] = useState(false);
+
   const handleClearBankQuestions = () => {
-    if (window.confirm(`Are you sure you want to delete all ${bankQuestions.length} questions in "${selectedBank.name}"?`)) {
-      const remaining = questions.filter((q) => q.bankId !== selectedBank.id);
-      setQuestions(remaining);
-      saveStoredQuestions(remaining);
-    }
+    setIsClearBankModalOpen(true);
+  };
+
+  const confirmClearBankQuestions = () => {
+    const remaining = questions.filter((q) => q.bankId !== selectedBank.id);
+    setQuestions(remaining);
+    saveStoredQuestions(remaining);
+    setIsClearBankModalOpen(false);
   };
 
   // Modals state
@@ -893,6 +898,16 @@ export const QuestionBanksPage: React.FC = () => {
         </div>
       )}
           <ConfirmationModal
+        isOpen={isClearBankModalOpen}
+        title="Clear All Questions"
+        message={`Are you sure you want to delete all ${bankQuestions.length} questions in "${selectedBank.name}"? This action cannot be undone.`}
+        confirmLabel="Clear Questions"
+        cancelLabel="Cancel"
+        onConfirm={confirmClearBankQuestions}
+        onCancel={() => setIsClearBankModalOpen(false)}
+        isDestructive={true}
+      />
+      <ConfirmationModal
         isOpen={Boolean(questionToDelete)}
         title="Delete Question"
         message={`Are you sure you want to remove this question from "${selectedBank.name}"? "${questionToDelete?.prompt?.slice(0, 90)}..." This action cannot be undone.`}

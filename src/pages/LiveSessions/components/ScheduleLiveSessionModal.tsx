@@ -112,6 +112,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   const [departmentId, setDepartmentId] = useState('all');
   const [courseId, setCourseId] = useState('');
   const [cohortId, setCohortId] = useState('');
+  const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [agenda, setAgenda] = useState('');
 
@@ -200,46 +201,80 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     }
   }, [departmentCourses, courseId]);
 
-  // Filtered Cohorts based on Course & Department
+  // Filtered Cohorts based directly on Department (NO course filter!)
   const eligibleCohorts = useMemo(() => {
     if (!cohorts || cohorts.length === 0) return [];
     if (!departmentId || departmentId === 'all') {
-      if (courseId && courseId !== 'all') {
-        const byCourse = cohorts.filter((coh) => !coh.courseId || coh.courseId === courseId);
-        if (byCourse.length > 0) return byCourse;
-      }
       return cohorts;
     }
-    const filtered = cohorts.filter((coh) => {
-      const matchCourse = !courseId || courseId === 'all' || !coh.courseId || coh.courseId === courseId;
-      const matchDept = !coh.departmentId || coh.departmentId === departmentId;
-      return matchCourse && matchDept;
-    });
+    const filtered = cohorts.filter((coh) => !coh.departmentId || coh.departmentId === departmentId);
     return filtered.length > 0 ? filtered : cohorts;
-  }, [cohorts, courseId, departmentId]);
+  }, [cohorts, departmentId]);
 
-  // Synchronize selected cohort when eligible cohorts change
+  // Synchronize selected cohorts when eligible cohorts change
   useEffect(() => {
     if (eligibleCohorts.length > 0) {
-      if (!cohortId || !eligibleCohorts.some((c) => c.id === cohortId)) {
-        setCohortId(eligibleCohorts[0].id);
-      }
+      setSelectedCohortIds((prev) => {
+        const stillValid = prev.filter((id) => eligibleCohorts.some((c) => c.id === id));
+        if (stillValid.length > 0) return stillValid;
+        // Default to all eligible cohorts in the department
+        return eligibleCohorts.map((c) => c.id);
+      });
+    } else {
+      setSelectedCohortIds([]);
     }
-  }, [eligibleCohorts, cohortId]);
+  }, [eligibleCohorts]);
 
-  // Selected Cohort
+  // Selected Cohorts list
+  const selectedCohortsList = useMemo(() => {
+    return cohorts.filter((c) => selectedCohortIds.includes(c.id));
+  }, [cohorts, selectedCohortIds]);
+
+  // Primary active cohort for legacy single-cohort consumers
   const activeCohort = useMemo(() => {
-    return cohorts.find((c) => c.id === cohortId) || eligibleCohorts[0] || cohorts[0];
-  }, [cohorts, cohortId, eligibleCohorts]);
+    return selectedCohortsList[0] || eligibleCohorts[0] || cohorts[0];
+  }, [selectedCohortsList, eligibleCohorts, cohorts]);
 
-  // Eligible students in selected cohort (reactive — updates when peopleUsers loads)
+  // Eligible students across all selected cohorts (reactive — updates when peopleUsers loads)
   const cohortStudents = useMemo(() => {
-    if (!activeCohort || !activeCohort.studentIds || activeCohort.studentIds.length === 0) {
-      return peopleUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
+    const studentUsers = peopleUsers.filter(
+      (u) =>
+        u.status !== 'suspended' &&
+        (u.activeRole === 'student' || u.activeRole === 'learner' || !u.activeRole)
+    );
+    if (studentUsers.length === 0) return [];
+
+    if (selectedCohortIds.length === 0) {
+      if (departmentId && departmentId !== 'all') {
+        const inDept = studentUsers.filter((u) => u.departmentId === departmentId);
+        return inDept.length > 0 ? inDept : studentUsers;
+      }
+      return studentUsers;
     }
-    const ids = activeCohort.studentIds;
-    return peopleUsers.filter((u) => ids.includes(u.id) || ids.includes(u.rollNo || ''));
-  }, [activeCohort, peopleUsers]);
+
+    const targetStudentIdsSet = new Set<string>();
+    let hasExplicitMembers = false;
+    selectedCohortsList.forEach((c) => {
+      if (Array.isArray(c.studentIds) && c.studentIds.length > 0) {
+        hasExplicitMembers = true;
+        c.studentIds.forEach((id) => targetStudentIdsSet.add(id));
+      }
+    });
+
+    if (hasExplicitMembers && targetStudentIdsSet.size > 0) {
+      return studentUsers.filter(
+        (u) =>
+          targetStudentIdsSet.has(u.id) ||
+          (u.rollNo && targetStudentIdsSet.has(u.rollNo))
+      );
+    }
+
+    if (departmentId && departmentId !== 'all') {
+      const inDept = studentUsers.filter((u) => u.departmentId === departmentId);
+      return inDept.length > 0 ? inDept : studentUsers;
+    }
+    return studentUsers;
+  }, [peopleUsers, selectedCohortIds, selectedCohortsList, departmentId]);
 
   // Filtered Students list by search
   const filteredStudents = useMemo(() => {
@@ -333,9 +368,20 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
     if (sessionToEdit) {
       setTitle(sessionToEdit.title);
-      setDepartmentId(sessionToEdit.departmentId || 'dep-001');
-      setCourseId(sessionToEdit.courseId || 'crs-001');
-      setCohortId(sessionToEdit.cohortId || 'coh-001');
+      setDepartmentId(sessionToEdit.departmentId || 'all');
+      setCourseId(sessionToEdit.courseId || '');
+      let cIds: string[] = [];
+      if (Array.isArray(sessionToEdit.materials)) {
+        const cMeta = (sessionToEdit.materials as any[]).find((m: any) => m && typeof m === 'object' && m.type === 'cohort_targets');
+        if (cMeta && Array.isArray(cMeta.cohortIds)) {
+          cIds = cMeta.cohortIds;
+        }
+      }
+      if (cIds.length === 0 && sessionToEdit.cohortId) {
+        cIds = [sessionToEdit.cohortId];
+      }
+      setSelectedCohortIds(cIds.length > 0 ? cIds : cohorts.map((c) => c.id));
+      setCohortId(sessionToEdit.cohortId || (cIds[0] || ''));
       setInstructorId(sessionToEdit.instructorId);
       setDate(sessionToEdit.date || new Date().toISOString().split('T')[0]);
       setStartTime(sessionToEdit.startTime || '10:00');
@@ -392,7 +438,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       // Default clean values
       setTitle('');
       setDepartmentId('all');
-      setCourseId(courses[0]?.id || '');
+      setCourseId('');
+      setSelectedCohortIds(cohorts.map((c) => c.id));
       setCohortId(cohorts[0]?.id || '');
       setDescription('');
       setAgenda('');
@@ -429,18 +476,32 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
     }
   }, [isOpen, sessionToEdit, isTrainer, user?.id]);
 
-  // Handle department dependency change
+  // Handle department change - directly filters batches!
   const handleDepartmentChange = (newDeptId: string) => {
     setIsDirty(true);
     setDepartmentId(newDeptId);
-    const validCourses = newDeptId === 'all'
-      ? courses
-      : courses.filter((c) => !c.departmentId || c.departmentId === newDeptId);
-    const targetCourses = validCourses.length > 0 ? validCourses : courses;
-    if (targetCourses.length > 0) {
-      const nextCourseId = targetCourses.some((c) => c.id === courseId) ? courseId : targetCourses[0].id;
-      setCourseId(nextCourseId);
+    if (errors.departmentId) setErrors((prev) => ({ ...prev, departmentId: '' }));
+  };
+
+  // Cohort multi-selection helpers
+  const handleToggleCohort = (cId: string) => {
+    setIsDirty(true);
+    setSelectedCohortIds((prev) => {
+      const exists = prev.includes(cId);
+      const next = exists ? prev.filter((id) => id !== cId) : [...prev, cId];
+      return next;
+    });
+    if (errors.cohorts) setErrors((prev) => ({ ...prev, cohorts: '' }));
+  };
+
+  const handleSelectAllCohorts = () => {
+    setIsDirty(true);
+    if (selectedCohortIds.length === eligibleCohorts.length) {
+      setSelectedCohortIds([]);
+    } else {
+      setSelectedCohortIds(eligibleCohorts.map((c) => c.id));
     }
+    if (errors.cohorts) setErrors((prev) => ({ ...prev, cohorts: '' }));
   };
 
   // Handle course dependency change
@@ -495,9 +556,12 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
 
     if (step === 1) {
       if (!title.trim()) errs.title = 'Session title is required.';
-      if (!departmentId) errs.departmentId = 'Academic department selection is required.';
-      if (!courseId) errs.courseId = 'Course selection is required.';
-      if (!cohortId) errs.cohortId = 'Cohort selection is required.';
+      if (selectedCohortIds.length === 0) {
+        errs.cohorts = 'Please select at least one batch / cohort.';
+      }
+      if (includeStudents && studentAudienceType === 'selected' && selectedStudentIds.length === 0) {
+        errs.students = 'Please select at least one student, or choose "All scholars in selected batch(es)".';
+      }
     }
 
     if (step === 2) {
@@ -600,17 +664,34 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
         ? googleMeetUrl.trim()
         : googleMeetUrl.trim();
 
-    const selectedCourseObj = courses.find((c) => c.id === courseId);
-    const selectedCohortObj = cohorts.find((c) => c.id === cohortId) || activeCohort;
+    const selectedCohortsList = cohorts.filter((c) => selectedCohortIds.includes(c.id));
+    const cohortDisplayTitle =
+      selectedCohortsList.length === 0
+        ? 'All Batches'
+        : selectedCohortsList.length === 1
+        ? selectedCohortsList[0].name
+        : `${selectedCohortsList.length} Batches (${selectedCohortsList.map((c) => c.name).join(', ')})`;
+
+    const primaryCohortId = selectedCohortIds[0] || undefined;
+    const selectedCourseObj = courseId ? courses.find((c) => c.id === courseId) : undefined;
     const finalDepartmentId = departmentId !== 'all' ? departmentId : (selectedCourseObj?.departmentId || undefined);
 
     const payload = {
       title: title.trim(),
       departmentId: finalDepartmentId,
-      courseId,
-      courseTitle: selectedCourseObj?.title || 'java 9.0',
-      cohortId,
-      cohortName: selectedCohortObj?.name || 'Class of 2026',
+      courseId: courseId || undefined,
+      courseTitle: selectedCourseObj?.title || undefined,
+      cohortId: primaryCohortId,
+      cohortName: cohortDisplayTitle,
+      targetCohortIds: selectedCohortIds,
+      materials: [
+        {
+          type: 'cohort_targets',
+          cohortIds: selectedCohortIds,
+          cohortNames: selectedCohortsList.map((c) => c.name),
+          studentIds: finalStudentIds,
+        },
+      ],
       instructorId: hostTrainer?.id || user?.id || 'u-004',
       instructorName: hostTrainer?.displayName || 'Dr. James Wilson',
       date,
@@ -768,8 +849,8 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
           {!isSuccessState && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
               {[
-                { number: 1, title: 'Session Details', caption: 'Academic & Course Info' },
-                { number: 2, title: 'Host, Schedule & Participants', caption: 'Host, Timing & Audience' },
+                { number: 1, title: 'Session Details', caption: 'Academic & Batches' },
+                { number: 2, title: 'Host & Schedule', caption: 'Host, Timing & Platform' },
                 { number: 3, title: 'Review & Schedule', caption: 'Summary & Confirmation' },
               ].map((s, idx) => {
                 const isActive = currentStep === s.number;
@@ -977,7 +1058,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
               {/* STEP 1: SESSION DETAILS                                  */}
               {/* ======================================================== */}
               {currentStep === 1 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   {/* Session Title */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>
@@ -986,7 +1067,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                     <input
                       type="text"
                       className="input"
-                      placeholder="e.g. Advanced React 19: Optimistic Mutations & Server Actions"
+                      placeholder="e.g. Advanced Architecture & Implementation Workshop"
                       value={title}
                       onChange={(e) => {
                         setIsDirty(true);
@@ -1002,81 +1083,329 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {/* 2-Column Academic Hierarchy: Department & Course */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-                    {/* Academic Department */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>
-                        Academic Department <span style={{ color: 'var(--danger)' }}>*</span>
-                      </label>
-                      <select
-                        className="input"
-                        value={departmentId}
-                        onChange={(e) => handleDepartmentChange(e.target.value)}
-                        style={{ height: '40px', fontSize: '0.85rem' }}
-                      >
-                        <option value="all">All Academic Departments</option>
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name} ({d.code})
-                          </option>
-                        ))}
-                      </select>
-                      <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Filtering courses in this discipline
-                      </span>
-                    </div>
-
-                    {/* Course */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>
-                        Curriculum Course <span style={{ color: 'var(--danger)' }}>*</span>
-                      </label>
-                      <select
-                        className="input"
-                        value={courseId}
-                        onChange={(e) => handleCourseChange(e.target.value)}
-                        style={{ height: '40px', fontSize: '0.85rem' }}
-                      >
-                        {departmentCourses.length === 0 ? (
-                          <option value="">No courses available in this department</option>
-                        ) : (
-                          departmentCourses.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.title}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                      <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Filtering eligible batches
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Cohort / Class / Batch */}
+                  {/* Academic Department (Directly filters Batches) */}
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-main)' }}>
-                      Cohort / Class / Batch <span style={{ color: 'var(--danger)' }}>*</span>
+                      Academic Department <span style={{ color: 'var(--danger)' }}>*</span>
                     </label>
                     <select
                       className="input"
-                      value={cohortId}
-                      onChange={(e) => {
-                        setIsDirty(true);
-                        setCohortId(e.target.value);
-                      }}
+                      value={departmentId}
+                      onChange={(e) => handleDepartmentChange(e.target.value)}
                       style={{ height: '40px', fontSize: '0.85rem' }}
                     >
-                      {(eligibleCohorts.length > 0 ? eligibleCohorts : cohorts).map((coh) => (
-                        <option key={coh.id} value={coh.id}>
-                          {coh.name} ({coh.code}) &bull; {coh.learnerCount || (coh.studentIds?.length || 0)} Scholars
+                      <option value="all">All Academic Departments (Entire Institution)</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.code})
                         </option>
                       ))}
                     </select>
                     <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      Primary academic cohort linked to this classroom session
+                      Filters the available batches and scholar cohorts below
                     </span>
+                  </div>
+
+                  {/* Cohort / Class / Batch Multi-Selection */}
+                  <div
+                    style={{
+                      background: 'var(--bg-card)',
+                      borderRadius: '12px',
+                      border: errors.cohorts ? '1px solid var(--danger)' : '1px solid var(--border-subtle)',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Layers size={18} color="var(--primary)" />
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                            Target Cohort(s) / Batch(es) <span style={{ color: 'var(--danger)' }}>*</span>
+                          </label>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Multi-select one, multiple, or all batches for this live classroom session
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={handleSelectAllCohorts}
+                          style={{ fontSize: '0.72rem', height: '28px', padding: '0 10px' }}
+                        >
+                          {selectedCohortIds.length === eligibleCohorts.length ? 'Deselect All' : 'Select All Batches'}
+                        </button>
+                        <span
+                          className="badge badge-primary font-mono"
+                          style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                        >
+                          {selectedCohortIds.length} of {eligibleCohorts.length} Batches Selected
+                        </span>
+                      </div>
+                    </div>
+
+                    {errors.cohorts && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={13} /> {errors.cohorts}
+                      </span>
+                    )}
+
+                    {/* Batch Selection Cards Grid */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                        gap: '10px',
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        padding: '2px',
+                      }}
+                    >
+                      {eligibleCohorts.length === 0 ? (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '12px', textAlign: 'center', gridColumn: '1 / -1' }}>
+                          No cohorts or batches found in this department.
+                        </div>
+                      ) : (
+                        eligibleCohorts.map((coh) => {
+                          const isSelected = selectedCohortIds.includes(coh.id);
+                          const studentCount = coh.learnerCount || (coh.studentIds?.length || 0);
+                          const dept = departments.find((d) => d.id === coh.departmentId);
+                          return (
+                            <div
+                              key={coh.id}
+                              onClick={() => handleToggleCohort(coh.id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
+                                background: isSelected ? 'rgba(56, 189, 248, 0.08)' : 'var(--bg-surface)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
+                              />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                                  <span style={{ fontWeight: 700, fontSize: '0.825rem', color: isSelected ? 'var(--primary)' : 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                                    {coh.name}
+                                  </span>
+                                  {coh.code && (
+                                    <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: 'var(--bg-input)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                                      {coh.code}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>👥 {studentCount} Scholars</span>
+                                  {dept && departmentId === 'all' && (
+                                    <span>&bull; {dept.code || dept.name}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Student Audience Selection (Directly in Step 1!) */}
+                  <div
+                    style={{
+                      background: 'var(--bg-card)',
+                      borderRadius: '12px',
+                      border: errors.students ? '1px solid var(--danger)' : '1px solid var(--border-subtle)',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <GraduationCap size={18} color="var(--primary)" />
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                            Student Audience Selection <span style={{ color: 'var(--danger)' }}>*</span>
+                          </label>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            Invite all scholars in the selected batches or cherry-pick specific students
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className="badge badge-primary font-mono"
+                        style={{ fontSize: '0.72rem', padding: '3px 8px' }}
+                      >
+                        {studentAudienceType === 'all_cohort'
+                          ? `All ${cohortStudents.length} Scholars Selected`
+                          : `${selectedStudentIds.length} of ${cohortStudents.length} Students Selected`}
+                      </span>
+                    </div>
+
+                    {/* Radio Options */}
+                    <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', padding: '4px 0' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer', fontWeight: studentAudienceType === 'all_cohort' ? 700 : 500 }}>
+                        <input
+                          type="radio"
+                          name="studentAudienceTypeStep1"
+                          checked={studentAudienceType === 'all_cohort'}
+                          onChange={() => {
+                            setIsDirty(true);
+                            setStudentAudienceType('all_cohort');
+                            if (errors.students) setErrors((prev) => ({ ...prev, students: '' }));
+                          }}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>All scholars in selected batch(es) ({cohortStudents.length})</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer', fontWeight: studentAudienceType === 'selected' ? 700 : 500 }}>
+                        <input
+                          type="radio"
+                          name="studentAudienceTypeStep1"
+                          checked={studentAudienceType === 'selected'}
+                          onChange={() => {
+                            setIsDirty(true);
+                            setStudentAudienceType('selected');
+                          }}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span>Select specific students</span>
+                      </label>
+                    </div>
+
+                    {errors.students && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={13} /> {errors.students}
+                      </span>
+                    )}
+
+                    {/* Specific Student Selection Box */}
+                    {studentAudienceType === 'selected' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                          <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                            <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)' }} />
+                            <input
+                              type="text"
+                              className="input"
+                              placeholder="Search by student name, roll no, or email..."
+                              value={studentSearch}
+                              onChange={(e) => setStudentSearch(e.target.value)}
+                              style={{ paddingLeft: '32px', height: '34px', fontSize: '0.8rem' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={handleSelectAllStudents}
+                              style={{ fontSize: '0.72rem', height: '32px', padding: '0 10px' }}
+                            >
+                              {selectedStudentIds.length === cohortStudents.length ? 'Deselect All' : 'Select All'}
+                            </button>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                              {selectedStudentIds.length} of {cohortStudents.length} selected
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Scrollable Student Items */}
+                        <div
+                          style={{
+                            maxHeight: '190px',
+                            overflowY: 'auto',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: '8px',
+                            background: 'var(--bg-input)',
+                            padding: '4px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px',
+                          }}
+                        >
+                          {filteredStudents.length === 0 ? (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '12px', textAlign: 'center' }}>
+                              No students found matching your criteria.
+                            </div>
+                          ) : (
+                            filteredStudents.map((s) => {
+                              const isSelected = selectedStudentIds.includes(s.id);
+                              return (
+                                <div
+                                  key={s.id}
+                                  onClick={() => handleToggleStudent(s.id)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    background: isSelected ? 'var(--primary-light)' : 'transparent',
+                                    fontSize: '0.8rem',
+                                    transition: 'background 0.15s ease',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}}
+                                    style={{ accentColor: 'var(--primary)', cursor: 'pointer' }}
+                                  />
+                                  <div
+                                    style={{
+                                      width: '26px',
+                                      height: '26px',
+                                      borderRadius: '50%',
+                                      background: 'var(--primary)',
+                                      color: '#fff',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {(s.displayName || s.firstName || 'S').charAt(0).toUpperCase()}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>{s.displayName || `${s.firstName} ${s.lastName}`}</span>
+                                      {s.rollNo && (
+                                        <span className="badge font-mono" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>
+                                          {s.rollNo}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                      {s.email}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Session Description (Optional) */}
@@ -1420,7 +1749,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                             style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
                           />
                           <GraduationCap size={18} color="var(--primary)" />
-                          <span>1. Students ({cohortStudents.length} eligible in {activeCohort?.name || 'Cohort'})</span>
+                          <span>1. Students ({cohortStudents.length} eligible across {selectedCohortIds.length} batch{selectedCohortIds.length === 1 ? '' : 'es'})</span>
                         </label>
 
                         <span style={{ fontSize: '0.75rem', color: includeStudents ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600 }}>
@@ -1443,7 +1772,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                                 }}
                                 style={{ accentColor: 'var(--primary)' }}
                               />
-                              <span>All eligible students in cohort ({cohortStudents.length})</span>
+                              <span>All eligible students in selected batch(es) ({cohortStudents.length})</span>
                             </label>
 
                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', cursor: 'pointer' }}>
@@ -1773,14 +2102,18 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', fontSize: '0.85rem' }}>
                       <div style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                         <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>ACADEMIC UNIT</span>
-                        <strong>{selectedDeptObj?.name || 'Department'}</strong>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{selectedCourseObj?.title}</div>
+                        <strong>{selectedDeptObj?.name || 'All Academic Departments'}</strong>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{selectedCohortIds.length} Batches Included</div>
                       </div>
 
                       <div style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                        <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>COHORT BATCH</span>
-                        <strong>{selectedCohortObj?.name || 'Cohort'}</strong>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Code: {selectedCohortObj?.code}</div>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>COHORT BATCH(ES)</span>
+                        <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedCohortsList.length === 0 ? 'All Batches' : selectedCohortsList.map((c) => c.name).join(', ')}
+                        </strong>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {selectedCohortIds.length} Batch{selectedCohortIds.length === 1 ? '' : 'es'} &bull; {cohortStudents.length} Scholars
+                        </div>
                       </div>
 
                       <div style={{ padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>

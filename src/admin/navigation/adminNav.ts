@@ -11,7 +11,6 @@ export const adminNav: NavItem[] = [
 
   // 3. Curriculum & Teaching
   { id: 'courses', label: 'Course Catalogue', icon: 'BookOpen', path: '/courses', group: 'Curriculum & Teaching' },
-  { id: 'course-builder', label: 'Course Builder', icon: 'PenTool', path: '/course-builder', group: 'Curriculum & Teaching' },
   { id: 'learning-paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Curriculum & Teaching' },
   { id: 'enrollments', label: 'Enrollments Roster', icon: 'GraduationCap', path: '/enrollments', group: 'Curriculum & Teaching' },
   { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Curriculum & Teaching' },

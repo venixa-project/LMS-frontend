@@ -7,7 +7,7 @@
 // Enforces 100-question assessment limit, duplicate skipping,
 // missing-answer review flagging, and template downloads.
 // ============================================================
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ConfirmationModal } from '../../Courses/components/ConfirmationModal';
 import {
   X, Sparkles, PenTool, Upload, FileText, CheckCircle2, AlertTriangle,
@@ -15,9 +15,10 @@ import {
   Eye, Check, Shield, Award, Clock, HelpCircle, ChevronRight, Layers, FileCheck,
   FileSpreadsheet, UploadCloud, Download, CheckSquare, Square, Search, Filter,
   AlertCircle, Edit3, Video, FileVideo, Play, Languages, Film, Volume2,
-  Users, Mic, Camera, Monitor, Radio, Lock, Calendar
+  Users, Mic, Camera, Monitor, Radio, Lock, Calendar, Scissors
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
+import { VideoCropModal } from '../../../components/video/VideoCropModal';
 import {
   Assessment,
   Question,
@@ -26,7 +27,8 @@ import {
   AssessmentQuestionTypeSetting,
   ProctoringMode,
   ProctoringSettings,
-  ProctoringPolicyLevel
+  ProctoringPolicyLevel,
+  VideoCropMetadata
 } from '../../../types';
 import { useCourseStore } from '../../../lib/courseStore';
 import { extractDocumentContent } from '../../../lib/documentParser';
@@ -45,7 +47,8 @@ import {
   loadSampleVideoFile,
   VideoSegmentItem,
   VideoProcessResponse,
-  AI_SERVICE_URL
+  AI_SERVICE_URL,
+  getAiServiceUrl
 } from '../../../lib/videoAssessmentService';
 import {
   downloadExcelTemplate,
@@ -82,6 +85,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   defaultCourseId
 }) => {
   const { user } = useAuthStore();
+  const isFaculty = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isLearner = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isAdmin = !isFaculty && !isLearner;
+
   const aiFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const videoPlayerRef = useRef<HTMLVideoElement>(null);
@@ -96,7 +103,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
   // Assessment Settings
   const [title, setTitle] = useState(initialDraft?.title || '');
-  const [courseId, setCourseId] = useState(initialDraft?.courseId || defaultCourseId || useCourseStore.getState().courses[0]?.id || 'crs-001');
+  const [courseId, setCourseId] = useState(
+    initialDraft?.courseId || defaultCourseId || (isAdmin ? 'all' : useCourseStore.getState().courses[0]?.id || 'crs-001')
+  );
 
   // Numeric Form States (Number + Raw String to support uninhibited typing, select-all, backspace, and cursor preservation)
   const initialTargetCount = initialDraft?.questionsData?.length || 10;
@@ -204,19 +213,24 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [videoLanguage, setVideoLanguage] = useState<'auto' | 'en' | 'te'>('auto');
   const [videoTranscript, setVideoTranscript] = useState<string>('');
+  const [videoSummary, setVideoSummary] = useState<string>('');
   const [videoSegments, setVideoSegments] = useState<VideoSegmentItem[]>([]);
   const [isVideoProcessing, setIsVideoProcessing] = useState<boolean>(false);
   const [videoStageText, setVideoStageText] = useState<string>('');
   const [videoProgress, setVideoProgress] = useState<number>(0);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoTranscriptModalOpen, setIsVideoTranscriptModalOpen] = useState<boolean>(false);
+  const [isVideoCropModalOpen, setIsVideoCropModalOpen] = useState<boolean>(false);
+  const [videoCropMetadata, setVideoCropMetadata] = useState<VideoCropMetadata | null>(null);
   const [aiBackendStatus, setAiBackendStatus] = useState<{
     available: boolean;
     ffmpeg: boolean;
     whisper: boolean;
     ollama: boolean;
     message: string;
+    errorDetail?: string;
   } | null>(null);
+  const [isPinging, setIsPinging] = useState<boolean>(false);
   const [transcriptSearch, setTranscriptSearch] = useState<string>('');
 
   // AI Configuration State
@@ -279,7 +293,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   useEffect(() => {
     if (initialDraft) {
       setTitle(initialDraft.title);
-      setCourseId(initialDraft.courseId || defaultCourseId || useCourseStore.getState().courses[0]?.id || 'crs-001');
+      setCourseId(initialDraft.courseId || defaultCourseId || (isAdmin ? 'all' : useCourseStore.getState().courses[0]?.id || 'crs-001'));
       const dur = initialDraft.durationMinutes || initialDraft.duration || 45;
       setDurationMinutes(dur);
       setRawDuration(String(dur));
@@ -323,17 +337,37 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     }
   }, [initialDraft]);
 
-  // Check Local Python AI backend health on mount
-  useEffect(() => {
-    checkAIServiceHealth().then((status) => {
+  // Interactive Local Python AI service ping handler
+  const handleTestPing = useCallback(async () => {
+    if (isPinging) return;
+    setIsPinging(true);
+    try {
+      const status = await checkAIServiceHealth();
       setAiBackendStatus(status);
-    }).catch(() => {
+    } catch (err: any) {
       setAiBackendStatus({
         available: false,
         ffmpeg: false,
         whisper: false,
         ollama: false,
-        message: 'Could not connect to local AI service.'
+        message: err?.message || 'Failed to ping AI service'
+      });
+    } finally {
+      setIsPinging(false);
+    }
+  }, [isPinging]);
+
+  // Check Local Python AI backend health on mount
+  useEffect(() => {
+    checkAIServiceHealth().then((status) => {
+      setAiBackendStatus(status);
+    }).catch((err: any) => {
+      setAiBackendStatus({
+        available: false,
+        ffmpeg: false,
+        whisper: false,
+        ollama: false,
+        message: err?.message || 'Could not connect to local AI service.'
       });
     });
   }, []);
@@ -671,7 +705,8 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         return;
       }
 
-      const merged = [...questions, ...res.questions];
+      // Set verified questions matching exact requested count
+      const merged = res.questions;
       setQuestions(merged);
 
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
@@ -713,6 +748,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const handleVideoFileChange = (file?: File) => {
     if (!file) return;
     setVideoError(null);
+    setVideoCropMetadata(null);
     const validation = validateVideoFile(file);
     if (!validation.valid) {
       setVideoError(validation.error || 'Invalid video file.');
@@ -736,6 +772,23 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     }
   };
 
+  const handleApplyVideoCrop = (result: {
+    file?: File;
+    blobUrl: string;
+    durationSeconds: number;
+    cropMetadata: VideoCropMetadata;
+  }) => {
+    if (result.file) {
+      setVideoFile(result.file);
+    }
+    setVideoCropMetadata(result.cropMetadata);
+    setVideoPreviewUrl(result.blobUrl);
+    if (result.durationSeconds > 0) {
+      setVideoDuration(result.durationSeconds);
+    }
+    setIsVideoCropModalOpen(false);
+  };
+
   const handleLoadSampleVideo = async () => {
     try {
       setVideoError(null);
@@ -756,6 +809,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       URL.revokeObjectURL(videoPreviewUrl);
     }
     setVideoFile(null);
+    setVideoCropMetadata(null);
     setVideoPreviewUrl(null);
     setVideoDuration(0);
     setVideoTranscript('');
@@ -812,10 +866,12 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         return;
       }
 
+      setVideoSummary(res.summary || '');
       setVideoTranscript(res.transcript);
       setVideoSegments(res.segments || []);
 
-      const merged = [...questions, ...res.questions];
+      // Set verified questions matching exact requested count
+      const merged = res.questions;
       setQuestions(merged);
 
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
@@ -1373,7 +1429,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 <label className="form-label" style={{ marginBottom: '10px' }}>
                   Choose Assessment Creation Method <span className="required">*</span>
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
                   {/* Option 1: Bulk Question Import */}
                   <div
                     onClick={() => setSelectedMode('bulk')}
@@ -1381,7 +1437,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       border: selectedMode === 'bulk' ? '2px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
                       background: selectedMode === 'bulk' ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-card)',
                       borderRadius: 'var(--radius-lg)',
-                      padding: '18px',
+                      padding: '16px 18px',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       position: 'relative'
@@ -1396,30 +1452,36 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           background: 'var(--accent-cyan)',
                           color: '#fff',
                           borderRadius: '50%',
-                          width: '22px',
-                          height: '22px',
+                          width: '20px',
+                          height: '20px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
                       >
-                        <Check size={14} strokeWidth={3} />
+                        <Check size={13} strokeWidth={3} />
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <UploadCloud size={20} color="var(--accent-cyan)" />
-                      <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>1. Bulk Question Import</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(6, 182, 212, 0.12)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <UploadCloud size={20} color="var(--accent-cyan)" />
+                      </div>
+                      <h3 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>1. Bulk Question Import</h3>
                     </div>
-                    <p className="text-muted text-xs" style={{ lineHeight: '1.5', margin: 0 }}>
-                      Upload formatted XLSX, CSV, Word, or PDF files. Automatic duplicate skipping, missing answer review flagging, and downloadable template generator.
+                    <p className="text-muted text-xs" style={{ lineHeight: '1.4', margin: 0 }}>
+                      Import questions from XLSX, CSV, Word, or PDF files.
                     </p>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <span className="badge text-xs" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' }}>
-                        XLSX / CSV / DOCX / PDF
-                      </span>
-                      <span className="badge badge-draft text-xs">Auto-Duplicate Skip</span>
-                      <span className="badge badge-active text-xs">Template Included</span>
-                    </div>
                   </div>
 
                   {/* Option 2: AI Question Generation */}
@@ -1429,7 +1491,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       border: selectedMode === 'ai' ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
                       background: selectedMode === 'ai' ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-card)',
                       borderRadius: 'var(--radius-lg)',
-                      padding: '18px',
+                      padding: '16px 18px',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       position: 'relative'
@@ -1444,28 +1506,36 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           background: 'var(--primary)',
                           color: '#fff',
                           borderRadius: '50%',
-                          width: '22px',
-                          height: '22px',
+                          width: '20px',
+                          height: '20px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
                       >
-                        <Check size={14} strokeWidth={3} />
+                        <Check size={13} strokeWidth={3} />
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <Sparkles size={20} color="var(--primary)" />
-                      <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>2. Generate with AI</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(99, 102, 241, 0.12)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Sparkles size={20} color="var(--primary)" />
+                      </div>
+                      <h3 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>2. Generate with AI</h3>
                     </div>
-                    <p className="text-muted text-xs" style={{ lineHeight: '1.5', margin: 0 }}>
-                      Upload curriculum documents (PDF, DOCX, TXT) or learning videos (MP4, WebM, MOV). Audio is transcribed via Whisper and questions are generated strictly from the content.
+                    <p className="text-muted text-xs" style={{ lineHeight: '1.4', margin: 0 }}>
+                      Generate questions automatically from learning videos or documents.
                     </p>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <span className="badge badge-primary text-xs">Documents & Videos</span>
-                      <span className="badge badge-draft text-xs">Whisper Speech-to-Text</span>
-                      <span className="badge badge-active text-xs">Local Pipeline / Ollama</span>
-                    </div>
                   </div>
 
                   {/* Option 3: Manual Question Entry */}
@@ -1475,7 +1545,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       border: selectedMode === 'manual' ? '2px solid var(--success)' : '1px solid var(--border-subtle)',
                       background: selectedMode === 'manual' ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)',
                       borderRadius: 'var(--radius-lg)',
-                      padding: '18px',
+                      padding: '16px 18px',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       position: 'relative'
@@ -1490,28 +1560,36 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           background: 'var(--success)',
                           color: '#fff',
                           borderRadius: '50%',
-                          width: '22px',
-                          height: '22px',
+                          width: '20px',
+                          height: '20px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
                       >
-                        <Check size={14} strokeWidth={3} />
+                        <Check size={13} strokeWidth={3} />
                       </div>
                     )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <PenTool size={20} color="var(--success)" />
-                      <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>3. Manual Question Entry</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <PenTool size={20} color="var(--success)" />
+                      </div>
+                      <h3 style={{ fontSize: '0.95rem', margin: 0, fontWeight: 700 }}>3. Manual Question Entry</h3>
                     </div>
-                    <p className="text-muted text-xs" style={{ lineHeight: '1.5', margin: 0 }}>
-                      Author questions one-by-one with full pedagogical control. Specify options, answer keys, explanations, and marks with immediate learner preview.
+                    <p className="text-muted text-xs" style={{ lineHeight: '1.4', margin: 0 }}>
+                      Author questions one-by-one with custom options, keys, and rubrics.
                     </p>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <span className="badge badge-active text-xs">Zero AI Required</span>
-                      <span className="badge badge-draft text-xs">Custom Rubrics</span>
-                      <span className="badge badge-primary text-xs">Instant Preview</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1539,14 +1617,36 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
                 <div className="grid-2" style={{ gap: '16px' }}>
                   <div className="form-group">
-                    <label className="form-label">Linked Course</label>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Linked Course <span className="required">*</span></span>
+                      {isAdmin ? (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>
+                          👑 Admin: All Students Access
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          Trainer Course Scope
+                        </span>
+                      )}
+                    </label>
                     <select className="form-select" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                      {/* Admin can assign to ALL students across all courses */}
+                      {isAdmin && (
+                        <option value="all">
+                          🌐 All Courses / All Students (Institution-Wide Assessment)
+                        </option>
+                      )}
                       {useCourseStore.getState().courses.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.title} ({c.id})
+                          {c.title}
                         </option>
                       ))}
                     </select>
+                    {!isAdmin && (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '3px' }}>
+                        * Trainers are restricted to specific assigned courses.
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group">
@@ -1872,14 +1972,14 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem' }}>
                         <Shield size={14} color="var(--primary)" /> Automated + Manual
                       </div>
                       <span className="badge badge-completed text-xs" style={{ fontSize: '0.65rem' }}>Recommended</span>
                     </div>
-                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      AI webcam presence, audio noise & tab focus checks combined with live Google Meet invigilator monitoring room.
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
+                      AI telemetry + Live Google Meet invigilation.
                     </p>
                   </div>
 
@@ -1898,11 +1998,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
                       <Camera size={14} color="var(--primary)" /> Automated Only
                     </div>
-                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      Background browser telemetry, webcam validation, audio activity, and tab focus monitoring without live human meeting.
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
+                      Webcam, audio & tab focus monitoring.
                     </p>
                   </div>
 
@@ -1921,11 +2021,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
                       <GoogleMeetIcon size={14} /> Manual (Google Meet)
                     </div>
-                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      Live Google Meet video monitoring session where authorized proctors monitor participants and dispatch real-time warnings.
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
+                      Live video room with proctor invigilation.
                     </p>
                   </div>
 
@@ -1944,11 +2044,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
                       <Lock size={14} color="var(--text-muted)" /> No Proctoring
                     </div>
-                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.4 }}>
-                      Standard unmonitored evaluation. Permitted for formative low-stakes practice quizzes and homework.
+                    <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
+                      Standard unmonitored evaluation.
                     </p>
                   </div>
                 </div>
@@ -1960,14 +2060,14 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       background: 'var(--bg-input)',
                       border: '1px solid var(--border-subtle)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '12px 14px',
-                      marginBottom: '14px'
+                      padding: '10px 14px',
+                      marginBottom: '12px'
                     }}
                   >
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                      Automated Signals Telemetry:
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                      Telemetry Checks:
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '0.825rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', fontSize: '0.825rem' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                         <input
                           type="checkbox"
@@ -1975,7 +2075,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           onChange={(e) => setProctoringSettings({ ...proctoringSettings, camera: e.target.checked })}
                           style={{ accentColor: 'var(--primary)' }}
                         />
-                        <span>Webcam Presence & Video Validation</span>
+                        <span>Webcam presence</span>
                       </label>
 
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
@@ -1985,7 +2085,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           onChange={(e) => setProctoringSettings({ ...proctoringSettings, mic: e.target.checked })}
                           style={{ accentColor: 'var(--primary)' }}
                         />
-                        <span>Mic Audio & Unusual Noise Activity</span>
+                        <span>Microphone / Noise</span>
                       </label>
 
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
@@ -1995,7 +2095,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           onChange={(e) => setProctoringSettings({ ...proctoringSettings, tabSwitchDetection: e.target.checked })}
                           style={{ accentColor: 'var(--primary)' }}
                         />
-                        <span>Browser Focus & Tab Switch Detection</span>
+                        <span>Tab switch detection</span>
                       </label>
 
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
@@ -2005,7 +2105,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           onChange={(e) => setProctoringSettings({ ...proctoringSettings, screenShare: e.target.checked })}
                           style={{ accentColor: 'var(--primary)' }}
                         />
-                        <span>Screen Sharing Requirement</span>
+                        <span>Screen sharing</span>
                       </label>
                     </div>
                   </div>
@@ -2018,49 +2118,39 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       background: 'rgba(16, 185, 129, 0.05)',
                       border: '1px solid rgba(16, 185, 129, 0.25)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '10px 14px',
+                      padding: '8px 12px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       flexWrap: 'wrap',
                       gap: '8px',
-                      marginBottom: '14px'
+                      marginBottom: '12px'
                     }}
                   >
-                    <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <GoogleMeetIcon size={14} /> Associated Google Meet Room / Link
-                      </div>
-                      <div className="text-muted text-xs">
-                        Google Meet link: <code style={{ color: 'var(--success)', fontWeight: 600 }}>https://meet.google.com/{jitsiRoomId.toLowerCase()}</code> &bull; Authorized invigilators access via Proctoring Console.
-                      </div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <GoogleMeetIcon size={14} /> Google Meet: <code style={{ color: 'var(--success)', fontWeight: 600 }}>https://meet.google.com/{jitsiRoomId.toLowerCase()}</code>
                     </div>
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                      style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                       onClick={() => setJitsiRoomId(`vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`)}
                       title="Generate new unique Google Meet code"
                     >
-                      <RefreshCw size={12} /> Regenerate Code
+                      <RefreshCw size={11} /> Regenerate Code
                     </button>
                   </div>
                 )}
 
                 {/* AI Evaluation Assistance Toggle */}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginTop: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '8px' }}>
                   <input
                     type="checkbox"
                     checked={aiGradingEnabled}
                     onChange={(e) => setAiGradingEnabled(e.target.checked)}
-                    style={{ accentColor: 'var(--primary)', marginTop: '3px' }}
+                    style={{ accentColor: 'var(--primary)' }}
                   />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Enable BOT / AI Evaluation Assistance</div>
-                    <div className="text-muted text-xs">
-                      Generates preliminary rubric score recommendations for human faculty review and final grade sign-off.
-                    </div>
-                  </div>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Enable AI-assisted evaluation suggestions</span>
                 </label>
               </div>
 
@@ -3061,41 +3151,62 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '10px 14px',
+                      padding: '12px 16px',
                       background: aiBackendStatus?.available ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)',
                       border: aiBackendStatus?.available ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
                       borderRadius: 'var(--radius-md)',
                       marginBottom: '16px',
-                      fontSize: '0.82rem'
+                      fontSize: '0.82rem',
+                      gap: '12px',
+                      flexWrap: 'wrap'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: '240px' }}>
                       <span
                         style={{
-                          width: '9px',
-                          height: '9px',
+                          width: '10px',
+                          height: '10px',
                           borderRadius: '50%',
-                          background: aiBackendStatus?.available ? 'var(--success)' : 'var(--danger)',
-                          boxShadow: aiBackendStatus?.available ? '0 0 8px rgba(16, 185, 129, 0.8)' : 'none'
+                          background: aiBackendStatus?.available ? 'var(--success, #10b981)' : 'var(--danger, #ef4444)',
+                          boxShadow: aiBackendStatus?.available ? '0 0 10px rgba(16, 185, 129, 0.8)' : 'none',
+                          flexShrink: 0
                         }}
                       />
-                      <span style={{ fontWeight: 600 }}>
-                        {aiBackendStatus?.available
-                          ? 'Local AI Processing Engine: Online & Ready'
-                          : 'Local AI Processing Service: Offline / Connecting'}
-                      </span>
-                      <span className="text-muted text-xs">
-                        ({AI_SERVICE_URL} &bull; FFmpeg &bull; faster-whisper &bull; Ollama)
-                      </span>
+                      <div>
+                        <div style={{ fontWeight: 600, color: aiBackendStatus?.available ? 'var(--success, #10b981)' : 'inherit' }}>
+                          {aiBackendStatus?.available
+                            ? 'Local AI Processing Engine: Online & Ready'
+                            : 'Local AI Processing Service: Offline / Connecting'}
+                        </div>
+                        <div className="text-muted text-xs" style={{ marginTop: '2px', wordBreak: 'break-word' }}>
+                          {aiBackendStatus?.message ? (
+                            <span>{aiBackendStatus.message}</span>
+                          ) : (
+                            <span>Target: {getAiServiceUrl()} &bull; FFmpeg &bull; faster-whisper &bull; Ollama / Local Engine</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                      onClick={() => checkAIServiceHealth().then(setAiBackendStatus)}
+                      disabled={isPinging}
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '5px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: isPinging ? 'not-allowed' : 'pointer',
+                        opacity: isPinging ? 0.7 : 1,
+                        flexShrink: 0
+                      }}
+                      onClick={handleTestPing}
+                      title={`Ping health endpoint at ${getAiServiceUrl()}/health`}
                     >
-                      <RefreshCw size={12} /> Test Ping
+                      <RefreshCw size={13} className={isPinging ? 'spin-animation' : ''} />
+                      {isPinging ? 'Pinging...' : 'Test Ping'}
                     </button>
                   </div>
 
@@ -3179,7 +3290,25 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary text-xs"
+                              disabled={isVideoProcessing}
+                              onClick={() => setIsVideoCropModalOpen(true)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                color: 'var(--primary, #6366f1)',
+                                borderColor: 'var(--primary, #6366f1)',
+                                fontWeight: 600,
+                              }}
+                              title="Trim duration, crop aspect ratio, or compress video"
+                            >
+                              <Scissors size={13} />
+                              Edit / Crop Video
+                            </button>
                             <button
                               type="button"
                               className="btn btn-secondary text-xs"
@@ -3198,6 +3327,32 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                               Remove Video
                             </button>
                           </div>
+
+                          {videoCropMetadata && (
+                            <div
+                              style={{
+                                marginTop: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                background: 'rgba(99, 102, 241, 0.12)',
+                                border: '1px solid rgba(99, 102, 241, 0.3)',
+                                color: 'var(--primary, #6366f1)',
+                                fontSize: '0.74rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <Scissors size={12} />
+                              <span>
+                                Cropped: {Math.floor(videoCropMetadata.startTime || 0)}s - {Math.floor(videoCropMetadata.endTime || 0)}s ({videoCropMetadata.aspectRatio || 'Original'})
+                              </span>
+                              <span style={{ color: 'var(--text-muted, #94a3b8)', fontWeight: 400 }}>
+                                &bull; Auto-Compress 420p SD Enabled
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -4337,62 +4492,117 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         </div>
                       ) : (
                         <div>
-                          <p style={{ margin: '0 0 10px 0', fontSize: '0.92rem', lineHeight: '1.5' }}>
+                          <div style={{ 
+                            margin: '0 0 14px 0', 
+                            fontSize: '0.94rem', 
+                            lineHeight: '1.6',
+                            color: 'var(--text-main)',
+                            fontWeight: 500
+                          }}>
                             {q.prompt}
-                          </p>
+                          </div>
 
-                          {/* Options View */}
+                          {/* Options View - Clean Vertical MCQ Layout */}
                           {q.options && q.options.length > 0 && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px', marginBottom: '10px' }}>
-                              {q.options.map((opt, optIdx) => (
-                                <div
-                                  key={opt.id}
-                                  style={{
-                                    padding: '8px 12px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    background: opt.isCorrect ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-input)',
-                                    border: opt.isCorrect ? '1px solid var(--success-border)' : '1px solid var(--border-subtle)',
-                                    fontSize: '0.82rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    color: opt.isCorrect ? 'var(--success)' : 'var(--text-main)'
-                                  }}
-                                >
-                                  <span style={{ fontWeight: 700, width: '18px' }}>
-                                    {String.fromCharCode(65 + optIdx)}.
-                                  </span>
-                                  <span style={{ flex: 1 }}>{opt.text}</span>
-                                  {opt.isCorrect && <Check size={14} />}
-                                </div>
-                              ))}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                              {q.options.map((opt, optIdx) => {
+                                const letter = String.fromCharCode(65 + optIdx);
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    style={{
+                                      padding: '10px 14px',
+                                      borderRadius: '8px',
+                                      background: opt.isCorrect ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                                      border: opt.isCorrect ? '1.5px solid rgba(16, 185, 129, 0.45)' : '1px solid var(--border-subtle)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '12px',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: '26px',
+                                        height: '26px',
+                                        minWidth: '26px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '0.78rem',
+                                        fontWeight: 700,
+                                        background: opt.isCorrect ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.06)',
+                                        color: opt.isCorrect ? '#10b981' : 'var(--text-muted)',
+                                        border: opt.isCorrect ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border-subtle)'
+                                      }}
+                                    >
+                                      {letter}
+                                    </div>
+                                    <div style={{ 
+                                      flex: 1, 
+                                      fontSize: '0.86rem', 
+                                      lineHeight: '1.45',
+                                      color: opt.isCorrect ? '#065f46' : 'var(--text-main)',
+                                      fontWeight: opt.isCorrect ? 600 : 400
+                                    }}>
+                                      {opt.text}
+                                    </div>
+                                    {opt.isCorrect && (
+                                      <span
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '5px',
+                                          fontSize: '0.74rem',
+                                          fontWeight: 600,
+                                          padding: '3px 9px',
+                                          borderRadius: '12px',
+                                          background: 'rgba(16, 185, 129, 0.18)',
+                                          color: '#34d399',
+                                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        <Check size={13} strokeWidth={2.5} /> Correct Answer
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
 
                           {q.correctAnswer && !q.options && (
-                            <div style={{ fontSize: '0.82rem', color: 'var(--success)', marginBottom: '8px' }}>
+                            <div style={{ 
+                              fontSize: '0.85rem', 
+                              color: 'var(--success)', 
+                              marginBottom: '10px',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              background: 'rgba(16, 185, 129, 0.08)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)'
+                            }}>
                               <strong>Expected Answer:</strong> {q.correctAnswer}
                             </div>
                           )}
 
-                          {(q.explanation || q.sourceSegment) && (
-                            <div className="text-muted text-xs" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                              {q.explanation && <span><strong>Rationale:</strong> {q.explanation}</span>}
-                              {q.sourceSegment && (
-                                <span
-                                  className="badge text-xs"
-                                  style={{
-                                    background: 'rgba(99, 102, 241, 0.12)',
-                                    color: 'var(--primary)',
-                                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  <Clock size={11} /> Video Segment: {q.sourceSegment}
-                                </span>
-                              )}
+                          {/* Video Segment (Rationale removed per user request) */}
+                          {q.sourceSegment && (
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px', display: 'flex', alignItems: 'center' }}>
+                              <span
+                                className="badge text-xs"
+                                style={{
+                                  background: 'rgba(99, 102, 241, 0.12)',
+                                  color: 'var(--primary)',
+                                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <Clock size={11} /> Video Segment: {q.sourceSegment}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -4447,7 +4657,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     {title || 'Untitled Assessment'}
                   </h3>
                   <span className="badge badge-primary">
-                    Course: {useCourseStore.getState().courses.find((c) => c.id === courseId)?.title || courseId}
+                    Course: {courseId === 'all' ? '🌐 All Courses / All Students (Institution-Wide)' : (useCourseStore.getState().courses.find((c) => c.id === courseId)?.title || courseId)}
                   </span>
                 </div>
 
@@ -4659,10 +4869,20 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <label className="form-label text-xs">Start Date & Time (Scheduled Opening)</label>
                       <input
                         type="datetime-local"
-                        className="form-control"
+                        className="form-input"
                         value={availabilityStart}
                         onChange={(e) => setAvailabilityStart(e.target.value)}
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ 
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
                       />
                       <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                         Before this time, students cannot begin and see a scheduled opening notice. Creators & admins retain preview access.
@@ -4673,10 +4893,20 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <label className="form-label text-xs">End Date & Time (Strict Deadline)</label>
                       <input
                         type="datetime-local"
-                        className="form-control"
+                        className="form-input"
                         value={availabilityEnd}
                         onChange={(e) => setAvailabilityEnd(e.target.value)}
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ 
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
                       />
                       <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                         After this time, the assessment becomes strictly read-only. Submissions and new attempts are locked.
@@ -4689,17 +4919,34 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 <div className="grid-3" style={{ gap: '14px', marginBottom: '16px' }}>
                   <div>
                     <label className="form-label text-xs">Required Completion Rate (%)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="number"
                         min="1"
                         max="100"
-                        className="form-control"
+                        className="form-input"
                         value={completionPercentageRequired}
                         onChange={(e) => setCompletionPercentageRequired(Math.min(100, Math.max(1, parseInt(e.target.value) || 100)))}
-                        style={{ fontSize: '0.9rem', fontWeight: 600 }}
+                        style={{ 
+                          fontSize: '0.9rem', 
+                          fontWeight: 600,
+                          height: '42px',
+                          paddingRight: '36px',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%'
+                        }}
                       />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>%</span>
+                      <span style={{ 
+                        position: 'absolute', 
+                        right: '12px', 
+                        fontSize: '0.88rem', 
+                        fontWeight: 700, 
+                        color: 'var(--text-muted)',
+                        pointerEvents: 'none'
+                      }}>%</span>
                     </div>
                     <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                       Distinct from pass marks. Learner must answer at least this % of questions to qualify.
@@ -4709,11 +4956,14 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   <div>
                     <label className="form-label text-xs">Minimum Passing Score</label>
                     <div style={{
-                      padding: '10px 12px',
+                      height: '42px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 12px',
                       background: 'var(--bg-input)',
                       border: '1px solid var(--border-subtle)',
                       borderRadius: 'var(--radius-md)',
-                      fontSize: '0.9rem',
+                      fontSize: '0.88rem',
                       fontWeight: 700,
                       color: 'var(--success)'
                     }}>
@@ -4726,16 +4976,33 @@ export const CreateAssessmentModal: React.FC<Props> = ({
 
                   <div>
                     <label className="form-label text-xs">Reward Points on Pass</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="number"
                         min="0"
-                        className="form-control"
+                        className="form-input"
                         value={completionPoints}
                         onChange={(e) => setCompletionPoints(Math.max(0, parseInt(e.target.value) || 0))}
-                        style={{ fontSize: '0.9rem', fontWeight: 600 }}
+                        style={{ 
+                          fontSize: '0.9rem', 
+                          fontWeight: 600,
+                          height: '42px',
+                          paddingRight: '42px',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%'
+                        }}
                       />
-                      <span className="text-muted text-xs font-semibold">pts</span>
+                      <span style={{ 
+                        position: 'absolute', 
+                        right: '12px', 
+                        fontSize: '0.82rem', 
+                        fontWeight: 600, 
+                        color: 'var(--text-muted)',
+                        pointerEvents: 'none'
+                      }}>pts</span>
                     </div>
                     <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
                       Awarded strictly once upon meeting passing & completion requirements.
@@ -4759,22 +5026,31 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <div>
                         <label className="form-label text-xs">Certificate Template</label>
                         <select
-                          className="form-control"
+                          className="form-select"
                           value={certTemplateId}
                           onChange={(e) => setCertTemplateId(e.target.value as any)}
-                          style={{ fontSize: '0.85rem' }}
+                          style={{ 
+                            fontSize: '0.85rem',
+                            height: '42px',
+                            background: 'var(--bg-input)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            width: '100%',
+                            padding: '0 12px'
+                          }}
                         >
-                          <option value="distinction">Distinction Honors (VeniLearn Blue & Gold)</option>
-                          <option value="technical">Technical Achievement (Modern Slate & Teal)</option>
-                          <option value="executive">Executive Minimal (Classic Navy)</option>
-                          <option value="standard">Standard Academic (Institutional)</option>
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="distinction">Distinction Honors (VeniLearn Blue & Gold)</option>
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="technical">Technical Achievement (Modern Slate & Teal)</option>
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="executive">Executive Minimal (Classic Navy)</option>
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="standard">Standard Academic (Institutional)</option>
                         </select>
                       </div>
 
                       <div>
                         <label className="form-label text-xs">Authorized Signatory Authority</label>
                         <select
-                          className="form-control"
+                          className="form-select"
                           value={selectedSignatoryOption}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -4794,17 +5070,26 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                               }
                             }
                           }}
-                          style={{ fontSize: '0.85rem' }}
+                          style={{ 
+                            fontSize: '0.85rem',
+                            height: '42px',
+                            background: 'var(--bg-input)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            width: '100%',
+                            padding: '0 12px'
+                          }}
                         >
-                          <option value="creator">
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="creator">
                             My Profile Signature ({creatorDefaultSig.name || user?.displayName || 'Creator'})
                           </option>
                           {approvedSignatories.map((sig) => (
-                            <option key={sig.id} value={sig.id}>
+                            <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} key={sig.id} value={sig.id}>
                               {sig.name} &mdash; {sig.designation}
                             </option>
                           ))}
-                          <option value="custom">Custom Signatory Details...</option>
+                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="custom">Custom Signatory Details...</option>
                         </select>
                       </div>
                     </div>
@@ -4815,22 +5100,40 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         <label className="form-label text-xs">Signatory Name</label>
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-input"
                           value={certSignerName}
                           onChange={(e) => setCertSignerName(e.target.value)}
                           placeholder="e.g. Dr. James Wilson"
-                          style={{ fontSize: '0.85rem' }}
+                          style={{ 
+                            fontSize: '0.85rem',
+                            height: '42px',
+                            background: 'var(--bg-input)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            width: '100%',
+                            padding: '0 12px'
+                          }}
                         />
                       </div>
                       <div>
                         <label className="form-label text-xs">Signatory Designation / Title</label>
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-input"
                           value={certSignerTitle}
                           onChange={(e) => setCertSignerTitle(e.target.value)}
                           placeholder="e.g. Principal Faculty & Evaluator"
-                          style={{ fontSize: '0.85rem' }}
+                          style={{ 
+                            fontSize: '0.85rem',
+                            height: '42px',
+                            background: 'var(--bg-input)',
+                            color: 'var(--text-main)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            width: '100%',
+                            padding: '0 12px'
+                          }}
                         />
                       </div>
                     </div>
@@ -5113,6 +5416,27 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </button>
                 </div>
 
+                {videoSummary && !transcriptSearch && (
+                  <div
+                    style={{
+                      background: 'rgba(99, 102, 241, 0.06)',
+                      border: '1px solid rgba(99, 102, 241, 0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 14px',
+                      marginBottom: '14px',
+                      fontSize: '0.83rem',
+                      lineHeight: 1.5,
+                      color: 'var(--text-main)',
+                      whiteSpace: 'pre-wrap'
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '6px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Sparkles size={14} /> Full Video Executive Summary
+                    </div>
+                    {videoSummary}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {videoSegments
                     .filter((seg) => !transcriptSearch.trim() || seg.text.toLowerCase().includes(transcriptSearch.toLowerCase()))
@@ -5170,7 +5494,18 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             </div>
           </div>
         )}
-            <ConfirmationModal
+            {/* Interactive Video Edit & Crop Modal */}
+      {isVideoCropModalOpen && (videoFile || videoPreviewUrl) && (
+        <VideoCropModal
+          isOpen={isVideoCropModalOpen}
+          onClose={() => setIsVideoCropModalOpen(false)}
+          videoSrc={videoFile || videoPreviewUrl!}
+          initialCrop={videoCropMetadata || undefined}
+          onApplyCrop={handleApplyVideoCrop}
+        />
+      )}
+
+      <ConfirmationModal
         isOpen={Boolean(questionToDelete)}
         title="Delete Question"
         message={`Are you sure you want to permanently delete this question? "${questionToDelete?.prompt?.slice(0, 90)}..." This action cannot be undone.`}

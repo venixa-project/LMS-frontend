@@ -26,6 +26,7 @@ import {
   Calendar, PenTool, Upload
 } from 'lucide-react';
 import { useSignatureStore } from '../../lib/signatureStore';
+import { inferVideoInfo, normalizeVideoUrl } from '../../lib/videoService';
 import { listAssessmentsApi, mapBackendResponseToConfig } from '../../api/assessment.api';
 import { migrateLocalStorageAssessmentsToPostgres, isAssessmentMigrationCompleted } from '../../lib/assessmentMigration';
 
@@ -294,14 +295,22 @@ export const CourseBuilderPage: React.FC = () => {
         id: m.id || `mod-${mIdx + 1}`,
         title: m.title || `Module ${mIdx + 1}`,
         order: m.order || mIdx + 1,
-        lessons: Array.isArray(m?.lessons) ? m.lessons.map((l: any, lIdx: number) => ({
-          ...l,
-          id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
-          quizConfig: l.quizConfig ? {
-            ...l.quizConfig,
-            questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
-          } : undefined
-        })) : [],
+        lessons: Array.isArray(m?.lessons) ? m.lessons.map((l: any, lIdx: number) => {
+          const resolvedVideo = inferVideoInfo(
+            l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title } : undefined),
+            l.title,
+            l.durationMinutes
+          );
+          return {
+            ...l,
+            id: l.id || `les-${mIdx + 1}-${lIdx + 1}`,
+            videoInfo: l.type === 'video' || (!l.type && resolvedVideo) ? resolvedVideo : l.videoInfo,
+            quizConfig: l.quizConfig ? {
+              ...l.quizConfig,
+              questions: Array.isArray(l.quizConfig.questions) ? l.quizConfig.questions : []
+            } : undefined
+          };
+        }) : [],
         assessment: m.assessment ? {
           ...m.assessment,
           questions: Array.isArray(m.assessment.questions) ? m.assessment.questions : []
@@ -971,12 +980,13 @@ export const CourseBuilderPage: React.FC = () => {
     if (modules[modIndex]?.lessons[lessonIndex]) {
       const updated = [...modules];
       const targetLesson = updated[modIndex].lessons[lessonIndex];
-      targetLesson.videoInfo = videoInfo;
+      const resolved = inferVideoInfo(videoInfo, updatedTitle || targetLesson.title, targetLesson.durationMinutes) || videoInfo;
+      targetLesson.videoInfo = resolved;
       if (updatedTitle) targetLesson.title = updatedTitle;
-      if (videoInfo.durationSeconds) {
-        targetLesson.durationMinutes = Math.max(1, Math.ceil(videoInfo.durationSeconds / 60));
+      if (resolved.durationSeconds) {
+        targetLesson.durationMinutes = Math.max(1, Math.ceil(resolved.durationSeconds / 60));
       }
-      targetLesson.contentUrl = videoInfo.url || videoInfo.embedUrl;
+      targetLesson.contentUrl = resolved.url || resolved.embedUrl;
       targetLesson.type = 'video';
       setModules(updated);
     }

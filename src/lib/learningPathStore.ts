@@ -585,8 +585,9 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await apiClient.get<any[]>('/learning-paths');
-      if (res && res.data && Array.isArray(res.data)) {
-        const mappedPaths: LearningPath[] = res.data.map((p: any) => ({
+      const backendItems = res?.data;
+      if (Array.isArray(backendItems)) {
+        const mappedPaths: LearningPath[] = backendItems.map((p: any) => ({
           ...p,
           organizationId: p.tenantId || p.organizationId || '871abf8a-e563-4d0f-afc7-416d8da3df14',
           courses: Array.isArray(p.courses) && p.courses.length > 0
@@ -606,14 +607,43 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
               : [],
           prerequisites: Array.isArray(p.prerequisites) ? p.prerequisites : [],
         }));
-        set({ paths: mappedPaths, isLoading: false });
-        persistPaths(mappedPaths);
+
+        // Merge with locally stored paths so any local path not yet in backend is preserved!
+        const localPaths = loadInitialPaths();
+        const backendIds = new Set(mappedPaths.map((p) => p.id));
+        const backendTitles = new Set(mappedPaths.map((p) => (p.title || '').toLowerCase().trim()));
+
+        const unsynced = localPaths.filter(
+          (lp) => !backendIds.has(lp.id) && !backendTitles.has((lp.title || '').toLowerCase().trim())
+        );
+
+        const combined = [...mappedPaths, ...unsynced];
+        set({ paths: combined, isLoading: false });
+        persistPaths(combined);
+
+        // Background sync any unsynced paths to the database
+        if (unsynced.length > 0) {
+          unsynced.forEach((lp) => {
+            apiClient.post('/learning-paths', {
+              ...lp,
+              courses: lp.courses?.map((c) => ({
+                courseId: c.courseId,
+                order: c.order || 1,
+                isRequired: c.isRequired ?? true,
+                prerequisiteCourseIds: c.prerequisiteCourseIds || [],
+              })),
+            }).catch((err) => console.warn('Background sync note for learning path:', err));
+          });
+        }
         return;
       }
     } catch (err) {
-      console.warn('Failed to fetch learning paths:', err);
+      console.warn('Failed to fetch learning paths from backend:', err);
     }
-    set({ isLoading: false });
+
+    // Fallback to local storage if API call fails
+    const local = loadInitialPaths();
+    set({ paths: local, isLoading: false });
   },
   paths: loadInitialPaths(),
   selectedPathId: 'lp-001',
@@ -639,9 +669,56 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
       return { success: false, message: cycleCheck.message };
     }
 
+    // 1. Instantly update local state and localStorage so UI responds without delay
     const updated = [newPath, ...paths];
     set({ paths: updated, selectedPathId: newPath.id });
     persistPaths(updated);
+
+    // 2. Persist to backend database via API
+    const backendPayload = {
+      title: newPath.title,
+      description: newPath.description,
+      objective: newPath.objective,
+      institutionType: newPath.institutionType,
+      category: newPath.category,
+      difficulty: newPath.difficulty,
+      targetGroup: newPath.targetGroup,
+      targetRole: newPath.targetRole,
+      departmentId: newPath.departmentId,
+      thumbnail: newPath.thumbnail,
+      status: newPath.status || 'published',
+      enforceSequence: newPath.enforceSequence,
+      requirePassingAssessments: newPath.requirePassingAssessments,
+      completionThreshold: newPath.completionThreshold,
+      certificateEligible: newPath.certificateEligible,
+      certificateTitle: newPath.certificateTitle,
+      assignedCohortIds: newPath.assignedCohortIds || [],
+      assignedDepartmentIds: newPath.assignedDepartmentIds || [],
+      assignedUserIds: newPath.assignedUserIds || [],
+      estimatedHours: newPath.estimatedHours || 20,
+      courses: newPath.courses?.map((c) => ({
+        courseId: c.courseId,
+        order: c.order || 1,
+        isRequired: c.isRequired ?? true,
+        prerequisiteCourseIds: c.prerequisiteCourseIds || [],
+      })),
+    };
+
+    apiClient.post<any>('/learning-paths', backendPayload)
+      .then((res) => {
+        if (res?.data && res.data.id) {
+          const currentPaths = get().paths;
+          const synced = currentPaths.map((p) =>
+            p.id === newPath.id ? { ...p, id: res.data.id } : p
+          );
+          set({ paths: synced });
+          persistPaths(synced);
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend learning path sync note (persisted locally):', err);
+      });
+
     return { success: true, message: 'Learning Path created successfully.', path: newPath };
   },
 
@@ -673,6 +750,12 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
 
     set({ paths: updated });
     persistPaths(updated);
+
+    // Sync update to backend
+    apiClient.put(`/learning-paths/${id}`, updates).catch((err) => {
+      console.warn('Backend learning path update note:', err);
+    });
+
     return { success: true, message: 'Learning Path updated successfully.' };
   },
 

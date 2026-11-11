@@ -218,7 +218,6 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     // Teaching & Curriculum
     { id: 'my-courses', label: 'My Courses', icon: 'BookOpen', path: '/courses', group: 'Teaching & Curriculum' },
     { id: 'learning-paths', label: 'Learning Paths', icon: 'Route', path: '/learning-paths', group: 'Teaching & Curriculum' },
-    { id: 'course-builder', label: 'Course Builder', icon: 'PenTool', path: '/course-builder', group: 'Teaching & Curriculum' },
     { id: 'cohorts', label: 'Classes & Batches', icon: 'UsersRound', path: '/cohorts', group: 'Teaching & Curriculum' },
     { id: 'leaderboard', label: 'Academic Leaderboard', icon: 'Trophy', path: '/leaderboard', group: 'Teaching & Curriculum' },
 

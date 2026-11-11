@@ -4,6 +4,8 @@
 // for PDF, DOCX, and TXT documents.
 // ============================================================
 import JSZip from 'jszip';
+// @ts-ignore
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { UploadedDocumentInfo } from '../types';
 
 export interface ParseProgressCallback {
@@ -154,18 +156,29 @@ async function parsePdfFile(
   onProgress?.(20, 'reading', 'Loading PDF binary stream...');
   const arrayBuffer = await file.arrayBuffer();
 
+  // Create an independent cloned copy of the raw bytes that can NEVER be detached by Web Worker transfers
+  const fallbackBytes = new Uint8Array(arrayBuffer.slice(0));
+
   try {
     // Dynamic import to allow clean bundling
     const pdfjs = await import('pdfjs-dist');
-    // Configure worker
-    if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version || '4.0.379'}/pdf.worker.min.mjs`;
+    // Configure worker to use local bundled Vite worker to avoid cross-origin / cdnjs blocking
+    if (pdfjs.GlobalWorkerOptions) {
+      if (pdfjsWorkerUrl) {
+        pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+      } else if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url
+        ).toString();
+      }
     }
 
     onProgress?.(45, 'extracting', 'Reading PDF document structure...');
+    // Explicitly pass a new cloned ArrayBuffer slice so transferring to the worker cannot detach fallbackBytes
     const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(arrayBuffer),
-      useSystemFonts: true
+      data: new Uint8Array(fallbackBytes.buffer.slice(0)),
+      useSystemFonts: true,
     });
 
     const pdf = await loadingTask.promise;
@@ -195,11 +208,13 @@ async function parsePdfFile(
       isScanned
     };
   } catch (pdfJsError: any) {
-    // Fallback: rudimentary direct text stream extractor from PDF bytes
+    console.warn('PDF.js parser note, attempting fallback extraction:', pdfJsError);
+
+    // Fallback: direct text stream extractor using intact fallbackBytes
     onProgress?.(65, 'extracting', 'Attempting raw stream fallback extraction...');
-    const rawText = extractRawTextFromPdfBytes(arrayBuffer);
+    const rawText = extractRawTextFromPdfBytes(fallbackBytes);
     const wordCount = rawText ? rawText.split(/\s+/).filter(Boolean).length : 0;
-    if (wordCount > 20) {
+    if (wordCount > 15) {
       return {
         text: rawText,
         pageCount: 1,
@@ -213,31 +228,60 @@ async function parsePdfFile(
       throw new Error('This PDF file is password protected or encrypted. Please upload an unlocked PDF.');
     }
 
-    throw new Error(`Unable to extract text from PDF: ${pdfJsError?.message || 'File may be corrupted or unreadable.'}`);
+    throw new Error(`Unable to extract text from PDF: ${pdfJsError?.message || 'File may be corrupted, scanned, or unreadable.'}`);
   }
 }
 
 /**
  * Fallback raw text extractor for PDF byte streams when worker/canvas fails
  */
-function extractRawTextFromPdfBytes(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const len = Math.min(bytes.byteLength, 5 * 1024 * 1024); // read up to 5MB
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+function extractRawTextFromPdfBytes(data: Uint8Array | ArrayBuffer): string {
+  try {
+    let bytes: Uint8Array;
+    if (data instanceof Uint8Array) {
+      bytes = data;
+    } else {
+      if (!data || data.byteLength === 0) return '';
+      bytes = new Uint8Array(data.slice(0));
+    }
+    if (bytes.length === 0) return '';
 
-  // Look for text in () inside BT ... ET blocks
-  const textMatches = binary.match(/\(([^()]{2,})\)\s*T[jJ]/g);
-  if (textMatches && textMatches.length > 5) {
-    return textMatches
-      .map((m) => m.replace(/^[\(\s]+|[\)\sTjJ]+$/g, ''))
-      .filter((s) => s.length > 2)
-      .join(' ');
-  }
+    let binary = '';
+    const len = Math.min(bytes.length, 5 * 1024 * 1024); // read up to 5MB
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
 
-  return '';
+    // 1. Look for text in () inside BT ... ET blocks
+    const textMatches = binary.match(/\(([^()]{2,})\)\s*T[jJ]/g);
+    if (textMatches && textMatches.length > 5) {
+      return textMatches
+        .map((m) => m.replace(/^[\(\s]+|[\)\sTjJ]+$/g, ''))
+        .filter((s) => s.length > 2)
+        .join(' ');
+    }
+
+    // 2. Look for text streams in PDF objects
+    const streamMatches = binary.match(/stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g);
+    if (streamMatches && streamMatches.length > 0) {
+      const extracted: string[] = [];
+      for (const sm of streamMatches.slice(0, 40)) {
+        const inner = sm.replace(/^stream[\r\n]+|[\r\n]+endstream$/g, '');
+        const words = inner.match(/[A-Za-z0-9,.:;?!'\-\s]{4,}/g);
+        if (words && words.length > 3) {
+          extracted.push(words.join(' ').trim());
+        }
+      }
+      if (extracted.length > 0) {
+        return extracted.join('\n\n');
+      }
+    }
+
+    return '';
+  } catch (err) {
+    console.warn('Raw PDF text extraction error:', err);
+    return '';
+  }
 }
 
 /**

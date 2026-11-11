@@ -106,28 +106,28 @@ export const PlatformOverviewCard: React.FC = () => {
       id: 'students',
       name: 'Students',
       count: studentsCount,
-      color: 'var(--primary)',
+      color: '#2563EB', /* Royal Blue */
       description: 'Enrolled learners across cohorts',
     },
     {
       id: 'faculty',
       name: 'Faculty',
       count: facultyCount,
-      color: 'var(--accent-purple)',
+      color: '#EC4899', /* Hot Pink */
       description: 'Instructors & subject trainers',
     },
     {
       id: 'admin_staff',
       name: 'Administrative Staff',
       count: adminStaffCount,
-      color: 'var(--accent-cyan)',
+      color: '#5447FF', /* Electric Indigo Blue */
       description: 'Institution & department managers',
     },
     {
       id: 'other_staff',
       name: 'Other Staff',
       count: otherStaffCount,
-      color: 'var(--warning)',
+      color: '#818CF8', /* Soft Indigo / Periwinkle */
       description: 'Operations, exam & lab staff',
     },
   ];

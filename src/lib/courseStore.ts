@@ -5,7 +5,7 @@
 // ============================================================
 import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
-
+import { inferVideoInfo } from './videoService';
 import { apiClient } from './apiClient';
 
 interface CourseState {
@@ -96,6 +96,35 @@ if (typeof window !== 'undefined') {
   } catch { }
 }
 
+// Curated high-resolution royalty-free educational course cover images
+export function getDefaultCourseCover(category?: string, title?: string): string {
+  const t = (title || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+
+  if (t.includes('java') || t.includes('spring') || t.includes('backend') || c.includes('backend')) {
+    return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'; // Laptop coding
+  }
+  if (t.includes('ai') || t.includes('deep') || t.includes('ml') || t.includes('neural') || c.includes('ai') || c.includes('deep')) {
+    return 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80'; // AI Futuristic
+  }
+  if (t.includes('data') || t.includes('analytics') || t.includes('india') || c.includes('data')) {
+    return 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80'; // Data analytics & charts
+  }
+  if (t.includes('python') || t.includes('django') || t.includes('flask')) {
+    return 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80'; // Python code matrix
+  }
+  if (t.includes('react') || t.includes('web') || t.includes('frontend') || c.includes('web')) {
+    return 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=600&q=80'; // Modern UI/Web design
+  }
+  if (t.includes('cloud') || t.includes('devops') || t.includes('aws') || c.includes('cloud')) {
+    return 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80'; // Cloud network
+  }
+  if (t.includes('security') || t.includes('cyber') || c.includes('security')) {
+    return 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=600&q=80'; // Cyber security
+  }
+  return 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80'; // Technology desk workspace
+}
+
 // Helper to normalize and map backend API course record into frontend Course object
 export function mapBackendCourseToFrontend(item: any): Course {
   const fallbackOrg = typeof window !== 'undefined'
@@ -107,7 +136,7 @@ export function mapBackendCourseToFrontend(item: any): Course {
     title: item.title,
     shortDescription: item.shortDescription || (item.description ? item.description.slice(0, 140) + '...' : ''),
     description: item.description || '',
-    thumbnail: item.thumbnailUrl || item.thumbnail || '',
+    thumbnail: item.thumbnailUrl || item.thumbnail || getDefaultCourseCover(item.category, item.title),
     category: item.category || 'General',
     departmentId: item.departmentId || undefined,
     tags: Array.isArray(item.tags) ? item.tags : [],
@@ -175,7 +204,11 @@ export function mapBackendCourseToFrontend(item: any): Course {
                   : undefined,
               videoInfo: isDoc
                 ? undefined
-                : (l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title, sourceType: 'upload' } : undefined)),
+                : inferVideoInfo(
+                    l.videoInfo || (l.contentUrl ? { id: l.id, url: l.contentUrl, title: l.title } : undefined),
+                    l.title,
+                    l.durationMinutes
+                  ),
             };
           })
           : [],
@@ -728,7 +761,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           description: l.description,
           type: l.type || 'rich_text',
           content: l.content,
-          contentUrl: (l as any).videoInfo?.url || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
+          contentUrl: (l as any).videoInfo?.url || (l as any).videoInfo?.embedUrl || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
           durationMinutes: l.durationMinutes || 15,
           order: l.order || lIdx + 1,
           isRequired: l.isRequired ?? true,
@@ -811,7 +844,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
           description: l.description,
           type: l.type || 'rich_text',
           content: l.content,
-          contentUrl: (l as any).videoInfo?.url || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
+          contentUrl: (l as any).videoInfo?.url || (l as any).videoInfo?.embedUrl || (l as any).uploadedDocument?.url || l.videoUrl || (l as any).contentUrl,
           durationMinutes: l.durationMinutes || 15,
           order: l.order || lIdx + 1,
           isRequired: l.isRequired ?? true,

@@ -13,6 +13,12 @@ import {
   CheckCircle2,
   Upload,
   Headphones,
+  Settings,
+  Check,
+  ChevronDown,
+  Sliders,
+  Scissors,
+  CheckCircle,
 } from 'lucide-react';
 import { VideoLessonInfo } from '../../../types';
 import {
@@ -56,7 +62,11 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
   const [hasError, setHasError] = useState(false);
   const [isCompletedFired, setIsCompletedFired] = useState(false);
 
-  // Resolve video source
+  // Target playback seek ref
+  const targetSeekTimeRef = useRef<number>(0);
+  const wasPlayingBeforeSwitchRef = useRef<boolean>(false);
+
+  // Resolve video source - automatically prioritizes optimized 420p stream
   const rawUrl = videoInfo?.url || videoInfo?.embedUrl || contentUrl || '';
   const normalized = normalizeVideoUrl(rawUrl);
 
@@ -80,9 +90,12 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
     Boolean(videoInfo?.fileName?.toLowerCase().endsWith('.wav')) ||
     Boolean(videoInfo?.fileName?.toLowerCase().endsWith('.m4a'));
 
-  // Local/Direct streaming video URL with guaranteed playable fallback
+  // Local/Direct streaming video URL with guaranteed 420p compressed stream
   const resolvePlayableSource = (): string => {
     if (isExternalEmbed && embedUrl) return embedUrl;
+    if (videoInfo?.qualities?.['420p']) {
+      return videoInfo.qualities['420p'];
+    }
     if (videoInfo?.id) {
       const reg = getActiveVideoFile(videoInfo.id) || (videoInfo.fileName ? getActiveVideoFile(videoInfo.fileName) : undefined);
       if (reg) return reg.objectUrl;
@@ -143,6 +156,17 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
     const cur = videoRef.current.currentTime;
     const dur = videoRef.current.duration || duration || 0;
     setCurrentTime(cur);
+
+    // Enforce crop end boundary if specified
+    if (videoInfo?.cropMetadata?.endTime && cur >= videoInfo.cropMetadata.endTime) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+      if (!isCompletedFired) {
+        setIsCompletedFired(true);
+        if (onComplete) onComplete();
+      }
+      return;
+    }
 
     if (onProgressUpdate && dur > 0) {
       onProgressUpdate(cur, dur);
@@ -304,6 +328,46 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
             <span style={{ color: '#94a3b8', fontSize: '0.74rem', flexShrink: 0 }}>
               &bull; {duration > 0 ? formatVideoDuration(duration) : isAudioFile ? 'Audio Lecture Stream' : 'Interactive Lecture Stream'}
             </span>
+            {videoInfo?.cropMetadata && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  background: 'rgba(99, 102, 241, 0.2)',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  color: '#a5b4fc',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+                title={`Trimmed: ${videoInfo.cropMetadata.startTime || 0}s to ${videoInfo.cropMetadata.endTime || 'end'}s`}
+              >
+                <Scissors size={10} /> Cropped
+              </span>
+            )}
+            {videoInfo?.qualities && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  color: '#6ee7b7',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+                title="Automatically optimized and compressed to 420p SD standard"
+              >
+                <CheckCircle size={10} /> 420p Stream
+              </span>
+            )}
           </div>
         </div>
 
@@ -344,12 +408,31 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
         onCanPlay={() => {
           setIsLoading(false);
           setHasError(false);
+          if (targetSeekTimeRef.current > 0 && videoRef.current) {
+            videoRef.current.currentTime = targetSeekTimeRef.current;
+            targetSeekTimeRef.current = 0;
+            if (wasPlayingBeforeSwitchRef.current) {
+              videoRef.current.play().catch(() => {});
+            }
+          }
         }}
         onLoadedMetadata={() => {
           if (videoRef.current) {
             setDuration(videoRef.current.duration);
             setIsLoading(false);
             setHasError(false);
+
+            if (videoInfo?.cropMetadata?.startTime && videoRef.current.currentTime < videoInfo.cropMetadata.startTime) {
+              videoRef.current.currentTime = videoInfo.cropMetadata.startTime;
+              setCurrentTime(videoInfo.cropMetadata.startTime);
+            }
+            if (targetSeekTimeRef.current > 0) {
+              videoRef.current.currentTime = targetSeekTimeRef.current;
+              targetSeekTimeRef.current = 0;
+              if (wasPlayingBeforeSwitchRef.current) {
+                videoRef.current.play().catch(() => {});
+              }
+            }
           }
         }}
         onTimeUpdate={handleTimeUpdate}
@@ -659,17 +742,23 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
               ))}
             </div>
 
+            {/* Fixed Standard 420p SD Stream Badge */}
             <span
               style={{
-                background: 'rgba(255, 255, 255, 0.12)',
-                color: '#e2e8f0',
-                padding: '2px 6px',
+                background: 'rgba(99, 102, 241, 0.18)',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
+                color: '#a5b4fc',
+                padding: '3px 8px',
                 borderRadius: '4px',
                 fontSize: '0.7rem',
                 fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
+              title="Automatically encoded and streamed in 420p Standard SD"
             >
-              HD Stream
+              420p SD
             </span>
 
             <button

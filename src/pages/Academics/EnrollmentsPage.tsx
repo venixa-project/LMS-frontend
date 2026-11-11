@@ -24,15 +24,23 @@ interface ExtendedEnrollment extends Omit<Enrollment, 'progress'> {
 }
 
 export const EnrollmentsPage: React.FC = () => {
-  const { courses, fetchCourses, adminEnrollments, fetchAdminEnrollments } = useCourseStore();
+  const {
+    courses,
+    fetchCourses,
+    adminEnrollments,
+    fetchAdminEnrollments,
+    enrollments: storeEnrollments,
+    assignStudentsToCourse,
+  } = useCourseStore();
   const { cohorts, fetchCohorts } = useCohortStore();
-  const { departments } = useDepartmentStore();
-  const { users, fetchPeople } = usePeopleStore();
+  const { departments, fetchDepartments } = useDepartmentStore();
+  const { users, fetchPeople, getStudents } = usePeopleStore();
   
   useEffect(() => {
     fetchCourses();
     fetchCohorts();
     fetchPeople();
+    fetchDepartments();
     fetchAdminEnrollments().then((items) => {
       if (items && items.length > 0) {
         const mapped: ExtendedEnrollment[] = items.map((ae: any) => ({
@@ -52,8 +60,6 @@ export const EnrollmentsPage: React.FC = () => {
       }
     });
   }, []);
-  const { enrollments: storeEnrollments, courses: storeCourses } = useCourseStore();
-  const { getStudents } = usePeopleStore();
 
   const [searchParams] = useSearchParams();
   const initialCourse = searchParams.get('courseId') || searchParams.get('course') || 'all';
@@ -97,7 +103,7 @@ export const EnrollmentsPage: React.FC = () => {
       const student =
         allStudents.find((s) => s.id === se.userId) ||
         users.find((u) => u.id === se.userId);
-      const course = storeCourses.find((c) => c.id === se.courseId);
+      const course = courses.find((c) => c.id === se.courseId);
       const cohort = cohorts.find((c) => c.id === se.cohortId);
 
       return {
@@ -117,13 +123,121 @@ export const EnrollmentsPage: React.FC = () => {
     });
 
     setEnrollments(mappedEnrollments);
-  }, [adminEnrollments, storeEnrollments, storeCourses, users, cohorts, getStudents]);
+  }, [adminEnrollments, storeEnrollments, courses, users, cohorts, getStudents]);
 
-  // Form states
-  const [selectedStudent, setSelectedStudent] = useState('');
+  const getStudentDepartmentName = (s: any): string => {
+    if (s.department && typeof s.department === 'string') return s.department;
+    if (s.departmentName && typeof s.departmentName === 'string') return s.departmentName;
+    if (s.specialization && typeof s.specialization === 'string') return s.specialization;
+    if (s.departmentId) {
+      const dept = departments.find((d) => d.id === s.departmentId);
+      if (dept) return dept.name;
+    }
+    return 'General Studies';
+  };
+
+  const deptOptions = React.useMemo(() => {
+    const map = new Map<string, string>();
+    departments.forEach((d) => {
+      if (d.id && d.name) map.set(d.id, d.name);
+    });
+    getStudents().forEach((s: any) => {
+      if (s.departmentId && !map.has(s.departmentId)) {
+        const name = s.department || s.departmentName || s.departmentId;
+        map.set(s.departmentId, name);
+      } else if (s.department && typeof s.department === 'string') {
+        const exists = Array.from(map.values()).some((v) => v.toLowerCase() === s.department.toLowerCase());
+        if (!exists) {
+          map.set(s.department, s.department);
+        }
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [departments, getStudents]);
+
+  // Form states for manual enrollment modal
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [enrollDeptFilter, setEnrollDeptFilter] = useState('all');
+  const [enrollStudentSearch, setEnrollStudentSearch] = useState('');
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.id || '');
   const [selectedCohort, setSelectedCohort] = useState(cohorts[0]?.name || '');
   const [enrollSuccessMessage, setEnrollSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedCourse && courses.length > 0) {
+      const defaultCourse = (courseFilter !== 'all' && courses.find((c) => c.id === courseFilter))
+        ? courseFilter
+        : courses[0].id;
+      setSelectedCourse(defaultCourse);
+    }
+  }, [courses, courseFilter, selectedCourse]);
+
+  useEffect(() => {
+    if (!selectedCohort && cohorts.length > 0) {
+      setSelectedCohort(cohorts[0].name);
+    }
+  }, [cohorts, selectedCohort]);
+
+  const studentsList = getStudents();
+
+  const filteredStudentsForEnroll = studentsList.filter((s: any) => {
+    // 1. Department filter
+    if (enrollDeptFilter !== 'all') {
+      const sDeptName = getStudentDepartmentName(s).toLowerCase();
+      const selectedDeptObj = departments.find((d) => d.id === enrollDeptFilter);
+      const targetName = (selectedDeptObj?.name || enrollDeptFilter).toLowerCase();
+      const matchesId = s.departmentId === enrollDeptFilter;
+      const matchesName = sDeptName === targetName;
+      if (!matchesId && !matchesName) return false;
+    }
+
+    // 2. Search query filter
+    if (enrollStudentSearch.trim()) {
+      const q = enrollStudentSearch.toLowerCase().trim();
+      const name = (s.displayName || `${s.firstName || ''} ${s.lastName || ''}`).toLowerCase();
+      const email = (s.email || '').toLowerCase();
+      const roll = (s.rollNo || '').toLowerCase();
+      const dept = getStudentDepartmentName(s).toLowerCase();
+      if (!name.includes(q) && !email.includes(q) && !roll.includes(q) && !dept.includes(q)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const toggleStudentSelection = (studentId: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredStudentsForEnroll.map((s) => s.id);
+    const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedStudentIds.includes(id));
+    if (allSelected) {
+      setSelectedStudentIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const openEnrollModal = () => {
+    if (courseFilter !== 'all' && courses.some((c) => c.id === courseFilter)) {
+      setSelectedCourse(courseFilter);
+    } else if (courses.length > 0 && !selectedCourse) {
+      setSelectedCourse(courses[0].id);
+    }
+    if (cohorts.length > 0 && !selectedCohort) {
+      setSelectedCohort(cohorts[0].name);
+    }
+    setSelectedStudentIds([]);
+    setEnrollDeptFilter('all');
+    setEnrollStudentSearch('');
+    setIsEnrollModalOpen(true);
+  };
 
   const filteredEnrollments = enrollments.filter((e) => {
     const matchesSearch =
@@ -141,26 +255,41 @@ export const EnrollmentsPage: React.FC = () => {
 
   const handleEnrollStudent = (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedStudentIds.length === 0) return;
+
     const courseObj = courses.find((c) => c.id === selectedCourse);
-    const newEnr: ExtendedEnrollment = {
-      id: `enr-${Date.now()}`,
-      userId: `u-${Date.now()}`,
-      studentName: selectedStudent.split(' (')[0],
-      studentEmail: selectedStudent.includes('(') ? selectedStudent.split('(')[1].replace(')', '') : 'student@lms.demo',
+    const cohortObj = cohorts.find((co) => co.name === selectedCohort || co.id === selectedCohort);
+    const allStudents = getStudents();
+    const studentsToEnroll = allStudents.filter((s) => selectedStudentIds.includes(s.id));
+
+    if (assignStudentsToCourse && selectedCourse) {
+      assignStudentsToCourse(selectedCourse, selectedStudentIds, cohortObj?.id);
+    }
+
+    const newEnrs: ExtendedEnrollment[] = studentsToEnroll.map((s, idx) => ({
+      id: `enr-${Date.now()}-${idx}`,
+      userId: s.id,
+      studentName: s.displayName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email,
+      studentEmail: s.email,
       courseId: selectedCourse,
       courseTitle: courseObj ? courseObj.title : 'Selected Course',
-      cohortName: selectedCohort,
-      departmentName: 'Computer Science & Engineering',
+      cohortName: selectedCohort || 'Standard Track',
+      departmentName: getStudentDepartmentName(s),
       status: 'active',
       progressPercent: 0,
       enrolledAt: new Date().toISOString(),
       completedLessons: [],
       updatedAt: new Date().toISOString()
-    };
+    }));
 
-    setEnrollments([newEnr, ...enrollments]);
+    setEnrollments([...newEnrs, ...enrollments]);
     setIsEnrollModalOpen(false);
-    setEnrollSuccessMessage(`Successfully enrolled ${newEnr.studentName} in "${newEnr.courseTitle}".`);
+    setSelectedStudentIds([]);
+    setEnrollStudentSearch('');
+    setEnrollDeptFilter('all');
+    setEnrollSuccessMessage(
+      `Successfully enrolled ${studentsToEnroll.length} student${studentsToEnroll.length === 1 ? '' : 's'} in "${courseObj?.title || 'Course'}".`
+    );
     setTimeout(() => setEnrollSuccessMessage(null), 4000);
   };
 
@@ -180,7 +309,7 @@ export const EnrollmentsPage: React.FC = () => {
           <p className="text-secondary text-sm">Manage curriculum enrollments, track individual syllabus velocity, and assign students to classes</p>
         </div>
 
-        <button className="btn btn-primary" onClick={() => setIsEnrollModalOpen(true)}>
+        <button className="btn btn-primary" onClick={openEnrollModal}>
           <Plus size={16} /> Enroll Student in Course
         </button>
       </div>
@@ -381,83 +510,380 @@ export const EnrollmentsPage: React.FC = () => {
       {/* Manual Enroll Modal */}
       {isEnrollModalOpen && (
         <div className="modal-overlay" onClick={() => setIsEnrollModalOpen(false)}>
-          <div className="modal-card" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ maxWidth: '580px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Enroll Student in Course</h3>
-              <button onClick={() => setIsEnrollModalOpen(false)} style={{ color: 'var(--text-muted)' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 700 }}>Enroll Student in Course</h3>
+                <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Filter by department, search, and select students to assign to the curriculum.
+                </p>
+              </div>
+              <button onClick={() => setIsEnrollModalOpen(false)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleEnrollStudent}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Select Student <span className="required">*</span></label>
-                  <select
-                    className="form-select"
-                    value={selectedStudent}
-                    onChange={(e) => setSelectedStudent(e.target.value)}
-                  >
-                    <option value="">-- Choose Student --</option>
-                    {getStudents().map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.displayName || s.email} ({s.email})
-                      </option>
-                    ))}
-                  </select>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '72vh', overflowY: 'auto' }}>
+                {/* Student Selection Section with Department Filter & Search Bar */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <label className="form-label" style={{ margin: 0, fontWeight: 600, fontSize: '0.85rem' }}>
+                      Select Student(s) <span className="required">*</span>
+                    </label>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: selectedStudentIds.length > 0 ? 'var(--accent-primary)' : 'var(--text-muted)',
+                      background: selectedStudentIds.length > 0 ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                      padding: '2px 8px',
+                      borderRadius: '12px'
+                    }}>
+                      {selectedStudentIds.length} Selected
+                    </span>
+                  </div>
+
+                  {/* Filter & Search Bar Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    {/* Department Filter */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '3px', fontWeight: 500 }}>
+                        Filter by Department:
+                      </label>
+                      <select
+                        className="form-select text-xs"
+                        value={enrollDeptFilter}
+                        onChange={(e) => setEnrollDeptFilter(e.target.value)}
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: '0.8rem',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value="all">🏢 All Departments ({studentsList.length})</option>
+                        {deptOptions.map((d) => (
+                          <option key={d.id} value={d.id}>🏢 {d.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.73rem', color: 'var(--text-muted)', marginBottom: '3px', fontWeight: 500 }}>
+                        Search Students:
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <Search
+                          size={13}
+                          style={{
+                            position: 'absolute',
+                            left: '9px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'var(--text-muted)',
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        <input
+                          type="text"
+                          className="form-input text-xs"
+                          placeholder="Search name, email, roll no..."
+                          value={enrollStudentSearch}
+                          onChange={(e) => setEnrollStudentSearch(e.target.value)}
+                          style={{
+                            paddingLeft: '28px',
+                            paddingRight: enrollStudentSearch ? '26px' : '8px',
+                            paddingTop: '6px',
+                            paddingBottom: '6px',
+                            fontSize: '0.8rem',
+                            height: '32px',
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            width: '100%',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                        {enrollStudentSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setEnrollStudentSearch('')}
+                            style={{
+                              position: 'absolute',
+                              right: '7px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title="Clear search"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary row with Selection Controls */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '2px 4px 6px',
+                    fontSize: '0.73rem',
+                    color: 'var(--text-muted)'
+                  }}>
+                    <span>
+                      Showing {filteredStudentsForEnroll.length} of {studentsList.length} student{studentsList.length === 1 ? '' : 's'}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {filteredStudentsForEnroll.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleSelectAllFiltered}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent-primary)',
+                            fontSize: '0.73rem',
+                            cursor: 'pointer',
+                            padding: 0,
+                            fontWeight: 600
+                          }}
+                        >
+                          {filteredStudentsForEnroll.length > 0 && filteredStudentsForEnroll.every(s => selectedStudentIds.includes(s.id))
+                            ? 'Deselect in View'
+                            : 'Select in View'}
+                        </button>
+                      )}
+                      {selectedStudentIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentIds([])}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            fontSize: '0.73rem',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Scrollable Student Selection Container */}
+                  <div style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    maxHeight: '190px',
+                    overflowY: 'auto',
+                    background: 'var(--bg-input)',
+                    padding: '4px'
+                  }}>
+                    {filteredStudentsForEnroll.length === 0 ? (
+                      <div style={{
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.8rem'
+                      }}>
+                        <AlertCircle size={20} style={{ margin: '0 auto 6px', opacity: 0.6 }} />
+                        <p style={{ margin: 0 }}>No students found matching your search or department filter.</p>
+                        {(enrollDeptFilter !== 'all' || enrollStudentSearch) && (
+                          <button
+                            type="button"
+                            onClick={() => { setEnrollDeptFilter('all'); setEnrollStudentSearch(''); }}
+                            className="btn btn-secondary text-xs"
+                            style={{ marginTop: '8px', padding: '4px 10px', fontSize: '0.75rem' }}
+                          >
+                            Reset Filters
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        {filteredStudentsForEnroll.map((s: any) => {
+                          const isSelected = selectedStudentIds.includes(s.id);
+                          const name = s.displayName || `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.email;
+                          const dept = getStudentDepartmentName(s);
+                          const initials = name
+                            .split(' ')
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .map((p: string) => p[0].toUpperCase())
+                            .join('');
+
+                          return (
+                            <div
+                              key={s.id}
+                              onClick={() => toggleStudentSelection(s.id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '7px 9px',
+                                borderRadius: 'var(--radius-sm)',
+                                cursor: 'pointer',
+                                background: isSelected ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
+                                border: isSelected ? '1px solid rgba(99, 102, 241, 0.45)' : '1px solid transparent',
+                                transition: 'all 0.12s ease'
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // handled by parent onClick
+                                style={{ cursor: 'pointer', accentColor: 'var(--accent-primary)', flexShrink: 0 }}
+                              />
+
+                              <div style={{
+                                width: '26px',
+                                height: '26px',
+                                borderRadius: '50%',
+                                background: isSelected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.08)',
+                                color: isSelected ? '#fff' : 'var(--text-secondary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                flexShrink: 0
+                              }}>
+                                {initials || 'ST'}
+                              </div>
+
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {name}
+                                  </span>
+                                  {s.rollNo && (
+                                    <span style={{
+                                      fontSize: '0.68rem',
+                                      background: 'rgba(255, 255, 255, 0.06)',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      color: 'var(--text-muted)'
+                                    }}>
+                                      #{s.rollNo}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{
+                                  fontSize: '0.73rem',
+                                  color: 'var(--text-muted)',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {s.email}
+                                </div>
+                              </div>
+
+                              <div style={{
+                                fontSize: '0.68rem',
+                                padding: '2px 7px',
+                                borderRadius: '10px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border-subtle)',
+                                flexShrink: 0,
+                                maxWidth: '130px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }} title={dept}>
+                                {dept}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Target Course <span className="required">*</span></label>
-                  <select
-                    className="form-select"
-                    value={selectedCourse}
-                    onChange={(e) => setSelectedCourse(e.target.value)}
-                  >
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>{c.title} ({c.level})</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Target Course & Assign Class / Batch */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.82rem' }}>Target Course <span className="required">*</span></label>
+                    <select
+                      className="form-select"
+                      value={selectedCourse}
+                      onChange={(e) => setSelectedCourse(e.target.value)}
+                      style={{ fontSize: '0.82rem' }}
+                    >
+                      {courses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.title} ({c.level})</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="form-group">
-                  <label className="form-label">Assign Class / Batch</label>
-                  <select
-                    className="form-select"
-                    value={selectedCohort}
-                    onChange={(e) => setSelectedCohort(e.target.value)}
-                  >
-                    {cohorts.map((co) => (
-                      <option key={co.id} value={co.name}>{co.name} ({co.code})</option>
-                    ))}
-                  </select>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.82rem' }}>Assign Class / Batch</label>
+                    <select
+                      className="form-select"
+                      value={selectedCohort}
+                      onChange={(e) => setSelectedCohort(e.target.value)}
+                      style={{ fontSize: '0.82rem' }}
+                    >
+                      {cohorts.map((co) => (
+                        <option key={co.id} value={co.name}>{co.name} ({co.code})</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div style={{
                   background: 'var(--bg-input)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '12px',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-muted)'
+                  padding: '10px 12px',
+                  fontSize: '0.74rem',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.4
                 }}>
-                  <strong>Access Policy:</strong> Enrolling the student immediately grants access to course materials, scheduled live sessions, and upcoming assessments for this class batch.
+                  <strong>Access Policy:</strong> Enrolling selected student(s) immediately grants access to course materials, scheduled live sessions, and upcoming assessments for this class batch.
                 </div>
               </div>
 
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsEnrollModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Confirm Enrollment
-                </button>
+              <div className="modal-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {selectedStudentIds.length === 0 ? 'No student selected yet' : `${selectedStudentIds.length} student${selectedStudentIds.length === 1 ? '' : 's'} ready to enroll`}
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsEnrollModalOpen(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={selectedStudentIds.length === 0}
+                    style={{ opacity: selectedStudentIds.length === 0 ? 0.6 : 1 }}
+                  >
+                    {selectedStudentIds.length <= 1 ? 'Confirm Enrollment' : `Enroll ${selectedStudentIds.length} Students`}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
-
       {/* Student Enrollment Details Cosmic Modal */}
       {selectedEnrollment && (
         <div className="modal-overlay" onClick={() => setSelectedEnrollment(null)}>

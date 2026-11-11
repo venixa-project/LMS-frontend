@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { ScheduleLiveSessionModal } from './components/ScheduleLiveSessionModal';
+import { CreateTimetablePeriodModal } from './components/CreateTimetablePeriodModal';
 import { LiveClassroomDemoModal } from './components/LiveClassroomDemoModal';
 import { LiveRecordingPlayerModal } from './components/LiveRecordingPlayerModal';
 import { SessionRosterModal } from './components/SessionRosterModal';
@@ -117,6 +118,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
 
   // Modals State
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isTimetablePeriodModalOpen, setIsTimetablePeriodModalOpen] = useState(false);
   const [attachMeetSession, setAttachMeetSession] = useState<LiveSession | null>(null);
   const [attachMeetUrlInput, setAttachMeetUrlInput] = useState('');
   const [attachMeetError, setAttachMeetError] = useState<string | null>(null);
@@ -560,12 +562,16 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
             <button
               className="btn btn-primary"
               onClick={() => {
-                setSessionToEdit(null);
-                setIsScheduleModalOpen(true);
+                if (activeTab === 'timetable') {
+                  setIsTimetablePeriodModalOpen(true);
+                } else {
+                  setSessionToEdit(null);
+                  setIsScheduleModalOpen(true);
+                }
               }}
               style={{ gap: '8px', padding: '10px 20px', fontWeight: 700 }}
             >
-              <Plus size={18} /> {activeTab === 'timetable' ? 'Create Schedule' : 'Schedule Live Session'}
+              <Plus size={18} /> {activeTab === 'timetable' ? 'Add Class Period' : 'Schedule Live Session'}
             </button>
           )}
         </div>
@@ -579,8 +585,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           onSelectSession={(session) => setSelectedDetailSession(session)}
           onLaunchLiveRoom={(session) => setActiveLiveRoomSession(session)}
           onOpenScheduleModal={() => {
-            setSessionToEdit(null);
-            setIsScheduleModalOpen(true);
+            setIsTimetablePeriodModalOpen(true);
           }}
           showNotice={showNotice}
         />
@@ -1246,6 +1251,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
         sessionToEdit={sessionToEdit}
+        onSuccess={showNotice}
+      />
+
+      {/* MODAL 1.5: TIMETABLE PERIOD-WISE CLASS SCHEDULE MODAL */}
+      <CreateTimetablePeriodModal
+        isOpen={isTimetablePeriodModalOpen}
+        onClose={() => setIsTimetablePeriodModalOpen(false)}
         onSuccess={showNotice}
       />
 

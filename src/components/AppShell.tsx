@@ -12,6 +12,8 @@ import { StudentLeaderboardWelcomeModal } from './StudentLeaderboardWelcomeModal
 import { useGamificationStore } from '../lib/gamificationStore';
 import { RankUpModal } from './Gamification/RankUpModal';
 import { LoginRewardToast, LoginRewardToastData } from './Gamification/LoginRewardToast';
+import { usePeopleStore } from '../lib/peopleStore';
+import { useCourseStore } from '../lib/courseStore';
 
 export const AppShell: React.FC = () => {
   // 1. Auth & Router Hooks (always called at top level)
@@ -23,6 +25,8 @@ export const AppShell: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchNotifications();
+      usePeopleStore.getState().fetchPeople().catch(() => {});
+      useCourseStore.getState().fetchCourses().catch(() => {});
     }
   }, [isAuthenticated, user, fetchNotifications]);
 

@@ -136,8 +136,8 @@ export const LearningPathsPage: React.FC = () => {
     return detectOrganizationType(userOrg?.name || userOrg?.slug);
   }, [userOrg]);
 
-  // Builder Form State (4 Steps Workflow)
-  const [builderStep, setBuilderStep] = useState<1 | 2 | 3 | 4>(1);
+  // Builder Form State (3 Steps Workflow)
+  const [builderStep, setBuilderStep] = useState<1 | 2 | 3>(1);
   const [templateOrgType, setTemplateOrgType] = useState<LearningPathInstitutionType>(detectedOrgType);
   const [suggestionOffset, setSuggestionOffset] = useState<number>(0);
   const [showAllTemplatesModal, setShowAllTemplatesModal] = useState<boolean>(false);
@@ -437,11 +437,10 @@ export const LearningPathsPage: React.FC = () => {
     setIsBuilderOpen(true);
   };
 
-  // Step validation helpers (4-step model)
+  // Step validation helpers (3-step model)
   const isStep1Valid = Boolean(formTitle.trim());
   const isStep2Valid = formCourses.length > 0 && !validateCircularPrerequisites(formCourses).hasCycle;
-  const isStep3Valid = true;
-  const isStep4Valid = isStep1Valid && isStep2Valid;
+  const isStep3Valid = isStep1Valid && isStep2Valid;
   const isAllRequiredValid = isStep1Valid && isStep2Valid;
 
   const getStepValidationMessage = (step: number): string | null => {
@@ -462,7 +461,7 @@ export const LearningPathsPage: React.FC = () => {
     return true;
   };
 
-  const handleStepNavigation = (targetStep: 1 | 2 | 3 | 4) => {
+  const handleStepNavigation = (targetStep: 1 | 2 | 3) => {
     if (targetStep === builderStep) return;
 
     // Moving backward is always allowed
@@ -1832,7 +1831,7 @@ export const LearningPathsPage: React.FC = () => {
             <div
               className="modal-header"
               style={{
-                padding: '20px 28px',
+                padding: '14px 24px',
                 borderBottom: '1px solid var(--border-subtle)',
                 background: 'var(--bg-card)',
                 flexShrink: 0,
@@ -1843,25 +1842,24 @@ export const LearningPathsPage: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span className="badge badge-primary" style={{ fontSize: '0.8rem', padding: '3px 10px', fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                  <span className="badge badge-primary" style={{ fontSize: '0.725rem', padding: '2px 8px', fontWeight: 700 }}>
                     {editingPathId ? 'Edit Learning Path' : 'Create Learning Path'}
                   </span>
-                  <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
-                    Curriculum Journey Studio
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    Step {builderStep} of 3
                   </span>
                 </div>
                 <h3
                   style={{
-                    fontSize: '1.45rem',
-                    fontWeight: 800,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
                     margin: 0,
                     color: 'var(--text-main)',
                     lineHeight: 1.3,
-                    wordBreak: 'break-word',
                   }}
                 >
-                  {formTitle.trim() || (editingPathId ? 'Edit Learning Journey' : 'New Learning Journey')}
+                  {formTitle.trim() || (editingPathId ? 'Edit Learning Path' : 'New Learning Path')}
                 </h3>
               </div>
               <button
@@ -1873,36 +1871,35 @@ export const LearningPathsPage: React.FC = () => {
                   border: 'none',
                   color: 'var(--text-muted)',
                   cursor: 'pointer',
-                  padding: '8px',
+                  padding: '6px',
                   borderRadius: 'var(--radius-sm)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <X size={22} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Stepper Tabs Bar - 4 Steps Horizontal Stepper */}
+            {/* Stepper Tabs Bar - 3 Steps Horizontal Stepper */}
             <div
               role="tablist"
               aria-label="Learning Path Steps"
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                 background: 'var(--bg-input)',
                 borderBottom: '1px solid var(--border-subtle)',
-                padding: '12px 24px',
-                gap: '12px',
+                padding: '8px 20px',
+                gap: '8px',
                 flexShrink: 0,
               }}
             >
               {[
                 { step: 1 as const, shortLabel: 'Details', fullName: 'Step 1: Basic Details' },
                 { step: 2 as const, shortLabel: 'Courses', fullName: 'Step 2: Add Courses' },
-                { step: 3 as const, shortLabel: 'Completion', fullName: 'Step 3: Completion Rules' },
-                { step: 4 as const, shortLabel: 'Assign & Publish', fullName: 'Step 4: Assign & Publish' },
+                { step: 3 as const, shortLabel: 'Review & Publish', fullName: 'Step 3: Review & Publish' },
               ].map((item) => {
                 const isStepFinished =
                   (builderStep > item.step && (item.step === 1 ? isStep1Valid : item.step === 2 ? isStep2Valid : true)) ||
@@ -1926,8 +1923,8 @@ export const LearningPathsPage: React.FC = () => {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '10px',
-                      padding: '10px 14px',
+                      gap: '8px',
+                      padding: '6px 12px',
                       borderRadius: 'var(--radius-md)',
                       border: isActive
                         ? '2px solid var(--primary)'
@@ -1954,14 +1951,14 @@ export const LearningPathsPage: React.FC = () => {
                     {/* Step Number or Completion Checkmark */}
                     <span
                       style={{
-                        width: '26px',
-                        height: '26px',
+                        width: '22px',
+                        height: '22px',
                         borderRadius: '50%',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        fontSize: '0.825rem',
+                        fontSize: '0.75rem',
                         fontWeight: 800,
                         background: isActive
                           ? 'var(--primary)'
@@ -1972,29 +1969,29 @@ export const LearningPathsPage: React.FC = () => {
                         boxShadow: isActive ? '0 0 0 2px var(--primary-light)' : 'none',
                       }}
                     >
-                      {isStepFinished ? <Check size={14} strokeWidth={3} /> : item.step}
+                      {isStepFinished ? <Check size={12} strokeWidth={3} /> : item.step}
                     </span>
 
                     {/* Step Label and Current Status */}
                     <div style={{ minWidth: 0, overflow: 'hidden' }}>
                       <div
                         style={{
-                          fontSize: '0.925rem',
+                          fontSize: '0.85rem',
                           fontWeight: isActive ? 700 : isStepFinished ? 600 : 500,
                           whiteSpace: 'nowrap',
                           textOverflow: 'ellipsis',
                           overflow: 'hidden',
-                          lineHeight: 1.3,
+                          lineHeight: 1.25,
                         }}
                       >
                         {item.shortLabel}
                       </div>
                       <div
                         style={{
-                          fontSize: '0.75rem',
+                          fontSize: '0.7rem',
                           color: isActive ? 'var(--primary)' : 'var(--text-muted)',
                           fontWeight: isActive ? 600 : 400,
-                          lineHeight: 1.2,
+                          lineHeight: 1.1,
                         }}
                       >
                         {isActive ? 'In Progress' : isStepFinished ? 'Completed' : 'Upcoming'}
@@ -2006,7 +2003,7 @@ export const LearningPathsPage: React.FC = () => {
             </div>
 
             {/* Builder Body - Scrollable Content */}
-            <div className="modal-body" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '26px 28px' }}>
+            <div className="modal-body" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px' }}>
               {/* Error Banners */}
               {builderErrors.length > 0 && (
                 <div
@@ -2033,286 +2030,16 @@ export const LearningPathsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 1: BASIC DETAILS & RECOMMENDED TEMPLATES */}
+              {/* TAB 1: BASIC DETAILS */}
               {builderStep === 1 && (
                 <div>
-                  {/* Recommended for Your Organization Section */}
-                  {!editingPathId && (
-                    <div
-                      style={{
-                        padding: '20px 22px',
-                        background: 'rgba(99, 102, 241, 0.05)',
-                        border: '1px solid rgba(99, 102, 241, 0.2)',
-                        borderRadius: 'var(--radius-lg)',
-                        marginBottom: '28px',
-                      }}
-                    >
-                      {/* Section Header with Context & Actions */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          flexWrap: 'wrap',
-                          gap: '12px',
-                          marginBottom: '12px',
-                        }}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Sparkles size={18} color="var(--primary)" />
-                            <h4 style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main)', margin: 0 }}>
-                              Recommended for Your Organization
-                            </h4>
-                          </div>
-                          <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                            Tailored for <strong>{userOrg?.name || 'Your Organization'}</strong> ({templateOrgType === 'corporate' ? 'Company / Corporate' : templateOrgType === 'higher_ed' ? 'College / University' : templateOrgType === 'school' ? 'School (K-12)' : 'Training Institute'})
-                          </p>
-                        </div>
-
-                        {/* Top Controls: Category Switcher, Refresh, View All */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <select
-                            value={templateOrgType}
-                            onChange={(e) => {
-                              setTemplateOrgType(e.target.value as any);
-                              setSuggestionOffset(0);
-                            }}
-                            className="form-input"
-                            aria-label="Switch recommendation category"
-                            style={{
-                              fontSize: '0.825rem',
-                              padding: '4px 10px',
-                              height: '32px',
-                              width: 'auto',
-                              fontWeight: 600,
-                            }}
-                          >
-                            <option value="corporate">Corporate / Company</option>
-                            <option value="higher_ed">College / University</option>
-                            <option value="school">School (K-12)</option>
-                            <option value="training_institute">Training Institute</option>
-                          </select>
-
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-xs"
-                            onClick={handleRefreshSuggestions}
-                            title="Show next 3 relevant templates"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              fontSize: '0.825rem',
-                              padding: '5px 12px',
-                              fontWeight: 600,
-                            }}
-                          >
-                            <RefreshCw size={13} /> Refresh Suggestions
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-xs"
-                            onClick={() => setShowAllTemplatesModal(true)}
-                            style={{
-                              fontSize: '0.825rem',
-                              color: 'var(--primary)',
-                              fontWeight: 700,
-                              padding: '5px 10px',
-                            }}
-                          >
-                            View All ({relevantTemplates.length})
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 3 Template Suggestions + Create from Scratch Grid */}
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))',
-                          gap: '12px',
-                        }}
-                      >
-                        {/* Option: Create from Scratch */}
-                        <button
-                          type="button"
-                          onClick={handleSelectCreateFromScratch}
-                          style={{
-                            padding: '14px 16px',
-                            textAlign: 'left',
-                            background: selectedTemplateId === 'scratch' ? 'var(--primary-light)' : 'var(--bg-card)',
-                            border: selectedTemplateId === 'scratch' ? '2px solid var(--primary)' : '1px dashed var(--border-subtle)',
-                            borderRadius: 'var(--radius-md)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            transition: 'var(--transition)',
-                            boxShadow: selectedTemplateId === 'scratch' ? '0 0 0 1px var(--primary)' : 'none',
-                          }}
-                        >
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                              <span
-                                style={{
-                                  fontWeight: 700,
-                                  fontSize: '0.925rem',
-                                  color: selectedTemplateId === 'scratch' ? 'var(--primary)' : 'var(--text-main)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                }}
-                              >
-                                <Sliders size={15} /> Create from Scratch
-                              </span>
-                              {selectedTemplateId === 'scratch' && (
-                                <span
-                                  style={{
-                                    width: '18px',
-                                    height: '18px',
-                                    borderRadius: '50%',
-                                    background: 'var(--primary)',
-                                    color: '#fff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  <Check size={12} strokeWidth={3} />
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 500 }}>
-                              Blank canvas
-                            </div>
-                          </div>
-                          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
-                            Build an empty journey from the ground up without preselected courses or rules.
-                          </p>
-                        </button>
-
-                        {/* 3 Relevant Templates */}
-                        {currentSuggestions.map((tpl) => {
-                          const isSelected = selectedTemplateId === tpl.id;
-                          return (
-                            <button
-                              key={tpl.id}
-                              type="button"
-                              onClick={() => handleApplyTemplate(tpl)}
-                              style={{
-                                padding: '14px 16px',
-                                textAlign: 'left',
-                                background: isSelected ? 'var(--primary-light)' : 'var(--bg-card)',
-                                border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'space-between',
-                                gap: '8px',
-                                transition: 'var(--transition)',
-                                boxShadow: isSelected ? '0 0 0 1px var(--primary)' : 'none',
-                              }}
-                            >
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px' }}>
-                                  <span
-                                    style={{
-                                      fontWeight: 700,
-                                      fontSize: '0.925rem',
-                                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
-                                      lineHeight: 1.35,
-                                      whiteSpace: 'normal',
-                                      wordBreak: 'break-word',
-                                    }}
-                                  >
-                                    {tpl.name}
-                                  </span>
-                                  {isSelected && (
-                                    <span
-                                      style={{
-                                        width: '18px',
-                                        height: '18px',
-                                        borderRadius: '50%',
-                                        background: 'var(--primary)',
-                                        color: '#fff',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      <Check size={12} strokeWidth={3} />
-                                    </span>
-                                  )}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '0.78rem',
-                                    color: 'var(--text-secondary)',
-                                    marginTop: '4px',
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {tpl.category} &bull; {tpl.difficulty}
-                                </div>
-                              </div>
-
-                              <p
-                                style={{
-                                  fontSize: '0.8rem',
-                                  color: 'var(--text-secondary)',
-                                  lineHeight: 1.4,
-                                  margin: 0,
-                                  display: '-webkit-box',
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
-                                }}
-                              >
-                                {tpl.description}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Selected State Notice */}
-                      {selectedTemplateId && selectedTemplateId !== 'scratch' && (
-                        <div
-                          style={{
-                            marginTop: '14px',
-                            padding: '8px 14px',
-                            background: 'var(--primary-light)',
-                            borderRadius: 'var(--radius-md)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '0.825rem',
-                            color: 'var(--primary)',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <CheckCircle2 size={16} />
-                          <span>
-                            Template pre-populated. You can adjust the path name, courses, and completion settings at any time.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Essential Fields */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div className="form-group">
+                  {/* Clean, Prominent Essential Form Fields */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
                       <label
                         className="form-label"
                         style={{
-                          fontSize: '0.95rem',
+                          fontSize: '0.92rem',
                           fontWeight: 700,
                           marginBottom: '6px',
                           display: 'flex',
@@ -2325,8 +2052,9 @@ export const LearningPathsPage: React.FC = () => {
                       <input
                         type="text"
                         required
+                        autoFocus
                         className="form-input"
-                        placeholder="e.g., Enterprise Software Systems Architecture Track"
+                        placeholder="e.g., Full Stack Java Developer Track"
                         value={formTitle}
                         onChange={(e) => {
                           setFormTitle(e.target.value);
@@ -2339,7 +2067,7 @@ export const LearningPathsPage: React.FC = () => {
                         }}
                       />
                       {!formTitle.trim() ? (
-                        <span style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
                           Give this learning path a clear title visible to students and trainers.
                         </span>
                       ) : null}
@@ -2350,38 +2078,18 @@ export const LearningPathsPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Short Description / Learning Objective (Optional)
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '6px' }}>
+                        Description / Objective (Optional)
                       </label>
                       <textarea
                         rows={3}
                         className="form-textarea"
-                        placeholder="Outline the core goals, expected outcomes, and target competencies for this path..."
+                        placeholder="Describe the target skills, prerequisites, and learning goals for this path..."
                         value={formDescription}
                         onChange={(e) => setFormDescription(e.target.value)}
-                        style={{ fontSize: '0.925rem', padding: '10px 14px', lineHeight: 1.5 }}
+                        style={{ fontSize: '0.9rem', padding: '10px 14px', lineHeight: 1.5 }}
                       />
-                    </div>
-
-                    {/* Derived Context Clarification Badge */}
-                    <div
-                      style={{
-                        padding: '10px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-subtle)',
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}
-                    >
-                      <Info size={15} color="var(--primary)" style={{ flexShrink: 0 }} />
-                      <span>
-                        Organization tenant (<strong>{userOrg?.name || 'Current Organization'}</strong>) and creator permissions (<strong>{user?.displayName || 'Active User'}</strong>) are automatically applied.
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -2657,180 +2365,302 @@ export const LearningPathsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 3: COMPLETION (SIMPLIFIED RULES) */}
+              {/* TAB 3: REVIEW & PUBLISH (WITH VISUAL FLOWCHART) */}
               {builderStep === 3 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  {/* Default Option: Complete All Courses */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                  {/* Section 1: Visual Learning Journey Flowchart & Overview */}
                   <div
                     style={{
-                      padding: '18px 20px',
                       background: 'var(--bg-card)',
-                      borderRadius: 'var(--radius-md)',
                       border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '20px 22px',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
-                          Complete all courses in this path (Default)
-                        </div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          Learners must complete preceding courses and prerequisites in sequence to unlock subsequent learning modules.
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={formEnforceSequence}
-                        onChange={(e) => setFormEnforceSequence(e.target.checked)}
-                        style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Optional: Require Passing Assessments */}
-                  <div
-                    style={{
-                      padding: '18px 20px',
-                      background: 'var(--bg-card)',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
-                          Require assessments to be passed
-                        </div>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          Requires learners to achieve a passing evaluation score on all required module quizzes and capstones.
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={formRequireAssessments}
-                        onChange={(e) => setFormRequireAssessments(e.target.checked)}
-                        style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Optional: Minimum Overall Completion Percentage */}
-                  <div
-                    style={{
-                      padding: '18px 20px',
-                      background: 'var(--bg-card)',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
-                        Minimum overall completion percentage
-                      </div>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        Specify the overall progress percentage required across lessons and activities to mark the journey completed.
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginTop: '14px' }}>
-                      <input
-                        type="range"
-                        min="50"
-                        max="100"
-                        step="5"
-                        value={formCompletionThreshold}
-                        onChange={(e) => setFormCompletionThreshold(Number(e.target.value))}
-                        style={{ flex: 1, accentColor: 'var(--primary)', height: '8px' }}
-                      />
-                      <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--primary)', minWidth: '60px' }}>
-                        {formCompletionThreshold}%
+                    {/* Header Badges & Title */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                      {renderInstitutionBadge(formInstitutionType)}
+                      <span className="badge badge-secondary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
+                        {formDifficulty}
+                      </span>
+                      <span className="badge badge-primary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
+                        {formCategory}
                       </span>
                     </div>
-                  </div>
 
-                  {/* Collapsible Advanced Settings */}
-                  <div
-                    style={{
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--bg-card)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedRules(!showAdvancedRules)}
-                      style={{
-                        width: '100%',
-                        padding: '14px 20px',
-                        background: 'none',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        color: 'var(--text-main)',
-                        fontWeight: 700,
-                        fontSize: '0.95rem',
-                      }}
-                    >
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Sliders size={16} color="var(--primary)" />
-                        Advanced Settings (Optional)
-                      </span>
-                      {showAdvancedRules ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
+                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-main)' }}>
+                      {formTitle || 'Untitled Learning Journey'}
+                    </h3>
+                    {formDescription ? (
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+                        {formDescription}
+                      </p>
+                    ) : null}
 
-                    {showAdvancedRules && (
-                      <div style={{ padding: '0 20px 20px 20px', borderTop: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', paddingTop: '16px' }}>
+                    {/* Compact Metrics Row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', textAlign: 'center', marginBottom: '18px' }}>
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Courses</div>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-main)' }}>{formCourses.length}</div>
+                      </div>
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Duration</div>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-main)' }}>
+                          {calculateTotalDuration(formCourses) || 0} hrs
+                        </div>
+                      </div>
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Completion Req.</div>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>
+                          {formCompletionThreshold}%
+                        </div>
+                      </div>
+                      <div style={{ padding: '8px 10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Certificate</div>
+                        <div style={{ fontWeight: 800, fontSize: '1.1rem', color: formCertificateEligible ? 'var(--success)' : 'var(--text-muted)' }}>
+                          {formCertificateEligible ? 'Enabled' : 'Disabled'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* VISUAL FLOWCHART */}
+                    <div style={{ marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Route size={16} color="var(--primary)" />
+                          <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                            Curriculum Flowchart ({formCourses.length} Stages)
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                          Step-by-step visual learning path
+                        </span>
+                      </div>
+
+                      {formCourses.length === 0 ? (
+                        <div style={{ padding: '24px', textAlign: 'center', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          No courses added yet. Go back to Step 2 to add courses to this learning journey.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            padding: '16px 18px',
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            overflowX: 'auto',
+                            WebkitOverflowScrolling: 'touch',
+                          }}
+                        >
+                          {/* Flowchart Node: START */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '12px 14px',
+                              background: 'rgba(99, 102, 241, 0.12)',
+                              border: '1.5px solid var(--primary)',
+                              borderRadius: 'var(--radius-md)',
+                              minWidth: '90px',
+                              textAlign: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                              <Play size={12} fill="#fff" />
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.78rem', color: 'var(--primary)' }}>START</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Enrollment</span>
+                          </div>
+
+                          {/* Sequenced Course Nodes with Arrows */}
+                          {formCourses.map((ci, idx) => {
+                            const crs = courses.find((c) => c.id === ci.courseId);
+                            const title = crs?.title || ci.courseId;
+                            const hrs = crs?.durationHours || (crs?.estimatedDuration ? Math.round(crs.estimatedDuration / 60) : null);
+                            const category = crs?.category || 'General';
+
+                            return (
+                              <React.Fragment key={ci.courseId}>
+                                {/* Arrow Connector */}
+                                <div style={{ display: 'flex', alignItems: 'center', color: 'var(--primary)', flexShrink: 0, opacity: 0.85 }}>
+                                  <ArrowRight size={18} strokeWidth={2.5} />
+                                </div>
+
+                                {/* Flowchart Course Card */}
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    padding: '12px 14px',
+                                    background: 'var(--bg-card)',
+                                    border: '1.5px solid var(--border-subtle)',
+                                    borderRadius: 'var(--radius-md)',
+                                    minWidth: '190px',
+                                    maxWidth: '220px',
+                                    flexShrink: 0,
+                                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                                  }}
+                                >
+                                  {/* Step Badge & Duration */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 800,
+                                        padding: '2px 8px',
+                                        borderRadius: 'var(--radius-full)',
+                                        background: 'var(--primary)',
+                                        color: '#fff',
+                                      }}
+                                    >
+                                      Stage {idx + 1}
+                                    </span>
+                                    {hrs ? (
+                                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                        <Clock size={11} /> {hrs}h
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  {/* Course Title */}
+                                  <div
+                                    style={{
+                                      fontWeight: 700,
+                                      fontSize: '0.88rem',
+                                      color: 'var(--text-main)',
+                                      lineHeight: 1.3,
+                                      marginBottom: '8px',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                    title={title}
+                                  >
+                                    {title}
+                                  </div>
+
+                                  {/* Discipline / Category Pill */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        color: 'var(--text-secondary)',
+                                        background: 'var(--bg-input)',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '120px',
+                                      }}
+                                    >
+                                      {category}
+                                    </span>
+                                    <CheckCircle2 size={13} color="var(--success)" />
+                                  </div>
+                                </div>
+                              </React.Fragment>
+                            );
+                          })}
+
+                          {/* Final Arrow */}
+                          <div style={{ display: 'flex', alignItems: 'center', color: 'var(--success)', flexShrink: 0 }}>
+                            <ArrowRight size={18} strokeWidth={2.5} />
+                          </div>
+
+                          {/* Completion / Certificate Node */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '12px 14px',
+                              background: 'rgba(16, 185, 129, 0.1)',
+                              border: '1.5px solid var(--success)',
+                              borderRadius: 'var(--radius-md)',
+                              minWidth: '105px',
+                              textAlign: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--success)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+                              <Award size={14} />
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.78rem', color: 'var(--success)' }}>COMPLETE</span>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>Certificate Earned</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Ready Validation Badge */}
+                    <div style={{ marginTop: '14px' }}>
+                      {isAllRequiredValid ? (
+                        <div
+                          style={{
+                            padding: '10px 14px',
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'var(--success)',
+                            fontSize: '0.825rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <CheckCircle2 size={16} /> All requirements met. Ready to publish or save as draft.
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            padding: '10px 14px',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid var(--danger-border)',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'var(--danger)',
+                            fontSize: '0.825rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          <AlertTriangle size={16} />
                           <div>
-                            <div style={{ fontWeight: 600, fontSize: '0.925rem', color: 'var(--text-main)' }}>
-                              Issue Verifiable Digital Certificate
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                              Award a tamper-proof digital completion credential when all completion rules are met.
-                            </div>
+                            Please complete required items:
+                            {!isStep1Valid && <div>&bull; Learning Path Name is required in Step 1.</div>}
+                            {formCourses.length === 0 && <div>&bull; At least 1 course must be added in Step 2.</div>}
                           </div>
-                          <input
-                            type="checkbox"
-                            checked={formCertificateEligible}
-                            onChange={(e) => setFormCertificateEligible(e.target.checked)}
-                            style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                          />
                         </div>
-
-                        {formCertificateEligible && (
-                          <div style={{ marginTop: '14px' }}>
-                            <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
-                              Certificate Credential Title
-                            </label>
-                            <input
-                              type="text"
-                              className="form-input"
-                              value={formCertificateTitle}
-                              onChange={(e) => setFormCertificateTitle(e.target.value)}
-                              placeholder="e.g. Certified Full-Stack Cloud Solutions Architect"
-                              style={{ fontSize: '0.875rem', padding: '8px 12px' }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* TAB 4: ASSIGN & PUBLISH (COMBINED STEP 4) */}
-              {builderStep === 4 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  {/* Section 1: Target Audience Assignment */}
-                  <div>
+                  {/* Section 2: Target Audience Assignment (Optional) */}
+                  <div
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '20px 22px',
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
                       <div>
-                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                          1. Assign Target Audience (Optional)
+                        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                          Assign Target Audience (Optional)
                         </h4>
-                        <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '3px 0 0 0' }}>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
                           Assign cohort batches, departments, or individual learners now, or publish immediately and assign later.
                         </p>
                       </div>
@@ -2838,9 +2668,9 @@ export const LearningPathsPage: React.FC = () => {
                       {/* Selected Count Indicator */}
                       <span
                         style={{
-                          fontSize: '0.8rem',
+                          fontSize: '0.78rem',
                           fontWeight: 700,
-                          padding: '4px 12px',
+                          padding: '3px 10px',
                           borderRadius: 'var(--radius-full)',
                           background: 'var(--primary-light)',
                           color: 'var(--primary)',
@@ -2858,27 +2688,27 @@ export const LearningPathsPage: React.FC = () => {
                         placeholder="Filter cohorts, departments, or learners..."
                         value={assignLearnerSearch}
                         onChange={(e) => setAssignLearnerSearch(e.target.value)}
-                        style={{ height: '36px', fontSize: '0.875rem' }}
+                        style={{ height: '34px', fontSize: '0.85rem' }}
                       />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
                       {/* Cohort Batches */}
                       <div>
-                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                           Cohort Batches ({cohorts.length})
                         </label>
                         <div
                           style={{
-                            maxHeight: '220px',
+                            maxHeight: '180px',
                             overflowY: 'auto',
                             background: 'var(--bg-input)',
                             border: '1px solid var(--border-subtle)',
                             borderRadius: 'var(--radius-md)',
-                            padding: '8px',
+                            padding: '6px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '6px',
+                            gap: '4px',
                           }}
                         >
                           {cohorts
@@ -2895,13 +2725,13 @@ export const LearningPathsPage: React.FC = () => {
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '8px 10px',
+                                    gap: '8px',
+                                    padding: '6px 8px',
                                     background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
                                     border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
                                     borderRadius: 'var(--radius-sm)',
                                     cursor: 'pointer',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.82rem',
                                   }}
                                 >
                                   <input
@@ -2914,13 +2744,13 @@ export const LearningPathsPage: React.FC = () => {
                                         setFormCohortIds(formCohortIds.filter((id) => id !== coh.id));
                                       }
                                     }}
-                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                    style={{ width: '15px', height: '15px', accentColor: 'var(--primary)', flexShrink: 0 }}
                                   />
                                   <div style={{ minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                       {coh.name}
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                                       {coh.code} &bull; {coh.learnerCount || 0} students
                                     </div>
                                   </div>
@@ -2932,20 +2762,20 @@ export const LearningPathsPage: React.FC = () => {
 
                       {/* Departments */}
                       <div>
-                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                           Departments ({useDepartmentStore.getState().departments.length})
                         </label>
                         <div
                           style={{
-                            maxHeight: '220px',
+                            maxHeight: '180px',
                             overflowY: 'auto',
                             background: 'var(--bg-input)',
                             border: '1px solid var(--border-subtle)',
                             borderRadius: 'var(--radius-md)',
-                            padding: '8px',
+                            padding: '6px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '6px',
+                            gap: '4px',
                           }}
                         >
                           {useDepartmentStore.getState().departments
@@ -2961,13 +2791,13 @@ export const LearningPathsPage: React.FC = () => {
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '8px 10px',
+                                    gap: '8px',
+                                    padding: '6px 8px',
                                     background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
                                     border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
                                     borderRadius: 'var(--radius-sm)',
                                     cursor: 'pointer',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.82rem',
                                   }}
                                 >
                                   <input
@@ -2980,15 +2810,10 @@ export const LearningPathsPage: React.FC = () => {
                                         setFormDepartmentIds(formDepartmentIds.filter((id) => id !== dept.id));
                                       }
                                     }}
-                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                    style={{ width: '15px', height: '15px', accentColor: 'var(--primary)', flexShrink: 0 }}
                                   />
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {dept.name}
-                                    </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                      {dept.memberCount} members
-                                    </div>
+                                  <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, color: 'var(--text-main)' }}>
+                                    {dept.name}
                                   </div>
                                 </label>
                               );
@@ -2998,20 +2823,20 @@ export const LearningPathsPage: React.FC = () => {
 
                       {/* Individual Learners */}
                       <div>
-                        <label className="form-label" style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '6px' }}>
+                        <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                           Individual Learners
                         </label>
                         <div
                           style={{
-                            maxHeight: '220px',
+                            maxHeight: '180px',
                             overflowY: 'auto',
                             background: 'var(--bg-input)',
                             border: '1px solid var(--border-subtle)',
                             borderRadius: 'var(--radius-md)',
-                            padding: '8px',
+                            padding: '6px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '6px',
+                            gap: '4px',
                           }}
                         >
                           {peopleList
@@ -3031,13 +2856,13 @@ export const LearningPathsPage: React.FC = () => {
                                   style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '8px 10px',
+                                    gap: '8px',
+                                    padding: '6px 8px',
                                     background: isAssigned ? 'var(--primary-light)' : 'var(--bg-card)',
                                     border: isAssigned ? '1px solid var(--primary)' : '1px solid var(--border-subtle)',
                                     borderRadius: 'var(--radius-sm)',
                                     cursor: 'pointer',
-                                    fontSize: '0.85rem',
+                                    fontSize: '0.82rem',
                                   }}
                                 >
                                   <input
@@ -3050,13 +2875,13 @@ export const LearningPathsPage: React.FC = () => {
                                         setFormUserIds(formUserIds.filter((id) => id !== u.id));
                                       }
                                     }}
-                                    style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', flexShrink: 0 }}
+                                    style={{ width: '15px', height: '15px', accentColor: 'var(--primary)', flexShrink: 0 }}
                                   />
                                   <div style={{ minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                       {u.displayName}
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                                       {u.email}
                                     </div>
                                   </div>
@@ -3064,138 +2889,6 @@ export const LearningPathsPage: React.FC = () => {
                               );
                             })}
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section 2: Review Summary Before Publishing */}
-                  <div>
-                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '10px' }}>
-                      2. Review Summary
-                    </h4>
-
-                    <div
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '20px 22px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        {renderInstitutionBadge(formInstitutionType)}
-                        <span className="badge badge-secondary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
-                          {formDifficulty}
-                        </span>
-                        <span className="badge badge-primary" style={{ fontSize: '0.78rem', padding: '2px 8px' }}>
-                          {formCategory}
-                        </span>
-                      </div>
-
-                      <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-main)' }}>
-                        {formTitle || 'Untitled Learning Journey'}
-                      </h3>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
-                        {formDescription || 'No description entered.'}
-                      </p>
-
-                      {/* Stat Metrics Grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', textAlign: 'center', marginBottom: '16px' }}>
-                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Courses</div>
-                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-main)' }}>{formCourses.length}</div>
-                        </div>
-                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Total Duration</div>
-                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--text-main)' }}>
-                            {calculateTotalDuration(formCourses) || 0} hrs
-                          </div>
-                        </div>
-                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Completion Req.</div>
-                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: 'var(--primary)' }}>
-                            {formCompletionThreshold}%
-                          </div>
-                        </div>
-                        <div style={{ padding: '10px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>Certificate</div>
-                          <div style={{ fontWeight: 800, fontSize: '1.15rem', color: formCertificateEligible ? 'var(--success)' : 'var(--text-muted)' }}>
-                            {formCertificateEligible ? 'Enabled' : 'Disabled'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Sequenced Courses Mini List */}
-                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
-                        Curriculum Sequence ({formCourses.length} courses):
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {formCourses.map((ci, idx) => {
-                          const crs = courses.find((c) => c.id === ci.courseId);
-                          return (
-                            <div
-                              key={ci.courseId}
-                              style={{
-                                padding: '8px 12px',
-                                background: 'var(--bg-input)',
-                                borderRadius: 'var(--radius-sm)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: '0.825rem',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Step {idx + 1}:</span>
-                                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{crs?.title || ci.courseId}</span>
-                              </div>
-                              <span style={{ color: 'var(--text-secondary)' }}>{crs?.category}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Validation / Ready Status */}
-                      <div style={{ marginTop: '16px' }}>
-                        {isAllRequiredValid ? (
-                          <div
-                            style={{
-                              padding: '12px 14px',
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
-                              borderRadius: 'var(--radius-md)',
-                              color: 'var(--success)',
-                              fontSize: '0.85rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              fontWeight: 600,
-                            }}
-                          >
-                            <CheckCircle2 size={16} /> All requirements met. Ready to publish or save as draft.
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              padding: '12px 14px',
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              border: '1px solid var(--danger-border)',
-                              borderRadius: 'var(--radius-md)',
-                              color: 'var(--danger)',
-                              fontSize: '0.85rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                            }}
-                          >
-                            <AlertTriangle size={16} />
-                            <div>
-                              Please complete required items:
-                              {!isStep1Valid && <div>&bull; Learning Path Name is required in Step 1.</div>}
-                              {formCourses.length === 0 && <div>&bull; At least 1 course must be added in Step 2.</div>}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -3247,7 +2940,7 @@ export const LearningPathsPage: React.FC = () => {
                     color: 'var(--text-main)',
                   }}
                 >
-                  Step {builderStep} of 4
+                  Step {builderStep} of 3
                 </div>
 
                 {/* Inline Validation Alert if Next is Blocked */}
@@ -3288,7 +2981,7 @@ export const LearningPathsPage: React.FC = () => {
                   Save as Draft
                 </button>
 
-                {builderStep < 4 ? (
+                {builderStep < 3 ? (
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
