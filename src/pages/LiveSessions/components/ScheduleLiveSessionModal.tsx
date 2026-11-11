@@ -13,7 +13,7 @@ import {
   Layers, AlertTriangle, Shield, CheckCheck, Briefcase
 } from 'lucide-react';
 
-import { GoogleMeetLinkField } from '../../../components/GoogleMeet';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface Props {
   isOpen: boolean;
@@ -79,7 +79,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   onSuccess,
 }) => {
   const { user } = useAuthStore();
-  const { sessions, addSession, updateSession } = useLiveSessionStore();
+  const { sessions, addSession, updateSession, defaultMeetUrl, fetchDefaultMeetUrl } = useLiveSessionStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { courses, fetchCourses } = useCourseStore();
   const { departments, fetchDepartments } = useDepartmentStore();
@@ -91,6 +91,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       fetchDepartments();
       fetchCohorts();
       fetchPeople();
+      fetchDefaultMeetUrl();
     }
   }, [isOpen]);
 
@@ -148,6 +149,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
   // Policy & Notifications
   const [notifyParticipants, setNotifyParticipants] = useState<boolean>(true);
   const [recordingEnabled, setRecordingEnabled] = useState<boolean>(true);
+  const [recordingUrlInput, setRecordingUrlInput] = useState<string>('');
 
   // Validation State
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -347,6 +349,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       setDescription(sessionToEdit.description || '');
       setAgenda(sessionToEdit.agenda || '');
       setRecordingEnabled(sessionToEdit.recordingEnabled ?? true);
+      setRecordingUrlInput(sessionToEdit.recordingUrl || '');
 
       // Determine audience settings from existing session
       const isFacultyOnly =
@@ -401,8 +404,9 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       setDayOfWeek(getDayOfWeekFromDate(todayStr));
       setRoom('Hall 101');
       setProvider('Google Meet');
-      setGoogleMeetUrl('');
+      setGoogleMeetUrl(defaultMeetUrl || '');
       setRecordingEnabled(true);
+      setRecordingUrlInput('');
       setNotifyParticipants(true);
 
       setIncludeStudents(true);
@@ -626,6 +630,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
       joinLink: finalMeetingUrl,
       recordingPolicy: recordingEnabled ? 'Cloud Recorded with automated AI transcript' : 'Not recorded',
       recordingEnabled,
+      recordingUrl: recordingUrlInput.trim() || undefined,
       description: description.trim(),
       agenda: agenda.trim(),
       targetAudienceType,
@@ -1294,88 +1299,51 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                     )}
                   </div>
 
-                  {/* SUBSECTION B: MEETING PROVIDER */}
+                  {/* SUBSECTION B: AUTOMATIC GOOGLE MEET VIRTUAL CLASSROOM */}
                   <div
                     style={{
-                      background: 'var(--bg-card)',
+                      background: 'linear-gradient(135deg, rgba(0, 172, 71, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%)',
                       borderRadius: '12px',
-                      border: '1px solid var(--border-subtle)',
-                      padding: '18px',
+                      border: '1.5px solid rgba(0, 172, 71, 0.28)',
+                      padding: '16px 18px',
                       display: 'flex',
-                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
                       gap: '12px',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Video size={18} color="var(--primary)" />
-                      <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>Meeting Provider</h3>
-                    </div>
-
-                    <div>
-                      <select
-                        className="input"
-                        value={provider}
-                        onChange={(e) => {
-                          setIsDirty(true);
-                          setProvider(e.target.value);
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '10px',
+                          background: 'rgba(0, 172, 71, 0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
                         }}
-                        style={{ height: '40px', fontSize: '0.85rem', fontWeight: 600 }}
                       >
-                        {PROVIDERS.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {PROVIDERS.find((p) => p.id === provider)?.desc || 'Secure virtual classroom integration'}
-                      </p>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '12px 14px',
-                        background: 'rgba(56, 189, 248, 0.08)',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(56, 189, 248, 0.25)',
-                        fontSize: '0.8rem',
-                        color: 'var(--text-secondary)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      {provider === 'Google Meet' ? (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                            <span style={{ color: '#38bdf8', fontWeight: 600 }}>
-                              📌 Important: All participants (Admin, Trainer & Students) join this exact same Google Meet room.
-                            </span>
-                          </div>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Paste your genuine Google Meet URL below (e.g. <code>https://meet.google.com/abc-defg-hij</code>). If left blank, you can attach it later before the session begins.
-                          </span>
-                        </>
-                      ) : (
-                        <span>
-                          Enter your {provider} meeting link for participants.
-                        </span>
-                      )}
-                    </div>
-
-                    {provider === 'Google Meet' && (
-                      <div style={{ marginTop: '4px' }}>
-                        <GoogleMeetLinkField
-                          value={googleMeetUrl}
-                          onChange={(val) => {
-                            setIsDirty(true);
-                            setGoogleMeetUrl(val);
-                          }}
-                          required={false}
-                          helperText="Paste your exact room URL. Students who click Join will be routed to this room and recorded as present."
-                        />
+                        <GoogleMeetIcon size={22} />
                       </div>
-                    )}
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>Google Meet Virtual Classroom</span>
+                          <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px', fontWeight: 700 }}>
+                            {defaultMeetUrl ? 'Institutional Room Active' : 'Automatic Sync'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          {defaultMeetUrl ? (
+                            <span>All participants will join your verified room: <strong style={{ fontFamily: 'monospace', color: '#22c55e' }}>{defaultMeetUrl}</strong></span>
+                          ) : (
+                            <span>A synchronized Google Meet room link is assigned so participants join the exact same meeting without code errors.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* SUBSECTION C: PARTICIPANT SCOPE & ACCESS RIGHTS */}
@@ -1892,6 +1860,22 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
                       />
                       <span>Enable automated cloud recording with post-session video archive replay</span>
                     </label>
+
+                    {recordingEnabled && (
+                      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
+                        <label style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                          Optional Pre-attached Recording Stream URL (YouTube, Drive, or S3):
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="https://www.youtube.com/watch?v=... or https://drive.google.com/file/d/..."
+                          value={recordingUrlInput}
+                          onChange={(e) => setRecordingUrlInput(e.target.value)}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: '0.8rem', background: 'var(--bg-surface)' }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

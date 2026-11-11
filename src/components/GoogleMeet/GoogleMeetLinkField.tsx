@@ -71,31 +71,44 @@ export const GoogleMeetLinkField: React.FC<Props> = ({
           {required && <span style={{ color: 'var(--danger)' }}>*</span>}
         </label>
 
-        {isInputValid && allowQuickTest && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="btn btn-ghost btn-sm"
-              title="Copy Meeting Link"
-              style={{ fontSize: '0.72rem', padding: '2px 8px', gap: '4px', height: '26px' }}
-            >
-              {copied ? <Check size={12} color="var(--success)" /> : <Copy size={12} />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() => window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer')}
+            className="btn btn-ghost btn-sm"
+            title="Create an authentic instant meeting on Google Meet"
+            style={{ fontSize: '0.72rem', padding: '2px 8px', gap: '4px', height: '26px', color: '#00ac47' }}
+          >
+            <ExternalLink size={12} />
+            <span>Generate Room</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={handleTestLink}
-              className="btn btn-ghost btn-sm"
-              title="Test Open in New Tab"
-              style={{ fontSize: '0.72rem', padding: '2px 8px', gap: '4px', height: '26px', color: '#38bdf8' }}
-            >
-              <ExternalLink size={12} />
-              <span>Test Link</span>
-            </button>
-          </div>
-        )}
+          {isInputValid && allowQuickTest && (
+            <>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="btn btn-ghost btn-sm"
+                title="Copy Meeting Link"
+                style={{ fontSize: '0.72rem', padding: '2px 8px', gap: '4px', height: '26px' }}
+              >
+                {copied ? <Check size={12} color="var(--success)" /> : <Copy size={12} />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestLink}
+                className="btn btn-ghost btn-sm"
+                title="Test Open in New Tab"
+                style={{ fontSize: '0.72rem', padding: '2px 8px', gap: '4px', height: '26px', color: '#38bdf8' }}
+              >
+                <ExternalLink size={12} />
+                <span>Test Link</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ position: 'relative' }}>
