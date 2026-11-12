@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookOpen, Clock, RefreshCw, Search } from 'lucide-react';
 import { ApiError, apiClient } from '../../lib/apiClient';
+import { getDefaultCourseCover } from '../../lib/courseStore';
 
 interface CourseItem {
   id: string;
@@ -12,6 +13,8 @@ interface CourseItem {
   category: string;
   level: string;
   estimatedDuration: number;
+  thumbnail?: string | null;
+  thumbnailUrl?: string | null;
 }
 
 interface CourseEnrollment {
@@ -128,38 +131,59 @@ export const StudentCoursesPage: React.FC = () => {
         <section aria-label={isMyLearning ? 'Enrolled courses' : 'Available courses'} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: 16 }}>
           {filteredCourses.map((course) => {
             const isEnrolled = enrolledCourseIds.has(course.id);
+            const courseCover = course.thumbnail || course.thumbnailUrl || getDefaultCourseCover(course.category, course.title);
+
             return (
-              <article className="card" key={course.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                  <span className="badge badge-secondary">{course.category}</span>
-                  <span className="text-muted text-xs">{course.level}</span>
-                </div>
-                <div>
-                  <h2 style={{ fontSize: '1.05rem', margin: '0 0 6px' }}>{course.title}</h2>
-                  <p className="text-secondary text-sm" style={{ margin: 0 }}>{course.shortDescription || course.description}</p>
-                </div>
-                <div className="text-muted text-xs"><Clock size={13} style={{ verticalAlign: 'middle' }} /> {course.estimatedDuration} minutes</div>
-                {isMyLearning ? (
-                  <>
-                    <div className="progress-bar-bg" role="progressbar" aria-label={`${course.title} progress`} aria-valuenow={course.progressPercentage} aria-valuemin={0} aria-valuemax={100} style={{ height: 6 }}>
-                      <div className="progress-bar-fill" style={{ width: `${course.progressPercentage}%`, height: '100%' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <span className="text-muted text-xs">{course.progressPercentage}% complete</span>
-                      <Link to={`/course-player/${course.id}`} className="btn btn-primary btn-sm">Continue <BookOpen size={14} /></Link>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ marginTop: 'auto' }}>
-                    {isEnrolled ? (
-                      <Link to="/my-learning" className="btn btn-secondary btn-sm">Open My Learning</Link>
-                    ) : (
-                      <button type="button" className="btn btn-primary btn-sm" disabled={enrollingId === course.id} onClick={() => void handleEnroll(course.id)}>
-                        {enrollingId === course.id ? 'Enrolling...' : 'Enroll'}
-                      </button>
-                    )}
+              <article className="card" key={course.id} style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+                {/* 16:9 Course Cover Page */}
+                <div style={{ width: '100%', height: '140px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)' }}>
+                  {courseCover && (
+                    <img
+                      src={courseCover}
+                      alt={course.title}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
+                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
+                    <span className="badge badge-secondary" style={{ background: 'rgba(5, 8, 22, 0.75)', backdropFilter: 'blur(6px)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.25)', fontSize: '0.68rem', fontWeight: 700 }}>
+                      {course.category}
+                    </span>
                   </div>
-                )}
+                </div>
+
+                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <span className="badge badge-secondary">{course.category}</span>
+                    <span className="text-muted text-xs">{course.level}</span>
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: '1.05rem', margin: '0 0 6px' }}>{course.title}</h2>
+                    <p className="text-secondary text-sm" style={{ margin: 0 }}>{course.shortDescription || course.description}</p>
+                  </div>
+                  <div className="text-muted text-xs"><Clock size={13} style={{ verticalAlign: 'middle' }} /> {course.estimatedDuration} minutes</div>
+                  {isMyLearning ? (
+                    <>
+                      <div className="progress-bar-bg" role="progressbar" aria-label={`${course.title} progress`} aria-valuenow={course.progressPercentage} aria-valuemin={0} aria-valuemax={100} style={{ height: 6 }}>
+                        <div className="progress-bar-fill" style={{ width: `${course.progressPercentage}%`, height: '100%' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 'auto' }}>
+                        <span className="text-muted text-xs">{course.progressPercentage}% complete</span>
+                        <Link to={`/course-player/${course.id}`} className="btn btn-primary btn-sm">Continue <BookOpen size={14} /></Link>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ marginTop: 'auto' }}>
+                      {isEnrolled ? (
+                        <Link to="/my-learning" className="btn btn-secondary btn-sm">Open My Learning</Link>
+                      ) : (
+                        <button type="button" className="btn btn-primary btn-sm" disabled={enrollingId === course.id} onClick={() => void handleEnroll(course.id)}>
+                          {enrollingId === course.id ? 'Enrolling...' : 'Enroll'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </article>
             );
           })}

@@ -27,8 +27,26 @@ export const AppShell: React.FC = () => {
       fetchNotifications();
       usePeopleStore.getState().fetchPeople().catch(() => {});
       useCourseStore.getState().fetchCourses().catch(() => {});
+
+      // Cross-tab and multi-window sync: refresh notifications on storage changes
+      const handleStorage = (e: StorageEvent) => {
+        if (e.key === 'venilearn_notifications') {
+          fetchNotifications();
+        }
+      };
+      window.addEventListener('storage', handleStorage);
+
+      // Periodic refresh for new notifications
+      const pollTimer = setInterval(() => {
+        fetchNotifications();
+      }, 20000);
+
+      return () => {
+        window.removeEventListener('storage', handleStorage);
+        clearInterval(pollTimer);
+      };
     }
-  }, [isAuthenticated, user, fetchNotifications]);
+  }, [isAuthenticated, user?.id, user?.activeRole, fetchNotifications]);
 
   // 2. UI Layout States
   const [mobileOpen, setMobileOpen] = useState(false);

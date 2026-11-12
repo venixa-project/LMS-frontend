@@ -7,6 +7,7 @@ import {
   Download, Trash2, CheckCircle2, ExternalLink
 } from 'lucide-react';
 import { GoogleMeetIcon, GoogleMeetJoinButton } from '../GoogleMeet';
+import { ConfirmationModal } from '../ConfirmationModal';
 
 interface Props {
   event: AcademicEvent | null;
@@ -17,6 +18,7 @@ interface Props {
 export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEvent }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [joinedNotice, setJoinedNotice] = useState<string | null>(null);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
   if (!event) return null;
 
@@ -219,12 +221,7 @@ export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEve
             <button
               className="btn btn-secondary btn-sm"
               style={{ color: 'var(--danger)', marginRight: 'auto' }}
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to remove "${event.title}" from your schedule?`)) {
-                  onDeleteEvent(event.id);
-                  onClose();
-                }
-              }}
+              onClick={() => setIsConfirmDeleteOpen(true)}
               title="Remove from schedule"
             >
               <Trash2 size={14} /> Remove
@@ -257,6 +254,23 @@ export const EventDetailsModal: React.FC<Props> = ({ event, onClose, onDeleteEve
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={isConfirmDeleteOpen}
+        title="Remove Event from Schedule"
+        message={`Are you sure you want to remove "${event.title}" from your schedule?`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (onDeleteEvent) {
+            onDeleteEvent(event.id);
+          }
+          setIsConfirmDeleteOpen(false);
+          onClose();
+        }}
+        onCancel={() => setIsConfirmDeleteOpen(false)}
+      />
     </div>
   );
 };

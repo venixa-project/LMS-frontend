@@ -16,6 +16,7 @@ import {
   AlertTriangle, CheckCircle, Info
 } from 'lucide-react';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
+import { ConfirmationModal } from './components/ConfirmationModal';
 
 export interface RosterMember {
   id: string;
@@ -539,11 +540,11 @@ const CoursesManagementPage: React.FC = () => {
     setDeleteModalCourse(null);
   };
 
+  const [archiveModalCourse, setArchiveModalCourse] = useState<{ id: string; title: string } | null>(null);
+
   const handleArchive = (id: string) => {
-    if (confirm('Archive this course? It will be hidden from new enrollments.')) {
-      updateCourseStatus(id, 'archived');
-      showNotice('Course moved to archived state.');
-    }
+    const course = courses.find((c) => c.id === id);
+    setArchiveModalCourse({ id, title: course?.title || 'Course' });
   };
 
   const handleStatusChange = (courseId: string, newStatus: EntityStatus) => {
@@ -2263,15 +2264,15 @@ const CoursesManagementPage: React.FC = () => {
             style={{ maxWidth: '480px', width: '100%' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="modal-header danger">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div
                   style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '38px',
+                    height: '38px',
                     borderRadius: '8px',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    color: 'var(--danger)',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    color: '#FFFFFF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -2280,10 +2281,10 @@ const CoursesManagementPage: React.FC = () => {
                   <AlertTriangle size={20} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#FFFFFF' }}>
                     Delete Course
                   </h3>
-                  <p className="text-muted text-xs" style={{ margin: '2px 0 0 0' }}>
+                  <p style={{ margin: '2px 0 0 0', color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.8rem' }}>
                     Permanent Curriculum Removal
                   </p>
                 </div>
@@ -2291,44 +2292,45 @@ const CoursesManagementPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setDeleteModalCourse(null)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255, 255, 255, 0.85)', cursor: 'pointer', padding: '4px' }}
+                title="Close"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="modal-body" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <p style={{ margin: 0, fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--text-main)' }}>
-                Are you sure you want to permanently delete <strong>"{deleteModalCourse.title}"</strong>?
+            <div className="modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '16px', background: '#0B0B2A', color: '#F8FAFC' }}>
+              <p style={{ margin: 0, fontSize: '0.94rem', lineHeight: 1.6, color: '#F1F5F9' }}>
+                Are you sure you want to permanently delete <strong style={{ color: '#FFFFFF', fontWeight: 700 }}>"{deleteModalCourse.title}"</strong>?
               </p>
 
               {(deleteModalCourse.enrolledLearners || 0) > 0 ? (
                 <div
                   style={{
-                    padding: '12px 14px',
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '0.8rem',
-                    color: 'var(--danger)',
+                    padding: '14px 16px',
+                    background: 'rgba(225, 29, 72, 0.16)',
+                    border: '1px solid rgba(244, 114, 182, 0.35)',
+                    borderRadius: '10px',
+                    fontSize: '0.86rem',
+                    color: '#FDA4AF',
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: '10px'
+                    gap: '12px'
                   }}
                 >
-                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <AlertCircle size={20} style={{ flexShrink: 0, marginTop: '2px', color: '#F472B6' }} />
                   <div>
-                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                    <div style={{ fontWeight: 700, marginBottom: '6px', color: '#FFFFFF', fontSize: '0.92rem' }}>
                       Active Enrolled Learners Impact ({deleteModalCourse.enrolledLearners} Students)
                     </div>
-                    <div style={{ lineHeight: 1.45 }}>
+                    <div style={{ lineHeight: 1.55, color: '#FECDD3' }}>
                       {isFaculty ? (
                         <>
-                          <strong>Deletion Blocked by Enrollment Rules:</strong> This course has active enrolled learners. Deletion is restricted to prevent silent destruction of learner progress, assessment attempts, and certificates. Please <strong>Archive</strong> this course instead to safeguard student records while retiring new enrollments.
+                          <strong style={{ color: '#FFFFFF' }}>Deletion Blocked by Enrollment Rules:</strong> This course has active enrolled learners. Deletion is restricted to prevent silent destruction of learner progress, assessment attempts, and certificates. Please <strong style={{ color: '#FFFFFF' }}>Archive</strong> this course instead to safeguard student records while retiring new enrollments.
                         </>
                       ) : (
                         <>
-                          This course has <strong>{deleteModalCourse.enrolledLearners} active enrolled students</strong>. Deleting will permanently remove syllabus modules, lesson content, and submitted assessments. To preserve learner records while retiring the course from new enrollments, choose <strong>Archive Instead</strong>.
+                          This course has <strong style={{ color: '#FFFFFF' }}>{deleteModalCourse.enrolledLearners} active enrolled students</strong>. Deleting will permanently remove syllabus modules, lesson content, and submitted assessments. To preserve learner records while retiring the course from new enrollments, choose <strong style={{ color: '#FFFFFF' }}>Archive Instead</strong>.
                         </>
                       )}
                     </div>
@@ -2337,32 +2339,41 @@ const CoursesManagementPage: React.FC = () => {
               ) : (
                 <div
                   style={{
-                    padding: '10px 14px',
-                    background: 'rgba(16, 185, 129, 0.08)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '0.78rem',
-                    color: 'var(--success)',
+                    padding: '12px 16px',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(52, 211, 153, 0.35)',
+                    borderRadius: '10px',
+                    fontSize: '0.86rem',
+                    color: '#A7F3D0',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px'
+                    gap: '10px'
                   }}
                 >
-                  <CheckCircle2 size={16} />
-                  <span>This course has 0 enrolled learners. Deletion is safe and will not impact student records.</span>
+                  <CheckCircle2 size={18} style={{ color: '#34D399', flexShrink: 0 }} />
+                  <span style={{ color: '#E2E8F0' }}>This course has 0 enrolled learners. Deletion is safe and will not impact student records.</span>
                 </div>
               )}
 
-              <p className="text-muted text-xs" style={{ margin: 0 }}>
+              <p style={{ margin: 0, fontSize: '0.84rem', color: '#94A3B8', lineHeight: 1.5 }}>
                 This action will permanently delete all curriculum modules, lessons, and configuration. This cannot be undone.
               </p>
             </div>
 
-            <div className="modal-footer" style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <div className="modal-footer" style={{ padding: '1rem 1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', background: '#07081D', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setDeleteModalCourse(null)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  color: '#FFFFFF',
+                  borderRadius: '8px',
+                  padding: '9px 20px',
+                  fontWeight: 600,
+                  fontSize: '0.88rem'
+                }}
               >
                 Cancel
               </button>
@@ -2375,19 +2386,33 @@ const CoursesManagementPage: React.FC = () => {
                     setDeleteModalCourse(null);
                     handleArchive(id);
                   }}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.18)',
+                    color: '#FFFFFF',
+                    borderRadius: '8px',
+                    padding: '9px 20px',
+                    fontWeight: 600,
+                    fontSize: '0.88rem'
+                  }}
                 >
                   Archive Instead
                 </button>
               )}
               <button
                 type="button"
-                className="btn btn-primary"
+                className="btn btn-danger"
                 disabled={isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0}
                 style={{
-                  background: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'var(--text-muted)' : 'var(--danger)',
-                  borderColor: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'var(--border-subtle)' : 'var(--danger)',
-                  color: '#fff',
-                  cursor: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'not-allowed' : 'pointer'
+                  background: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? '#334155' : 'linear-gradient(135deg, #E11D48 0%, #DB2777 100%)',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  borderRadius: '8px',
+                  padding: '9px 22px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(225, 29, 72, 0.35)'
                 }}
                 onClick={handleConfirmDelete}
                 title={isFaculty && (deleteModalCourse.enrolledLearners || 0) > 0 ? 'Deletion blocked: Course has active enrolled learners. Please archive instead.' : undefined}
@@ -2398,6 +2423,24 @@ const CoursesManagementPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Archive Course Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(archiveModalCourse)}
+        title="Archive Course"
+        message={`Are you sure you want to archive "${archiveModalCourse?.title}"? It will be hidden from new student enrollments.`}
+        confirmLabel="Archive Course"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (archiveModalCourse) {
+            updateCourseStatus(archiveModalCourse.id, 'archived');
+            showNotice('Course moved to archived state.');
+            setArchiveModalCourse(null);
+          }
+        }}
+        onCancel={() => setArchiveModalCourse(null)}
+      />
     </div>
   );
 };

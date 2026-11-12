@@ -341,41 +341,62 @@ export const CohortCreateWizardModal: React.FC<Props> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="modal-header" style={{ padding: '18px 24px', borderBottom: 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
                 width: '40px',
                 height: '40px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple) 100%)',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.18)',
                 color: '#ffffff',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 12px var(--primary-light)'
+                boxShadow: '0 4px 12px rgba(84, 71, 255, 0.3)'
               }}
             >
               <UsersRound size={20} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>
+                <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 800, color: '#FFFFFF' }}>
                   Create New Cohort / Batch
                 </h3>
-                <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
+                <span
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.22)',
+                    border: '1px solid rgba(255, 255, 255, 0.35)',
+                    color: '#FFFFFF',
+                    padding: '2px 8px',
+                    borderRadius: '999px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700
+                  }}
+                >
                   Multi-Step Workflow
                 </span>
               </div>
-              <p className="text-muted text-xs" style={{ margin: '2px 0 0 0' }}>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.85)' }}>
                 Configure academic section details, assign certified faculty, and enroll students across departments
               </p>
             </div>
           </div>
           <button
             onClick={handleAttemptClose}
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '6px', borderRadius: '50%', color: 'var(--text-muted)' }}
+            style={{
+              padding: '6px',
+              borderRadius: '8px',
+              color: '#FFFFFF',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease'
+            }}
             title="Close dialog"
             aria-label="Close dialog"
           >

@@ -37,111 +37,140 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        background: 'rgba(5, 8, 16, 0.75)',
-        backdropFilter: 'blur(6px)',
+        background: 'rgba(5, 8, 22, 0.85)',
+        backdropFilter: 'blur(8px)',
         animation: 'fadeIn 0.15s ease-out',
       }}
       onClick={onCancel}
     >
       <div
-        className="card"
+        className="modal-card"
         style={{
           maxWidth: '460px',
           width: '100%',
-          padding: '24px',
-          background: 'var(--bg-surface, #111827)',
-          border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.1))',
+          background: '#0B0B2A',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: '16px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
-          animation: 'scaleUp 0.18s ease-out',
+          overflow: 'hidden',
+          boxShadow: isDestructive
+            ? '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(225, 29, 72, 0.25)'
+            : '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(84, 71, 255, 0.25)',
+          animation: 'scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
-          <div
+        {/* Top Header Banner matching the user's exact popup aesthetic */}
+        <div
+          style={{
+            background: isDestructive
+              ? 'linear-gradient(135deg, #E11D48 0%, #DB2777 50%, #EC4899 100%)'
+              : 'linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%)',
+            padding: '18px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <h3
             style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '12px',
-              background: isDestructive ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-              border: isDestructive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
-              color: isDestructive ? 'var(--danger, #ef4444)' : 'var(--warning, #f59e0b)',
+              margin: 0,
+              fontSize: '1.15rem',
+              fontWeight: 800,
+              color: '#FFFFFF',
+              letterSpacing: '-0.2px',
+            }}
+          >
+            {title}
+          </h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'rgba(255, 255, 255, 0.85)',
+              cursor: 'pointer',
+              padding: '4px',
+              borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            {icon === 'trash' || isDestructive ? <Trash2 size={22} /> : <AlertTriangle size={22} />}
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ fontSize: '1.1rem', margin: '0 0 6px', fontWeight: 800, color: 'var(--text-main, #f8fafc)' }}>
-              {title}
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--text-secondary, #94a3b8)' }}>
-              {message}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onCancel}
-            className="btn btn-secondary btn-sm"
-            style={{
-              padding: '6px',
-              borderRadius: '8px',
-              color: 'var(--text-muted)',
-              lineHeight: 1,
+              transition: 'all 0.15s ease',
             }}
             title="Close"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: '10px',
-            borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-            paddingTop: '16px',
-            marginTop: '8px',
-          }}
-        >
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onCancel}
+        {/* Modal Body with dark background */}
+        <div style={{ padding: '24px 24px 20px', background: '#0B0B2A' }}>
+          <p
             style={{
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              padding: '8px 18px',
-              borderRadius: '8px',
+              margin: 0,
+              fontSize: '0.94rem',
+              lineHeight: 1.6,
+              color: '#F1F5F9',
+              fontWeight: 500,
             }}
           >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={isDestructive ? 'btn btn-danger' : 'btn btn-primary'}
-            onClick={() => {
-              onConfirm();
-              onCancel();
-            }}
+            {message}
+          </p>
+
+          {/* Action Buttons matching the user's screenshot */}
+          <div
             style={{
-              fontSize: '0.875rem',
-              fontWeight: 700,
-              padding: '8px 20px',
-              borderRadius: '8px',
-              background: isDestructive ? 'var(--danger, #ef4444)' : 'var(--primary, #3b82f6)',
-              color: '#ffffff',
-              boxShadow: isDestructive ? '0 2px 10px rgba(239, 68, 68, 0.35)' : '0 2px 10px rgba(59, 130, 246, 0.35)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              marginTop: '26px',
             }}
           >
-            {confirmLabel}
-          </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onCancel}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                color: '#FFFFFF',
+                borderRadius: '8px',
+                padding: '9px 24px',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {cancelLabel}
+            </button>
+            <button
+              type="button"
+              className={isDestructive ? 'btn btn-danger' : 'btn btn-primary'}
+              onClick={() => {
+                onConfirm();
+                onCancel();
+              }}
+              style={{
+                background: isDestructive
+                  ? '#E11D48'
+                  : 'linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%)',
+                border: 'none',
+                color: '#FFFFFF',
+                borderRadius: '8px',
+                padding: '9px 24px',
+                fontSize: '0.88rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: isDestructive
+                  ? '0 4px 14px rgba(225, 29, 72, 0.4)'
+                  : '0 4px 14px rgba(84, 71, 255, 0.4)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>

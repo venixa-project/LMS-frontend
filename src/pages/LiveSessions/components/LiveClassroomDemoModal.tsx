@@ -7,6 +7,7 @@ import {
   Users, PhoneOff, Settings, ShieldCheck, Radio, AlertCircle,
   Sparkles, Send, Hand, Maximize2, HelpCircle
 } from 'lucide-react';
+import { ConfirmationModal } from '../../../components/ConfirmationModal';
 
 interface Props {
   session: LiveSession | null;
@@ -84,13 +85,11 @@ export const LiveClassroomDemoModal: React.FC<Props> = ({
     setNewMessage('');
   };
 
+  const [isConfirmEndOpen, setIsConfirmEndOpen] = useState(false);
+
   const handleEndClassroom = () => {
     if (session && isHost) {
-      if (confirm('Are you sure you want to conclude and record this live session for all students?')) {
-        endSession(session.id);
-        onSessionEnded?.();
-        onClose();
-      }
+      setIsConfirmEndOpen(true);
     } else {
       onClose();
     }
@@ -666,6 +665,24 @@ export const LiveClassroomDemoModal: React.FC<Props> = ({
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={isConfirmEndOpen}
+        title="Conclude Live Classroom"
+        message="Are you sure you want to conclude and record this live session for all students? All participant streams will end."
+        confirmLabel="End Session"
+        cancelLabel="Continue Live"
+        isDestructive={true}
+        onConfirm={() => {
+          if (session) {
+            endSession(session.id);
+            onSessionEnded?.();
+          }
+          setIsConfirmEndOpen(false);
+          onClose();
+        }}
+        onCancel={() => setIsConfirmEndOpen(false)}
+      />
     </div>
   );
 };

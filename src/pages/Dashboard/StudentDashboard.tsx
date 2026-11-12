@@ -8,7 +8,7 @@ import {
 import { GoogleMeetJoinButton, MeetingProviderBadge } from '../../components/GoogleMeet';
 import { apiClient, ApiError, hasBackendAccessToken } from '../../lib/apiClient';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, getDefaultCourseCover } from '../../lib/courseStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 // Authenticated database-driven student dashboard
@@ -33,6 +33,9 @@ interface StudentDashboardData {
     progressPercentage: number;
     completedLessons: number;
     totalLessons: number;
+    thumbnail?: string | null;
+    thumbnailUrl?: string | null;
+    category?: string;
     nextLesson: { id: string; title: string; type?: string; durationMinutes?: number } | null;
   }>;
   cohorts?: Array<{
@@ -150,7 +153,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. James Wilson',
     description: 'Master modern full-stack JavaScript, React 19, Node.js microservices, and PostgreSQL with capstone projects.',
     accentColor: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
-    courseId: 'crs-004'
+    courseId: 'crs-004',
+    thumbnail: 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-002',
@@ -168,7 +172,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. Marcus Bell',
     description: 'Practical data science with Pandas, NumPy, statistical modeling, and machine learning algorithms on real-world datasets.',
     accentColor: 'linear-gradient(135deg, #5447FF 0%, #F232A9 100%)',
-    courseId: 'crs-003'
+    courseId: 'crs-003',
+    thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-003',
@@ -186,7 +191,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Prof. Elena Rostova',
     description: 'Container orchestration, production Kubernetes clusters, Helm charts, and CI/CD automated deployment pipelines.',
     accentColor: 'linear-gradient(135deg, #2563EB 0%, #F472B6 100%)',
-    courseId: 'crs-001'
+    courseId: 'crs-001',
+    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-004',
@@ -204,7 +210,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. James Wilson',
     description: 'Advanced generics, mapped types, conditional typing, decorator patterns, and building bulletproof scalable APIs.',
     accentColor: 'linear-gradient(135deg, #2563EB 0%, #818CF8 50%, #F472B6 100%)',
-    courseId: 'crs-004'
+    courseId: 'crs-004',
+    thumbnail: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-005',
@@ -222,7 +229,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. Sarah Lin',
     description: 'Build enterprise LLM agents, RAG architectures, prompt pipelines, and embeddings with LangChain and vector databases.',
     accentColor: 'linear-gradient(135deg, #5447FF 0%, #3B82F6 100%)',
-    courseId: 'crs-003'
+    courseId: 'crs-003',
+    thumbnail: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-006',
@@ -240,7 +248,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. James Wilson',
     description: 'Server Components, App Router, Server Actions, streaming SSR, and edge deployments with maximum performance.',
     accentColor: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
-    courseId: 'crs-002'
+    courseId: 'crs-002',
+    thumbnail: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-007',
@@ -258,7 +267,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Prof. Elena Rostova',
     description: 'Design resilient distributed systems on AWS utilizing Lambda, DynamoDB, API Gateway, and CloudFront CDN caching.',
     accentColor: 'linear-gradient(135deg, #f59e0b 0%, #EC4899 100%)',
-    courseId: 'crs-001'
+    courseId: 'crs-001',
+    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
   },
   {
     id: 'rec-008',
@@ -276,7 +286,8 @@ const RECOMMENDED_COURSES = [
     instructor: 'Dr. Marcus Bell',
     description: 'Convolutional neural networks, vision transformers, transfer learning, and deploying computer vision models with TorchScript.',
     accentColor: 'linear-gradient(135deg, #5447FF 0%, #2563EB 100%)',
-    courseId: 'crs-003'
+    courseId: 'crs-003',
+    thumbnail: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80',
   }
 ];
 
@@ -374,6 +385,7 @@ export const StudentDashboard: React.FC = () => {
         id: c.id,
         courseId: c.id,
         title: c.title,
+        thumbnail: c.thumbnail || (c as any).thumbnailUrl || getDefaultCourseCover(c.category, c.title),
         category: (c.category || 'general').toLowerCase(),
         categoryName: c.category || 'General',
         badge: idx === 0 ? '🔥 #1 Popular' : '⭐ Recommended',
@@ -391,7 +403,12 @@ export const StudentDashboard: React.FC = () => {
       if (recommendedCategory === 'all') return mapped;
       return mapped.filter((course) => course.category.includes(recommendedCategory));
     }
-    return [];
+    const recs = RECOMMENDED_COURSES.map((r) => ({
+      ...r,
+      thumbnail: (r as any).thumbnail || getDefaultCourseCover(r.category, r.title),
+    }));
+    if (recommendedCategory === 'all') return recs;
+    return recs.filter((course) => course.category === recommendedCategory);
   }, [courses, recommendedCategory]);
 
   useEffect(() => {
@@ -501,10 +518,18 @@ export const StudentDashboard: React.FC = () => {
   const firstName = user?.firstName || user?.displayName?.split(' ')[0] || 'Student';
 
   const displayContinueLearning = data?.continueLearning || null;
+  const activeCourseRaw = displayContinueLearning
+    ? null
+    : (data.courses.find((course) => course.status !== 'completed') || data.courses[0] || null);
+
   const activeCourse = displayContinueLearning
     ? {
       id: displayContinueLearning.courseId,
       title: displayContinueLearning.courseTitle,
+      category: displayContinueLearning.category,
+      thumbnail: displayContinueLearning.courseThumbnail ||
+        courses.find((c) => c.id === displayContinueLearning.courseId)?.thumbnail ||
+        getDefaultCourseCover(displayContinueLearning.category, displayContinueLearning.courseTitle),
       description: null,
       status: 'in_progress',
       progressPercentage: displayContinueLearning.progressPercentage,
@@ -513,7 +538,13 @@ export const StudentDashboard: React.FC = () => {
       nextLesson: displayContinueLearning.nextLesson,
       actionUrl: displayContinueLearning.actionUrl,
     }
-    : (data.courses.find((course) => course.status !== 'completed') || data.courses[0]);
+    : (activeCourseRaw ? {
+      ...activeCourseRaw,
+      thumbnail: activeCourseRaw.thumbnail ||
+        activeCourseRaw.thumbnailUrl ||
+        courses.find((c) => c.id === activeCourseRaw.id)?.thumbnail ||
+        getDefaultCourseCover(activeCourseRaw.category, activeCourseRaw.title),
+    } : null);
 
   const nextSession = data.sessions[0];
   const nextAssessment = data.assessments.find((assessment) => assessment.attemptsRemaining > 0);
@@ -834,6 +865,72 @@ export const StudentDashboard: React.FC = () => {
 
             {activeCourse ? (
               <>
+                {/* 16:9 Course Cover Page Banner */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '135px',
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    marginBottom: '14px',
+                    background: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
+                    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {(activeCourse as any).thumbnail && (
+                    <img
+                      src={(activeCourse as any).thumbnail}
+                      alt={activeCourse.title}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(to top, rgba(11, 11, 42, 0.88) 0%, rgba(11, 11, 42, 0.25) 60%, transparent 100%)',
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                    }}
+                  >
+                    <span
+                      className="badge"
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.25)',
+                        backdropFilter: 'blur(6px)',
+                        color: '#FFFFFF',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                      }}
+                    >
+                      Active Syllabus Track
+                    </span>
+                    <span
+                      style={{
+                        color: '#FFFFFF',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                      }}
+                    >
+                      {activeCourse.progressPercentage}%
+                    </span>
+                  </div>
+                </div>
+
                 <h3 style={{ margin: '0 0 6px', fontSize: '1.05rem', lineHeight: 1.35 }}>{activeCourse.title}</h3>
                 <p className="text-secondary text-xs" style={{ margin: '0 0 14px', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {activeCourse.description || 'Resume your active curriculum and syllabus modules.'}
@@ -901,32 +998,73 @@ export const StudentDashboard: React.FC = () => {
 
             {data.courses.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {data.courses.slice(0, 3).map((course) => (
-                  <Link
-                    key={course.id}
-                    to={`/course-player/${course.id}`}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border-subtle)',
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      display: 'block',
-                      transition: 'border-color 0.18s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                      <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {course.title}
-                      </strong>
-                      <span className="text-muted text-xs" style={{ fontWeight: 600 }}>{course.progressPercentage}%</span>
-                    </div>
-                    <div className="progress-bar-bg" role="progressbar" aria-valuenow={course.progressPercentage} aria-valuemin={0} aria-valuemax={100} style={{ height: 5, borderRadius: 3 }}>
-                      <div className="progress-bar-fill" style={{ width: `${course.progressPercentage}%`, height: '100%', borderRadius: 3 }} />
-                    </div>
-                  </Link>
-                ))}
+                {data.courses.slice(0, 3).map((course: any) => {
+                  const courseCover = course.thumbnail ||
+                    course.thumbnailUrl ||
+                    courses.find((c) => c.id === course.id)?.thumbnail ||
+                    getDefaultCourseCover(course.category, course.title);
+
+                  return (
+                    <Link
+                      key={course.id}
+                      to={`/course-player/${course.id}`}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        textDecoration: 'none',
+                        color: 'inherit',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        transition: 'border-color 0.18s ease'
+                      }}
+                    >
+                      {/* 16:9 Course Cover Page Thumbnail */}
+                      <div
+                        style={{
+                          width: '64px',
+                          height: '42px',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          background: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
+                          position: 'relative',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                        }}
+                      >
+                        {courseCover && (
+                          <img
+                            src={courseCover}
+                            alt={course.title}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                          <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {course.title}
+                          </strong>
+                          <span className="text-muted text-xs" style={{ fontWeight: 600 }}>{course.progressPercentage}%</span>
+                        </div>
+                        <div className="progress-bar-bg" role="progressbar" aria-valuenow={course.progressPercentage} aria-valuemin={0} aria-valuemax={100} style={{ height: 5, borderRadius: 3 }}>
+                          <div className="progress-bar-fill" style={{ width: `${course.progressPercentage}%`, height: '100%', borderRadius: 3 }} />
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             ) : (
               <div style={{ padding: '24px 16px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-subtle)', textAlign: 'center', margin: 'auto 0' }}>
@@ -1053,87 +1191,132 @@ export const StudentDashboard: React.FC = () => {
 
         {/* Horizontal Slide Carousel Track */}
         <div ref={sliderRef} className="horizontal-course-slider">
-          {filteredRecommendedCourses.map((course) => (
-            <div
-              key={course.id}
-              className="course-carousel-card"
-            >
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: course.accentColor
-              }} />
+          {filteredRecommendedCourses.map((course: any) => {
+            const courseCover = course.thumbnail ||
+              courses.find((c) => c.id === course.courseId || c.id === course.id)?.thumbnail ||
+              getDefaultCourseCover(course.category, course.title);
 
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span className="badge" style={{
-                    background: `${course.badgeColor}20`,
-                    color: course.badgeColor,
-                    border: `1px solid ${course.badgeColor}40`,
-                    fontSize: '0.68rem',
-                    fontWeight: 700
-                  }}>
-                    {course.badge}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.78rem', fontWeight: 700, color: '#f59e0b' }}>
-                    <Star size={13} fill="#f59e0b" color="#f59e0b" />
-                    <span>{course.rating}</span>
-                    <span className="text-muted text-xs" style={{ fontWeight: 400 }}>({course.ratingCount})</span>
+            return (
+              <div
+                key={course.id}
+                className="course-carousel-card"
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                {/* 16:9 Course Cover Page */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '140px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    background: course.accentColor || 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {courseCover && (
+                    <img
+                      src={courseCover}
+                      alt={course.title}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '10px',
+                      left: '10px',
+                      zIndex: 2,
+                    }}
+                  >
+                    <span
+                      className="badge"
+                      style={{
+                        background: 'rgba(5, 8, 22, 0.75)',
+                        backdropFilter: 'blur(6px)',
+                        color: '#FFFFFF',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      {course.badge}
+                    </span>
                   </div>
                 </div>
 
-                <h3 style={{ fontSize: '1.02rem', margin: '0 0 8px 0', lineHeight: 1.35, minHeight: '2.7rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {course.title}
-                </h3>
-                <p className="text-secondary text-xs" style={{ margin: '0 0 14px 0', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '2.4rem' }}>
-                  {course.description}
-                </p>
+                <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>
+                        {course.categoryName || course.level}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.78rem', fontWeight: 700, color: '#f59e0b' }}>
+                        <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                        <span>{course.rating}</span>
+                        <span className="text-muted text-xs" style={{ fontWeight: 400 }}>({course.ratingCount})</span>
+                      </div>
+                    </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <BookOpen size={12} color="var(--primary)" /> {course.learnersCount} enrolled
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Clock size={12} /> {course.duration}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Activity size={12} /> {course.modulesCount} modules
-                  </span>
+                    <h3 style={{ fontSize: '1.02rem', margin: '0 0 8px 0', lineHeight: 1.35, minHeight: '2.7rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {course.title}
+                    </h3>
+                    <p className="text-secondary text-xs" style={{ margin: '0 0 14px 0', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '2.4rem' }}>
+                      {course.description}
+                    </p>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <BookOpen size={12} color="var(--primary)" /> {course.learnersCount} enrolled
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} /> {course.duration}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Activity size={12} /> {course.modulesCount} modules
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', marginBottom: '12px', fontSize: '0.75rem' }}>
+                      <span className="text-muted text-xs">Instructor: <strong style={{ color: 'var(--text-main)' }}>{course.instructor}</strong></span>
+                      <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>{course.level}</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <Link
+                        to={`/course-player/${course.courseId}`}
+                        className="btn btn-secondary btn-sm"
+                        style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
+                      >
+                        Syllabus
+                      </Link>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          enrollCourse(course.courseId);
+                          setEnrolledNotice(`Successfully enrolled in "${course.title}"! Added to My Enrolled Courses.`);
+                          setTimeout(() => setEnrolledNotice(null), 5000);
+                        }}
+                      >
+                        Quick Enroll
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)', marginBottom: '12px', fontSize: '0.75rem' }}>
-                  <span className="text-muted text-xs">Instructor: <strong style={{ color: 'var(--text-main)' }}>{course.instructor}</strong></span>
-                  <span className="badge badge-secondary" style={{ fontSize: '0.68rem' }}>{course.level}</span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <Link
-                    to={`/course-player/${course.courseId}`}
-                    className="btn btn-secondary btn-sm"
-                    style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
-                  >
-                    Syllabus
-                  </Link>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
-                    onClick={() => {
-                      enrollCourse(course.courseId);
-                      setEnrolledNotice(`Successfully enrolled in "${course.title}"! Added to My Enrolled Courses.`);
-                      setTimeout(() => setEnrolledNotice(null), 5000);
-                    }}
-                  >
-                    Quick Enroll
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>

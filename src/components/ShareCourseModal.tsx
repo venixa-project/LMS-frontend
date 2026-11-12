@@ -86,11 +86,12 @@ export const ShareCourseModal: React.FC<Props> = ({ course, isOpen, onClose }) =
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
               style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: '#FFFFFF',
+                border: '1px solid rgba(255, 255, 255, 0.35)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -99,18 +100,28 @@ export const ShareCourseModal: React.FC<Props> = ({ course, isOpen, onClose }) =
               <Link2 size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 700 }}>
+              <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800, color: '#FFFFFF' }}>
                 Share Course & Student Enrollment
               </h3>
-              <p className="text-muted text-xs" style={{ margin: '2px 0 0 0' }}>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.85)' }}>
                 Generate official shareable link for student discovery and enrollment
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '6px', borderRadius: '50%', color: 'var(--text-muted)' }}
+            style={{
+              padding: '6px',
+              borderRadius: '8px',
+              color: '#FFFFFF',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease'
+            }}
             aria-label="Close modal"
           >
             <X size={18} />

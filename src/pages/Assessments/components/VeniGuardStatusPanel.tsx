@@ -100,23 +100,25 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
         {/* Center: Live Monitoring Status Chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Screen */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              fontSize: '0.75rem',
-              color: isScreenSharing ? 'var(--text-main)' : 'var(--danger)',
-              fontWeight: 500,
-            }}
-            title={isScreenSharing ? 'Screen capture active' : 'Screen share interrupted'}
-          >
-            <Monitor size={14} color={isScreenSharing ? '#3B82F6' : 'var(--danger)'} />
-            <span>Screen:</span>
-            <span style={{ fontWeight: 700, color: isScreenSharing ? 'var(--success)' : 'var(--danger)' }}>
-              {isScreenSharing ? 'Active' : 'Offline'}
-            </span>
-          </div>
+          {policy.requireScreenShare && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.75rem',
+                color: isScreenSharing ? 'var(--text-main)' : 'var(--danger)',
+                fontWeight: 500,
+              }}
+              title={isScreenSharing ? 'Screen capture active' : 'Screen share interrupted'}
+            >
+              <Monitor size={14} color={isScreenSharing ? '#3B82F6' : 'var(--danger)'} />
+              <span>Screen:</span>
+              <span style={{ fontWeight: 700, color: isScreenSharing ? 'var(--success)' : 'var(--danger)' }}>
+                {isScreenSharing ? 'Active' : 'Offline'}
+              </span>
+            </div>
+          )}
 
           {/* Mic */}
           {policy.requireMicrophone && (

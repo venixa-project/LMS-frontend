@@ -24,6 +24,7 @@ import { WeeklyTimetableView } from './components/WeeklyTimetableView';
 import { RecordedClassesView } from './components/RecordedClassesView';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
 import { openGoogleMeetSession } from '../../lib/googleMeet';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -126,6 +127,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   // Cancellation Modal
   const [cancelModalSession, setCancelModalSession] = useState<LiveSession | null>(null);
   const [cancelReason, setCancelReason] = useState('Faculty schedule conflict & curriculum rescheduling');
+  const [deleteSessionModal, setDeleteSessionModal] = useState<{ id: string; title: string } | null>(null);
 
   // Notification Banner
   const [noticeBanner, setNoticeBanner] = useState<string | null>(null);
@@ -1102,10 +1104,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           <button
                             className="btn btn-ghost btn-sm"
                             onClick={() => {
-                              if (confirm(`Permanently remove record for "${s.title}"?`)) {
-                                deleteSession(s.id);
-                                showNotice(`Session removed from archives.`);
-                              }
+                              setDeleteSessionModal({ id: s.id, title: s.title });
                             }}
                             style={{ padding: '4px 8px', color: 'var(--danger)', gap: '4px' }}
                           >
@@ -1595,6 +1594,24 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           </div>
         </div>
       )}
+
+      {/* Delete Record Confirmation Modal matching user screenshot */}
+      <ConfirmationModal
+        isOpen={Boolean(deleteSessionModal)}
+        title="Delete Session Record"
+        message={`Are you sure you want to permanently remove the record for "${deleteSessionModal?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (deleteSessionModal) {
+            deleteSession(deleteSessionModal.id);
+            showNotice('Session removed from archives.');
+            setDeleteSessionModal(null);
+          }
+        }}
+        onCancel={() => setDeleteSessionModal(null)}
+      />
     </div>
   );
 };

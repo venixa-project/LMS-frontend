@@ -15,6 +15,7 @@ import {
 import { ScheduleLiveSessionModal } from './components/ScheduleLiveSessionModal';
 import { LiveClassroomDemoModal } from './components/LiveClassroomDemoModal';
 import { GoogleMeetIcon, GoogleMeetJoinButton, MeetingProviderBadge } from '../../components/GoogleMeet';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 
 export const TimetablePage: React.FC = () => {
   const { user } = useAuthStore();
@@ -35,6 +36,7 @@ export const TimetablePage: React.FC = () => {
   const [sessionToEdit, setSessionToEdit] = useState<LiveSession | null>(null);
   const [selectedDetailSession, setSelectedDetailSession] = useState<LiveSession | null>(null);
   const [activeLiveRoomSession, setActiveLiveRoomSession] = useState<LiveSession | null>(null);
+  const [deleteSessionModal, setDeleteSessionModal] = useState<{ id: string; title: string } | null>(null);
   const [noticeBanner, setNoticeBanner] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
@@ -989,10 +991,7 @@ export const TimetablePage: React.FC = () => {
                                     className="btn btn-icon btn-sm"
                                     title="Delete Schedule"
                                     onClick={() => {
-                                      if (confirm(`Remove "${s.title}" from timetable?`)) {
-                                        deleteSession(s.id);
-                                        showNotice(`Removed "${s.title}" from timetable.`);
-                                      }
+                                      setDeleteSessionModal({ id: s.id, title: s.title });
                                     }}
                                     style={{ padding: '4px 6px' }}
                                   >
@@ -1201,11 +1200,8 @@ export const TimetablePage: React.FC = () => {
                   <button
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
-                      if (confirm(`Delete "${selectedDetailSession.title}" from timetable?`)) {
-                        deleteSession(selectedDetailSession.id);
-                        showNotice(`Deleted "${selectedDetailSession.title}".`);
-                        setSelectedDetailSession(null);
-                      }
+                      setDeleteSessionModal({ id: selectedDetailSession.id, title: selectedDetailSession.title });
+                      setSelectedDetailSession(null);
                     }}
                     style={{ color: 'var(--danger)', gap: '4px' }}
                   >
@@ -1241,6 +1237,24 @@ export const TimetablePage: React.FC = () => {
         isOpen={Boolean(activeLiveRoomSession)}
         onClose={() => setActiveLiveRoomSession(null)}
         onSessionEnded={() => showNotice('Live broadcast concluded and video recorded.')}
+      />
+
+      {/* Delete Timetable Schedule Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(deleteSessionModal)}
+        title="Remove from Timetable"
+        message={`Are you sure you want to remove "${deleteSessionModal?.title}" from the timetable? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (deleteSessionModal) {
+            deleteSession(deleteSessionModal.id);
+            showNotice(`Removed "${deleteSessionModal.title}" from timetable.`);
+            setDeleteSessionModal(null);
+          }
+        }}
+        onCancel={() => setDeleteSessionModal(null)}
       />
     </div>
   );

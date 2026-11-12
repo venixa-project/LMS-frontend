@@ -188,9 +188,20 @@ function persistStoredNotifications(notifs: Notification[]) {
 
 function getUserNotifications(user: User): Notification[] {
   const stored = loadStoredNotifications();
-  // Filter notifications belonging to this user
+  const isStudentUser =
+    user.activeRole === 'student' ||
+    user.activeRole === 'learner' ||
+    (user as any).role === 'student' ||
+    (user as any).role === 'learner';
+
+  // Filter notifications belonging to this user or broadcast to students/all
   const userStored = stored.filter(
-    (n) => n.userId === user.id || n.userId === user.email || (user.rollNo && n.userId === user.rollNo)
+    (n) =>
+      n.userId === user.id ||
+      n.userId === user.email ||
+      (user.rollNo && n.userId === user.rollNo) ||
+      n.userId === 'all' ||
+      (isStudentUser && n.userId === 'all-students')
   );
 
   const defaults: Notification[] = [
@@ -272,6 +283,15 @@ interface AuthState {
     date?: string;
     startTime?: string;
     message?: string;
+  }) => { success: boolean; count: number };
+  notifyAssessmentPublished: (payload: {
+    assessmentId: string;
+    assessmentTitle: string;
+    courseId?: string;
+    courseTitle?: string;
+    durationMinutes?: number;
+    totalMarks?: number;
+    recipientIds?: string[];
   }) => { success: boolean; count: number };
 }
 
@@ -651,6 +671,47 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           unreadNotifications: refreshed.filter((n) => !n.isRead).length,
         });
       }
+    }
+
+    return {
+      success: true,
+      count: newNotifs.length,
+    };
+  },
+
+  notifyAssessmentPublished: ({ assessmentId, assessmentTitle, courseId, courseTitle, durationMinutes, totalMarks, recipientIds }) => {
+    const stored = loadStoredNotifications();
+    const timestamp = new Date().toISOString();
+    const dur = durationMinutes || 60;
+    const marks = totalMarks || 100;
+    const courseSuffix = courseTitle ? ` for "${courseTitle}"` : '';
+
+    const defaultStudents = ['all-students', 'stu-001', 'stu-002', 'student@lms.demo', 'k.ravivarma047@gmail.com'];
+    const recipients = (recipientIds && recipientIds.length > 0)
+      ? Array.from(new Set([...recipientIds, 'all-students']))
+      : defaultStudents;
+
+    const newNotifs: Notification[] = recipients.map((sid) => ({
+      id: `notif-asmt-${Date.now()}-${sid}`,
+      userId: sid,
+      title: `New Assessment: ${assessmentTitle}`,
+      message: `A new assessment "${assessmentTitle}" has been published${courseSuffix}. Total Marks: ${marks}, Duration: ${dur} mins. Good luck!`,
+      category: 'assessment',
+      link: `/exam/${assessmentId}`,
+      isRead: false,
+      timestamp,
+    }));
+
+    const updatedStored = [...newNotifs, ...stored];
+    persistStoredNotifications(updatedStored);
+
+    const currentUser = get().user;
+    if (currentUser) {
+      const refreshed = getUserNotifications(currentUser);
+      set({
+        notifications: refreshed,
+        unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+      });
     }
 
     return {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 import { Organization } from '../../types';
 import { StructureTenantsNav } from '../../components/StructureTenantsNav';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 import {
   Building2, Plus, Search, Edit2, Archive, Globe, Clock,
   Users, CheckCircle2, X, ExternalLink, Settings
@@ -72,10 +73,10 @@ export const OrganizationsPage: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const [archiveOrgId, setArchiveOrgId] = useState<string | null>(null);
+
   const handleArchive = (id: string) => {
-    if (confirm('Are you sure you want to archive this organization? All active sessions and enrollments will be suspended.')) {
-      setOrgs(orgs.map((o) => o.id === id ? { ...o, status: 'archived' } : o));
-    }
+    setArchiveOrgId(id);
   };
 
   return (
@@ -283,6 +284,22 @@ export const OrganizationsPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Archive Organization Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={Boolean(archiveOrgId)}
+        title="Archive Organization"
+        message="Are you sure you want to archive this organization? All active sessions and enrollments will be suspended."
+        confirmLabel="Archive"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (archiveOrgId) {
+            setOrgs(orgs.map((o) => o.id === archiveOrgId ? { ...o, status: 'archived' } : o));
+            setArchiveOrgId(null);
+          }
+        }}
+        onCancel={() => setArchiveOrgId(null)}
+      />
     </div>
   );
 };

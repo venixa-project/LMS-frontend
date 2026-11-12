@@ -55,7 +55,11 @@ export function getAiServiceUrl(): string {
   }
 
   if (typeof window !== 'undefined' && window.location) {
-    const hostname = window.location.hostname;
+    const { protocol, hostname } = window.location;
+    // When served over HTTPS, use the relative reverse-proxy endpoint to prevent mixed-content blocks
+    if (protocol === 'https:') {
+      return '/ai-service';
+    }
     if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
       return `http://${hostname}:8000`;
     }

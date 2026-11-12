@@ -10,8 +10,9 @@ import { apiClient } from '../../lib/apiClient';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
-  FileText, Video, Mic, Download, Lock, Send
+  FileText, Video, Mic, Download, Lock, Send, ExternalLink
 } from 'lucide-react';
+import { GoogleMeetIcon } from '../../components/GoogleMeet';
 import { VeniGuardSetup } from './components/VeniGuardSetup';
 import { VeniGuardStatusPanel } from './components/VeniGuardStatusPanel';
 import { VeniGuardAlertToast, AlertNotification } from './components/VeniGuardAlertToast';
@@ -40,35 +41,50 @@ export const ExamPlayerPage: React.FC = () => {
   }
 
   const { id } = useParams<{ id: string }>();
-  const { getAssessmentById, getQuestionsForAssessment } = useAssessmentStore();
+  const { getAssessmentById, getQuestionsForAssessment, fetchAssessments } = useAssessmentStore();
   const storeAssessment = id ? getAssessmentById(id) : undefined;
   const [pgAssessment, setPgAssessment] = useState<any | null>(null);
   const [pgQuestions, setPgQuestions] = useState<any[] | null>(null);
   const [pgAttemptId, setPgAttemptId] = useState<string | null>(null);
   const [serverSessionId, setServerSessionId] = useState<string | null>(null);
+  const [isLoadingApi, setIsLoadingApi] = useState<boolean>(Boolean(id && !storeAssessment));
+
+  useEffect(() => {
+    if (!storeAssessment) {
+      fetchAssessments().catch(() => {});
+    }
+  }, [storeAssessment, fetchAssessments]);
 
   useEffect(() => {
     if (id && id.length === 36) {
+      setIsLoadingApi(true);
       getAssessmentApi(id)
         .then((data) => {
-          setPgAssessment(data);
-          if (data.questions && data.questions.length > 0) {
-            setPgQuestions(
-              data.questions.map((q: any) => ({
-                id: q.id,
-                assessmentId: data.id,
-                prompt: q.prompt,
-                type: q.type,
-                points: q.points || 1,
-                options: (q.options || []).map((o: any) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
-                explanation: q.explanation,
-              }))
-            );
+          if (data) {
+            setPgAssessment(data);
+            if (data.questions && data.questions.length > 0) {
+              setPgQuestions(
+                data.questions.map((q: any) => ({
+                  id: q.id,
+                  assessmentId: data.id,
+                  prompt: q.prompt,
+                  type: q.type,
+                  points: q.points || 1,
+                  options: (q.options || []).map((o: any) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+                  explanation: q.explanation,
+                }))
+              );
+            }
           }
         })
         .catch((err) => {
           console.warn('Notice: Could not load assessment from PostgreSQL API:', err);
+        })
+        .finally(() => {
+          setIsLoadingApi(false);
         });
+    } else {
+      setIsLoadingApi(false);
     }
   }, [id]);
 
@@ -97,14 +113,14 @@ export const ExamPlayerPage: React.FC = () => {
     attachRecording,
   } = useProctoringStore();
 
-  // Resolve monitoring policy (Ensure all 4 permissions: Screen, Mic, Webcam, Fullscreen are required)
+  // Resolve monitoring policy based on assessment's configured proctoringSettings
   const policyLevel: any = assessment?.proctoringPolicyLevel || 'monitored';
   const basePolicy: ProctoringPolicy = (policies as Record<string, ProctoringPolicy>)[policyLevel] || DEFAULT_PROCTORING_POLICIES.monitored;
   const policy: ProctoringPolicy = {
     ...basePolicy,
-    requireScreenShare: true,
-    requireMicrophone: true,
-    requireWebcam: true,
+    requireScreenShare: Boolean(assessment?.proctoringSettings?.screenShare),
+    requireMicrophone: assessment?.proctoringSettings ? Boolean(assessment.proctoringSettings.mic) : true,
+    requireWebcam: assessment?.proctoringSettings ? Boolean(assessment.proctoringSettings.camera) : true,
     requireFullscreen: true,
   };
 
@@ -116,35 +132,39 @@ export const ExamPlayerPage: React.FC = () => {
   const candidateEmail = user?.email || 'student@venilearn.org';
   const candidateId = user?.id || 'u-009';
 
-  // Jitsi Meet endpoints and pre-configured proctoring room
+  // Google Meet endpoints and pre-configured proctoring room
   const jitsiEndpoints = useMemo(() => {
     return buildJitsiUrls({
       assessmentId: assessment?.id || "",
-      assessmentTitle: assessment.title,
+      assessmentTitle: assessment?.title || "Assessment",
       candidateId,
       candidateName,
       candidateEmail,
       role: 'candidate',
+      customMeetUrl: (assessment as any)?.googleMeetUrl,
+      jitsiRoomId: assessment?.jitsiRoomId,
     });
-  }, [assessment.id, assessment.title, candidateId, candidateName, candidateEmail]);
+  }, [assessment?.id, assessment?.title, assessment?.jitsiRoomId, (assessment as any)?.googleMeetUrl, candidateId, candidateName, candidateEmail]);
 
   // Lifecycle stage: 'readiness' -> 'in_exam' -> 'results'
   const [stage, setStage] = useState<'readiness' | 'in_exam' | 'results'>('readiness');
 
-  // Availability & Permission Rules
+  // Availability & Permission Rules (Safe optional-chaining protects initial render)
   const now = new Date();
-  const startDate = assessment.availabilityStart ? new Date(assessment.availabilityStart) : null;
-  const endDate = assessment.availabilityEnd ? new Date(assessment.availabilityEnd) : null;
+  const startDate = assessment?.availabilityStart ? new Date(assessment.availabilityStart) : null;
+  const endDate = assessment?.availabilityEnd ? new Date(assessment.availabilityEnd) : null;
   const isBeforeStart = Boolean(startDate && now < startDate);
   const isAfterEnd = Boolean(endDate && now > endDate);
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isPrivileged = !isStudent;
 
   // Check if learner already earned an assessment certificate
-  const existingAssessmentCert = user ? useCertificateStore.getState().getCertificatesByLearner(user.id).find((c) => c.assessmentId === assessment?.id) : undefined;
+  const existingAssessmentCert = (user && assessment?.id)
+    ? useCertificateStore.getState().getCertificatesByLearner(user.id).find((c) => c.assessmentId === assessment.id)
+    : undefined;
 
   // Exam questions & answer state
-  const loadedQuestions = (id && assessment) ? getQuestionsForAssessment(assessment.id) : [];
+  const loadedQuestions = (id && assessment?.id) ? getQuestionsForAssessment(assessment.id) : [];
   const questions = (pgQuestions && pgQuestions.length > 0)
     ? pgQuestions
     : loadedQuestions;
@@ -191,9 +211,9 @@ export const ExamPlayerPage: React.FC = () => {
   const [passed, setPassed] = useState(true);
 
   // Proctoring mode resolution
-  const isProctored = assessment.proctoringRequired || (assessment.proctoringMode && assessment.proctoringMode !== 'none');
-  const proctorMode = assessment.proctoringMode || (assessment.proctoringRequired ? 'combined' : 'none');
-  const proctorSettings = assessment.proctoringSettings || {
+  const isProctored = Boolean(assessment?.proctoringRequired || (assessment?.proctoringMode && assessment.proctoringMode !== 'none'));
+  const proctorMode = assessment?.proctoringMode || (assessment?.proctoringRequired ? 'combined' : 'none');
+  const proctorSettings = assessment?.proctoringSettings || {
     camera: true,
     mic: true,
     screenShare: false,
@@ -260,77 +280,86 @@ export const ExamPlayerPage: React.FC = () => {
   useEffect(() => {
     if (stage !== 'in_exam') return;
 
-    // 1. Tab Visibility Change
+    // 1. Tab Visibility Change (Student switched tabs or minimized window)
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        setIsExamPaused(true);
+        setPauseReason({
+          title: 'Assessment Locked: Tab Switch Detected',
+          message:
+            'Navigating to other browser tabs or external applications during the examination is strictly prohibited. Your session is paused to prevent accessing other websites. Return to this window and verify full-screen to continue.',
+        });
+
         if (currentSessionId) {
           logEvent(currentSessionId, {
             category: 'tab_visibility',
-            severity: policy.pauseOnTabSwitch ? 'critical' : 'warning',
-            title: 'Exam Window Focus Lost',
-            description: 'The assessment tab became hidden. Student may have switched tabs or minimized the browser window.',
+            severity: 'critical',
+            title: 'Exam Window Focus Lost (Tab Switch)',
+            description: 'The assessment tab became hidden. Student switched to another tab or application.',
             technicalMetadata: { event: 'visibilitychange', hidden: true },
           });
         }
         recordTelemetryEvent(
           'tab_visibility',
-          policy.pauseOnTabSwitch ? 'critical' : 'warning',
-          'Exam Window Focus Lost',
-          'The assessment tab became hidden. Student may have switched tabs or minimized the browser window.'
+          'critical',
+          'Exam Window Focus Lost (Tab Switch)',
+          'The assessment tab became hidden. Student switched to another tab or application.'
         );
 
         showAlert({
-          title: 'Exam Window Focus Lost',
+          title: 'Tab Switch Prohibited',
           message:
-            'The assessment window lost focus. This happens when you switch tabs or another program activates.',
-          severity: policy.pauseOnTabSwitch ? 'critical' : 'warning',
+            'You switched away from the active examination tab. The assessment has been paused and recorded for academic review.',
+          severity: 'critical',
           timestamp: new Date().toLocaleTimeString(),
-          actionLabel: 'Return to Assessment',
-          onAction: () => {},
+          actionLabel: 'Return to Fullscreen',
+          onAction: () => {
+            enterFullscreen().then((ok) => setIsFullscreen(ok));
+          },
           recordedForReview: true,
         });
-
-        if (policy.pauseOnTabSwitch) {
-          setIsExamPaused(true);
-          setPauseReason({
-            title: 'Window Focus Lost',
-            message:
-              'Your institutional policy requires uninterrupted tab focus. Return to this tab and verify focus to resume.',
-          });
-        }
       }
     };
 
-    // 2. Window Blur (Lost OS Focus)
+    // 2. Window Blur (Lost OS Focus / Clicked on external window or dual screen)
     const handleWindowBlur = () => {
-      if (currentSessionId && !document.hidden) {
-        logEvent(currentSessionId, {
-          category: 'window_focus',
-          severity: 'informational',
-          title: 'Assessment Window Lost Focus',
-          description: 'The browser window lost primary OS focus. An external application or desktop notification became active.',
-          technicalMetadata: { event: 'window_blur' },
+      if (!document.hidden && stage === 'in_exam') {
+        setIsExamPaused(true);
+        setPauseReason({
+          title: 'Assessment Locked: Window Focus Lost',
+          message:
+            'The browser window lost active OS focus. An external window, desktop notification, or split-screen application became active. Please refocus the exam window.',
         });
+
+        if (currentSessionId) {
+          logEvent(currentSessionId, {
+            category: 'window_focus',
+            severity: 'critical',
+            title: 'Assessment Window Lost Focus (Blur)',
+            description: 'The browser window lost primary OS focus. An external application or monitor was clicked.',
+            technicalMetadata: { event: 'window_blur' },
+          });
+        }
         recordTelemetryEvent(
           'window_focus',
-          'informational',
-          'Assessment Window Lost Focus',
-          'The browser window lost primary OS focus. An external application or desktop notification became active.'
+          'critical',
+          'Assessment Window Lost Focus (Blur)',
+          'The browser window lost primary OS focus. An external application or monitor was clicked.'
         );
 
         showAlert({
           title: 'Window Focus Lost',
           message:
-            'Another application or window became active. Please keep the examination window focused.',
-          severity: 'informational',
+            'Operating another application or window during the examination is prohibited. The assessment has been paused.',
+          severity: 'critical',
           timestamp: new Date().toLocaleTimeString(),
-          actionLabel: 'Keep Focused',
+          actionLabel: 'Refocus Window',
           recordedForReview: true,
         });
       }
     };
 
-    // 3. Fullscreen Exit
+    // 3. Fullscreen Exit (Student pressed ESC, F11, or browser exit)
     const handleFullscreenChange = () => {
       const nowFullscreen = isCurrentlyFullscreen();
       setIsFullscreen(nowFullscreen);
@@ -338,11 +367,19 @@ export const ExamPlayerPage: React.FC = () => {
         updateChecklistState(currentSessionId, { isFullscreen: nowFullscreen });
       }
 
-      if (!nowFullscreen && policy.requireFullscreen) {
+      if (!nowFullscreen) {
+        // Immediately pause exam and lock questions behind overlay
+        setIsExamPaused(true);
+        setPauseReason({
+          title: 'Assessment Locked: Full-Screen Exited',
+          message:
+            'To maintain academic integrity and prevent accessing other websites or unauthorized resources, this assessment is locked outside full-screen mode. Please click below to re-enter full-screen mode immediately.',
+        });
+
         if (currentSessionId) {
           logEvent(currentSessionId, {
             category: 'fullscreen_exit',
-            severity: 'warning',
+            severity: 'critical',
             title: 'Full-Screen Mode Exited',
             description: 'The student exited full-screen mode during the active assessment session.',
             technicalMetadata: { event: 'fullscreenchange', isFullscreen: false },
@@ -350,7 +387,7 @@ export const ExamPlayerPage: React.FC = () => {
         }
         recordTelemetryEvent(
           'fullscreen_exit',
-          'warning',
+          'critical',
           'Full-Screen Mode Exited',
           'The student exited full-screen mode during the active assessment session.'
         );
@@ -358,8 +395,8 @@ export const ExamPlayerPage: React.FC = () => {
         showAlert({
           title: 'Full-Screen Mode Exited',
           message:
-            'You exited full-screen mode. Re-enter full-screen mode to comply with the assessment policy.',
-          severity: 'warning',
+            'You exited full-screen mode. You must remain in full-screen mode throughout the entire assessment.',
+          severity: 'critical',
           timestamp: new Date().toLocaleTimeString(),
           actionLabel: 'Re-enter Fullscreen',
           onAction: () => {
@@ -370,7 +407,73 @@ export const ExamPlayerPage: React.FC = () => {
       }
     };
 
-    // 4. Network Offline / Online
+    // 4. Keyboard Trap (Block Alt+Tab, Meta, F11, F12, DevTools, Copy-Paste)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent browser F11 fullscreen toggle and F12 developer tools
+      if (e.key === 'F11' || e.key === 'F12') {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      // Prevent Windows/Meta key and Alt+Tab / Alt+Esc
+      if (e.key === 'Meta' || (e.altKey && (e.key === 'Tab' || e.key === 'Escape'))) {
+        e.preventDefault();
+        setIsExamPaused(true);
+        setPauseReason({
+          title: 'System Key Navigation Intercepted',
+          message: 'System navigation shortcuts are locked to prevent switching between applications during the exam.',
+        });
+        return;
+      }
+      // Prevent Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+P, Ctrl+S, Ctrl+U
+      if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a', 'p', 's', 'u'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        showAlert({
+          title: 'Action Disabled',
+          message: 'Copying, pasting, printing, or viewing page source is prohibited during the assessment.',
+          severity: 'warning',
+          timestamp: new Date().toLocaleTimeString(),
+          recordedForReview: true,
+        });
+        return;
+      }
+      // Prevent DevTools shortcuts (Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        setIsExamPaused(true);
+        setPauseReason({
+          title: 'Developer Tools Blocked',
+          message: 'Opening browser developer tools is strictly prohibited during the examination.',
+        });
+        return;
+      }
+    };
+
+    // 5. Context Menu (Right Click) Prevention
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      showAlert({
+        title: 'Right-Click Disabled',
+        message: 'The context menu is disabled during the assessment to preserve exam integrity.',
+        severity: 'warning',
+        timestamp: new Date().toLocaleTimeString(),
+        recordedForReview: true,
+      });
+    };
+
+    // 6. Copy / Cut / Paste Prevention
+    const handleClipboard = (e: ClipboardEvent) => {
+      e.preventDefault();
+      showAlert({
+        title: 'Clipboard Disabled',
+        message: 'Copying or pasting content is disabled during the assessment.',
+        severity: 'warning',
+        timestamp: new Date().toLocaleTimeString(),
+        recordedForReview: true,
+      });
+    };
+
+    // 7. Network Offline / Online
     const handleOffline = () => {
       setIsOnline(false);
       if (currentSessionId) {
@@ -429,6 +532,11 @@ export const ExamPlayerPage: React.FC = () => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleClipboard);
+    document.addEventListener('cut', handleClipboard);
+    document.addEventListener('paste', handleClipboard);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
 
@@ -436,6 +544,11 @@ export const ExamPlayerPage: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleClipboard);
+      document.removeEventListener('cut', handleClipboard);
+      document.removeEventListener('paste', handleClipboard);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
     };
@@ -520,7 +633,19 @@ export const ExamPlayerPage: React.FC = () => {
   };
 
   // Resume Exam Action from Pause Overlay
-  const handleResumeExam = () => {
+  const handleResumeExam = async () => {
+    // If fullscreen is not active, enforce entering fullscreen first
+    if (!isCurrentlyFullscreen()) {
+      const ok = await enterFullscreen();
+      setIsFullscreen(ok);
+      if (!ok) {
+        setPauseReason({
+          title: 'Full-Screen Re-entry Required',
+          message: 'You must grant full-screen access to resume the examination.',
+        });
+        return;
+      }
+    }
     setIsExamPaused(false);
     if (currentSessionId) {
       setSessionStatus(currentSessionId, 'in_progress');
@@ -876,6 +1001,20 @@ export const ExamPlayerPage: React.FC = () => {
   };
 
   if (!assessment) {
+    if (isLoadingApi) {
+      return (
+        <div style={{ maxWidth: '680px', margin: '80px auto', padding: '0 16px', textAlign: 'center' }}>
+          <div className="card" style={{ padding: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div className="spin-slow" style={{ width: '40px', height: '40px', border: '3px solid rgba(84, 71, 255, 0.2)', borderTopColor: '#5447FF', borderRadius: '50%' }} />
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Loading Assessment Session...</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: 0 }}>
+              Connecting to secure environment and retrieving assessment parameters.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ maxWidth: '680px', margin: '40px auto', padding: '0 16px', textAlign: 'center' }}>
         <div className="card" style={{ padding: '36px' }}>
@@ -1173,6 +1312,31 @@ export const ExamPlayerPage: React.FC = () => {
               <Clock size={16} />
               <span>{formatTimer(timeLeftSeconds)}</span>
             </div>
+
+            {/* Google Meet Quick-Access Launcher Pill */}
+            {(assessment.proctoringMode === 'manual' || assessment.proctoringMode === 'combined' || assessment.jitsiRoomId || (assessment as any).googleMeetUrl) && (
+              <button
+                type="button"
+                onClick={() => launchJitsiConference(jitsiEndpoints.webUrl)}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.78rem',
+                  padding: '5px 12px',
+                  borderColor: 'rgba(16, 185, 129, 0.45)',
+                  color: '#34D399',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  fontWeight: 700,
+                }}
+                title="Open or Rejoin Live Google Meet Invigilation Session"
+              >
+                <GoogleMeetIcon size={15} />
+                <span>Google Meet</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
 
             <button
               className="btn btn-primary btn-sm"

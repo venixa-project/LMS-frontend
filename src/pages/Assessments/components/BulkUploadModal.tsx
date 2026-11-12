@@ -770,42 +770,60 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       >
         {/* Header */}
         <div
+          className="modal-header"
           style={{
             padding: '18px 24px',
-            borderBottom: '1px solid var(--border-subtle)',
+            borderBottom: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'var(--bg-input)'
+            background: 'linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%)',
+            color: '#FFFFFF'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, var(--primary) 0%, #a855f7 100%)',
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.18)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                boxShadow: '0 4px 12px rgba(84, 71, 255, 0.3)'
               }}
             >
               <Upload size={20} />
             </div>
             <div>
-              <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 700 }}>Bulk Question Import</h2>
-              <p className="text-muted text-xs" style={{ margin: 0 }}>
+              <h2 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.2px' }}>
+                Bulk Question Import
+              </h2>
+              <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.85)' }}>
                 Upload question pools from Excel, CSV, PDF, or TXT documents directly into Question Repositories
               </p>
             </div>
           </div>
           <button
             onClick={handleModalClose}
-            className="btn btn-secondary btn-sm"
-            style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{
+              borderRadius: '8px',
+              width: '32px',
+              height: '32px',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            title="Close"
           >
             <X size={18} />
           </button>

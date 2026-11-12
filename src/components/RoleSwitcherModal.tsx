@@ -64,19 +64,11 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
         style={{ maxWidth: '420px', borderRadius: 'var(--radius-xl)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0 }}>Select Role</h3>
+        <div className="modal-header">
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#FFFFFF' }}>Select Active Role</h3>
           <button
             onClick={onClose}
-            style={{
-              color: 'var(--text-muted)',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '4px'
-            }}
+            title="Close"
           >
             <X size={18} />
           </button>

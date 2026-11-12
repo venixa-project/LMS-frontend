@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import { useAuthStore } from './store';
 // ============================================================
 // LMS - Assessment Store (Zustand with LocalStorage Persistence)
 // Manages assessments, question sets, drafts, publication status,
@@ -382,6 +383,19 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       console.warn('Backend assessment creation sync note:', err);
     });
 
+    // Notify students of new published assessment
+    try {
+      useAuthStore.getState().notifyAssessmentPublished({
+        assessmentId: id,
+        assessmentTitle: newAssessment.title,
+        courseId: newAssessment.courseId,
+        durationMinutes: Number(newAssessment.durationMinutes || newAssessment.duration || 60),
+        totalMarks: totMarks,
+      });
+    } catch (e) {
+      console.warn('Local student assessment notification notice:', e);
+    }
+
     return { success: true, id };
   },
 
@@ -547,6 +561,20 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       apiClient.patch(`/assessments/${assessmentId}/publish`).catch((err) => {
         console.warn('Backend publish sync note:', err);
       });
+
+      // Notify students of published assessment
+      try {
+        useAuthStore.getState().notifyAssessmentPublished({
+          assessmentId: published.id,
+          assessmentTitle: published.title,
+          courseId: published.courseId,
+          durationMinutes: Number(published.durationMinutes || published.duration || 60),
+          totalMarks: Number(published.totalMarks) || 100,
+        });
+      } catch (e) {
+        console.warn('Local student assessment notification notice:', e);
+      }
+
       return { success: true };
     }
 
@@ -557,6 +585,21 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       return { assessments: updated };
     });
     apiClient.patch(`/assessments/${assessmentId}/publish`).catch(() => {});
+
+    const existingTarget = state.assessments.find((a) => a.id === assessmentId);
+    if (existingTarget) {
+      try {
+        useAuthStore.getState().notifyAssessmentPublished({
+          assessmentId: existingTarget.id,
+          assessmentTitle: existingTarget.title,
+          courseId: existingTarget.courseId,
+          durationMinutes: Number(existingTarget.durationMinutes || existingTarget.duration || 60),
+          totalMarks: Number(existingTarget.totalMarks) || 100,
+        });
+      } catch (e) {
+        console.warn('Local student assessment notification notice:', e);
+      }
+    }
 
     return { success: true };
   },

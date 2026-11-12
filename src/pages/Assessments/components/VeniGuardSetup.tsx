@@ -6,7 +6,7 @@ import {
   Shield, Monitor, Mic, Camera, Wifi, Globe, Maximize,
   CheckCircle2, AlertTriangle, AlertCircle, Info, RefreshCw,
   ExternalLink, ChevronRight, Lock, Eye, HelpCircle, Check, Play,
-  Video
+  Video, X
 } from 'lucide-react';
 import { buildJitsiUrls, launchJitsiConference } from '../../../lib/jitsiProctoring';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
@@ -14,6 +14,13 @@ import {
   checkBrowserCapabilities,
   requestScreenCapture,
   requestUserMedia,
+  probeConnectedHardware,
+  isInsecureLanOrigin,
+  getLocalhostEquivalentUrl,
+  getCollegeLanHttpsUrl,
+  getPublicHttpsUrl,
+  getSecurityContextReport,
+  SecurityContextReport,
   enterFullscreen,
   isCurrentlyFullscreen,
   probeConnectionHealth,
@@ -49,6 +56,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
 }) => {
   // Capability detection
   const [capabilities, setCapabilities] = useState<BrowserCapabilityReport | null>(null);
+  const [securityReport, setSecurityReport] = useState<SecurityContextReport>(() => getSecurityContextReport());
 
   // Dedicated stream references
   const screenStreamRef = useRef<MediaStream | null>(null);
@@ -56,26 +64,50 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const videoStreamRef = useRef<MediaStream | null>(null);
   const webcamVideoElementRef = useRef<HTMLVideoElement | null>(null);
 
-  // Status for each check (ALL REQUIRED)
-  const [screenStatus, setScreenStatus] = useState<CheckStatus>('permission_required');
+  // Dynamically resolve required permissions from assessment settings
+  const needsScreen = Boolean(assessment?.proctoringSettings?.screenShare ?? policy.requireScreenShare);
+  const needsMic = assessment?.proctoringSettings?.mic !== undefined ? Boolean(assessment.proctoringSettings.mic) : Boolean(policy.requireMicrophone);
+  const needsWebcam = assessment?.proctoringSettings?.camera !== undefined ? Boolean(assessment.proctoringSettings.camera) : Boolean(policy.requireWebcam);
+  const needsFullscreen = Boolean(policy.requireFullscreen ?? true);
+
+  // Status for each check (Dynamic based on settings)
+  const [screenStatus, setScreenStatus] = useState<CheckStatus>(() => needsScreen ? 'permission_required' : 'not_required');
   const [screenError, setScreenError] = useState<string | null>(null);
+  const [screenDeviceLabel, setScreenDeviceLabel] = useState<string>('');
 
-  const [micStatus, setMicStatus] = useState<CheckStatus>('permission_required');
+  const [micStatus, setMicStatus] = useState<CheckStatus>(() => needsMic ? 'permission_required' : 'not_required');
   const [micError, setMicError] = useState<string | null>(null);
+  const [audioDeviceLabel, setAudioDeviceLabel] = useState<string>('');
+  const [audioLevel, setAudioLevel] = useState<number>(0);
 
-  const [webcamStatus, setWebcamStatus] = useState<CheckStatus>('permission_required');
+  const [webcamStatus, setWebcamStatus] = useState<CheckStatus>(() => needsWebcam ? 'permission_required' : 'not_required');
   const [webcamError, setWebcamError] = useState<string | null>(null);
+  const [videoDeviceLabel, setVideoDeviceLabel] = useState<string>('');
 
   const [netStatus, setNetStatus] = useState<CheckStatus>('not_checked');
   const [netLatency, setNetLatency] = useState<number | null>(null);
 
   const [browserStatus, setBrowserStatus] = useState<CheckStatus>('not_checked');
   const [fullscreenStatus, setFullscreenStatus] = useState<CheckStatus>('permission_required');
+  const [customMeetInput, setCustomMeetInput] = useState<string>('');
+
+  // Real AudioContext and Analyser for Live VU Meter
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const isTransitioningToExamRef = useRef<boolean>(false);
+
+  // Check if manual or combined Google Meet invigilation is configured
+  const isMeetProctoring =
+    assessment.proctoringMode === 'manual' ||
+    assessment.proctoringMode === 'combined' ||
+    Boolean(assessment.jitsiRoomId) ||
+    Boolean((assessment as any).googleMeetUrl);
 
   // Consent & accommodations
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showAccommodationModal, setShowAccommodationModal] = useState(false);
-  const [autoLaunchJitsi, setAutoLaunchJitsi] = useState(false);
+  const [autoLaunchJitsi, setAutoLaunchJitsi] = useState(isMeetProctoring);
 
   // Authenticated candidate details for Jitsi Meet
   const { user } = useAuthStore();
@@ -92,13 +124,17 @@ export const VeniGuardSetup: React.FC<Props> = ({
       candidateName,
       candidateEmail,
       role: 'candidate',
+      customMeetUrl: (assessment as any).googleMeetUrl,
+      jitsiRoomId: assessment.jitsiRoomId,
     });
-  }, [assessment.id, assessment.title, candidateId, candidateName, candidateEmail]);
+  }, [assessment.id, assessment.title, assessment.jitsiRoomId, (assessment as any).googleMeetUrl, candidateId, candidateName, candidateEmail]);
 
   // Initial capability and status check
   useEffect(() => {
     const caps = checkBrowserCapabilities();
+    const sec = getSecurityContextReport();
     setCapabilities(caps);
+    setSecurityReport(sec);
     setBrowserStatus(caps.isCompatible ? 'connected' : 'unsupported');
 
     // Initial network latency probe
@@ -118,6 +154,59 @@ export const VeniGuardSetup: React.FC<Props> = ({
     };
   }, []);
 
+  // Real-time hardware device monitoring (enumerateDevices & ondevicechange)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.addEventListener !== 'function') {
+      return;
+    }
+
+    const handleDeviceChange = async () => {
+      try {
+        const { hasAudioHardware, hasVideoHardware } = await probeConnectedHardware();
+
+        if (needsMic && micStatus === 'connected' && !hasAudioHardware) {
+          stopAllMediaTracks(audioStreamRef.current);
+          audioStreamRef.current = null;
+          setMicStatus('interrupted');
+          setMicError('Physical microphone hardware was disconnected from your system.');
+          setAudioLevel(0);
+        }
+
+        if (needsWebcam && webcamStatus === 'connected' && !hasVideoHardware) {
+          stopAllMediaTracks(videoStreamRef.current);
+          videoStreamRef.current = null;
+          setWebcamStatus('interrupted');
+          setWebcamError('Physical webcam hardware was disconnected from your system.');
+          if (webcamVideoElementRef.current) {
+            webcamVideoElementRef.current.srcObject = null;
+          }
+        }
+      } catch (err) {
+        console.warn('Hardware device change probe notice:', err);
+      }
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [needsMic, needsWebcam, micStatus, webcamStatus]);
+
+  // Clean up media streams and AudioContext on unmount (unless transitioning into live exam)
+  useEffect(() => {
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+      }
+      if (!isTransitioningToExamRef.current) {
+        stopAllMediaTracks(audioStreamRef.current);
+        stopAllMediaTracks(videoStreamRef.current);
+        stopAllMediaTracks(screenStreamRef.current);
+      }
+    };
+  }, []);
+
   // Sync webcam live feed to video element
   useEffect(() => {
     if (webcamStatus === 'connected' && videoStreamRef.current && webcamVideoElementRef.current) {
@@ -130,11 +219,12 @@ export const VeniGuardSetup: React.FC<Props> = ({
     setScreenStatus('awaiting_user_action');
     setScreenError(null);
     try {
-      const { stream } = await requestScreenCapture(() => {
+      const { stream, track } = await requestScreenCapture(() => {
         setScreenStatus('interrupted');
         setScreenError('Screen sharing was ended or closed. Please restore screen sharing to satisfy exam policy.');
       });
       screenStreamRef.current = stream;
+      setScreenDeviceLabel(track?.label || 'Active Display Stream');
       setScreenStatus('connected');
     } catch (err: any) {
       setScreenStatus('permission_denied');
@@ -142,49 +232,173 @@ export const VeniGuardSetup: React.FC<Props> = ({
     }
   };
 
-  // 2. Handle Microphone Request
+  // 2. Start Real-Time Physical Audio VU Meter
+  const startAudioMeter = (stream: MediaStream, _track?: MediaStreamTrack) => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) {
+        setAudioLevel(0);
+        return;
+      }
+
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.35;
+      analyserRef.current = analyser;
+
+      const source = ctx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const updateMeter = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        // Real acoustic level calculation:
+        // Background noise is typically avg 0-4. Normal speech produces avg 15-60.
+        // Scale to 0-100% cleanly without synthetic sine wave or noise additions.
+        const normalized = Math.min(100, Math.round((avg / 75) * 100));
+        setAudioLevel(normalized);
+
+        animFrameRef.current = requestAnimationFrame(updateMeter);
+      };
+
+      updateMeter();
+    } catch (audioErr) {
+      console.warn('AudioContext initialization notice:', audioErr);
+      setAudioLevel(0);
+    }
+  };
+
+  // 2. Handle Genuine Physical Microphone Request
   const handleRequestMic = async () => {
+    if (audioStreamRef.current) {
+      stopAllMediaTracks(audioStreamRef.current);
+      audioStreamRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    setAudioLevel(0);
     setMicStatus('awaiting_user_action');
     setMicError(null);
+
     try {
-      const { stream } = await requestUserMedia({ audio: true, video: false }, () => {
-        setMicStatus('interrupted');
-        setMicError('Microphone input disconnected.');
-      });
+      const { stream } = await requestUserMedia(
+        { audio: true, video: false },
+        {
+          onEnded: () => {
+            setMicStatus('interrupted');
+            setMicError('Microphone hardware disconnected or stream ended. Please reconnect your microphone and retry.');
+            setAudioLevel(0);
+          },
+          onMute: () => {
+            setAudioDeviceLabel((prev) => (prev ? `${prev.replace(' (Muted)', '')} (Muted)` : 'Microphone (Muted)'));
+          },
+          onUnmute: () => {
+            setAudioDeviceLabel((prev) => prev.replace(' (Muted)', ''));
+          },
+        }
+      );
+
       audioStreamRef.current = stream;
+      const track = stream.getAudioTracks()[0];
+      const rawAudio = track?.label || 'Active System Microphone';
+      setAudioDeviceLabel(rawAudio);
       setMicStatus('connected');
+      setMicError(null);
+      startAudioMeter(stream, track);
     } catch (err: any) {
       setMicStatus('permission_denied');
-      setMicError(err.message || 'Microphone access denied or audio device not found.');
+      setMicError(err.message || 'Microphone access could not be acquired.');
     }
   };
 
-  // 3. Handle Webcam Request
+  // 3. Handle Genuine Physical Webcam Request
   const handleRequestWebcam = async () => {
+    if (videoStreamRef.current) {
+      stopAllMediaTracks(videoStreamRef.current);
+      videoStreamRef.current = null;
+    }
     setWebcamStatus('awaiting_user_action');
     setWebcamError(null);
+
     try {
-      const { stream } = await requestUserMedia({ audio: false, video: true }, () => {
-        setWebcamStatus('interrupted');
-        setWebcamError('Webcam feed disconnected.');
-      });
+      const { stream } = await requestUserMedia(
+        { audio: false, video: true },
+        {
+          onEnded: () => {
+            setWebcamStatus('interrupted');
+            setWebcamError('Webcam hardware disconnected or video feed ended. Please reconnect your camera and retry.');
+            if (webcamVideoElementRef.current) {
+              webcamVideoElementRef.current.srcObject = null;
+            }
+          },
+          onMute: () => {
+            setVideoDeviceLabel((prev) => (prev ? `${prev.replace(' (Muted)', '')} (Muted)` : 'Camera (Muted)'));
+          },
+          onUnmute: () => {
+            setVideoDeviceLabel((prev) => prev.replace(' (Muted)', ''));
+          },
+        }
+      );
+
       videoStreamRef.current = stream;
+      const track = stream.getVideoTracks()[0];
+      const rawVid = track?.label || 'Integrated Physical Camera';
+      setVideoDeviceLabel(rawVid);
       setWebcamStatus('connected');
+      setWebcamError(null);
+
+      if (webcamVideoElementRef.current) {
+        webcamVideoElementRef.current.srcObject = stream;
+        webcamVideoElementRef.current.onloadedmetadata = () => {
+          webcamVideoElementRef.current?.play().catch(() => {});
+        };
+        webcamVideoElementRef.current.play().catch(() => {});
+      }
     } catch (err: any) {
       setWebcamStatus('permission_denied');
-      setWebcamError(err.message || 'Camera access denied or webcam device not found.');
+      setWebcamError(err.message || 'Webcam access could not be acquired.');
     }
   };
 
-  // Testing fallbacks for environments without physical peripherals
-  const handleSimulateMic = () => {
-    setMicStatus('connected');
-    setMicError(null);
-  };
-
-  const handleSimulateWebcam = () => {
-    setWebcamStatus('connected');
-    setWebcamError(null);
+  // Safe Cancel Setup Handler
+  const handleCancelSetup = () => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+    }
+    stopAllMediaTracks(audioStreamRef.current);
+    stopAllMediaTracks(videoStreamRef.current);
+    stopAllMediaTracks(screenStreamRef.current);
+    onCancel();
   };
 
   // 4. Handle Fullscreen Enter
@@ -205,11 +419,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
     setNetLatency(latencyMs);
   };
 
-  // Verify ALL 6 prerequisites are strictly satisfied
-  const isScreenSatisfied = screenStatus === 'connected';
-  const isMicSatisfied = micStatus === 'connected';
-  const isWebcamSatisfied = webcamStatus === 'connected';
-  const isFullscreenSatisfied = fullscreenStatus === 'connected';
+  // Verify active prerequisites based on assessment configuration
+  const isScreenSatisfied = !needsScreen || screenStatus === 'connected' || screenStatus === 'not_required';
+  const isMicSatisfied = !needsMic || micStatus === 'connected' || micStatus === 'not_required';
+  const isWebcamSatisfied = !needsWebcam || webcamStatus === 'connected' || webcamStatus === 'not_required';
+  const isFullscreenSatisfied = !needsFullscreen || fullscreenStatus === 'connected';
   const isNetSatisfied = netStatus === 'connected';
   const isBrowserSatisfied = browserStatus === 'connected';
 
@@ -222,11 +436,34 @@ export const VeniGuardSetup: React.FC<Props> = ({
     isBrowserSatisfied &&
     consentAcknowledged;
 
+  const totalRequiredChecks = [
+    needsScreen,
+    needsMic,
+    needsWebcam,
+    needsFullscreen,
+    true, // Network
+    true, // Browser
+  ].filter(Boolean).length;
+
+  // Calculate pass percentage safely
+  const totalMarks = Number(assessment.totalMarks) || 100;
+  const rawPass = Number(assessment.passingMarks) || 0;
+  const passPercent = assessment.passmark
+    ? Number(assessment.passmark)
+    : (assessment as any).passingPercentage
+    ? Number((assessment as any).passingPercentage)
+    : rawPass > 0 && totalMarks > 0
+    ? Math.min(100, Math.round((rawPass / totalMarks) * 100))
+    : 70;
+
   const handleStartExam = () => {
     if (!allPrerequisitesSatisfied) return;
 
-    // Automatically launch Jitsi Meet proctoring companion window if enabled
-    if (autoLaunchJitsi) {
+    // Mark transition to live exam to protect media streams from unmount cleanup
+    isTransitioningToExamRef.current = true;
+
+    // Automatically launch Google Meet companion window if enabled or manual/combined proctoring
+    if (autoLaunchJitsi || isMeetProctoring) {
       launchJitsiConference(jitsiEndpoints.webUrl);
     }
 
@@ -252,6 +489,12 @@ export const VeniGuardSetup: React.FC<Props> = ({
         return (
           <span className="badge badge-active" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <CheckCircle2 size={12} /> Verified
+          </span>
+        );
+      case 'not_required':
+        return (
+          <span className="badge badge-secondary" style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.85 }}>
+            <Check size={12} /> Not Required
           </span>
         );
       case 'permission_required':
@@ -284,7 +527,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   };
 
   return (
-    <div style={{ maxWidth: '840px', margin: '30px auto', padding: '0 16px' }}>
+    <div style={{ maxWidth: '1020px', margin: '24px auto', padding: '0 16px' }}>
       {/* Main Container Card */}
       <div className="card" style={{ padding: '28px', border: '1px solid rgba(84, 71, 255, 0.35)', boxShadow: '0 10px 40px rgba(0,0,0,0.45)' }}>
         {/* Header */}
@@ -308,12 +551,23 @@ export const VeniGuardSetup: React.FC<Props> = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <h1 style={{ fontSize: '1.45rem', margin: 0, fontWeight: 800 }}>VeniGuard — Secure Assessment Setup</h1>
-                <span className="badge badge-primary" style={{ textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.5px' }}>
-                  Full Proctoring Enforced
+                <span
+                  className="badge badge-primary"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, rgba(84, 71, 255, 0.25) 100%)',
+                    border: '1px solid rgba(129, 140, 248, 0.4)',
+                    color: '#818CF8',
+                    textTransform: 'uppercase',
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.5px',
+                    fontWeight: 700,
+                  }}
+                >
+                  Secure Assessment Active
                 </span>
               </div>
               <p className="text-secondary text-xs" style={{ marginTop: '3px' }}>
-                All monitoring permissions below are required to authenticate student environment integrity
+                Please complete the environment verification below to begin your examination.
               </p>
             </div>
           </div>
@@ -355,115 +609,29 @@ export const VeniGuardSetup: React.FC<Props> = ({
           <div>
             <div className="text-muted text-xs font-semibold">Pass Threshold</div>
             <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--success)', marginTop: '2px' }}>
-              {assessment.passingMarks || 70} Pts
+              {passPercent}%
             </div>
           </div>
           <div>
-            <div className="text-muted text-xs font-semibold">Integrity Protocol</div>
+            <div className="text-muted text-xs font-semibold">Session Security</div>
             <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#F472B6', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Eye size={12} /> Human Review Only
+              <Eye size={12} /> Online Verified Session
             </div>
           </div>
         </div>
 
-        {/* Policy Transparency Banner */}
-        <div
-          style={{
-            background: 'rgba(37, 99, 235, 0.08)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: 'var(--radius-md)',
-            padding: '14px 18px',
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '12px',
-          }}
-        >
-          <Info size={20} color="#3B82F6" style={{ marginTop: '2px', flexShrink: 0 }} />
-          <div style={{ fontSize: '0.84rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-main)' }}>Policy: Full Proctoring Protocol Enforced. </strong>
-            To protect academic standards, this assessment requires verified <strong>Screen Sharing</strong>, <strong>Microphone Monitoring</strong>, <strong>Webcam Feed</strong>, <strong>Full-Screen Lock</strong>, and <strong>Continuous Network Sync</strong>.
-          </div>
-        </div>
-
-        {/* Section B: Permission & Readiness Checklist (ALL REQUIRED) */}
+        {/* Section B: Permission & Readiness Checklist */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <h2 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 700 }}>
             Permission & Readiness Checklist
           </h2>
           <span style={{ fontSize: '0.75rem', color: '#F472B6', fontWeight: 700 }}>
-            All 6 Checks Required
+            All {totalRequiredChecks} Checks Required
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
-          {/* 1. Screen Sharing Card */}
-          <div
-            style={{
-              padding: '16px 20px',
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-card)',
-              border:
-                screenStatus === 'connected'
-                  ? '1px solid rgba(16, 185, 129, 0.45)'
-                  : screenStatus === 'permission_denied' || screenStatus === 'interrupted'
-                  ? '1px solid rgba(239, 68, 68, 0.5)'
-                  : '1px solid var(--border-subtle)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '10px',
-                    background: screenStatus === 'connected' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(37, 99, 235, 0.15)',
-                    color: screenStatus === 'connected' ? 'var(--success)' : '#3B82F6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Monitor size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Screen Sharing Stream
-                    <span style={{ color: '#F472B6', fontSize: '0.75rem', fontWeight: 700 }}>*Required</span>
-                  </div>
-                  <div className="text-muted text-xs">
-                    Captures your assessment window to verify test integrity.
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {getStatusBadge(screenStatus)}
-                {screenStatus !== 'connected' && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleRequestScreen}
-                    disabled={screenStatus === 'awaiting_user_action'}
-                    style={{ fontWeight: 700 }}
-                  >
-                    Select Screen to Share &rarr;
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {screenError && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                <AlertCircle size={14} /> {screenError}
-              </div>
-            )}
-          </div>
-
-          {/* 2. Microphone Card */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+                    {/* 2. Microphone Card with Live VU Meter */}
           <div
             style={{
               padding: '16px 20px',
@@ -514,27 +682,110 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     className="btn btn-primary btn-sm"
                     onClick={handleRequestMic}
                     disabled={micStatus === 'awaiting_user_action'}
-                    style={{ fontWeight: 700 }}
+                    style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                   >
-                    Enable Microphone &rarr;
+                    {micStatus === 'awaiting_user_action' ? (
+                      <>
+                        <RefreshCw size={13} className="spin-slow" /> Connecting...
+                      </>
+                    ) : micStatus === 'permission_denied' || micStatus === 'interrupted' ? (
+                      <>
+                        <RefreshCw size={13} /> Retry Microphone &rarr;
+                      </>
+                    ) : (
+                      'Enable Microphone →'
+                    )}
                   </button>
                 )}
               </div>
             </div>
 
-            {micError && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertCircle size={14} /> {micError}
+            {/* Live Audio Visualizer VU Meter */}
+            {micStatus === 'connected' && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '10px 14px',
+                  background: 'var(--bg-app)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={13} /> Live System Microphone Connected: {audioDeviceLabel || 'Active Audio Input'}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Live Input: {audioLevel}%</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleSimulateMic}
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                >
-                  Verify Virtual Mic (Test Fallback)
-                </button>
+                {/* Audio Level Bar */}
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${Math.max(4, audioLevel)}%`,
+                      height: '100%',
+                      background: audioLevel > 65 ? 'linear-gradient(90deg, #10B981, #F59E0B)' : 'linear-gradient(90deg, #3B82F6, #10B981)',
+                      transition: 'width 0.08s ease',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {micError && (
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  fontSize: '0.78rem',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 220px' }}>
+                  <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                  <span>{micError}</span>
+                </div>
+                {(isInsecureLanOrigin() || securityReport.isInsecureHttp) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
+                    {securityReport.collegeLanHttpsUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => { window.location.href = securityReport.collegeLanHttpsUrl!; }}
+                        style={{ fontSize: '0.74rem', padding: '4px 10px', fontWeight: 700 }}
+                        title="Access through trusted College LAN HTTPS domain"
+                      >
+                        Switch to College HTTPS &rarr;
+                      </button>
+                    )}
+                    {securityReport.publicHttpsUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { window.location.href = securityReport.publicHttpsUrl!; }}
+                        style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+                      >
+                        Switch to Public HTTPS &rarr;
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { window.location.href = getLocalhostEquivalentUrl(); }}
+                      style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+                    >
+                      Switch to localhost:5173 &rarr;
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -590,9 +841,19 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     className="btn btn-primary btn-sm"
                     onClick={handleRequestWebcam}
                     disabled={webcamStatus === 'awaiting_user_action'}
-                    style={{ fontWeight: 700 }}
+                    style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                   >
-                    Enable Webcam &rarr;
+                    {webcamStatus === 'awaiting_user_action' ? (
+                      <>
+                        <RefreshCw size={13} className="spin-slow" /> Connecting...
+                      </>
+                    ) : webcamStatus === 'permission_denied' || webcamStatus === 'interrupted' ? (
+                      <>
+                        <RefreshCw size={13} /> Retry Camera &rarr;
+                      </>
+                    ) : (
+                      'Enable Webcam →'
+                    )}
                   </button>
                 )}
               </div>
@@ -613,7 +874,13 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 }}
               >
                 <video
-                  ref={webcamVideoElementRef}
+                  ref={(el) => {
+                    webcamVideoElementRef.current = el;
+                    if (el && videoStreamRef.current && el.srcObject !== videoStreamRef.current) {
+                      el.srcObject = videoStreamRef.current;
+                      el.play().catch(() => {});
+                    }
+                  }}
                   autoPlay
                   playsInline
                   muted
@@ -629,7 +896,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 />
                 <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                   <div style={{ fontWeight: 700, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                    <CheckCircle2 size={14} /> Live Camera Feed Verified
+                    <CheckCircle2 size={14} /> Live System Camera Feed Verified
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '3px' }}>
+                    Active Device: {videoDeviceLabel || 'Integrated Camera'}
                   </div>
                   <div>Center your face within frame and verify that lighting is adequate.</div>
                 </div>
@@ -637,21 +907,185 @@ export const VeniGuardSetup: React.FC<Props> = ({
             )}
 
             {webcamError && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <AlertCircle size={14} /> {webcamError}
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  fontSize: '0.78rem',
+                  color: 'var(--danger)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 220px' }}>
+                  <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                  <span>{webcamError}</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleSimulateWebcam}
-                  style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                >
-                  Verify Virtual Camera (Test Fallback)
-                </button>
+                {(isInsecureLanOrigin() || securityReport.isInsecureHttp) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flexShrink: 0 }}>
+                    {securityReport.collegeLanHttpsUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => { window.location.href = securityReport.collegeLanHttpsUrl!; }}
+                        style={{ fontSize: '0.74rem', padding: '4px 10px', fontWeight: 700 }}
+                        title="Access through trusted College LAN HTTPS domain"
+                      >
+                        Switch to College HTTPS &rarr;
+                      </button>
+                    )}
+                    {securityReport.publicHttpsUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => { window.location.href = securityReport.publicHttpsUrl!; }}
+                        style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+                      >
+                        Switch to Public HTTPS &rarr;
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { window.location.href = getLocalhostEquivalentUrl(); }}
+                      style={{ fontSize: '0.74rem', padding: '4px 10px' }}
+                    >
+                      Switch to localhost:5173 &rarr;
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* 1. Screen Sharing Card (Only active if requested by author) */}
+          {needsScreen ? (
+            <div
+              style={{
+                padding: '16px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-card)',
+                border:
+                  screenStatus === 'connected'
+                    ? '1px solid rgba(16, 185, 129, 0.45)'
+                    : screenStatus === 'permission_denied' || screenStatus === 'interrupted'
+                    ? '1px solid rgba(239, 68, 68, 0.5)'
+                    : '1px solid var(--border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: screenStatus === 'connected' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                      color: screenStatus === 'connected' ? 'var(--success)' : '#3B82F6',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Monitor size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Screen Sharing Stream
+                      <span style={{ color: '#F472B6', fontSize: '0.75rem', fontWeight: 700 }}>*Required</span>
+                    </div>
+                    <div className="text-muted text-xs">
+                      Captures your assessment window to verify test environment.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {getStatusBadge(screenStatus)}
+                  {screenStatus !== 'connected' && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleRequestScreen}
+                      disabled={screenStatus === 'awaiting_user_action'}
+                      style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      {screenStatus === 'awaiting_user_action' ? (
+                        <>
+                          <RefreshCw size={13} className="spin-slow" /> Connecting...
+                        </>
+                      ) : screenStatus === 'permission_denied' || screenStatus === 'interrupted' ? (
+                        <>
+                          <RefreshCw size={13} /> Retry Screen Share &rarr;
+                        </>
+                      ) : (
+                        'Select Screen to Share →'
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {screenStatus === 'connected' && (
+                <div style={{ marginTop: '4px', fontSize: '0.8rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={13} /> Active Display: {screenDeviceLabel || 'Assessment Screen Window'}
+                </div>
+              )}
+
+              {screenError && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} /> {screenError}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: '12px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                opacity: 0.85,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    color: '#3B82F6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Monitor size={17} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Screen Sharing Stream</div>
+                  <div className="text-muted text-xs">Not required for this assessment.</div>
+                </div>
+              </div>
+              <span className="badge badge-secondary" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Check size={12} /> Not Required
+              </span>
+            </div>
+          )}
 
           {/* 4. Full-Screen Mode Availability Card */}
           <div
@@ -801,6 +1235,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 </div>
                 <div className="text-muted text-xs">
                   {capabilities ? `${capabilities.browserName} on ${capabilities.osName}` : 'Evaluating environment...'}
+                  {' • '}
+                  <span style={{ color: securityReport.isSecureContext ? '#10B981' : '#F59E0B', fontWeight: 600 }}>
+                    {securityReport.isSecureContext ? 'Secure Context (HTTPS)' : 'Insecure Origin (HTTPS Required for Devices)'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -810,13 +1248,14 @@ export const VeniGuardSetup: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* 7. Jitsi Meet Video Conference Bridge Card */}
+                    {/* 7. Google Meet Video Conference Bridge Card */}
           <div
             style={{
-              padding: '18px 20px',
+              gridColumn: '1 / -1',
+              padding: '16px 20px',
               borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, rgba(84, 71, 255, 0.08) 0%, rgba(236, 72, 153, 0.08) 100%)',
-              border: '1px solid rgba(84, 71, 255, 0.35)',
+              background: 'linear-gradient(135deg, rgba(84, 71, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
@@ -826,8 +1265,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div
                   style={{
-                    width: '38px',
-                    height: '38px',
+                    width: '40px',
+                    height: '40px',
                     borderRadius: '10px',
                     background: 'rgba(255, 255, 255, 0.08)',
                     color: '#FFFFFF',
@@ -836,34 +1275,95 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     justifyContent: 'center',
                     boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
                     border: '1px solid rgba(16, 185, 129, 0.3)',
+                    flexShrink: 0,
                   }}
                 >
-                  <GoogleMeetIcon size={20} />
+                  <GoogleMeetIcon size={22} />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     Google Meet Live Video Conference
-                    <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Auto-Configured</span>
+                    <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Ready to Join</span>
                   </div>
-                  <div className="text-muted text-xs">
-                    Two-way invigilation link: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong>
+                  <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                    {jitsiEndpoints.webUrl === 'https://meet.google.com/new'
+                      ? 'Launch an instant Google Meet room (creates active video call with live camera & microphone).'
+                      : <span>Live meeting room: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong></span>}
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span className="badge badge-active" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <CheckCircle2 size={12} /> Ready to Connect
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => launchJitsiConference(jitsiEndpoints.webUrl)}
-                  style={{ fontSize: '0.75rem', padding: '4px 10px', gap: '4px' }}
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
+                    const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
+                    launchJitsiConference(finalUrl);
+                  }}
+                  style={{
+                    fontSize: '0.8rem',
+                    padding: '7px 16px',
+                    fontWeight: 700,
+                    gap: '6px',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    border: 'none',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                  }}
                 >
-                  <ExternalLink size={12} /> Open in Google Meet
+                  <ExternalLink size={14} /> Open in Google Meet &rarr;
                 </button>
               </div>
+            </div>
+
+            {/* Custom Meet Code or Link Join Bar */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(5, 8, 22, 0.45)',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                Join with teacher's code:
+              </span>
+              <input
+                type="text"
+                value={customMeetInput}
+                onChange={(e) => setCustomMeetInput(e.target.value)}
+                placeholder="e.g. abc-defg-hij or meet.google.com/abc-defg-hij"
+                style={{
+                  flex: '1 1 200px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '0.78rem',
+                  color: '#fff',
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  if (!customMeetInput.trim()) {
+                    launchJitsiConference('https://meet.google.com/new');
+                    return;
+                  }
+                  const target = customMeetInput.trim();
+                  const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
+                  launchJitsiConference(finalUrl);
+                }}
+                style={{ fontSize: '0.74rem', padding: '4px 10px', gap: '4px' }}
+              >
+                Join Code
+              </button>
             </div>
 
             {/* Info details forwarded to Google Meet */}
@@ -889,7 +1389,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
               </div>
               <div>
                 <span className="text-muted">Media Permissions:</span>{' '}
-                <span style={{ color: '#10B981', fontWeight: 600 }}>Webcam & Audio Forwarded</span>
+                <span style={{ color: '#10B981', fontWeight: 600 }}>Webcam & Audio Ready</span>
               </div>
               <div>
                 <span className="text-muted">Platform:</span>{' '}
@@ -915,9 +1415,34 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 style={{ accentColor: '#10B981', width: '15px', height: '15px' }}
               />
               <span>
-                (Optional) Launch external Google Meet live conference in a new tab when starting assessment
+                (Optional) Automatically open Google Meet live conference in a new tab when starting assessment
               </span>
             </label>
+          </div>
+        
+</div>
+
+        {/* Policy Transparency Banner (Moved down below Checklist) */}
+        <div
+          style={{
+            background: 'rgba(37, 99, 235, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px 18px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
+          <Info size={20} color="#3B82F6" style={{ marginTop: '2px', flexShrink: 0 }} />
+          <div style={{ fontSize: '0.84rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            <strong style={{ color: 'var(--text-main)' }}>Policy: Examination Integrity Guidelines. </strong>
+            To protect academic standards and ensure fair testing, this assessment requires verified{' '}
+            {needsScreen && <span><strong>Screen Sharing</strong>, </span>}
+            {needsMic && <span><strong>Microphone Monitoring</strong>, </span>}
+            {needsWebcam && <span><strong>Webcam Feed</strong>, </span>}
+            <strong>Full-Screen Lock</strong>, and <strong>Continuous Network Sync</strong>.
           </div>
         </div>
 
@@ -936,7 +1461,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
             <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Data Minimization & Fair Review Principles</span>
           </div>
           <ul style={{ margin: '0 0 12px 18px', padding: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            <li><strong>Data Collected:</strong> Only signals declared by the assessment policy (screen sharing, focus timestamps, mic levels, and webcam presence).</li>
+            <li><strong>Data Collected:</strong> Only signals declared by the assessment policy ({needsScreen ? 'screen sharing, ' : ''}focus timestamps{needsMic ? ', mic levels' : ''}{needsWebcam ? ', and webcam presence' : ''}).</li>
             <li><strong>Access Control:</strong> Review is restricted exclusively to your assigned course instructor and academic review board.</li>
             <li><strong>Retention Schedule:</strong> Encrypted telemetry data is automatically purged after {policy.retentionDays} days.</li>
             <li><strong>Fair Review Principle:</strong> Browser events are recorded as review indicators. They are never treated as autonomous cheating verdicts.</li>
@@ -960,7 +1485,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
               style={{ accentColor: '#2563EB', marginTop: '3px', width: '16px', height: '16px' }}
             />
             <span>
-              I have read the VeniGuard proctoring disclosure. I consent to screen sharing, webcam video feed, microphone monitoring, and full-screen focus for this examination under the institutional integrity policy.
+              I have reviewed the assessment environment guidelines. I agree to maintain active focus in full-screen mode and comply with institutional academic integrity policies throughout this examination.
             </span>
           </label>
         </div>
@@ -984,10 +1509,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
             <AlertCircle size={18} style={{ flexShrink: 0 }} />
             <span>
               To start your examination, please satisfy all required checks:
-              {!isScreenSatisfied && ' [Share Screen]'}
-              {!isMicSatisfied && ' [Enable Mic]'}
-              {!isWebcamSatisfied && ' [Enable Camera]'}
-              {!isFullscreenSatisfied && ' [Enter Fullscreen]'}
+              {needsScreen && !isScreenSatisfied && ' [Share Screen]'}
+              {needsMic && !isMicSatisfied && ' [Enable Mic]'}
+              {needsWebcam && !isWebcamSatisfied && ' [Enable Camera]'}
+              {needsFullscreen && !isFullscreenSatisfied && ' [Enter Fullscreen]'}
               {!isNetSatisfied && ' [Check Network]'}
               {!consentAcknowledged && ' [Acknowledge Consent Checkbox]'}
             </span>
@@ -996,7 +1521,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
         {/* Bottom Navigation / Start Button */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <button onClick={onCancel} className="btn btn-secondary">
+          <button onClick={handleCancelSetup} className="btn btn-secondary">
             Cancel & Return to Courses
           </button>
 
@@ -1024,10 +1549,17 @@ export const VeniGuardSetup: React.FC<Props> = ({
         <div className="modal-overlay" onClick={() => setShowAccommodationModal(false)}>
           <div className="modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={20} color="#2563EB" />
+              <h3 style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#FFFFFF' }}>
+                <Shield size={20} color="#FFFFFF" />
                 Accommodations & Technical Assistance
               </h3>
+              <button
+                type="button"
+                onClick={() => setShowAccommodationModal(false)}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
             <div className="modal-body" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <p>
@@ -1035,9 +1567,9 @@ export const VeniGuardSetup: React.FC<Props> = ({
               </p>
               <div style={{ background: 'var(--bg-input)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '14px' }}>
                 <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                  Alternative Proctoring Accommodations:
+                  Alternative Examination Accommodations:
                 </strong>
-                If your physical device or accessibility software (e.g. screen readers, assistive switches) prevents automated browser screen sharing or webcam feed, you may request:
+                If your physical device or accessibility software (e.g. screen readers, assistive switches) prevents automated browser verification, you may request:
                 <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
                   <li>Invigilated In-Person Assessment Session</li>
                   <li>Live One-on-One Faculty Oral Examination</li>
@@ -1045,7 +1577,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 </ul>
               </div>
               <p>
-                To schedule an approved alternative route, contact your course instructor or email <strong>proctoring-support@venilearn.org</strong> before the assessment deadline.
+                To schedule an approved alternative route, contact your course instructor or email <strong>support@venilearn.org</strong> before the assessment deadline.
               </p>
             </div>
             <div className="modal-footer">
@@ -1059,3 +1591,4 @@ export const VeniGuardSetup: React.FC<Props> = ({
     </div>
   );
 };
+        

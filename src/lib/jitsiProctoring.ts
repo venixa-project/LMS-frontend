@@ -12,6 +12,8 @@ export interface GoogleMeetProctoringParams {
   candidateEmail?: string;
   role?: 'candidate' | 'proctor' | 'instructor';
   serverDomain?: string; // Default: 'meet.google.com'
+  customMeetUrl?: string;
+  jitsiRoomId?: string;
 }
 
 export type JitsiProctoringParams = GoogleMeetProctoringParams;
@@ -27,6 +29,15 @@ export interface GoogleMeetProctoringEndpoints {
 export type JitsiProctoringEndpoints = GoogleMeetProctoringEndpoints;
 
 /**
+ * Validates whether a string is a standard Google Meet 10-character code (xxx-yyyy-zzz)
+ */
+export function isValidGoogleMeetCode(code: string): boolean {
+  if (!code) return false;
+  const clean = code.trim().toLowerCase();
+  return /^[a-z]{3}-[a-z]{4}-[a-z]{3}$/.test(clean);
+}
+
+/**
  * Generate a clean, deterministic Google Meet format code for an assessment candidate (e.g. ven-asm-cand).
  */
 export function generateGoogleMeetRoomCode(assessmentId: string, candidateIdentifier: string): string {
@@ -39,10 +50,35 @@ export const generateJitsiRoomName = generateGoogleMeetRoomCode;
 
 /**
  * Build all necessary URLs for launching and monitoring live Google Meet proctoring sessions.
+ * If no valid Google Meet room code is supplied by instructor, directs to https://meet.google.com/new
+ * to ensure a real live session is created without "Check your meeting code" errors.
  */
 export function buildGoogleMeetUrls(params: GoogleMeetProctoringParams): GoogleMeetProctoringEndpoints {
-  const roomName = generateGoogleMeetRoomCode(params.assessmentId, params.candidateName || params.candidateId);
-  const webUrl = `https://meet.google.com/${roomName}`;
+  const custom = (params.customMeetUrl || params.jitsiRoomId || '').trim();
+  let webUrl = '';
+  let roomName = '';
+
+  const isMeetUrl = custom.includes('meet.google.com');
+  const isStandardCode = isValidGoogleMeetCode(custom);
+
+  if (isMeetUrl) {
+    webUrl = custom.startsWith('http') ? custom : `https://${custom}`;
+    const cleanUrl = webUrl.split('?')[0].replace(/\/$/, '');
+    const parts = cleanUrl.split('/');
+    roomName = parts[parts.length - 1] || 'google-meet';
+  } else if (isStandardCode) {
+    roomName = custom.toLowerCase();
+    webUrl = `https://meet.google.com/${roomName}`;
+  } else if (custom && !custom.startsWith('vl-exam-') && !custom.startsWith('ven-') && !custom.startsWith('asm-') && /^[a-zA-Z0-9_-]{8,30}$/.test(custom)) {
+    roomName = custom;
+    webUrl = `https://meet.google.com/${custom}`;
+  } else {
+    // When no specific real Google Meet code has been provided by the instructor,
+    // open Google Meet instant meeting creator (https://meet.google.com/new).
+    // This creates an authenticated, real live meeting room where camera & mic connect instantly.
+    webUrl = 'https://meet.google.com/new';
+    roomName = 'Instant Google Meet';
+  }
 
   return {
     roomName,
@@ -56,11 +92,12 @@ export function buildGoogleMeetUrls(params: GoogleMeetProctoringParams): GoogleM
 export const buildJitsiUrls = buildGoogleMeetUrls;
 
 /**
- * Safely launch Google Meet in a new browser tab with noopener, noreferrer.
+ * Safely launch Google Meet in a new browser tab.
  */
 export function launchGoogleMeetConference(webUrl: string): Window | null {
   if (typeof window === 'undefined') return null;
-  return window.open(webUrl, '_blank', 'noopener,noreferrer');
+  const target = webUrl && webUrl.trim() ? webUrl.trim() : 'https://meet.google.com/new';
+  return window.open(target, '_blank');
 }
 
 export const launchJitsiConference = launchGoogleMeetConference;
@@ -81,4 +118,3 @@ export async function copyGoogleMeetRoomLink(url: string): Promise<boolean> {
 }
 
 export const copyJitsiRoomLink = copyGoogleMeetRoomLink;
-

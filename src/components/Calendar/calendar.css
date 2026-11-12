@@ -806,9 +806,9 @@
 .cal-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(5, 8, 16, 0.75);
-  backdrop-filter: blur(6px);
-  z-index: 100;
+  background: rgba(5, 8, 22, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -822,12 +822,12 @@
 }
 
 .cal-modal-dialog {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-xl);
+  background: #0B0B2A;
+  border: 1px solid rgba(84, 71, 255, 0.3);
+  border-radius: 16px;
   width: 100%;
   max-width: 540px;
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(84, 71, 255, 0.18);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -840,31 +840,41 @@
 }
 
 .cal-modal-header {
-  padding: 18px 22px;
+  padding: 18px 24px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  border-bottom: none;
+  background: linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%);
+  color: #FFFFFF;
+}
+
+.cal-modal-header h3,
+.cal-modal-header h4 {
+  color: #FFFFFF !important;
+  margin: 0;
+  font-weight: 800;
 }
 
 .cal-modal-body {
-  padding: 22px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   max-height: 75vh;
   overflow-y: auto;
+  background: #0B0B2A;
+  color: #E2E8F0;
 }
 
 .cal-modal-footer {
-  padding: 14px 22px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #07081D;
 }
 
 .cal-field-error {

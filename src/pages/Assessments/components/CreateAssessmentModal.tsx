@@ -15,7 +15,7 @@ import {
   Eye, Check, Shield, Award, Clock, HelpCircle, ChevronRight, Layers, FileCheck,
   FileSpreadsheet, UploadCloud, Download, CheckSquare, Square, Search, Filter,
   AlertCircle, Edit3, Video, FileVideo, Play, Languages, Film, Volume2,
-  Users, Mic, Camera, Monitor, Radio, Lock, Calendar, Scissors
+  Users, Mic, Camera, Monitor, Radio, Lock, Calendar, Scissors, ExternalLink
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 import { VideoCropModal } from '../../../components/video/VideoCropModal';
@@ -1101,9 +1101,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         return;
       }
       if (!certSignerImage && !userHasSignature && selectedSignatoryOption === 'creator') {
-        if (!confirm('Warning: You have not configured an authorized signature in your profile. Do you want to publish the assessment certificate with formal typographic signature, or configure your signature in Profile first? Click OK to publish or Cancel to configure.')) {
-          return;
-        }
+        // Automatically formats with formal typographic institutional signature
       }
     }
 
@@ -1242,14 +1240,16 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       >
         {/* Header */}
         <div
+          className="modal-header"
           style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--border-subtle)',
-            background: 'var(--bg-surface)',
+            padding: '18px 24px',
+            background: 'linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%)',
+            color: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            flexShrink: 0
+            flexShrink: 0,
+            borderBottom: 'none'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1257,19 +1257,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
               style={{
                 width: '42px',
                 height: '42px',
-                borderRadius: '10px',
-                background:
-                  selectedMode === 'bulk'
-                    ? 'rgba(6, 182, 212, 0.15)'
-                    : selectedMode === 'ai'
-                    ? 'rgba(99, 102, 241, 0.15)'
-                    : 'rgba(16, 185, 129, 0.15)',
-                color:
-                  selectedMode === 'bulk'
-                    ? 'var(--accent-cyan)'
-                    : selectedMode === 'ai'
-                    ? 'var(--primary)'
-                    : 'var(--success)',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.18)',
+                color: '#FFFFFF',
+                backdropFilter: 'blur(4px)',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -1285,7 +1277,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>
+                <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.2px' }}>
                   {step === 'mode_select'
                     ? 'Configure Quiz / Examination'
                     : step === 'bulk_import'
@@ -1298,7 +1290,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     ? `Assessment Questions (${questions.length}/${MAX_ASSESSMENT_QUESTIONS})`
                     : 'Assessment Summary & Final Publishing'}
                 </h2>
-                <span className="badge badge-primary">
+                <span
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.22)',
+                    border: '1px solid rgba(255, 255, 255, 0.35)',
+                    color: '#FFFFFF',
+                    padding: '2px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700
+                  }}
+                >
                   {selectedMode === 'bulk'
                     ? 'Method 1: Bulk Import'
                     : selectedMode === 'ai'
@@ -1306,7 +1308,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     : 'Method 3: Manual Entry'}
                 </span>
               </div>
-              <p className="text-muted text-xs" style={{ margin: '2px 0 0 0' }}>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.85)' }}>
                 Max Capacity: {MAX_ASSESSMENT_QUESTIONS} Questions &bull; Current: {questions.length} Items &bull; Available Slots: {remainingCapacity}
               </p>
             </div>
@@ -1316,11 +1318,16 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             <button
               onClick={onClose}
               style={{
-                background: 'transparent',
+                background: 'rgba(255, 255, 255, 0.12)',
                 border: 'none',
-                color: 'var(--text-muted)',
+                color: '#FFFFFF',
                 cursor: 'pointer',
-                padding: '6px'
+                padding: '6px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease'
               }}
               title="Close modal"
             >
@@ -2115,30 +2122,41 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 {(proctoringMode === 'manual' || proctoringMode === 'combined') && (
                   <div
                     style={{
-                      background: 'rgba(16, 185, 129, 0.05)',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      background: 'rgba(16, 185, 129, 0.06)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '8px 12px',
+                      padding: '12px 14px',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
+                      flexDirection: 'column',
                       gap: '8px',
                       marginBottom: '12px'
                     }}
                   >
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <GoogleMeetIcon size={14} /> Google Meet: <code style={{ color: 'var(--success)', fontWeight: 600 }}>https://meet.google.com/{jitsiRoomId.toLowerCase()}</code>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <GoogleMeetIcon size={15} /> Google Meet Invigilation Link or Code
+                      </div>
+                      <a
+                        href="https://meet.google.com/new"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary btn-sm"
+                        style={{ fontSize: '0.72rem', padding: '3px 8px', gap: '4px', textDecoration: 'none' }}
+                      >
+                        <ExternalLink size={12} /> Create Instant Meet in Google
+                      </a>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                      onClick={() => setJitsiRoomId(`vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`)}
-                      title="Generate new unique Google Meet code"
-                    >
-                      <RefreshCw size={11} /> Regenerate Code
-                    </button>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="Paste meeting link or code (e.g. https://meet.google.com/abc-defg-hij or abc-defg-hij)"
+                      value={jitsiRoomId.startsWith('vl-exam-') ? '' : jitsiRoomId}
+                      onChange={(e) => setJitsiRoomId(e.target.value.trim())}
+                      style={{ fontSize: '0.82rem', width: '100%' }}
+                    />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      Enter your Google Meet link so students join your live invigilation room. If left empty, students will launch an instant meeting via <code style={{ color: 'var(--success)' }}>https://meet.google.com/new</code>.
+                    </div>
                   </div>
                 )}
 
