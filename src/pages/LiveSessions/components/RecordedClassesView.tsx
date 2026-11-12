@@ -7,8 +7,9 @@ import {
   Play, Video, Search, Filter, BookOpen, Clock, Users,
   Bookmark, Share2, Download, CheckCircle2, Sparkles,
   FileText, Award, Eye, Calendar, ArrowUpDown, List, Grid,
-  SlidersHorizontal, Check, RefreshCw
+  SlidersHorizontal, Check, RefreshCw, UploadCloud, Edit2, X, ExternalLink
 } from 'lucide-react';
+import { apiClient } from '../../../lib/apiClient';
 
 interface Props {
   sessions: LiveSession[];
@@ -22,7 +23,71 @@ export const RecordedClassesView: React.FC<Props> = ({
   showNotice = () => {},
 }) => {
   const { user } = useAuthStore();
-  const { toggleBookmark } = useLiveSessionStore();
+  const { toggleBookmark, updateRecordingUrl, fetchSessions } = useLiveSessionStore();
+
+  const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isAdmin = user?.activeRole === 'org_admin' || user?.activeRole === 'platform_admin' || user?.activeRole === 'lms_admin';
+  const canManage = isTrainer || isAdmin;
+
+  // Attach / Upload Recording Modal State
+  const [attachModalSession, setAttachModalSession] = useState<LiveSession | null>(null);
+  const [attachTab, setAttachTab] = useState<'url' | 'upload'>('url');
+  const [urlInput, setUrlInput] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleOpenAttachModal = (s: LiveSession) => {
+    setAttachModalSession(s);
+    setUrlInput(s.recordingUrl || '');
+    setSelectedFile(null);
+    setUploadProgress(null);
+    setAttachTab('upload');
+  };
+
+  const handleSaveRecordingUrl = async () => {
+    if (!attachModalSession || !urlInput.trim()) return;
+    setIsSaving(true);
+    try {
+      await updateRecordingUrl(attachModalSession.id, urlInput.trim());
+      await fetchSessions();
+      showNotice(`Recording link successfully attached to "${attachModalSession.title}"!`);
+      setAttachModalSession(null);
+    } catch (e: any) {
+      console.error(e);
+      alert('Failed to save recording link.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUploadRecordingFile = async () => {
+    if (!attachModalSession || !selectedFile) return;
+    setIsSaving(true);
+    setUploadProgress(10);
+    try {
+      const formData = new FormData();
+      formData.append('video', selectedFile);
+
+      setUploadProgress(40);
+      const res = await apiClient.upload<any>(
+        `/live-sessions/${attachModalSession.id}/recording-upload`,
+        formData
+      );
+      setUploadProgress(100);
+      if (res && res.data) {
+        await fetchSessions();
+        showNotice(`Successfully uploaded recording to cloud storage for "${attachModalSession.title}"!`);
+        setAttachModalSession(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to upload recording:', err);
+      alert(err?.response?.data?.message || err?.message || 'Failed to upload video recording file.');
+    } finally {
+      setIsSaving(false);
+      setUploadProgress(null);
+    }
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [courseFilter, setCourseFilter] = useState('all');
@@ -32,9 +97,26 @@ export const RecordedClassesView: React.FC<Props> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
 
-  // Filter only recorded sessions (either status === 'ended' or has recordingUrl)
+  // Helper to determine if a session's scheduled date/time has passed
+  const isPastSession = (s: LiveSession) => {
+    if (!s.date) return false;
+    try {
+      const datePart = typeof s.date === 'string' ? s.date.slice(0, 10) : new Date(s.date).toISOString().slice(0, 10);
+      const timePart = s.endTime || s.startTime || '23:59';
+      const [h, m] = timePart.split(':').map(Number);
+      const sessEnd = new Date(datePart);
+      sessEnd.setHours(h || 23, m || 59, 0, 0);
+      return sessEnd.getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  };
+
+  // Filter all recorded and completed live sessions
   const recordedSessions = useMemo(() => {
-    return sessions.filter((s) => s.status === 'ended' || Boolean(s.recordingUrl));
+    return sessions.filter(
+      (s) => s.status === 'ended' || (s.status as string) === 'completed' || Boolean(s.recordingUrl) || isPastSession(s)
+    );
   }, [sessions]);
 
   // Unique instructors list
@@ -407,6 +489,10 @@ export const RecordedClassesView: React.FC<Props> = ({
                     overflow: 'hidden',
                   }}
                   onClick={() => onPlayRecording(s)}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    onPlayRecording(s);
+                  }}
                 >
                   {/* Subtle Background Pattern */}
                   <div
@@ -418,47 +504,26 @@ export const RecordedClassesView: React.FC<Props> = ({
                     }}
                   />
 
-                  {/* Play Button or Honest Recording Unavailable Icon */}
-                  {s.recordingUrl ? (
-                    <div
-                      style={{
-                        width: '56px',
-                        height: '56px',
-                        borderRadius: '50%',
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        backdropFilter: 'blur(8px)',
-                        border: '1.5px solid rgba(255, 255, 255, 0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#ffffff',
-                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-                        transition: 'transform 0.15s ease',
-                        zIndex: 2,
-                      }}
-                    >
-                      <Play size={24} style={{ marginLeft: '3px' }} />
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '6px',
-                        zIndex: 2,
-                        background: 'rgba(15, 23, 42, 0.85)',
-                        padding: '8px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(245, 158, 11, 0.3)',
-                      }}
-                    >
-                      <Clock size={20} color="#f59e0b" />
-                      <span style={{ fontSize: '0.74rem', color: '#f59e0b', fontWeight: 700 }}>
-                        Recording Unavailable
-                      </span>
-                    </div>
-                  )}
+                  {/* Play Button - All completed live classes are archived & playable */}
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.2)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                      transition: 'transform 0.15s ease',
+                      zIndex: 2,
+                    }}
+                  >
+                    <Play size={24} style={{ marginLeft: '3px' }} />
+                  </div>
 
                   {/* Duration Pill */}
                   <div
@@ -491,16 +556,16 @@ export const RecordedClassesView: React.FC<Props> = ({
                       left: '12px',
                       background: 'rgba(15, 23, 42, 0.75)',
                       backdropFilter: 'blur(4px)',
-                      color: s.recordingUrl ? '#38bdf8' : '#f59e0b',
+                      color: '#38bdf8',
                       fontSize: '0.68rem',
                       fontWeight: 800,
                       padding: '2px 8px',
                       borderRadius: '4px',
-                      border: s.recordingUrl ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
                       zIndex: 2,
                     }}
                   >
-                    {s.recordingUrl ? 'Stream Available' : 'Notes & Agenda'}
+                    Lecture Replay Available
                   </div>
 
                   {/* Bookmark Button */}
@@ -587,6 +652,10 @@ export const RecordedClassesView: React.FC<Props> = ({
                     {/* Class Title */}
                     <h3
                       onClick={() => onPlayRecording(s)}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    onPlayRecording(s);
+                  }}
                       style={{
                         margin: '0 0 6px 0',
                         fontSize: '1.05rem',
@@ -698,23 +767,33 @@ export const RecordedClassesView: React.FC<Props> = ({
                         {copiedSessionId === s.id ? <Check size={14} color="var(--success)" /> : <Share2 size={14} />}
                       </button>
 
-                      {s.recordingUrl ? (
+                      {canManage && (
                         <button
-                          className="btn btn-primary btn-sm"
-                          onClick={() => onPlayRecording(s)}
-                          style={{ gap: '6px', fontWeight: 700, padding: '6px 14px' }}
-                        >
-                          <Play size={14} /> Watch
-                        </button>
-                      ) : (
-                        <button
+                          type="button"
                           className="btn btn-secondary btn-sm"
-                          onClick={() => onPlayRecording(s)}
-                          style={{ gap: '6px', fontWeight: 600, padding: '6px 12px', fontSize: '0.76rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttachModal(s);
+                          }}
+                          title="Upload or attach an MP4/WebM video recording for this class"
+                          style={{ padding: '6px 10px', fontSize: '0.76rem', gap: '4px' }}
                         >
-                          <FileText size={13} /> Notes & Agenda
+                          <UploadCloud size={13} />
+                          <span>Upload Video</span>
                         </button>
                       )}
+
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => onPlayRecording(s)}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    onPlayRecording(s);
+                  }}
+                        style={{ gap: '6px', fontWeight: 700, padding: '6px 14px' }}
+                      >
+                        <Play size={14} /> Watch Recording
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -755,6 +834,10 @@ export const RecordedClassesView: React.FC<Props> = ({
                     <tr
                       key={s.id}
                       onClick={() => onPlayRecording(s)}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    onPlayRecording(s);
+                  }}
                       style={{
                         borderBottom: '1px solid var(--border-subtle)',
                         cursor: 'pointer',
@@ -826,14 +909,14 @@ export const RecordedClassesView: React.FC<Props> = ({
                             <Bookmark size={14} fill={s.isBookmarked ? 'var(--accent-purple)' : 'none'} color={s.isBookmarked ? 'var(--accent-purple)' : 'currentColor'} />
                           </button>
                           <button
-                            className={s.recordingUrl ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                            className="btn btn-primary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               onPlayRecording(s);
                             }}
-                            style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+                            style={{ padding: '4px 12px', fontSize: '0.78rem', fontWeight: 700 }}
                           >
-                            {s.recordingUrl ? 'Play' : 'Notes & Agenda'}
+                            Play
                           </button>
                         </div>
                       </td>
@@ -842,6 +925,240 @@ export const RecordedClassesView: React.FC<Props> = ({
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Upload / Attach Recording Modal */}
+      {attachModalSession && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '20px',
+          }}
+          onClick={() => !isSaving && setAttachModalSession(null)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '540px',
+              width: '100%',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              position: 'relative',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <UploadCloud size={20} color="var(--primary)" />
+                  Attach Class Video Recording
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Session: <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{attachModalSession.title}</span>
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => !isSaving && setAttachModalSession(null)}
+                disabled={isSaving}
+                style={{ padding: '6px', borderRadius: '8px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setAttachTab('upload')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: attachTab === 'upload' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                  color: attachTab === 'upload' ? 'var(--primary)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <UploadCloud size={15} /> Upload Video File (.mp4 / .webm)
+              </button>
+              <button
+                type="button"
+                onClick={() => setAttachTab('url')}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: attachTab === 'url' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+                  color: attachTab === 'url' ? 'var(--primary)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <ExternalLink size={15} /> Direct Video URL
+              </button>
+            </div>
+
+            {/* Upload Tab */}
+            {attachTab === 'upload' && (
+              <div>
+                <label
+                  style={{
+                    border: '2px dashed var(--border-subtle)',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    background: 'var(--bg-card)',
+                    textAlign: 'center',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/mkv,video/quicktime"
+                    style={{ display: 'none' }}
+                    disabled={isSaving}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setSelectedFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <UploadCloud size={36} color="var(--primary)" style={{ marginBottom: '8px' }} />
+                  {selectedFile ? (
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                        {selectedFile.name}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready to upload
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                        Click or drag to choose lecture video
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        Supports MP4, WebM, MKV (up to 500MB)
+                      </div>
+                    </div>
+                  )}
+                </label>
+
+                {uploadProgress !== null && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      <span>Uploading to cloud storage...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '6px', background: 'var(--bg-card)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${uploadProgress}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #6366f1, #10b981)',
+                          transition: 'width 0.2s',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={isSaving}
+                    onClick={() => setAttachModalSession(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={!selectedFile || isSaving}
+                    onClick={handleUploadRecordingFile}
+                    style={{ gap: '6px', fontWeight: 700 }}
+                  >
+                    {isSaving ? 'Uploading...' : 'Save & Publish Recording'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Direct URL Tab */}
+            {attachTab === 'url' && (
+              <div>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Video URL (.mp4, .webm, or S3 link)
+                  </label>
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="https://.../video.mp4"
+                    disabled={isSaving}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                    Provide a direct video link or S3 bucket recording URL.
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={isSaving}
+                    onClick={() => setAttachModalSession(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={!urlInput.trim() || isSaving}
+                    onClick={handleSaveRecordingUrl}
+                    style={{ gap: '6px', fontWeight: 700 }}
+                  >
+                    {isSaving ? 'Saving...' : 'Save Recording URL'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

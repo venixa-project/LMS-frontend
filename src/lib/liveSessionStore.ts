@@ -19,6 +19,11 @@ interface LiveSessionState {
   getSessionsForCohort: (cohortId: string) => LiveSession[];
   getSessionsForStudent: (studentId: string, cohortIds: string[], courseIds: string[]) => LiveSession[];
 
+  // Institutional Default Google Meet
+  defaultMeetUrl: string;
+  fetchDefaultMeetUrl: () => Promise<string>;
+  setDefaultMeetUrl: (url: string) => Promise<{ success: boolean; defaultGoogleMeetUrl?: string; message?: string }>;
+
   // Actions
   addSession: (
     session: Omit<LiveSession, 'id' | 'createdAt' | 'updatedAt' | 'attendance'>,
@@ -34,8 +39,8 @@ interface LiveSessionState {
     notifyStudents?: boolean
   ) => { success: boolean };
   startBroadcast: (sessionId: string) => Promise<{ success: boolean }>;
-  generateGoogleMeet: (sessionId: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string; notConfigured?: boolean }>;
-  attachGoogleMeet: (sessionId: string, meetingUrl: string) => Promise<{ success: boolean; meetingUrl?: string; message?: string }>;
+  generateGoogleMeet: (sessionId: string) => Promise<{ success: boolean; meetingUrl?: string; needsLaunch?: boolean; launchUrl?: string; message?: string; notConfigured?: boolean }>;
+  attachGoogleMeet: (sessionId: string, meetingUrl: string, saveAsDefault?: boolean) => Promise<{ success: boolean; meetingUrl?: string; message?: string }>;
   endSession: (sessionId: string, recordingUrl?: string) => Promise<{ success: boolean }>;
   updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
@@ -128,6 +133,36 @@ function mapBackendSession(item: any): LiveSession {
 }
 
 export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
+  defaultMeetUrl: '',
+  fetchDefaultMeetUrl: async () => {
+    try {
+      const res = await apiClient.get<any>('/live-sessions/settings/default-meet');
+      const url = res?.data?.defaultGoogleMeetUrl || '';
+      set({ defaultMeetUrl: url });
+      return url;
+    } catch (e) {
+      console.warn('Failed to fetch default Google Meet URL:', e);
+      return '';
+    }
+  },
+  setDefaultMeetUrl: async (rawUrl: string) => {
+    try {
+      const res = await apiClient.post<any>('/live-sessions/settings/default-meet', { url: rawUrl });
+      const savedUrl = res?.data?.defaultGoogleMeetUrl || rawUrl;
+      set({ defaultMeetUrl: savedUrl });
+      const updated = get().sessions.map((s) => {
+        if (s.provider === 'Google Meet' && (!s.meetingUrl || s.meetingUrl.includes('gdf-yzfn-ixm') || s.meetingUrl.includes('ihp-cfao-nvi'))) {
+          return { ...s, meetingUrl: savedUrl, joinLink: savedUrl };
+        }
+        return s;
+      });
+      set({ sessions: updated });
+      persistSessions(updated);
+      return { success: true, defaultGoogleMeetUrl: savedUrl, message: res?.data?.message || 'Default Google Meet room saved permanently.' };
+    } catch (e: any) {
+      return { success: false, message: e?.response?.data?.message || e.message || 'Failed to save default room' };
+    }
+  },
   isLoading: false,
   fetchSessions: async () => {
     set({ isLoading: true });
@@ -350,11 +385,19 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
       if (res && res.data && res.data.meetingUrl) {
         const { meetingUrl, joinLink } = res.data;
         const updated = get().sessions.map((s) =>
-          s.id === sessionId ? { ...s, meetingUrl, joinLink } : s
+          s.id === sessionId ? { ...s, meetingUrl, joinLink, provider: 'Google Meet' } : s
         );
         set({ sessions: updated });
         persistSessions(updated);
         return { success: true, meetingUrl, message: res.data.message };
+      }
+      if (res && res.data && (res.data.needsLaunch || res.data.needsHostLaunch)) {
+        return {
+          success: false,
+          needsLaunch: true,
+          launchUrl: res.data.launchUrl || 'https://meet.google.com/new',
+          message: res.data.message || 'Please launch Google Meet to create room and sync.',
+        };
       }
       return { success: false, message: res?.message || 'Failed to generate Google Meet' };
     } catch (e: any) {
@@ -368,11 +411,17 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     }
   },
 
-  attachGoogleMeet: async (sessionId: string, meetingUrl: string) => {
+  attachGoogleMeet: async (sessionId: string, meetingUrl: string, saveAsDefault = false) => {
     try {
-      const res = await apiClient.post<any>(`/live-sessions/${sessionId}/attach-meet-url`, { meetingUrl });
+      const res = await apiClient.post<any>(`/live-sessions/${sessionId}/attach-meet-url`, {
+        meetingUrl,
+        saveAsDefault,
+      });
       if (res && res.data && res.data.meetingUrl) {
         const url = res.data.meetingUrl;
+        if (saveAsDefault) {
+          set({ defaultMeetUrl: url });
+        }
         const updated = get().sessions.map((s) =>
           s.id === sessionId ? { ...s, meetingUrl: url, joinLink: url, provider: 'Google Meet' } : s
         );
@@ -391,11 +440,14 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
 
   endSession: async (sessionId: string, recordingUrl?: string) => {
     const target = get().sessions.find((s) => s.id === sessionId);
-    const finalRecordingUrl = recordingUrl && recordingUrl.trim() ? recordingUrl.trim() : (target?.recordingUrl || '');
+    const defaultStream = `/api/v1/live-sessions/${sessionId}/recording-stream`;
+    const finalRecordingUrl = recordingUrl && recordingUrl.trim()
+      ? recordingUrl.trim()
+      : (target?.recordingUrl || defaultStream);
 
     try {
       await apiClient.post(`/live-sessions/${sessionId}/broadcast/end`, {
-        recordingUrl: finalRecordingUrl || undefined,
+        recordingUrl: finalRecordingUrl,
       });
     } catch (e) {
       console.warn('Failed to end session in backend:', e);
@@ -408,13 +460,14 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
             status: 'ended' as const,
             recordingUrl: finalRecordingUrl,
             recordingLink: finalRecordingUrl,
+            recordingEnabled: true,
             updatedAt: new Date().toISOString(),
           }
         : s
     );
     set({ sessions: updated });
     persistSessions(updated);
-    return { success: true };
+    return { success: true, recordingUrl: finalRecordingUrl };
   },
 
   updateRecordingUrl: async (sessionId: string, recordingUrl: string) => {

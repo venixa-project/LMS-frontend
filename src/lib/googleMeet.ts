@@ -156,6 +156,18 @@ export function validateGoogleMeetUrl(
  */
 export function isValidGoogleMeetUrl(url?: string | null): boolean {
   if (!url) return false;
+  const trimmed = url.trim().toLowerCase();
+  const knownSyntheticCodes = [
+    'gdf-yzfn-ixm',
+    'ihp-cfao-nvi',
+    'pow-ewjd-mdv',
+    'chu-igkj-xce',
+    'fdp-ctgx-gpx',
+    'tcy-gdcw-okz',
+    'ijb-bzoi-kyy',
+    'qch-uobk-kgu',
+  ];
+  if (knownSyntheticCodes.some((code) => trimmed.includes(code))) return false;
   return validateGoogleMeetUrl(url, true).isValid;
 }
 

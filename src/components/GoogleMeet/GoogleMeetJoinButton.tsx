@@ -40,23 +40,44 @@ export const GoogleMeetJoinButton: React.FC<Props> = ({
   const effectiveHost = isHost || (role ? ['instructor', 'trainer', 'faculty', 'host', 'admin', 'org_admin'].includes(role.toLowerCase()) : false);
   const isConfigured = isValidGoogleMeetUrl(meetingUrl);
 
-  const defaultLabel = !isConfigured
-    ? (effectiveHost ? 'Configure Google Meet' : 'Meeting Link Pending')
-    : label || (effectiveHost ? 'Open Google Meet' : 'Join with Google Meet');
+  const defaultLabel = label || (effectiveHost ? 'Open Google Meet' : 'Join Now');
 
-  const handleClick = (e: React.MouseEvent) => {
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
     if (!isConfigured) {
-      if (onLinkMissing) {
-        onLinkMissing();
+      if (sessionId) {
+        setIsAutoGenerating(true);
+        try {
+          const res = await apiClient.post<any>(`/live-sessions/${sessionId}/generate-meet`);
+          const generatedUrl = res?.data?.meetingUrl || res?.data?.joinLink;
+          if (generatedUrl && isValidGoogleMeetUrl(generatedUrl)) {
+            openGoogleMeetSession(generatedUrl);
+            apiClient.post(`/live-sessions/${sessionId}/join`).catch(() => {});
+            if (onJoined) onJoined();
+            setIsAutoGenerating(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Auto meet generation error:', err);
+        } finally {
+          setIsAutoGenerating(false);
+        }
+      }
+
+      if (effectiveHost) {
+        if (onLinkMissing) {
+          onLinkMissing();
+        } else {
+          window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
+          setMissingNotice('Google Meet opened in a new tab! Copy the meeting URL and sync it with students.');
+          setTimeout(() => setMissingNotice(null), 5000);
+        }
       } else {
-        setMissingNotice(
-          effectiveHost
-            ? 'Please generate or configure a Google Meet room code for this session.'
-            : 'The instructor has not published the Google Meet room link yet. Please check back before class begins.'
-        );
-        setTimeout(() => setMissingNotice(null), 3800);
+        setMissingNotice('The instructor is preparing the Google Meet room. Please wait a moment, it will connect automatically.');
+        setTimeout(() => setMissingNotice(null), 5000);
       }
       return;
     }

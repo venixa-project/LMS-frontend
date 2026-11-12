@@ -12,7 +12,8 @@ import {
   ShieldCheck, FileText, Check, AlertCircle, Download,
   Filter, UserCheck, Shield, ChevronRight, ChevronLeft, Search, Share2,
   Trash2, PhoneCall, Sparkles, LayoutList, CalendarDays,
-  Copy, BookOpen, GraduationCap, Building2, List, MapPin, Eye, Settings
+  Copy, BookOpen, GraduationCap, Building2, List, MapPin, Eye, Settings,
+  Square, UploadCloud
 } from 'lucide-react';
 
 import { ScheduleLiveSessionModal } from './components/ScheduleLiveSessionModal';
@@ -22,9 +23,15 @@ import { LiveRecordingPlayerModal } from './components/LiveRecordingPlayerModal'
 import { SessionRosterModal } from './components/SessionRosterModal';
 import { WeeklyTimetableView } from './components/WeeklyTimetableView';
 import { RecordedClassesView } from './components/RecordedClassesView';
+import { MeetingRecorderWidget } from './components/MeetingRecorderWidget';
+import { useScreenRecorder } from '../../lib/useScreenRecorder';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
+<<<<<<< HEAD
 import { openGoogleMeetSession } from '../../lib/googleMeet';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+=======
+import { openGoogleMeetSession, isValidGoogleMeetUrl } from '../../lib/googleMeet';
+>>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -79,6 +86,9 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     deleteSession,
     generateGoogleMeet,
     attachGoogleMeet,
+    defaultMeetUrl,
+    fetchDefaultMeetUrl,
+    setDefaultMeetUrl,
   } = useLiveSessionStore();
 
   const { cohorts, fetchCohorts } = useCohortStore();
@@ -123,11 +133,52 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   const [activeLiveRoomSession, setActiveLiveRoomSession] = useState<LiveSession | null>(null);
   const [recordingModalSession, setRecordingModalSession] = useState<LiveSession | null>(null);
   const [rosterModalSession, setRosterModalSession] = useState<LiveSession | null>(null);
+  const [concludeModalSession, setConcludeModalSession] = useState<LiveSession | null>(null);
+  const [meetLaunchedNotice, setMeetLaunchedNotice] = useState(false);
+
+  // Institutional Default Google Meet State
+  const [isDefaultMeetModalOpen, setIsDefaultMeetModalOpen] = useState(false);
+  const [defaultMeetInput, setDefaultMeetInput] = useState('');
+  const [defaultMeetError, setDefaultMeetError] = useState<string | null>(null);
+  const [saveAsDefaultRoom, setSaveAsDefaultRoom] = useState(true);
+
+  useEffect(() => {
+    fetchDefaultMeetUrl();
+  }, [fetchDefaultMeetUrl]);
 
   // Cancellation Modal
   const [cancelModalSession, setCancelModalSession] = useState<LiveSession | null>(null);
   const [cancelReason, setCancelReason] = useState('Faculty schedule conflict & curriculum rescheduling');
   const [deleteSessionModal, setDeleteSessionModal] = useState<{ id: string; title: string } | null>(null);
+
+  // Screen & Google Meet In-Browser Recorder
+  const {
+    state: recorderState,
+    startRecording,
+    pauseRecording,
+    resumeRecording,
+    stopRecording,
+    cancelRecording,
+  } = useScreenRecorder();
+
+  const handleStartMeetingRecording = async (s: LiveSession) => {
+    const res = await startRecording({ id: s.id, title: s.title, withMic: true });
+    if (res.success) {
+      showNotice(`Screen recorder active! In Chrome's popup, select the Google Meet tab to capture your webcam, motions & audio.`);
+    } else if (res.error) {
+      showNotice(`Recording error: ${res.error}`);
+    }
+  };
+
+  const handleStopAndSaveRecorder = async () => {
+    const res = await stopRecording();
+    if (res.success) {
+      await fetchSessions();
+      showNotice(`Live class recording saved and uploaded successfully! Students can now replay it in Recorded Classes.`);
+    } else if (res.error) {
+      showNotice(`Failed to upload recording: ${res.error}`);
+    }
+  };
 
   // Notification Banner
   const [noticeBanner, setNoticeBanner] = useState<string | null>(null);
@@ -397,16 +448,35 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
   };
 
   // Launch Broadcast / Open Google Meet
-  const handleStartBroadcast = (sessionId: string) => {
-    startBroadcast(sessionId);
-    const updated = sessions.find((s) => s.id === sessionId);
+  const handleStartBroadcast = async (sessionId: string) => {
+    let currentSession = sessions.find((s) => s.id === sessionId);
+    if (!currentSession?.meetingUrl || !isValidGoogleMeetUrl(currentSession.meetingUrl)) {
+      const res = await generateGoogleMeet(sessionId);
+      if (res?.meetingUrl && isValidGoogleMeetUrl(res.meetingUrl)) {
+        currentSession = { ...currentSession, meetingUrl: res.meetingUrl } as LiveSession;
+      } else {
+        // No valid meeting room configured yet. Open meet.google.com/new and prompt 1-click sync
+        window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
+        if (currentSession) {
+          setAttachMeetSession(currentSession);
+          setAttachMeetUrlInput('');
+          setAttachMeetError(null);
+          setMeetLaunchedNotice(true);
+        }
+        await startBroadcast(sessionId);
+        showNotice('Google Meet opened in a new tab! Copy your room link and paste it in the sync modal.');
+        return;
+      }
+    }
+    await startBroadcast(sessionId);
+    const updated = sessions.find((s) => s.id === sessionId) || currentSession;
     if (updated) {
       const meetUrl = updated.meetingUrl || updated.joinLink;
-      if (meetUrl) {
+      if (meetUrl && isValidGoogleMeetUrl(meetUrl)) {
         openGoogleMeetSession(meetUrl);
-        showNotice(`Session is now LIVE NOW on Google Meet! Meeting opened in a new tab.`);
+        showNotice(`Session is now LIVE on Google Meet! Meeting room opened in a new tab.`);
       } else {
-        showNotice('This session does not have a Google Meet link configured yet.');
+        showNotice('Session is now LIVE.');
       }
     }
   };
@@ -539,6 +609,88 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       {/* 3. LIVE SESSIONS HUB */}
       {activeTab === 'live_sessions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Institutional Permanent Google Meet Status Banner */}
+          {!isStudent && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                background: defaultMeetUrl
+                  ? 'linear-gradient(135deg, rgba(0, 172, 71, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%)'
+                  : 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%)',
+                border: defaultMeetUrl
+                  ? '1.5px solid rgba(0, 172, 71, 0.35)'
+                  : '1.5px dashed rgba(59, 130, 246, 0.4)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <GoogleMeetIcon size={22} />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 800 }}>
+                      Institutional Google Meet Room
+                    </span>
+                    {defaultMeetUrl ? (
+                      <span className="badge badge-published" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                        Active & Verified
+                      </span>
+                    ) : (
+                      <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                        Setup Recommended
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    {defaultMeetUrl ? (
+                      <span>
+                        All scheduled sessions automatically link to:{' '}
+                        <strong style={{ fontFamily: 'monospace', color: '#22c55e' }}>{defaultMeetUrl}</strong>
+                      </span>
+                    ) : (
+                      <span>
+                        Save a permanent Google Meet room so all live classes connect instantly with zero "Check meeting code" errors.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {defaultMeetUrl && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(defaultMeetUrl);
+                      showNotice('Default meeting link copied to clipboard!');
+                    }}
+                    style={{ fontSize: '0.75rem', gap: '4px' }}
+                  >
+                    <Copy size={12} /> Copy Link
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={defaultMeetUrl ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+                  onClick={() => {
+                    setDefaultMeetInput(defaultMeetUrl || '');
+                    setDefaultMeetError(null);
+                    setIsDefaultMeetModalOpen(true);
+                  }}
+                  style={{ fontSize: '0.78rem', gap: '6px', fontWeight: 700 }}
+                >
+                  <Sparkles size={14} />
+                  <span>{defaultMeetUrl ? 'Change Room' : 'Set Permanent Room'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Simplified 4 Summary Metric Cards */}
           <div className="grid-4" style={{ gap: '16px' }}>
             <div className="stat-card" style={{ borderLeft: '4px solid #ef4444', padding: '16px 18px' }}>
@@ -885,33 +1037,71 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '10px', borderTop: '1px solid var(--border-subtle)' }}>
                       {/* Primary Action Button */}
                       {isLive && (
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <GoogleMeetJoinButton
-                            sessionId={s.id}
-                            meetingUrl={s.meetingUrl || s.joinLink}
-                            role={isCreatorOrAdmin ? 'instructor' : 'student'}
-                            label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join with Google Meet'}
-                            size="md"
-                            style={{ flex: 1, justifyContent: 'center' }}
-                          />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <GoogleMeetJoinButton
+                              sessionId={s.id}
+                              meetingUrl={s.meetingUrl || s.joinLink}
+                              role={isCreatorOrAdmin ? 'instructor' : 'student'}
+                              label={isCreatorOrAdmin ? 'Open Google Meet' : 'Join Now'}
+                              size="md"
+                              style={{ flex: 1, justifyContent: 'center' }}
+                            />
+                            {isCreatorOrAdmin && (
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => setConcludeModalSession(s)}
+                                title="Conclude live broadcast and save recording"
+                                style={{ padding: '8px 12px', color: 'var(--danger)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                              >
+                                End Stream
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Companion Screen & Video Recorder for Google Meet */}
                           {isCreatorOrAdmin && (
-                            <button
-                              className="btn btn-secondary"
-                              onClick={() => {
-                                const rec = window.prompt(
-                                  'Conclude stream and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
-                                  s.recordingUrl || ''
-                                );
-                                if (rec !== null) {
-                                  endSession(s.id, rec.trim() || undefined);
-                                  showNotice(`Broadcast concluded for "${s.title}". Recording archived in Recorded Classes.`);
-                                }
-                              }}
-                              title="Conclude live broadcast and save recording"
-                              style={{ padding: '8px 12px', color: 'var(--danger)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                            >
-                              End Stream
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {recorderState.isRecording && recorderState.activeSessionId === s.id ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={handleStopAndSaveRecorder}
+                                  style={{
+                                    flex: 1,
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1.5px solid #ef4444',
+                                    color: '#ef4444',
+                                    fontWeight: 700,
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontSize: '0.8rem',
+                                  }}
+                                >
+                                  <Square size={13} fill="#ef4444" />
+                                  <span>Stop & Save Recording ({Math.floor(recorderState.duration / 60)}:{(recorderState.duration % 60).toString().padStart(2, '0')})</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleStartMeetingRecording(s)}
+                                  style={{
+                                    flex: 1,
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    color: '#ef4444',
+                                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                                    fontWeight: 700,
+                                    fontSize: '0.8rem',
+                                  }}
+                                  title="Capture and record your Google Meet video, movements, audio, and presentation in Full HD"
+                                >
+                                  <Radio size={14} color="#ef4444" />
+                                  <span>Record Google Meet Tab & Cam</span>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
@@ -920,53 +1110,28 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           {isCreatorOrAdmin ? (
                             <>
-                              {s.meetingUrl ? (
-                                <>
-                                  <button
-                                    className="btn btn-primary"
-                                    onClick={() => handleStartBroadcast(s.id)}
-                                    style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
-                                  >
-                                    <GoogleMeetIcon size={16} /> Open Google Meet
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary"
-                                    onClick={() => {
-                                      setAttachMeetSession(s);
-                                      setAttachMeetUrlInput(s.meetingUrl || '');
-                                      setAttachMeetError(null);
-                                    }}
-                                    title="Edit Google Meet Link"
-                                    style={{ padding: '8px 10px' }}
-                                  >
-                                    <Settings size={15} />
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  className="btn btn-primary"
-                                  onClick={() => {
-                                    setAttachMeetSession(s);
-                                    setAttachMeetUrlInput('');
-                                    setAttachMeetError(null);
-                                  }}
-                                  style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700, background: 'linear-gradient(135deg, #00ac47 0%, #00832d 100%)' }}
-                                >
-                                  <GoogleMeetIcon size={16} /> Configure Google Meet
-                                </button>
-                              )}
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleStartBroadcast(s.id)}
+                                style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
+                              >
+                                <GoogleMeetIcon size={16} /> Open Google Meet
+                              </button>
                               <button
                                 className="btn btn-secondary"
                                 onClick={() => {
-                                  const rec = window.prompt(
-                                    'Conclude scheduled class and archive recording.\nEnter custom recording link (Google Drive / YouTube / Cloud storage), or leave blank for automatic LMS cloud archive:',
-                                    s.recordingUrl || ''
-                                  );
-                                  if (rec !== null) {
-                                    endSession(s.id, rec.trim() || undefined);
-                                    showNotice(`Class "${s.title}" marked as concluded and recording archived.`);
-                                  }
+                                  setAttachMeetSession(s);
+                                  setAttachMeetUrlInput(s.meetingUrl || '');
+                                  setAttachMeetError(null);
                                 }}
+                                title="Google Meet Settings & Room Link"
+                                style={{ padding: '8px 10px' }}
+                              >
+                                <Settings size={15} />
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => setConcludeModalSession(s)}
                                 title="Conclude class and archive recording for students"
                                 style={{ padding: '8px 12px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
                               >
@@ -975,35 +1140,23 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                             </>
                           ) : (
                             isJoinWindowOpen(s) ? (
-                              (s.meetingUrl || s.joinLink) ? (
-                                <GoogleMeetJoinButton
-                                  sessionId={s.id}
-                                  meetingUrl={s.meetingUrl || s.joinLink}
-                                  role="student"
-                                  label="Join with Google Meet"
-                                  size="md"
-                                  style={{ flex: 1, justifyContent: 'center' }}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className="btn btn-secondary"
-                                  style={{ flex: 1, justifyContent: 'center', opacity: 0.8, cursor: 'not-allowed', fontSize: '0.82rem', gap: '6px' }}
-                                  title="The instructor has not added the Google Meet room link yet."
-                                >
-                                  <GoogleMeetIcon size={14} /> Meeting Link Pending
-                                </button>
-                              )
+                              <GoogleMeetJoinButton
+                                sessionId={s.id}
+                                meetingUrl={s.meetingUrl || s.joinLink}
+                                role="student"
+                                label="Join Now"
+                                size="md"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                              />
                             ) : (
                               <button
                                 type="button"
                                 disabled
                                 className="btn btn-secondary"
-                                style={{ flex: 1, justifyContent: 'center', opacity: 0.65, cursor: 'not-allowed', fontSize: '0.82rem' }}
+                                style={{ flex: 1, justifyContent: 'center', opacity: 0.75, cursor: 'not-allowed', fontSize: '0.82rem' }}
                                 title="Meeting room opens 15 minutes before scheduled start time."
                               >
-                                Upcoming (Join opens 15m prior)
+                                Scheduled &bull; Opens {s.startTime}
                               </button>
                             )
                           )}
@@ -1030,38 +1183,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
 
                       {isEnded && (
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          {s.recordingUrl ? (
-                            <button
-                              className="btn btn-primary"
-                              onClick={() => setRecordingModalSession(s)}
-                              style={{ flex: 1, justifyContent: 'center', gap: '6px' }}
-                            >
-                              <Play size={15} /> Watch Recording
-                            </button>
-                          ) : (
-                            <div style={{ flex: 1, textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', padding: '8px' }}>
-                              Recording Unavailable
-                            </div>
-                          )}
-                          {isCreatorOrAdmin && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                const newUrl = window.prompt(
-                                  'Update recording link (Google Drive / YouTube / Cloud storage MP4):',
-                                  s.recordingUrl || ''
-                                );
-                                if (newUrl !== null) {
-                                  endSession(s.id, newUrl.trim() || undefined);
-                                  showNotice(`Updated recording link for "${s.title}".`);
-                                }
-                              }}
-                              title="Edit or attach custom recording link"
-                              style={{ fontSize: '0.75rem', padding: '6px 10px' }}
-                            >
-                              Edit Link
-                            </button>
-                          )}
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => setRecordingModalSession(s)}
+                            style={{ flex: 1, justifyContent: 'center', gap: '6px', fontWeight: 700 }}
+                          >
+                            <Play size={15} /> Watch Recording
+                          </button>
                         </div>
                       )}
 
@@ -1490,10 +1618,87 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                 </div>
               )}
 
-              {/* Option 1: Attach existing Google Meet link */}
+              {/* Primary Action: Launch Genuine Google Meet in New Tab */}
+              <div style={{
+                padding: '14px 16px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, rgba(0, 172, 71, 0.1) 0%, rgba(0, 131, 45, 0.05) 100%)',
+                border: '1.5px solid rgba(0, 172, 71, 0.35)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <GoogleMeetIcon size={18} />
+                      <span>Google Meet Virtual Classroom</span>
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      Auto-generate a persistent room, or launch instant room under your Google account.
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {defaultMeetUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setAttachMeetUrlInput(defaultMeetUrl);
+                          setAttachMeetError(null);
+                          showNotice(`Loaded default room: ${defaultMeetUrl}`);
+                        }}
+                        style={{ gap: '6px', fontWeight: 700 }}
+                      >
+                        <Sparkles size={14} color="var(--primary)" />
+                        <span>Use Default Room</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer');
+                        setMeetLaunchedNotice(true);
+                        setAttachMeetError(null);
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #00ac47 0%, #00832d 100%)',
+                        borderColor: '#00ac47',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        gap: '6px',
+                      }}
+                    >
+                      <GoogleMeetIcon size={14} /> Launch Google Meet
+                    </button>
+                  </div>
+                </div>
+
+                {meetLaunchedNotice && (
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(34, 197, 94, 0.15)',
+                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                    fontSize: '0.78rem',
+                    color: '#86efac',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}>
+                    <CheckCircle2 size={14} color="#22c55e" />
+                    <span>Google Meet opened in your new tab! Copy the meeting URL from that tab's address bar and click Paste below:</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Paste & Confirm Real Meeting URL */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  Enter Existing Google Meet Link:
+                <label style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Google Meet Room URL:
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
@@ -1509,75 +1714,55 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                   />
                   <button
                     type="button"
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        if (clipText) {
+                          setAttachMeetUrlInput(clipText.trim());
+                          setAttachMeetError(null);
+                        }
+                      } catch (e) {
+                        // ignore
+                      }
+                    }}
+                    title="Paste from clipboard"
+                    style={{ padding: '8px 12px', fontSize: '0.78rem', gap: '4px' }}
+                  >
+                    <Copy size={13} /> Paste
+                  </button>
+                  <button
+                    type="button"
                     className="btn btn-primary"
                     disabled={!attachMeetUrlInput.trim()}
                     onClick={async () => {
                       setAttachMeetError(null);
-                      const res = await attachGoogleMeet(attachMeetSession.id, attachMeetUrlInput);
+                      const res = await attachGoogleMeet(attachMeetSession.id, attachMeetUrlInput, saveAsDefaultRoom);
                       if (res.success) {
-                        showNotice(`Google Meet link saved: ${res.meetingUrl}`);
+                        showNotice(`Google Meet link saved & broadcast to students: ${res.meetingUrl}`);
                         setAttachMeetSession(null);
+                        setMeetLaunchedNotice(false);
                       } else {
                         setAttachMeetError(res.message || 'Failed to save meeting link.');
                       }
                     }}
-                    style={{ whiteSpace: 'nowrap' }}
+                    style={{ whiteSpace: 'nowrap', fontWeight: 700 }}
                   >
-                    Save Link
+                    Save & Open for Students
                   </button>
                 </div>
-                <span className="text-muted text-xs">
-                  Paste the Google Meet room URL created in your institutional Google Calendar or Google Workspace.
-                </span>
-              </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0' }}>
-                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-                <span className="text-muted text-xs" style={{ fontWeight: 600 }}>OR</span>
-                <div style={{ flex: 1, height: '1px', background: 'var(--border-subtle)' }} />
-              </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', marginTop: '4px' }}>
+                  <input
+                    type="checkbox"
+                    checked={saveAsDefaultRoom}
+                    onChange={(e) => setSaveAsDefaultRoom(e.target.checked)}
+                  />
+                  <span>Save as permanent default Google Meet room for all future classes</span>
+                </label>
 
-              {/* Option 2: Generate via Google Calendar API */}
-              <div style={{
-                padding: '12px 14px',
-                borderRadius: '8px',
-                background: 'rgba(56, 189, 248, 0.05)',
-                border: '1px solid rgba(56, 189, 248, 0.2)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Automated Google Calendar Conference API
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={isGeneratingMeet}
-                    onClick={async () => {
-                      setIsGeneratingMeet(true);
-                      setAttachMeetError(null);
-                      const res = await generateGoogleMeet(attachMeetSession.id);
-                      setIsGeneratingMeet(false);
-                      if (res.success && res.meetingUrl) {
-                        showNotice(`Google Meet created via Google API: ${res.meetingUrl}`);
-                        setAttachMeetSession(null);
-                      } else {
-                        setAttachMeetError(
-                          res.notConfigured
-                            ? 'Google Calendar API credentials are not configured on the backend server. Please enter your Google Meet link directly above.'
-                            : (res.message || 'Failed to create conference via Google Calendar API.')
-                        );
-                      }
-                    }}
-                    style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.4)' }}
-                  >
-                    {isGeneratingMeet ? 'Connecting Google API...' : 'Generate via Google API'}
-                  </button>
-                </div>
                 <span className="text-muted text-xs">
-                  Requires GOOGLE_CLIENT_ID and GOOGLE_REFRESH_TOKEN configured on the backend server.
+                  This room link is saved in PostgreSQL and immediately accessible to all enrolled students without "Check your meeting code" errors.
                 </span>
               </div>
             </div>
@@ -1586,7 +1771,10 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setAttachMeetSession(null)}
+                onClick={() => {
+                  setAttachMeetSession(null);
+                  setMeetLaunchedNotice(false);
+                }}
               >
                 Cancel
               </button>
@@ -1595,6 +1783,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         </div>
       )}
 
+<<<<<<< HEAD
       {/* Delete Record Confirmation Modal matching user screenshot */}
       <ConfirmationModal
         isOpen={Boolean(deleteSessionModal)}
@@ -1611,6 +1800,254 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           }
         }}
         onCancel={() => setDeleteSessionModal(null)}
+=======
+      {/* Set Default Google Meet Room Modal */}
+      {isDefaultMeetModalOpen && (
+        <div className="modal-backdrop" style={{ zIndex: 1200 }}>
+          <div className="modal-content" style={{ maxWidth: '500px', width: '92%' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GoogleMeetIcon size={20} />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
+                  Permanent Institutional Google Meet
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setIsDefaultMeetModalOpen(false)}
+                style={{ padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px 0' }}>
+              <p className="text-secondary text-xs" style={{ margin: 0, lineHeight: 1.5 }}>
+                Configure a permanent, reusable Google Meet link for your institution. All upcoming and new live classes will automatically use this room, ensuring students and trainers join without code errors.
+              </p>
+
+              {defaultMeetError && (
+                <div style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: 'var(--danger)',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span>{defaultMeetError}</span>
+                </div>
+              )}
+
+              <div style={{
+                padding: '12px 14px',
+                borderRadius: '8px',
+                background: 'rgba(0, 172, 71, 0.08)',
+                border: '1px solid rgba(0, 172, 71, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Don't have a room yet? Create one now on Google Meet:
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => window.open('https://meet.google.com/new', '_blank', 'noopener,noreferrer')}
+                  style={{ gap: '6px', fontWeight: 700, fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                >
+                  <ExternalLink size={13} /> Launch meet.new
+                </button>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, marginBottom: '6px' }}>
+                  Google Meet Room URL:
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="url"
+                    className="form-input"
+                    placeholder="https://meet.google.com/abc-defg-hij"
+                    value={defaultMeetInput}
+                    onChange={(e) => {
+                      setDefaultMeetInput(e.target.value);
+                      setDefaultMeetError(null);
+                    }}
+                    style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        if (clipText) {
+                          setDefaultMeetInput(clipText.trim());
+                          setDefaultMeetError(null);
+                        }
+                      } catch {}
+                    }}
+                    title="Paste from clipboard"
+                    style={{ padding: '8px 12px', fontSize: '0.78rem', gap: '4px' }}
+                  >
+                    <Copy size={13} /> Paste
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setIsDefaultMeetModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!defaultMeetInput.trim()}
+                onClick={async () => {
+                  setDefaultMeetError(null);
+                  const res = await setDefaultMeetUrl(defaultMeetInput.trim());
+                  if (res.success) {
+                    showNotice('Institutional Google Meet room successfully saved and active!');
+                    setIsDefaultMeetModalOpen(false);
+                  } else {
+                    setDefaultMeetError(res.message || 'Failed to save default room.');
+                  }
+                }}
+                style={{ fontWeight: 700 }}
+              >
+                Save Permanent Room
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: CONCLUDE LIVE CLASS & ARCHIVE TO RECORDED CLASSES */}
+      {concludeModalSession && (
+        <div
+          className="modal-overlay"
+          onClick={() => setConcludeModalSession(null)}
+          style={{ zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)' }}
+        >
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '460px', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)' }}>
+                  <Radio size={18} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                  Conclude Live Class
+                </h3>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConcludeModalSession(null)}
+                style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              Are you sure you want to conclude the live broadcast for <strong>"{concludeModalSession.title}"</strong>?
+            </p>
+
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '8px',
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+            }}>
+              <CheckCircle2 size={16} color="#38bdf8" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.4 }}>
+                The session will automatically transfer to <strong>Recorded Classes</strong> so any students who missed or were absent can replay the lecture recording, chapters, slides, and attendance roll call.
+              </div>
+            </div>
+
+            {/* Active Recording Notice */}
+            {recorderState.isRecording && recorderState.activeSessionId === concludeModalSession.id && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}>
+                <Radio size={16} color="#ef4444" />
+                <div style={{ fontSize: '0.8rem', color: '#fca5a5', lineHeight: 1.4 }}>
+                  <strong>Active HD Recording Detected:</strong> The recorded Google Meet stream will be automatically compiled, finalized, and uploaded as the official class recording.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setConcludeModalSession(null)}
+              >
+                Keep Live
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: 'var(--danger)', borderColor: 'var(--danger)', color: '#ffffff', fontWeight: 700 }}
+                onClick={async () => {
+                  const s = concludeModalSession;
+                  setConcludeModalSession(null);
+                  let finalRecUrl: string | undefined = undefined;
+
+                  // If this session has an active recording running, finalize it and upload now
+                  if (recorderState.isRecording && recorderState.activeSessionId === s.id) {
+                    showNotice(`Finalizing and uploading recorded Google Meet stream...`);
+                    const recRes = await stopRecording();
+                    if (recRes.success && recRes.recordingUrl) {
+                      finalRecUrl = recRes.recordingUrl;
+                    }
+                  }
+
+                  await endSession(s.id, finalRecUrl);
+                  await fetchSessions();
+                  showNotice(`Live class "${s.title}" concluded and archived in Recorded Classes.`);
+                }}
+              >
+                Conclude & Archive Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING IN-APP MEETING RECORDER WIDGET */}
+      <MeetingRecorderWidget
+        state={recorderState}
+        onPause={pauseRecording}
+        onResume={resumeRecording}
+        onStop={handleStopAndSaveRecorder}
+        onCancel={cancelRecording}
+>>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
       />
     </div>
   );
