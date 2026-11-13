@@ -318,6 +318,32 @@ export function getLocalhostEquivalentUrl(): string {
   const port = window.location.port ? `:${window.location.port}` : '';
   return `http://localhost${port}${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
+
+/**
+ * Asynchronously probes whether localhost is reachable on the current browser
+ * (i.e. whether the user is viewing on the development host machine rather than a remote client device).
+ */
+export async function probeIsLocalhostAvailable(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const { hostname, port } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return false;
+  }
+  if (!port) return false;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 350);
+    await fetch(`http://localhost:${port}/`, {
+      method: 'GET',
+      mode: 'no-cors',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    return true;
+  } catch {
+    return false;
+  }
+}
 /**
  * Synthetic MediaStreamTrack mock for headless environments, unit tests, or unsupported captureStream
  */

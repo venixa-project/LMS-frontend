@@ -20,6 +20,7 @@ import {
   getCollegeLanHttpsUrl,
   getPublicHttpsUrl,
   getSecurityContextReport,
+  probeIsLocalhostAvailable,
   SecurityContextReport,
   enterFullscreen,
   isCurrentlyFullscreen,
@@ -95,6 +96,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const audioMeterBarRef = useRef<HTMLDivElement | null>(null);
+  const audioMeterTextRef = useRef<HTMLSpanElement | null>(null);
   const isTransitioningToExamRef = useRef<boolean>(false);
 
   // Check if manual or combined Google Meet invigilation is configured
@@ -107,7 +110,6 @@ export const VeniGuardSetup: React.FC<Props> = ({
   // Consent & accommodations
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showAccommodationModal, setShowAccommodationModal] = useState(false);
-  const [autoLaunchJitsi, setAutoLaunchJitsi] = useState(isMeetProctoring);
 
   // Authenticated candidate details for Jitsi Meet
   const { user } = useAuthStore();
@@ -135,7 +137,17 @@ export const VeniGuardSetup: React.FC<Props> = ({
     const sec = getSecurityContextReport();
     setCapabilities(caps);
     setSecurityReport(sec);
-    setBrowserStatus(caps.isCompatible ? 'connected' : 'unsupported');
+    const isSec = sec.isSecureContext;
+    setBrowserStatus((caps.isCompatible && isSec) ? 'connected' : (!isSec ? 'permission_denied' : 'unsupported'));
+
+    // If viewing via insecure LAN IP on the host machine, proactively transition to localhost:5173
+    if (!isSec && typeof window !== 'undefined') {
+      probeIsLocalhostAvailable().then((isAvailable) => {
+        if (isAvailable) {
+          window.location.replace(getLocalhostEquivalentUrl());
+        }
+      });
+    }
 
     // Initial network latency probe
     probeConnectionHealth().then(({ online, latencyMs }) => {
@@ -152,6 +164,34 @@ export const VeniGuardSetup: React.FC<Props> = ({
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
+  }, []);
+
+  // Handle auto-trigger intent after redirection to secure context (e.g. from insecure LAN to localhost)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.isSecureContext) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoTrigger = urlParams.get('autoTrigger') || sessionStorage.getItem('veniguard_auto_trigger');
+
+    if (autoTrigger) {
+      sessionStorage.removeItem('veniguard_auto_trigger');
+      if (urlParams.has('autoTrigger')) {
+        urlParams.delete('autoTrigger');
+        const cleanSearch = urlParams.toString() ? `?${urlParams.toString()}` : '';
+        window.history.replaceState({}, '', `${window.location.pathname}${cleanSearch}${window.location.hash}`);
+      }
+
+      // Automatically execute requested hardware action without requiring a second click
+      const timer = setTimeout(() => {
+        if (autoTrigger === 'mic') {
+          handleRequestMic();
+        } else if (autoTrigger === 'webcam') {
+          handleRequestWebcam();
+        }
+      }, 350);
+
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   // Real-time hardware device monitoring (enumerateDevices & ondevicechange)
@@ -257,34 +297,84 @@ export const VeniGuardSetup: React.FC<Props> = ({
       }
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.35;
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.2;
       analyserRef.current = analyser;
 
       const source = ctx.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const hasFloat = typeof analyser.getFloatTimeDomainData === 'function';
+      const floatData = hasFloat ? new Float32Array(analyser.fftSize) : null;
+      const byteData = !hasFloat ? new Uint8Array(analyser.fftSize) : null;
 
-      const updateMeter = () => {
+      let smoothedLevel = 0;
+      let lastThrottleUpdate = 0;
+
+      const updateMeter = (timestamp: number) => {
         if (!analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
 
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
+        let sumSquares = 0;
+        if (hasFloat && floatData) {
+          analyserRef.current.getFloatTimeDomainData(floatData);
+          for (let i = 0; i < floatData.length; i++) {
+            const val = floatData[i];
+            sumSquares += val * val;
+          }
+        } else if (byteData) {
+          analyserRef.current.getByteTimeDomainData(byteData);
+          for (let i = 0; i < byteData.length; i++) {
+            const val = (byteData[i] - 128) / 128;
+            sumSquares += val * val;
+          }
         }
-        const avg = sum / dataArray.length;
-        // Real acoustic level calculation:
-        // Background noise is typically avg 0-4. Normal speech produces avg 15-60.
-        // Scale to 0-100% cleanly without synthetic sine wave or noise additions.
-        const normalized = Math.min(100, Math.round((avg / 75) * 100));
-        setAudioLevel(normalized);
+        const sampleCount = floatData?.length || byteData?.length || 512;
+        const rms = Math.sqrt(sumSquares / sampleCount);
+
+        // Acoustic Decibel & Dynamic Range Calibration:
+        // Ambient room silence / fan noise: RMS < 0.007 (-43 dB) -> 0% (Clean baseline, no stuck 13%)
+        // Whisper / quiet voice: RMS 0.015 - 0.035 (-36 dB to -29 dB) -> 20% - 40%
+        // Normal conversational speech: RMS 0.04 - 0.16 (-28 dB to -16 dB) -> 50% - 75%
+        // Loud vocal projection / clap: RMS > 0.20 (-14 dB to 0 dB) -> 85% - 100%
+        let targetLevel = 0;
+        if (rms > 0.007) {
+          const db = 20 * Math.log10(rms);
+          const minDb = -45; // Silence floor threshold
+          const maxDb = -13; // Max vocal range
+          const ratio = (db - minDb) / (maxDb - minDb);
+          targetLevel = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+        }
+
+        // Fast attack (immediate jump when student speaks), smooth decay (gentle release between words)
+        if (targetLevel > smoothedLevel) {
+          smoothedLevel = Math.round(smoothedLevel * 0.25 + targetLevel * 0.75);
+        } else {
+          smoothedLevel = Math.round(smoothedLevel * 0.82 + targetLevel * 0.18);
+          if (smoothedLevel < 1) smoothedLevel = 0;
+        }
+
+        // 1. Direct DOM update (hardware-accelerated 60fps with zero React re-render stutter)
+        if (audioMeterBarRef.current) {
+          audioMeterBarRef.current.style.width = `${Math.max(0, smoothedLevel)}%`;
+          audioMeterBarRef.current.style.background =
+            smoothedLevel > 65
+              ? 'linear-gradient(90deg, #10B981, #F59E0B)'
+              : 'linear-gradient(90deg, #3B82F6, #10B981)';
+        }
+        if (audioMeterTextRef.current) {
+          audioMeterTextRef.current.textContent = `Live Input: ${smoothedLevel}%`;
+        }
+
+        // 2. Throttled React state update (~120ms) to keep state in sync
+        if (timestamp - lastThrottleUpdate > 120) {
+          setAudioLevel(smoothedLevel);
+          lastThrottleUpdate = timestamp;
+        }
 
         animFrameRef.current = requestAnimationFrame(updateMeter);
       };
 
-      updateMeter();
+      animFrameRef.current = requestAnimationFrame(updateMeter);
     } catch (audioErr) {
       console.warn('AudioContext initialization notice:', audioErr);
       setAudioLevel(0);
@@ -293,6 +383,17 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
   // 2. Handle Genuine Physical Microphone Request
   const handleRequestMic = async () => {
+    // If on insecure origin and localhost dev environment is reachable, seamlessly redirect and auto-trigger
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      const isLanDev = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isLanDev) {
+        sessionStorage.setItem('veniguard_auto_trigger', 'mic');
+        const sep = window.location.search ? '&' : '?';
+        window.location.href = getLocalhostEquivalentUrl() + `${sep}autoTrigger=mic`;
+        return;
+      }
+    }
+
     if (audioStreamRef.current) {
       stopAllMediaTracks(audioStreamRef.current);
       audioStreamRef.current = null;
@@ -342,6 +443,17 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
   // 3. Handle Genuine Physical Webcam Request
   const handleRequestWebcam = async () => {
+    // If on insecure origin and localhost dev environment is reachable, seamlessly redirect and auto-trigger
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      const isLanDev = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isLanDev) {
+        sessionStorage.setItem('veniguard_auto_trigger', 'webcam');
+        const sep = window.location.search ? '&' : '?';
+        window.location.href = getLocalhostEquivalentUrl() + `${sep}autoTrigger=webcam`;
+        return;
+      }
+    }
+
     if (videoStreamRef.current) {
       stopAllMediaTracks(videoStreamRef.current);
       videoStreamRef.current = null;
@@ -462,9 +574,9 @@ export const VeniGuardSetup: React.FC<Props> = ({
     // Mark transition to live exam to protect media streams from unmount cleanup
     isTransitioningToExamRef.current = true;
 
-    // Automatically launch Google Meet companion window if enabled or manual/combined proctoring
-    if (autoLaunchJitsi || isMeetProctoring) {
-      launchJitsiConference(jitsiEndpoints.webUrl);
+    // Ensure fullscreen is active when student starts the exam
+    if (!isCurrentlyFullscreen()) {
+      enterFullscreen().catch(() => {});
     }
 
     // Combine audio and video tracks into userMediaStream if available
@@ -715,16 +827,19 @@ export const VeniGuardSetup: React.FC<Props> = ({
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <CheckCircle2 size={13} /> Live System Microphone Connected: {audioDeviceLabel || 'Active Audio Input'}
                   </span>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Live Input: {audioLevel}%</span>
+                  <span ref={audioMeterTextRef} style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Live Input: {audioLevel}%
+                  </span>
                 </div>
                 {/* Audio Level Bar */}
                 <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div
+                    ref={audioMeterBarRef}
                     style={{
-                      width: `${Math.max(4, audioLevel)}%`,
+                      width: `${Math.max(0, audioLevel)}%`,
                       height: '100%',
                       background: audioLevel > 65 ? 'linear-gradient(90deg, #10B981, #F59E0B)' : 'linear-gradient(90deg, #3B82F6, #10B981)',
-                      transition: 'width 0.08s ease',
+                      transition: 'width 0.05s ease-out',
                       borderRadius: '4px',
                     }}
                   />
@@ -779,7 +894,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => { window.location.href = getLocalhostEquivalentUrl(); }}
+                      onClick={() => {
+                        sessionStorage.setItem('veniguard_auto_trigger', 'mic');
+                        const sep = window.location.search ? '&' : '?';
+                        window.location.href = getLocalhostEquivalentUrl() + `${sep}autoTrigger=mic`;
+                      }}
                       style={{ fontSize: '0.74rem', padding: '4px 10px' }}
                     >
                       Switch to localhost:5173 &rarr;
@@ -953,7 +1072,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => { window.location.href = getLocalhostEquivalentUrl(); }}
+                      onClick={() => {
+                        sessionStorage.setItem('veniguard_auto_trigger', 'mic');
+                        const sep = window.location.search ? '&' : '?';
+                        window.location.href = getLocalhostEquivalentUrl() + `${sep}autoTrigger=mic`;
+                      }}
                       style={{ fontSize: '0.74rem', padding: '4px 10px' }}
                     >
                       Switch to localhost:5173 &rarr;
@@ -1396,28 +1519,6 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 <span style={{ color: '#10B981', fontWeight: 600 }}>Google Meet</span>
               </div>
             </div>
-
-            {/* Auto Launch Preference Checkbox */}
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '0.8rem',
-                color: 'var(--text-main)',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={autoLaunchJitsi}
-                onChange={(e) => setAutoLaunchJitsi(e.target.checked)}
-                style={{ accentColor: '#10B981', width: '15px', height: '15px' }}
-              />
-              <span>
-                (Optional) Automatically open Google Meet live conference in a new tab when starting assessment
-              </span>
-            </label>
           </div>
         
 </div>

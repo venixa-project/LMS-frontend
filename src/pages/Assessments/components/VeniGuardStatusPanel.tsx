@@ -3,12 +3,13 @@ import { ProctoringPolicy } from '../../../types';
 import {
   Shield, Monitor, Mic, Camera, Wifi, WifiOff,
   Radio, HelpCircle, CheckCircle2, AlertCircle, X, LifeBuoy,
-  Video
+  Video, User
 } from 'lucide-react';
-import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface Props {
   policy: ProctoringPolicy;
+  candidateName?: string;
+  candidateId?: string;
   isScreenSharing: boolean;
   isMicActive: boolean;
   isWebcamActive: boolean;
@@ -21,6 +22,8 @@ interface Props {
 
 export const VeniGuardStatusPanel: React.FC<Props> = ({
   policy,
+  candidateName,
+  candidateId,
   isScreenSharing,
   isMicActive,
   isWebcamActive,
@@ -54,51 +57,42 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}
       >
-        {/* Left: Branding & Recording Indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Left: Branding & Student Identification */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Shield size={16} color="#3B82F6" />
-            <span style={{ fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.3px' }}>
+            <span style={{ fontWeight: 800, fontSize: '0.88rem', letterSpacing: '0.3px', color: 'var(--text-main)' }}>
               VeniGuard
-            </span>
-            <span
-              className="badge badge-secondary"
-              style={{ fontSize: '0.65rem', textTransform: 'uppercase', padding: '2px 6px' }}
-            >
-              {policy.level}
             </span>
           </div>
 
-          {/* Recording active badge */}
+          {/* Student Name & ID Chip on Top */}
           <div
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
               padding: '3px 10px',
-              borderRadius: '12px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#F472B6',
-              fontSize: '0.72rem',
-              fontWeight: 700,
+              borderRadius: '6px',
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              fontSize: '0.78rem',
             }}
           >
-            <span
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: '#EF4444',
-                animation: 'pulse 1.5s infinite',
-              }}
-            />
-            <span>REC {formatRecDuration(recordingSeconds)}</span>
+            <User size={13} color="#3B82F6" />
+            <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+              {candidateName || 'Student'}
+            </span>
+            {candidateId && (
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                (ID: {candidateId})
+              </span>
+            )}
           </div>
         </div>
 
         {/* Center: Live Monitoring Status Chips */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           {/* Screen */}
           {policy.requireScreenShare && (
             <div
@@ -140,7 +134,7 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Webcam */}
+          {/* Cam */}
           {policy.requireWebcam && (
             <div
               style={{
@@ -177,42 +171,46 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
               {isOnline ? 'Online' : 'Reconnecting...'}
             </span>
           </div>
-
-          {/* Google Meet Bridge */}
-          {jitsiRoomName && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                fontSize: '0.75rem',
-                color: '#34D399',
-                fontWeight: 600,
-                cursor: onOpenJitsi ? 'pointer' : 'default',
-                padding: '2px 8px',
-                borderRadius: '6px',
-                background: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-              }}
-              onClick={onOpenJitsi}
-              title={`Connected to Google Meet session: ${jitsiRoomName}. Click to open in a new tab.`}
-            >
-              <GoogleMeetIcon size={13} />
-              <span>Google Meet:</span>
-              <span style={{ fontWeight: 700, color: '#10B981' }}>Live</span>
-            </div>
-          )}
         </div>
 
-        {/* Right: Technical Support Action */}
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setShowSupportModal(true)}
-          style={{ fontSize: '0.72rem', padding: '4px 10px', gap: '5px' }}
-        >
-          <LifeBuoy size={13} color="#3B82F6" />
-          Technical Support
-        </button>
+        {/* Right: Keep REC to a side + Technical Support */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Recording active badge (kept to a side) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              borderRadius: '12px',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#F472B6',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+            }}
+          >
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: '#EF4444',
+                animation: 'pulse 1.5s infinite',
+              }}
+            />
+            <span>REC {formatRecDuration(recordingSeconds)}</span>
+          </div>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowSupportModal(true)}
+            style={{ fontSize: '0.72rem', padding: '4px 10px', gap: '5px' }}
+          >
+            <LifeBuoy size={13} color="#3B82F6" />
+            Technical Support
+          </button>
+        </div>
       </div>
 
       {/* Technical Support Modal */}

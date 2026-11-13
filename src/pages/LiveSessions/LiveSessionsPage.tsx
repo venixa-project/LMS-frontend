@@ -26,12 +26,8 @@ import { RecordedClassesView } from './components/RecordedClassesView';
 import { MeetingRecorderWidget } from './components/MeetingRecorderWidget';
 import { useScreenRecorder } from '../../lib/useScreenRecorder';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
-<<<<<<< HEAD
-import { openGoogleMeetSession } from '../../lib/googleMeet';
-import { ConfirmationModal } from '../../components/ConfirmationModal';
-=======
 import { openGoogleMeetSession, isValidGoogleMeetUrl } from '../../lib/googleMeet';
->>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -1783,7 +1779,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         </div>
       )}
 
-<<<<<<< HEAD
       {/* Delete Record Confirmation Modal matching user screenshot */}
       <ConfirmationModal
         isOpen={Boolean(deleteSessionModal)}
@@ -1800,7 +1795,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           }
         }}
         onCancel={() => setDeleteSessionModal(null)}
-=======
+      />
       {/* Set Default Google Meet Room Modal */}
       {isDefaultMeetModalOpen && (
         <div className="modal-backdrop" style={{ zIndex: 1200 }}>
@@ -2047,7 +2042,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         onResume={resumeRecording}
         onStop={handleStopAndSaveRecorder}
         onCancel={cancelRecording}
->>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
       />
     </div>
   );

@@ -162,6 +162,43 @@ function clearPersistedSession() {
 }
 
 const STORAGE_KEY_NOTIFICATIONS = 'venilearn_notifications';
+const NOTIFICATION_BROADCAST_CHANNEL = 'venilearn_notifications_broadcast_v1';
+
+let notificationBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    notificationBroadcastChannel = new BroadcastChannel(NOTIFICATION_BROADCAST_CHANNEL);
+    notificationBroadcastChannel.onmessage = (ev) => {
+      if (ev.data?.type === 'NOTIFICATIONS_UPDATED') {
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+          const refreshed = getUserNotifications(currentUser);
+          useAuthStore.setState({
+            notifications: refreshed,
+            unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+          });
+        }
+      }
+    };
+  } catch (err) {
+    // Ignore BroadcastChannel errors in unsupported envs
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY_NOTIFICATIONS) {
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser) {
+        const refreshed = getUserNotifications(currentUser);
+        useAuthStore.setState({
+          notifications: refreshed,
+          unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+        });
+      }
+    }
+  });
+}
 
 function loadStoredNotifications(): Notification[] {
   try {
@@ -181,6 +218,7 @@ function loadStoredNotifications(): Notification[] {
 function persistStoredNotifications(notifs: Notification[]) {
   try {
     localStorage.setItem(STORAGE_KEY_NOTIFICATIONS, JSON.stringify(notifs));
+    notificationBroadcastChannel?.postMessage({ type: 'NOTIFICATIONS_UPDATED' });
   } catch (e) {
     console.warn('Failed to persist notifications to storage:', e);
   }
@@ -194,14 +232,27 @@ function getUserNotifications(user: User): Notification[] {
     (user as any).role === 'student' ||
     (user as any).role === 'learner';
 
-  // Filter notifications belonging to this user or broadcast to students/all
+  const isAdminOrTrainer =
+    (user.activeRole as any) === 'admin' ||
+    user.activeRole === 'org_admin' ||
+    user.activeRole === 'platform_admin' ||
+    user.activeRole === 'trainer' ||
+    user.activeRole === 'instructor' ||
+    (user as any).role === 'admin' ||
+    (user as any).role === 'org_admin' ||
+    (user as any).role === 'trainer' ||
+    (user as any).role === 'instructor' ||
+    user.roles?.some((r) => ['admin', 'org_admin', 'platform_admin', 'trainer', 'instructor'].includes(r.name));
+
+  // Filter notifications belonging to this user or broadcast to students/all/admins
   const userStored = stored.filter(
     (n) =>
       n.userId === user.id ||
       n.userId === user.email ||
       (user.rollNo && n.userId === user.rollNo) ||
       n.userId === 'all' ||
-      (isStudentUser && n.userId === 'all-students')
+      (isStudentUser && n.userId === 'all-students') ||
+      (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors'))
   );
 
   const defaults: Notification[] = [
@@ -292,6 +343,19 @@ interface AuthState {
     durationMinutes?: number;
     totalMarks?: number;
     recipientIds?: string[];
+  }) => { success: boolean; count: number };
+  notifyStudentStartedProctoredExam: (payload: {
+    assessmentId: string;
+    assessmentTitle: string;
+    studentId: string;
+    studentName: string;
+    proctoringMode?: string;
+    creatorId?: string;
+  }) => { success: boolean; count: number };
+  notifyScheduledExamStarted: (payload: {
+    assessmentId: string;
+    assessmentTitle: string;
+    creatorId?: string;
   }) => { success: boolean; count: number };
 }
 
@@ -698,6 +762,113 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       message: `A new assessment "${assessmentTitle}" has been published${courseSuffix}. Total Marks: ${marks}, Duration: ${dur} mins. Good luck!`,
       category: 'assessment',
       link: `/exam/${assessmentId}`,
+      isRead: false,
+      timestamp,
+    }));
+
+    const updatedStored = [...newNotifs, ...stored];
+    persistStoredNotifications(updatedStored);
+
+    const currentUser = get().user;
+    if (currentUser) {
+      const refreshed = getUserNotifications(currentUser);
+      set({
+        notifications: refreshed,
+        unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+      });
+    }
+
+    return {
+      success: true,
+      count: newNotifs.length,
+    };
+  },
+
+  notifyStudentStartedProctoredExam: ({
+    assessmentId,
+    assessmentTitle,
+    studentId,
+    studentName,
+    proctoringMode = 'Manual Google Meet Proctor',
+    creatorId,
+  }) => {
+    const stored = loadStoredNotifications();
+    const timestamp = new Date().toISOString();
+
+    const targets = new Set<string>([
+      'all-admins',
+      'all-trainers',
+      'u-001',
+      'u-002',
+      'orgadmin@lms.demo',
+      'trainer@lms.demo',
+      'faculty@lms.demo',
+    ]);
+    if (creatorId) {
+      targets.add(creatorId);
+    }
+
+    const newNotifs: Notification[] = Array.from(targets).map((uid) => ({
+      id: `notif-proc-start-${Date.now()}-${uid}`,
+      userId: uid,
+      title: `Live Proctoring Alert: ${studentName} started exam`,
+      message: `${studentName} has initialized proctored environment verification and started "${assessmentTitle}". Proctoring Mode: ${proctoringMode}. Click to monitor live webcam, mic levels, and telemetry.`,
+      category: 'proctoring',
+      link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+      isRead: false,
+      timestamp,
+    }));
+
+    const updatedStored = [...newNotifs, ...stored];
+    persistStoredNotifications(updatedStored);
+
+    const currentUser = get().user;
+    if (currentUser) {
+      const refreshed = getUserNotifications(currentUser);
+      set({
+        notifications: refreshed,
+        unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+      });
+    }
+
+    return {
+      success: true,
+      count: newNotifs.length,
+    };
+  },
+
+  notifyScheduledExamStarted: ({
+    assessmentId,
+    assessmentTitle,
+    creatorId,
+  }) => {
+    const stored = loadStoredNotifications();
+    const notifPrefix = `notif-exam-schedule-${assessmentId}`;
+    if (stored.some((n) => n.id.startsWith(notifPrefix))) {
+      return { success: false, count: 0 };
+    }
+
+    const timestamp = new Date().toISOString();
+    const targets = new Set<string>([
+      'all-admins',
+      'all-trainers',
+      'u-001',
+      'u-002',
+      'orgadmin@lms.demo',
+      'trainer@lms.demo',
+      'faculty@lms.demo',
+    ]);
+    if (creatorId) {
+      targets.add(creatorId);
+    }
+
+    const newNotifs: Notification[] = Array.from(targets).map((uid) => ({
+      id: `${notifPrefix}-${uid}`,
+      userId: uid,
+      title: `Exam Started: "${assessmentTitle}" Schedule Reached`,
+      message: `The scheduled exam start time for "${assessmentTitle}" (Manual Proctoring) has arrived. Candidates are now entering the exam. Please join the Live Conference Bridge to invigilate.`,
+      category: 'proctoring',
+      link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
       isRead: false,
       timestamp,
     }));
