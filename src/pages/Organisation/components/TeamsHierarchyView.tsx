@@ -198,20 +198,29 @@ export const TeamsHierarchyView: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '260px' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
-              <Search size={15} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
+              <Search size={15} style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-placeholder)' }} />
               <input
                 type="text"
                 placeholder="Search teams, objectives..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.825rem' }}
+                className="lms-form-input"
+                style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.825rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
               />
             </div>
 
             <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.825rem', background: '#fff' }}
+              className="form-select"
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border-subtle)',
+                fontSize: '0.825rem',
+                background: 'var(--bg-input)',
+                color: 'var(--text-main)',
+              }}
             >
               <option value="All">All Departments</option>
               {departments.map((d) => (
@@ -252,20 +261,20 @@ export const TeamsHierarchyView: React.FC = () => {
               <div
                 key={team.id}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--bg-card-subtle)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: '14px',
                   padding: '1.25rem',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  boxShadow: '0 2px 4px rgba(15, 23, 42, 0.02)',
+                  boxShadow: 'var(--shadow-sm, 0 2px 4px rgba(15, 23, 42, 0.02))',
                 }}
               >
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.65rem' }}>
                     <div>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.2rem 0' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 0.2rem 0' }}>
                         {team.name}
                       </h4>
                       <span style={{ fontSize: '0.72rem', color: 'var(--brand-blue, #2563EB)', fontWeight: 600 }}>
@@ -280,8 +289,9 @@ export const TeamsHierarchyView: React.FC = () => {
                           fontWeight: 700,
                           padding: '0.2rem 0.5rem',
                           borderRadius: '9999px',
-                          background: team.status === 'Active' ? '#dcfce7' : '#fef3c7',
-                          color: team.status === 'Active' ? '#15803d' : '#b45309',
+                          background: team.status === 'Active' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(217, 119, 6, 0.15)',
+                          color: team.status === 'Active' ? '#10b981' : '#f59e0b',
+                          border: team.status === 'Active' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(217, 119, 6, 0.3)',
                         }}
                       >
                         {team.status}
@@ -290,11 +300,11 @@ export const TeamsHierarchyView: React.FC = () => {
                         type="button"
                         onClick={() => openEditModal(team)}
                         style={{
-                          background: '#fff',
-                          border: '1px solid #cbd5e1',
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border-subtle)',
                           borderRadius: '6px',
                           padding: '0.3rem 0.5rem',
-                          color: '#475569',
+                          color: 'var(--text-secondary)',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -305,22 +315,22 @@ export const TeamsHierarchyView: React.FC = () => {
                     </div>
                   </div>
 
-                  <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
                     {team.objective}
                   </p>
                 </div>
 
-                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.85rem' }}>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.85rem' }}>
                   {/* Lead */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.65rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>LEAD:</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>LEAD:</span>
                     {lead ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                         <img src={lead.avatar} alt={lead.firstName} style={{ width: '20px', height: '20px', borderRadius: '50%' }} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a' }}>{lead.firstName} {lead.lastName}</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)' }}>{lead.firstName} {lead.lastName}</span>
                       </div>
                     ) : (
-                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Unassigned</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Unassigned</span>
                     )}
                   </div>
 
@@ -337,7 +347,7 @@ export const TeamsHierarchyView: React.FC = () => {
                             width: '26px',
                             height: '26px',
                             borderRadius: '50%',
-                            border: '2px solid #ffffff',
+                            border: '2px solid var(--bg-card)',
                             marginLeft: idx > 0 ? '-8px' : 0,
                           }}
                         />
@@ -348,14 +358,14 @@ export const TeamsHierarchyView: React.FC = () => {
                             width: '26px',
                             height: '26px',
                             borderRadius: '50%',
-                            background: '#e2e8f0',
-                            color: '#475569',
+                            background: 'var(--bg-card)',
+                            color: 'var(--text-secondary)',
                             fontSize: '0.68rem',
                             fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            border: '2px solid #ffffff',
+                            border: '2px solid var(--bg-card)',
                             marginLeft: '-8px',
                           }}
                         >
@@ -364,7 +374,7 @@ export const TeamsHierarchyView: React.FC = () => {
                       )}
                     </div>
 
-                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                       {team.memberIds.length} Squad Members
                     </span>
                   </div>
@@ -393,23 +403,24 @@ export const TeamsHierarchyView: React.FC = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-card)',
               borderRadius: '16px',
               maxWidth: '620px',
               width: '100%',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: 'var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.1))',
+              border: '1px solid var(--border-subtle)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
                 {editingTeam ? 'Edit Team / Pod' : 'Create Functional Squad / Pod'}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
               >
                 <X size={18} />
               </button>
@@ -417,24 +428,26 @@ export const TeamsHierarchyView: React.FC = () => {
 
             <form onSubmit={handleSaveTeam} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Pod / Squad Name *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Pod / Squad Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Identity Architecture Pod"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                  className="lms-form-input"
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Department Alignment *</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Department Alignment *</label>
                   <select
                     value={teamDept}
                     onChange={(e) => setTeamDept(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: '#fff' }}
+                    className="form-select"
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   >
                     {departments.map((d) => (
                       <option key={d.id} value={d.name}>{d.name}</option>
@@ -443,11 +456,12 @@ export const TeamsHierarchyView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Pod Status</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Pod Status</label>
                   <select
                     value={teamStatus}
                     onChange={(e) => setTeamStatus(e.target.value as any)}
-                    style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: '#fff' }}
+                    className="form-select"
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   >
                     <option value="Active">Active</option>
                     <option value="Formulating">Formulating</option>
@@ -457,11 +471,12 @@ export const TeamsHierarchyView: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Team / Technical Lead *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Team / Technical Lead *</label>
                 <select
                   value={teamLeadId}
                   onChange={(e) => setTeamLeadId(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: '#fff' }}
+                  className="form-select"
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                 >
                   {companyEmployees.map((e) => (
                     <option key={e.id} value={e.id}>
@@ -472,10 +487,10 @@ export const TeamsHierarchyView: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                   Assign Squad Members ({selectedMemberIds.length} selected)
                 </label>
-                <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem' }}>
+                <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '0.5rem', background: 'var(--bg-input)' }}>
                   {companyEmployees.map((e) => {
                     const isChecked = selectedMemberIds.includes(e.id);
                     return (
@@ -488,7 +503,7 @@ export const TeamsHierarchyView: React.FC = () => {
                           padding: '0.35rem 0.5rem',
                           borderRadius: '6px',
                           cursor: 'pointer',
-                          background: isChecked ? '#f0fdf4' : 'transparent',
+                          background: isChecked ? 'rgba(5, 150, 105, 0.12)' : 'transparent',
                         }}
                       >
                         <input
@@ -498,10 +513,10 @@ export const TeamsHierarchyView: React.FC = () => {
                           style={{ accentColor: '#059669' }}
                         />
                         <img src={e.avatar} alt={e.firstName} style={{ width: '22px', height: '22px', borderRadius: '50%' }} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: isChecked ? 700 : 500, color: '#0f172a' }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: isChecked ? 700 : 500, color: 'var(--text-main)' }}>
                           {e.firstName} {e.lastName}
                         </span>
-                        <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
                           {e.departmentId}
                         </span>
                       </label>
@@ -511,21 +526,22 @@ export const TeamsHierarchyView: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Mission & Strategic Objective</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Mission & Strategic Objective</label>
                 <textarea
                   rows={2}
                   placeholder="Define deliverables, milestone target, and KPIs..."
                   value={teamObjective}
                   onChange={(e) => setTeamObjective(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                  className="lms-form-input"
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  style={{ padding: '0.55rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: '0.85rem', cursor: 'pointer' }}
+                  style={{ padding: '0.55rem 1rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card-subtle)', color: 'var(--text-secondary)', fontSize: '0.85rem', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>

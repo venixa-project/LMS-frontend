@@ -266,7 +266,15 @@ export const BranchesManagementView: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.825rem', background: '#fff' }}
+              className="form-select"
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1px solid var(--border-subtle)',
+                fontSize: '0.825rem',
+                background: 'var(--bg-input)',
+                color: 'var(--text-main)',
+              }}
             >
               <option value="All">All Statuses</option>
               <option value="Operational">Operational</option>
@@ -421,9 +429,9 @@ export const BranchesManagementView: React.FC = () => {
                               style={{
                                 padding: '0.35rem 0.7rem',
                                 borderRadius: '6px',
-                                border: '1px solid #d97706',
-                                background: '#fffbeb',
-                                color: '#b45309',
+                                border: '1px solid rgba(217, 119, 6, 0.35)',
+                                background: 'rgba(217, 119, 6, 0.12)',
+                                color: '#d97706',
                                 fontSize: '0.72rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
@@ -445,9 +453,9 @@ export const BranchesManagementView: React.FC = () => {
                           style={{
                             padding: '0.35rem 0.75rem',
                             borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#fff',
-                            color: '#475569',
+                            border: '1px solid var(--border-subtle)',
+                            background: 'var(--bg-card-subtle)',
+                            color: 'var(--text-main)',
                             fontSize: '0.75rem',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -466,12 +474,12 @@ export const BranchesManagementView: React.FC = () => {
 
               {filteredBranches.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#64748b' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-muted)' }}>
                     <Building size={28} style={{ margin: '0 auto 0.5rem', opacity: 0.4 }} />
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
                       {branches.length === 0 ? 'No office branch locations created yet.' : 'No matching locations found.'}
                     </div>
-                    <p style={{ margin: '0.25rem 0 0.8rem', fontSize: '0.75rem' }}>
+                    <p style={{ margin: '0.25rem 0 0.8rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       {branches.length === 0
                         ? 'Click "Add Office Branch" above to onboard your enterprise offices and designate a Headquarters.'
                         : 'Try searching by a different name, city, or branch code.'}
@@ -518,13 +526,13 @@ export const BranchesManagementView: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-card)',
               borderRadius: '16px',
               padding: '1.5rem',
               maxWidth: '480px',
               width: '100%',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border-subtle)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -533,8 +541,8 @@ export const BranchesManagementView: React.FC = () => {
                   width: '40px',
                   height: '40px',
                   borderRadius: '50%',
-                  background: '#fef3c7',
-                  color: '#b45309',
+                  background: 'rgba(217, 119, 6, 0.15)',
+                  color: '#d97706',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -544,10 +552,10 @@ export const BranchesManagementView: React.FC = () => {
                 <Building2 size={20} />
               </div>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
                   Confirm Headquarters Designation
                 </h3>
-                <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                <p style={{ margin: '0.15rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   Update primary operating office across company profile and branches
                 </p>
               </div>
@@ -555,34 +563,34 @@ export const BranchesManagementView: React.FC = () => {
 
             <div
               style={{
-                background: '#f8fafc',
+                background: 'var(--bg-card-subtle)',
                 borderRadius: '10px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--border-subtle)',
                 padding: '0.85rem 1rem',
                 marginBottom: '1rem',
                 fontSize: '0.8rem',
               }}
             >
               <div style={{ marginBottom: '0.4rem' }}>
-                <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>
+                <span className="text-muted" style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
                   New Headquarters Location:
                 </span>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
+                <div style={{ fontWeight: 800, color: 'var(--text-main)', fontSize: '0.95rem' }}>
                   {confirmHqBranch.name} ({confirmHqBranch.code})
                 </div>
-                <div style={{ color: '#475569' }}>
+                <div style={{ color: 'var(--text-secondary)' }}>
                   {confirmHqBranch.address || 'Standard Address'}, {confirmHqBranch.city}, {confirmHqBranch.state ? `${confirmHqBranch.state}, ` : ''}{confirmHqBranch.country}
                 </div>
               </div>
 
               {hqBranch && (
-                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '0.4rem', fontSize: '0.75rem', color: '#64748b' }}>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   Previous HQ ({hqBranch.name}) will remain an active operational branch.
                 </div>
               )}
             </div>
 
-            <p style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4, margin: '0 0 1.25rem' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4, margin: '0 0 1.25rem' }}>
               * This will designate this branch as the company's official Headquarters. Note that this change does not alter the company's legal Registered Office address.
             </p>
 
@@ -593,9 +601,9 @@ export const BranchesManagementView: React.FC = () => {
                 style={{
                   padding: '0.5rem 1rem',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#fff',
-                  color: '#475569',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-card-subtle)',
+                  color: 'var(--text-secondary)',
                   fontSize: '0.8rem',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -646,32 +654,32 @@ export const BranchesManagementView: React.FC = () => {
         >
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--bg-card)',
               borderRadius: '16px',
               maxWidth: '560px',
               width: '100%',
               maxHeight: '90vh',
               overflowY: 'auto',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border-subtle)',
             }}
           >
             <div
               style={{
                 padding: '1.25rem 1.5rem',
-                borderBottom: '1px solid #e2e8f0',
+                borderBottom: '1px solid var(--border-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
                 {editingBranch ? 'Edit Office Branch' : 'Add New Office Branch'}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
               >
                 <X size={18} />
               </button>
@@ -679,7 +687,7 @@ export const BranchesManagementView: React.FC = () => {
 
             <form onSubmit={handleSaveBranch} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                   Branch Name *
                 </label>
                 <input
@@ -688,13 +696,14 @@ export const BranchesManagementView: React.FC = () => {
                   placeholder="e.g. Bangalore Tech Center"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                  className="lms-form-input"
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Branch Code *
                   </label>
                   <input
@@ -703,18 +712,20 @@ export const BranchesManagementView: React.FC = () => {
                     placeholder="e.g. BLR-01"
                     value={formCode}
                     onChange={(e) => setFormCode(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Status
                   </label>
                   <select
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as any)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: '#fff' }}
+                    className="form-select"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   >
                     <option value="Operational">Operational</option>
                     <option value="Planned">Planned</option>
@@ -725,7 +736,7 @@ export const BranchesManagementView: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     City *
                   </label>
                   <input
@@ -734,12 +745,13 @@ export const BranchesManagementView: React.FC = () => {
                     placeholder="e.g. Bengaluru"
                     value={formCity}
                     onChange={(e) => setFormCity(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     State / Region
                   </label>
                   <input
@@ -747,13 +759,14 @@ export const BranchesManagementView: React.FC = () => {
                     placeholder="e.g. Karnataka"
                     value={formState}
                     onChange={(e) => setFormState(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                   Street Address
                 </label>
                 <input
@@ -761,25 +774,27 @@ export const BranchesManagementView: React.FC = () => {
                   placeholder="e.g. Outer Ring Road, Bellandur"
                   value={formAddress}
                   onChange={(e) => setFormAddress(e.target.value)}
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                  className="lms-form-input"
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Country
                   </label>
                   <input
                     type="text"
                     value={formCountry}
                     onChange={(e) => setFormCountry(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Postal Code
                   </label>
                   <input
@@ -787,14 +802,15 @@ export const BranchesManagementView: React.FC = () => {
                     placeholder="e.g. 560103"
                     value={formPostalCode}
                     onChange={(e) => setFormPostalCode(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Seating Capacity
                   </label>
                   <input
@@ -802,26 +818,28 @@ export const BranchesManagementView: React.FC = () => {
                     min="1"
                     value={formCapacity}
                     onChange={(e) => setFormCapacity(parseInt(e.target.value) || 50)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
                     Timezone
                   </label>
                   <input
                     type="text"
                     value={formTimezone}
                     onChange={(e) => setFormTimezone(e.target.value)}
-                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    className="lms-form-input"
+                    style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-main)' }}
                   />
                 </div>
               </div>
 
               {/* Designate as HQ Checkbox */}
-              <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.825rem', fontWeight: 600, color: '#0f172a' }}>
+              <div style={{ padding: '0.75rem', background: 'var(--bg-card-subtle)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-main)' }}>
                   <input
                     type="checkbox"
                     checked={formIsHQ}
@@ -830,7 +848,7 @@ export const BranchesManagementView: React.FC = () => {
                   />
                   <span>Designate as Company Headquarters</span>
                 </label>
-                <p style={{ margin: '0.25rem 0 0 1.5rem', fontSize: '0.7rem', color: '#64748b' }}>
+                <p style={{ margin: '0.25rem 0 0 1.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                   Setting this location as Headquarters will update the company's primary operating office and remove HQ designation from any previously designated location.
                 </p>
               </div>
@@ -842,9 +860,9 @@ export const BranchesManagementView: React.FC = () => {
                   style={{
                     padding: '0.5rem 1rem',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: '#fff',
-                    color: '#475569',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-card-subtle)',
+                    color: 'var(--text-secondary)',
                     fontSize: '0.825rem',
                     fontWeight: 600,
                     cursor: 'pointer',
