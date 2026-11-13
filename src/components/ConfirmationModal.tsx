@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
+import { useThemeStore } from '../lib/themeStore';
 
 export interface ConfirmationModalProps {
   isOpen: boolean;
@@ -24,6 +25,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
+
   if (!isOpen) return null;
 
   return (
@@ -37,7 +41,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        background: 'rgba(5, 8, 22, 0.85)',
+        background: isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(5, 8, 22, 0.85)',
         backdropFilter: 'blur(8px)',
         animation: 'fadeIn 0.15s ease-out',
       }}
@@ -48,11 +52,13 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         style={{
           maxWidth: '460px',
           width: '100%',
-          background: '#0B0B2A',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: isLight ? '#FFFFFF' : '#0B0B2A',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: '16px',
           overflow: 'hidden',
-          boxShadow: isDestructive
+          boxShadow: isLight
+            ? '0 20px 45px -10px rgba(15, 23, 42, 0.18), 0 0 1px rgba(15, 23, 42, 0.15)'
+            : isDestructive
             ? '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(225, 29, 72, 0.25)'
             : '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(84, 71, 255, 0.25)',
           animation: 'scaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -103,14 +109,14 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body with dark background */}
-        <div style={{ padding: '24px 24px 20px', background: '#0B0B2A' }}>
+        {/* Modal Body with dynamic theme background */}
+        <div style={{ padding: '24px 24px 20px', background: isLight ? '#FFFFFF' : '#0B0B2A' }}>
           <p
             style={{
               margin: 0,
               fontSize: '0.94rem',
               lineHeight: 1.6,
-              color: '#F1F5F9',
+              color: isLight ? '#334155' : '#F1F5F9',
               fontWeight: 500,
             }}
           >
@@ -131,9 +137,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
               className="btn btn-secondary"
               onClick={onCancel}
               style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.18)',
-                color: '#FFFFFF',
+                background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.08)',
+                border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.18)',
+                color: isLight ? '#1E293B' : '#FFFFFF',
                 borderRadius: '8px',
                 padding: '9px 24px',
                 fontSize: '0.88rem',

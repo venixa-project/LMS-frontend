@@ -21,6 +21,7 @@ import { usePeopleStore } from '../../lib/peopleStore';
 import { peopleApi } from '../../lib/peopleApiService';
 import { useCourseStore } from '../../lib/courseStore';
 import { User } from '../../types';
+import { useThemeStore } from '../../lib/themeStore';
 
 export type RankingMetricType =
   | 'overall'
@@ -48,6 +49,8 @@ interface StudentLeaderboardRow {
 }
 
 export const GamificationLeaderboard: React.FC = () => {
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
   const {
     departmentId,
     courseId,
@@ -402,7 +405,7 @@ export const GamificationLeaderboard: React.FC = () => {
                 const globalIndex = viewAll ? idx : (currentPage - 1) * itemsPerPage + idx;
                 const rankNumber = globalIndex + 1;
 
-                // Subtle gold, silver, bronze rank indicators
+                // Subtle gold, silver, bronze rank indicators with WCAG 2.2 AA contrast
                 let rankBadge = null;
                 if (rankNumber === 1) {
                   rankBadge = (
@@ -413,9 +416,9 @@ export const GamificationLeaderboard: React.FC = () => {
                         gap: '3px',
                         padding: '2px 8px',
                         borderRadius: '6px',
-                        background: 'rgba(245, 158, 11, 0.14)',
-                        border: '1px solid rgba(245, 158, 11, 0.4)',
-                        color: '#f59e0b',
+                        background: isLight ? '#FEF3C7' : 'rgba(245, 158, 11, 0.14)',
+                        border: isLight ? '1px solid #FDE68A' : '1px solid rgba(245, 158, 11, 0.4)',
+                        color: isLight ? '#92400E' : '#f59e0b',
                         fontWeight: 800,
                         fontSize: '0.78rem',
                       }}
@@ -433,9 +436,9 @@ export const GamificationLeaderboard: React.FC = () => {
                         gap: '3px',
                         padding: '2px 8px',
                         borderRadius: '6px',
-                        background: 'rgba(148, 163, 184, 0.14)',
-                        border: '1px solid rgba(148, 163, 184, 0.4)',
-                        color: '#cbd5e1',
+                        background: isLight ? '#F1F5F9' : 'rgba(148, 163, 184, 0.14)',
+                        border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(148, 163, 184, 0.4)',
+                        color: isLight ? '#334155' : '#e2e8f0',
                         fontWeight: 800,
                         fontSize: '0.78rem',
                       }}
@@ -453,9 +456,9 @@ export const GamificationLeaderboard: React.FC = () => {
                         gap: '3px',
                         padding: '2px 8px',
                         borderRadius: '6px',
-                        background: 'rgba(217, 119, 6, 0.14)',
-                        border: '1px solid rgba(217, 119, 6, 0.4)',
-                        color: '#d97706',
+                        background: isLight ? '#FFEDD5' : 'rgba(217, 119, 6, 0.14)',
+                        border: isLight ? '1px solid #FED7AA' : '1px solid rgba(217, 119, 6, 0.4)',
+                        color: isLight ? '#9A3412' : '#fdba74',
                         fontWeight: 800,
                         fontSize: '0.78rem',
                       }}

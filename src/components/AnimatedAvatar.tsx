@@ -5,6 +5,7 @@
 import React, { useMemo } from 'react';
 import { Crown, Sparkles } from 'lucide-react';
 import { AVATAR_ARCHETYPES, useUserAvatar } from '../lib/avatarStore';
+import { useThemeStore } from '../lib/themeStore';
 
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | number;
 
@@ -51,6 +52,8 @@ export const AnimatedAvatar: React.FC<AnimatedAvatarProps> = ({
   interactive = false,
 }) => {
   const { avatarId: currentSelectedAvatar } = useUserAvatar();
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
 
   // Determine size in pixels
   const pxSize = typeof size === 'number' ? size : SIZE_MAP[size] || 44;
@@ -100,29 +103,43 @@ export const AnimatedAvatar: React.FC<AnimatedAvatarProps> = ({
 
     if (ringVariant === 'gold' || isFirst) {
       return {
-        ringGradient: 'conic-gradient(from 0deg, #ffd700, #f59e0b, #fde047, #ffd700)',
-        ringShadow: '0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(245, 158, 11, 0.3)',
+        ringGradient: isLight
+          ? 'conic-gradient(from 0deg, #F59E0B, #FBBF24, #D97706, #F59E0B)'
+          : 'conic-gradient(from 0deg, #ffd700, #f59e0b, #fde047, #ffd700)',
+        ringShadow: isLight
+          ? '0 4px 14px rgba(245, 158, 11, 0.25), 0 1px 3px rgba(0, 0, 0, 0.08)'
+          : '0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(245, 158, 11, 0.3)',
         hasCrown: true,
       };
     }
     if (ringVariant === 'silver' || isSecond) {
       return {
-        ringGradient: 'conic-gradient(from 0deg, #f1f5f9, #94a3b8, #cbd5e1, #f1f5f9)',
-        ringShadow: '0 0 16px rgba(203, 213, 225, 0.5)',
+        ringGradient: isLight
+          ? 'conic-gradient(from 0deg, #94A3B8, #E2E8F0, #64748B, #94A3B8)'
+          : 'conic-gradient(from 0deg, #f1f5f9, #94a3b8, #cbd5e1, #f1f5f9)',
+        ringShadow: isLight
+          ? '0 4px 12px rgba(100, 116, 139, 0.2), 0 1px 3px rgba(0, 0, 0, 0.06)'
+          : '0 0 16px rgba(203, 213, 225, 0.5)',
         hasCrown: false,
       };
     }
     if (ringVariant === 'bronze' || isThird) {
       return {
-        ringGradient: 'conic-gradient(from 0deg, #fdba74, #ea580c, #c2410c, #fdba74)',
-        ringShadow: '0 0 16px rgba(234, 88, 12, 0.45)',
+        ringGradient: isLight
+          ? 'conic-gradient(from 0deg, #EA580C, #FED7AA, #C2410C, #EA580C)'
+          : 'conic-gradient(from 0deg, #fdba74, #ea580c, #c2410c, #fdba74)',
+        ringShadow: isLight
+          ? '0 4px 14px rgba(234, 88, 12, 0.22), 0 1px 3px rgba(0, 0, 0, 0.08)'
+          : '0 0 16px rgba(234, 88, 12, 0.45)',
         hasCrown: false,
       };
     }
     if (ringVariant === 'cyan' || (isCurrentUser && !rank)) {
       return {
         ringGradient: 'conic-gradient(from 0deg, #38bdf8, #818cf8, #a855f7, #38bdf8)',
-        ringShadow: '0 0 16px rgba(56, 189, 248, 0.5)',
+        ringShadow: isLight
+          ? '0 4px 12px rgba(56, 189, 248, 0.25)'
+          : '0 0 16px rgba(56, 189, 248, 0.5)',
         hasCrown: false,
       };
     }
@@ -130,10 +147,12 @@ export const AnimatedAvatar: React.FC<AnimatedAvatarProps> = ({
     // Default archetype ring
     return {
       ringGradient: archetype.ringGradient,
-      ringShadow: `0 0 12px ${archetype.themeColor}55`,
+      ringShadow: isLight
+        ? `0 3px 10px ${archetype.themeColor}30`
+        : `0 0 12px ${archetype.themeColor}55`,
       hasCrown: false,
     };
-  }, [rank, showCrown, ringVariant, isCurrentUser, archetype]);
+  }, [rank, showCrown, ringVariant, isCurrentUser, archetype, isLight]);
 
   const strokeWidth = pxSize >= 80 ? 4 : pxSize >= 44 ? 3 : 2;
   const innerSize = pxSize - strokeWidth * 2;

@@ -100,3 +100,17 @@ if (typeof window !== 'undefined' && window.matchMedia) {
     (mediaQuery as any).addListener(handleSystemThemeChange);
   }
 }
+
+// Set up cross-tab synchronization listener (runs once in browser environment)
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event: StorageEvent) => {
+    if (event.key === THEME_STORAGE_KEY && event.newValue) {
+      const newPref = event.newValue as ThemePreference;
+      if (newPref === 'light' || newPref === 'dark' || newPref === 'system') {
+        const resolved = resolveEffectiveTheme(newPref);
+        applyThemeToDOM(resolved);
+        useThemeStore.setState({ preference: newPref, resolvedTheme: resolved });
+      }
+    }
+  });
+}

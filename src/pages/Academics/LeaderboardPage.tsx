@@ -30,10 +30,13 @@ import { useGamificationStore } from '../../lib/gamificationStore';
 import { getRankForPoints } from '../../lib/gamificationConfig';
 import { RankRoadmap } from '../../components/Gamification/RankRoadmap';
 import { RankBadge } from '../../components/Gamification/RankBadge';
+import { useThemeStore } from '../../lib/themeStore';
 
 export const LeaderboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
   const { profiles, leaderboard, fetchLeaderboard, stats, fetchStats } = useGamificationStore();
   const { cohorts, fetchCohorts } = useCohortStore();
   const { departments, fetchDepartments } = useDepartmentStore();
@@ -317,8 +320,8 @@ export const LeaderboardPage: React.FC = () => {
           <h1 style={{ fontSize: '1.5rem', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)', fontWeight: 800 }}>
             Academic Leaderboard & Top Achievers
           </h1>
-          <p className="text-secondary text-sm" style={{ margin: 0, maxWidth: '750px', color: 'var(--text-muted)', fontSize: '0.825rem' }}>
-            Compete, track syllabus velocity, maintain study streaks, and celebrate your journey to the top of the academy.
+          <p className="text-secondary text-sm" style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.825rem' }}>
+            Track academic rankings, syllabus velocity, and verified masteries.
           </p>
         </div>
 
@@ -351,53 +354,6 @@ export const LeaderboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Role-Based Scope Notification Banner */}
-      {isTrainer && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '10px 16px',
-            background: 'rgba(37, 99, 235, 0.08)',
-            border: '1px solid rgba(37, 99, 235, 0.25)',
-            borderRadius: '12px',
-            fontSize: '0.825rem',
-            color: 'var(--text-main)',
-          }}
-        >
-          <ShieldCheck size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <strong>Trainer View:</strong> Leaderboard participants and academic dossiers are scoped strictly to your assigned cohorts and courses (
-            <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
-              {trainerAuthorizedCohorts?.join(', ')}
-            </span>
-            ). Unrelated students are protected and excluded per institutional access policies.
-          </div>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '10px 16px',
-            background: 'rgba(99, 102, 241, 0.06)',
-            border: '1px solid rgba(99, 102, 241, 0.2)',
-            borderRadius: '12px',
-            fontSize: '0.825rem',
-            color: 'var(--text-main)',
-          }}
-        >
-          <ShieldCheck size={18} color="var(--accent-purple)" style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <strong>Institution Admin View:</strong> You have full institution-wide oversight of all student leaderboard rankings, syllabus mastery velocity, and verified credentials across all departments and cohorts.
-          </div>
-        </div>
-      )}
-
       {/* ------------------------------------------------------------- */}
       {/* 3. TIMEFRAME FILTERS & COHORT SELECTOR                        */}
       {/* ------------------------------------------------------------- */}
@@ -416,19 +372,24 @@ export const LeaderboardPage: React.FC = () => {
             style={{
               display: 'flex',
               gap: '6px',
-              background: 'var(--bg-input)',
+              background: isLight ? '#F1F5F9' : 'var(--bg-input)',
               padding: '4px',
               borderRadius: '12px',
-              border: '1px solid var(--border-subtle)',
+              border: isLight ? '1px solid #E2E8F0' : '1px solid var(--border-subtle)',
             }}
           >
             <button
               onClick={() => setTimeframe('weekly')}
               className="btn btn-sm"
               style={{
-                background: timeframe === 'weekly' ? 'linear-gradient(135deg, #2563eb, #3b82f6)' : 'transparent',
-                color: timeframe === 'weekly' ? '#fff' : 'var(--text-secondary)',
-                border: 'none',
+                background: timeframe === 'weekly'
+                  ? (isLight ? '#FFFFFF' : 'linear-gradient(135deg, #2563eb, #3b82f6)')
+                  : 'transparent',
+                color: timeframe === 'weekly'
+                  ? (isLight ? '#2563EB' : '#fff')
+                  : 'var(--text-secondary)',
+                border: timeframe === 'weekly' && isLight ? '1px solid #CBD5E1' : 'none',
+                boxShadow: timeframe === 'weekly' && isLight ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 padding: '7px 16px',
                 fontSize: '0.825rem',
                 fontWeight: 700,
@@ -440,7 +401,7 @@ export const LeaderboardPage: React.FC = () => {
                 transition: 'all 0.2s ease',
               }}
             >
-              <Flame size={14} color={timeframe === 'weekly' ? '#f97316' : 'currentColor'} />
+              <Flame size={14} color={timeframe === 'weekly' ? (isLight ? '#2563EB' : '#f97316') : 'currentColor'} />
               <span>Weekly Velocity</span>
             </button>
 
@@ -448,9 +409,14 @@ export const LeaderboardPage: React.FC = () => {
               onClick={() => setTimeframe('monthly')}
               className="btn btn-sm"
               style={{
-                background: timeframe === 'monthly' ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
-                color: timeframe === 'monthly' ? '#fff' : 'var(--text-secondary)',
-                border: 'none',
+                background: timeframe === 'monthly'
+                  ? (isLight ? '#FFFFFF' : 'linear-gradient(135deg, #6366f1, #8b5cf6)')
+                  : 'transparent',
+                color: timeframe === 'monthly'
+                  ? (isLight ? '#4F46E5' : '#fff')
+                  : 'var(--text-secondary)',
+                border: timeframe === 'monthly' && isLight ? '1px solid #CBD5E1' : 'none',
+                boxShadow: timeframe === 'monthly' && isLight ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 padding: '7px 16px',
                 fontSize: '0.825rem',
                 fontWeight: 700,
@@ -462,7 +428,7 @@ export const LeaderboardPage: React.FC = () => {
                 transition: 'all 0.2s ease',
               }}
             >
-              <BarChart3 size={14} />
+              <BarChart3 size={14} color={timeframe === 'monthly' && isLight ? '#4F46E5' : 'currentColor'} />
               <span>Monthly Standings</span>
             </button>
 
@@ -470,9 +436,14 @@ export const LeaderboardPage: React.FC = () => {
               onClick={() => setTimeframe('all_time')}
               className="btn btn-sm"
               style={{
-                background: timeframe === 'all_time' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
-                color: timeframe === 'all_time' ? '#0f172a' : 'var(--text-secondary)',
-                border: 'none',
+                background: timeframe === 'all_time'
+                  ? (isLight ? '#FFFFFF' : 'linear-gradient(135deg, #f59e0b, #d97706)')
+                  : 'transparent',
+                color: timeframe === 'all_time'
+                  ? (isLight ? '#B45309' : '#0f172a')
+                  : 'var(--text-secondary)',
+                border: timeframe === 'all_time' && isLight ? '1px solid #FCD34D' : 'none',
+                boxShadow: timeframe === 'all_time' && isLight ? '0 1px 4px rgba(245, 158, 11, 0.15)' : 'none',
                 padding: '7px 16px',
                 fontSize: '0.825rem',
                 fontWeight: 800,
@@ -484,7 +455,7 @@ export const LeaderboardPage: React.FC = () => {
                 transition: 'all 0.2s ease',
               }}
             >
-              <Crown size={14} color={timeframe === 'all_time' ? '#78350f' : 'currentColor'} />
+              <Crown size={14} color={timeframe === 'all_time' ? (isLight ? '#D97706' : '#78350f') : 'currentColor'} />
               <span>All-Time Champions</span>
             </button>
           </div>
@@ -606,109 +577,113 @@ export const LeaderboardPage: React.FC = () => {
                 const maxXP = sortedMembers[0]?.points || 5000;
                 const barPercent = Math.min(100, Math.max(12, Math.round((m.points / maxXP) * 100)));
 
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    padding: '4px 6px',
-                    borderRadius: '8px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span
+                return (
+                  <div
+                    key={m.id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      padding: '4px 6px',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '50%',
+                            background: idx === 0 ? (isLight ? '#F59E0B' : '#ffd700') : idx === 1 ? '#cbd5e1' : idx === 2 ? '#d97706' : 'var(--bg-input)',
+                            color: idx <= 2 ? '#0f172a' : 'var(--text-secondary)',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {idx + 1}
+                        </span>
+                        <strong style={{ color: m.isCurrentUser ? 'var(--primary)' : 'var(--text-main)' }}>
+                          {m.name.replace(' (You)', '')}
+                        </strong>
+                        {m.isCurrentUser && <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 800, color: isLight ? '#B45309' : '#ffd700', fontSize: '0.825rem' }}>
+                          {m.points.toLocaleString()} XP
+                        </span>
+                        <span className="text-muted text-xs">({m.overallCompletionRate}%)</span>
+                      </div>
+                    </div>
+
+                    {/* Visual Bar representation */}
+                    <div className="progress-bar-bg" style={{ height: '9px', background: 'var(--bg-input)' }}>
+                      <div
+                        className="progress-bar-fill"
                         style={{
-                          width: '22px',
-                          height: '22px',
-                          borderRadius: '50%',
-                          background: idx === 0 ? '#ffd700' : idx === 1 ? '#cbd5e1' : idx === 2 ? '#d97706' : 'var(--bg-input)',
-                          color: idx <= 2 ? '#0f172a' : 'var(--text-secondary)',
-                          fontSize: '0.72rem',
-                          fontWeight: 800,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          width: `${barPercent}%`,
+                          background:
+                            idx === 0
+                              ? 'linear-gradient(90deg, #f59e0b, #ffd700)'
+                              : idx === 1
+                                ? 'linear-gradient(90deg, #64748b, #cbd5e1)'
+                                : idx === 2
+                                  ? 'linear-gradient(90deg, #b45309, #d97706)'
+                                  : 'linear-gradient(90deg, #2563eb, #818cf8)',
+                          transition: 'width 0.6s ease',
                         }}
-                      >
-                        {idx + 1}
-                      </span>
-                      <strong style={{ color: m.isCurrentUser ? 'var(--primary)' : 'var(--text-main)' }}>
-                        {m.name.replace(' (You)', '')}
-                      </strong>
-                      {m.isCurrentUser && <span className="badge badge-primary" style={{ fontSize: '0.62rem' }}>YOU</span>}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: 800, color: '#ffd700', fontSize: '0.825rem' }}>
-                        {m.points.toLocaleString()} XP
-                      </span>
-                      <span className="text-muted text-xs">({m.overallCompletionRate}%)</span>
+                      />
                     </div>
                   </div>
-
-                  {/* Visual Bar representation */}
-                  <div className="progress-bar-bg" style={{ height: '9px', background: 'var(--bg-input)' }}>
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: `${barPercent}%`,
-                        background:
-                          idx === 0
-                            ? 'linear-gradient(90deg, #f59e0b, #ffd700)'
-                            : idx === 1
-                            ? 'linear-gradient(90deg, #64748b, #cbd5e1)'
-                            : idx === 2
-                            ? 'linear-gradient(90deg, #b45309, #d97706)'
-                            : 'linear-gradient(90deg, #2563eb, #818cf8)',
-                        transition: 'width 0.6s ease',
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
           </div>
         </div>
 
-        {/* Right: Milestone Distribution & Badges Legend */}
-        <div className="card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+        {/* Right: Milestone Distribution & Badges Showcase */}
+        <div className="card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Award size={16} color="var(--accent-purple)" />
-              <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 800 }}>Achievement Badges Legend</h3>
+              <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 800 }}>Achievement Badges</h3>
             </div>
-            <p className="text-muted text-xs" style={{ margin: 0 }}>
-              Official recognition badges automatically awarded based on performance criteria
-            </p>
+            <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>5 Milestones</span>
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-              {Object.values(ACHIEVEMENT_DEFINITIONS).map((ach) => (
-                <div
-                  key={ach.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '8px 12px',
-                    background: 'var(--bg-input)',
-                    borderRadius: '10px',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <span style={{ fontSize: '1.3rem' }}>{ach.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.82rem', color: ach.color }}>
-                      {ach.name}
-                    </div>
-                    <div className="text-muted text-xs">{ach.description}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', flex: 1, alignContent: 'start' }}>
+            {Object.values(ACHIEVEMENT_DEFINITIONS).map((ach) => (
+              <div
+                key={ach.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 10px',
+                  background: 'var(--bg-input)',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{ach.icon}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.78rem', color: isLight && ach.color === '#ffd700' ? '#B45309' : ach.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {ach.name}
+                  </div>
+                  <div className="text-muted text-xs" style={{ fontSize: '0.68rem', lineHeight: 1.2 }}>
+                    {ach.id === 'champion' ? '1st Place' :
+                      ach.id === 'top_performer' ? 'Top 3 Podium' :
+                        ach.id === 'fast_riser' ? '+2 Ranks Up' :
+                          ach.id === 'consistency' ? '10d+ Streak' :
+                            '3k+ XP / 3 Courses'}
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -801,34 +776,34 @@ export const LeaderboardPage: React.FC = () => {
                       key={m.id}
                       style={{
                         background: isRowHighlighted
-                          ? 'rgba(255, 215, 0, 0.15)'
+                          ? (isLight ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 215, 0, 0.15)')
                           : m.isCurrentUser
-                          ? 'rgba(99, 102, 241, 0.14)'
-                          : isTop3
-                          ? 'rgba(255, 215, 0, 0.03)'
-                          : 'inherit',
+                            ? (isLight ? 'rgba(37, 99, 235, 0.08)' : 'rgba(99, 102, 241, 0.14)')
+                            : isTop3
+                              ? (isLight ? 'rgba(245, 158, 11, 0.04)' : 'rgba(255, 215, 0, 0.03)')
+                              : 'inherit',
                         borderLeft: m.isCurrentUser
                           ? '4px solid var(--primary)'
                           : isTop3
-                          ? `4px solid ${rank === 1 ? '#ffd700' : rank === 2 ? '#cbd5e1' : '#d97706'}`
-                          : '4px solid transparent',
+                            ? `4px solid ${rank === 1 ? (isLight ? '#F59E0B' : '#ffd700') : rank === 2 ? '#94A3B8' : '#D97706'}`
+                            : '4px solid transparent',
                         transition: 'background 0.25s ease, border-left 0.25s ease',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = isRowHighlighted
-                          ? 'rgba(255, 215, 0, 0.22)'
+                          ? (isLight ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255, 215, 0, 0.22)')
                           : m.isCurrentUser
-                          ? 'rgba(99, 102, 241, 0.22)'
-                          : 'rgba(255, 255, 255, 0.05)';
+                            ? (isLight ? 'rgba(37, 99, 235, 0.14)' : 'rgba(99, 102, 241, 0.22)')
+                            : (isLight ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.05)');
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = isRowHighlighted
-                          ? 'rgba(255, 215, 0, 0.15)'
+                          ? (isLight ? 'rgba(245, 158, 11, 0.18)' : 'rgba(255, 215, 0, 0.15)')
                           : m.isCurrentUser
-                          ? 'rgba(99, 102, 241, 0.14)'
-                          : isTop3
-                          ? 'rgba(255, 215, 0, 0.03)'
-                          : 'transparent';
+                            ? (isLight ? 'rgba(37, 99, 235, 0.08)' : 'rgba(99, 102, 241, 0.14)')
+                            : isTop3
+                              ? (isLight ? 'rgba(245, 158, 11, 0.04)' : 'rgba(255, 215, 0, 0.03)')
+                              : 'transparent';
                       }}
                     >
                       {/* Rank Position */}
@@ -974,7 +949,8 @@ export const LeaderboardPage: React.FC = () => {
                               style={{
                                 fontSize: '0.85rem',
                                 cursor: 'help',
-                                background: 'rgba(255, 255, 255, 0.06)',
+                                background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
+                                border: isLight ? '1px solid #CBD5E1' : 'none',
                                 borderRadius: '50%',
                                 padding: '2px 3px',
                               }}
@@ -988,7 +964,7 @@ export const LeaderboardPage: React.FC = () => {
                       {/* Courses Completed */}
                       <td style={{ textAlign: 'center', width: '85px', minWidth: '80px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                          <GraduationCap size={14} color={rank === 1 ? '#ffd700' : 'var(--primary)'} />
+                          <GraduationCap size={14} color={rank === 1 ? (isLight ? '#D97706' : '#ffd700') : 'var(--primary)'} />
                           <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>
                             {m.coursesCompleted} / {m.coursesEnrolled}
                           </span>
@@ -1310,8 +1286,8 @@ export const LeaderboardPage: React.FC = () => {
                         {/* Leaderboard Rank */}
                         <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
                           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Leaderboard Rank</span>
-                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: memberRank <= 3 ? '#ffd700' : 'var(--text-main)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Trophy size={14} color={memberRank <= 3 ? '#ffd700' : 'var(--text-muted)'} />
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: memberRank <= 3 ? (isLight ? '#B45309' : '#ffd700') : 'var(--text-main)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Trophy size={14} color={memberRank <= 3 ? (isLight ? '#B45309' : '#ffd700') : 'var(--text-muted)'} />
                             #{memberRank}
                           </div>
                           <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>of {sortedMembers.length} scholars</span>
@@ -1339,8 +1315,8 @@ export const LeaderboardPage: React.FC = () => {
                         {/* Points / XP */}
                         <div style={{ background: 'var(--bg-input)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
                           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block' }}>Total Learning XP</span>
-                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Sparkles size={14} color="#f59e0b" />
+                          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: isLight ? '#B45309' : '#f59e0b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Sparkles size={14} color={isLight ? '#B45309' : '#f59e0b'} />
                             {selectedMember.points.toLocaleString()}
                           </div>
                           <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>gamification points</span>

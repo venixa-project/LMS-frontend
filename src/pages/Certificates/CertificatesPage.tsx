@@ -305,9 +305,9 @@ export const CertificatesPage: React.FC = () => {
 
       {downloadNotice && (
         <div style={{
-          background: 'var(--info-bg, rgba(37, 99, 235, 0.1))',
-          border: '1px solid var(--info-border, rgba(59, 130, 246, 0.3))',
-          color: 'var(--info, #3b82f6)',
+          background: 'var(--info-bg)',
+          border: '1px solid var(--info-border)',
+          color: 'var(--info-text, var(--primary))',
           padding: '12px 18px',
           borderRadius: 'var(--radius-md)',
           marginBottom: '20px',

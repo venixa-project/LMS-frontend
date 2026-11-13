@@ -1300,9 +1300,9 @@ export const ExamPlayerPage: React.FC = () => {
             {/* Countdown timer */}
             <div
               style={{
-                background: timeLeftSeconds < 300 ? 'var(--danger-bg)' : 'rgba(37, 99, 235, 0.15)',
-                border: timeLeftSeconds < 300 ? '1px solid var(--danger-border)' : '1px solid rgba(59, 130, 246, 0.35)',
-                color: timeLeftSeconds < 300 ? 'var(--danger)' : '#3B82F6',
+                background: timeLeftSeconds < 300 ? 'var(--danger-bg)' : 'var(--info-bg)',
+                border: timeLeftSeconds < 300 ? '1px solid var(--danger-border)' : '1px solid var(--info-border)',
+                color: timeLeftSeconds < 300 ? 'var(--danger-text, var(--danger))' : 'var(--info-text, var(--primary))',
                 padding: '6px 14px',
                 borderRadius: 'var(--radius-md)',
                 display: 'flex',
@@ -1329,9 +1329,9 @@ export const ExamPlayerPage: React.FC = () => {
                   gap: '6px',
                   fontSize: '0.78rem',
                   padding: '5px 12px',
-                  borderColor: 'rgba(16, 185, 129, 0.45)',
-                  color: '#34D399',
-                  background: 'rgba(16, 185, 129, 0.08)',
+                  borderColor: 'var(--success-border)',
+                  color: 'var(--success-text, var(--success))',
+                  background: 'var(--success-bg)',
                   fontWeight: 700,
                 }}
                 title="Open or Rejoin Live Google Meet Invigilation Session"
@@ -1418,7 +1418,7 @@ export const ExamPlayerPage: React.FC = () => {
                 </div>
               ) : currentQ.type === 'multiple_choice' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <span style={{ fontSize: '0.82rem', color: '#60A5FA', fontWeight: 600, marginBottom: '2px' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 700, marginBottom: '2px' }}>
                     Select all options that apply:
                   </span>
                   {currentQ.options?.map((opt: any) => {
@@ -1443,8 +1443,8 @@ export const ExamPlayerPage: React.FC = () => {
                           gap: '12px',
                           padding: '14px 18px',
                           borderRadius: 'var(--radius-md)',
-                          background: isChecked ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
-                          border: isChecked ? '2px solid #2563EB' : '1px solid var(--border-subtle)',
+                          background: isChecked ? 'var(--info-bg)' : 'var(--bg-input)',
+                          border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
                           cursor: 'pointer',
                           transition: 'var(--transition)',
                         }}
@@ -1454,12 +1454,12 @@ export const ExamPlayerPage: React.FC = () => {
                           name={`question-${currentQ.id}`}
                           checked={isChecked}
                           onChange={() => {}}
-                          style={{ accentColor: '#2563EB', width: '16px', height: '16px', cursor: 'pointer' }}
+                          style={{ accentColor: 'var(--primary)', width: '16px', height: '16px', cursor: 'pointer' }}
                         />
                         <span
                           style={{
                             fontSize: '0.92rem',
-                            color: isChecked ? '#3B82F6' : 'var(--text-main)',
+                            color: isChecked ? 'var(--primary)' : 'var(--text-main)',
                             fontWeight: isChecked ? 700 : 400,
                           }}
                         >
@@ -1484,8 +1484,8 @@ export const ExamPlayerPage: React.FC = () => {
                           gap: '12px',
                           padding: '14px 18px',
                           borderRadius: 'var(--radius-md)',
-                          background: isChecked ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-input)',
-                          border: isChecked ? '2px solid #2563EB' : '1px solid var(--border-subtle)',
+                          background: isChecked ? 'var(--info-bg)' : 'var(--bg-input)',
+                          border: isChecked ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
                           cursor: 'pointer',
                           transition: 'var(--transition)',
                         }}
@@ -1495,12 +1495,12 @@ export const ExamPlayerPage: React.FC = () => {
                           name={`question-${currentQ.id}`}
                           checked={isChecked}
                           onChange={() => {}}
-                          style={{ accentColor: '#2563EB', width: '16px', height: '16px' }}
+                          style={{ accentColor: 'var(--primary)', width: '16px', height: '16px' }}
                         />
                         <span
                           style={{
                             fontSize: '0.92rem',
-                            color: isChecked ? '#3B82F6' : 'var(--text-main)',
+                            color: isChecked ? 'var(--primary)' : 'var(--text-main)',
                             fontWeight: isChecked ? 700 : 400,
                           }}
                         >
