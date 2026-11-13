@@ -4,6 +4,7 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useMomentumStore } from '../../lib/momentumStore';
 import { useGamificationStore } from '../../lib/gamificationStore';
+import { useThemeStore } from '../../lib/themeStore';
 import {
   BookOpen, Clock, Trophy, Flame, BarChart2, Calendar,
   Zap, Timer, Play, Pause, Square, Info, ChevronLeft,
@@ -20,6 +21,8 @@ export const MomentumPage: React.FC = () => {
   const { user } = useAuthStore();
   const userName = user?.displayName || (user as any)?.name || user?.firstName || 'Learner';
   const { courses } = useCourseStore();
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
 
   const {
     days: studyDatabase,
@@ -306,7 +309,7 @@ export const MomentumPage: React.FC = () => {
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke={isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)'}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -331,7 +334,7 @@ export const MomentumPage: React.FC = () => {
       display: 'flex',
       flexDirection: 'column',
       gap: '20px',
-      color: '#ffffff',
+      color: isLight ? 'var(--text-main)' : '#ffffff',
       fontFamily: 'var(--font-sans)',
       paddingBottom: '32px'
     }}>
@@ -340,9 +343,13 @@ export const MomentumPage: React.FC = () => {
         position: 'relative',
         width: '100%',
         minHeight: '150px',
-        background: 'linear-gradient(135deg, #0d1238 0%, #171b4a 45%, #24144e 100%)',
-        border: '1px solid rgba(139, 92, 246, 0.35)',
-        boxShadow: '0 8px 32px rgba(124, 58, 237, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+        background: isLight
+          ? 'linear-gradient(90deg, #ec4899 0%, #8b5cf6 50%, #3b82f6 100%)'
+          : 'linear-gradient(135deg, #0d1238 0%, #171b4a 45%, #24144e 100%)',
+        border: isLight ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(139, 92, 246, 0.35)',
+        boxShadow: isLight
+          ? '0 10px 25px -5px rgba(139, 92, 246, 0.25), 0 4px 10px -2px rgba(236, 72, 153, 0.2)'
+          : '0 8px 32px rgba(124, 58, 237, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
         borderRadius: '20px',
         padding: '24px 36px',
         overflow: 'hidden',
@@ -357,24 +364,26 @@ export const MomentumPage: React.FC = () => {
           right: '15%',
           width: '320px',
           height: '320px',
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.28) 0%, rgba(37, 99, 235, 0.12) 50%, transparent 70%)',
+          background: isLight
+            ? 'radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 50%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(139, 92, 246, 0.28) 0%, rgba(37, 99, 235, 0.12) 50%, transparent 70%)',
           pointerEvents: 'none',
           borderRadius: '50%'
         }} />
 
-        <svg style={{ position: 'absolute', top: 0, right: 0, width: '600px', height: '100%', pointerEvents: 'none', opacity: 0.7 }} viewBox="0 0 600 160" fill="none">
+        <svg style={{ position: 'absolute', top: 0, right: 0, width: '600px', height: '100%', pointerEvents: 'none', opacity: isLight ? 0.45 : 0.7 }} viewBox="0 0 600 160" fill="none">
           <path d="M50 160C180 80 340 40 600 20" stroke="url(#heroArc1)" strokeWidth="1.5" strokeDasharray="4 4" />
           <path d="M120 160C260 70 420 20 600 0" stroke="url(#heroArc2)" strokeWidth="2" />
           <defs>
             <linearGradient id="heroArc1" x1="50" y1="160" x2="600" y2="20" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#818cf8" stopOpacity="0.1" />
-              <stop offset="0.6" stopColor="#c084fc" stopOpacity="0.5" />
-              <stop offset="1" stopColor="#38bdf8" stopOpacity="0.8" />
+              <stop stopColor="#ffffff" stopOpacity="0.2" />
+              <stop offset="0.6" stopColor="#ffffff" stopOpacity="0.5" />
+              <stop offset="1" stopColor="#ffffff" stopOpacity="0.8" />
             </linearGradient>
             <linearGradient id="heroArc2" x1="120" y1="160" x2="600" y2="0" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#a855f7" stopOpacity="0.1" />
-              <stop offset="0.5" stopColor="#818cf8" stopOpacity="0.6" />
-              <stop offset="1" stopColor="#60a5fa" stopOpacity="0.9" />
+              <stop stopColor="#ffffff" stopOpacity="0.2" />
+              <stop offset="0.5" stopColor="#ffffff" stopOpacity="0.6" />
+              <stop offset="1" stopColor="#ffffff" stopOpacity="0.9" />
             </linearGradient>
           </defs>
         </svg>
@@ -394,7 +403,7 @@ export const MomentumPage: React.FC = () => {
           }}>
             <span>Your Learning</span>
             <span style={{
-              background: 'linear-gradient(90deg, #c084fc 0%, #f472b6 100%)',
+              background: isLight ? 'linear-gradient(90deg, #ffffff 0%, #fbcfe8 100%)' : 'linear-gradient(90deg, #c084fc 0%, #f472b6 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               display: 'inline-block'
@@ -405,7 +414,7 @@ export const MomentumPage: React.FC = () => {
           </h1>
           <p style={{
             fontSize: '0.9rem',
-            color: '#a5b4fc',
+            color: isLight ? 'rgba(255, 255, 255, 0.95)' : '#a5b4fc',
             margin: '8px 0 0 0',
             lineHeight: 1.5,
             fontWeight: 400
@@ -491,8 +500,11 @@ export const MomentumPage: React.FC = () => {
       }}>
         {/* Card 1: Course Progress */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '18px 20px',
           display: 'flex',
@@ -503,7 +515,7 @@ export const MomentumPage: React.FC = () => {
           {/* Left: Circular Ring with Percentage */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {renderCircleRing(progressPercent, '#00d2ff', 64, 5)}
-            <span style={{ position: 'absolute', fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
+            <span style={{ position: 'absolute', fontSize: '15px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>
               {progressPercent}%
             </span>
           </div>
@@ -511,16 +523,16 @@ export const MomentumPage: React.FC = () => {
           {/* Right: Info & Mini Progress Bar */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginLeft: '16px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>Course Progress</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>Course Progress</span>
               <BookOpen size={16} color="#3b82f6" />
             </div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px' }}>
               {completedLessons} / {totalLessons} Lessons
             </span>
             <div style={{
               width: '100%',
               height: '4px',
-              background: 'rgba(255, 255, 255, 0.08)',
+              background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.08)',
               borderRadius: '2px',
               marginTop: '8px',
               overflow: 'hidden'
@@ -538,8 +550,11 @@ export const MomentumPage: React.FC = () => {
 
         {/* Card 2: Study Time */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '18px 20px',
           display: 'flex',
@@ -550,7 +565,7 @@ export const MomentumPage: React.FC = () => {
           {/* Left: Circular Ring with Duration */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {renderCircleRing(weekPercent, '#10b981', 64, 5)}
-            <span style={{ position: 'absolute', fontSize: '11px', fontWeight: 700, color: '#ffffff', textAlign: 'center' }}>
+            <span style={{ position: 'absolute', fontSize: '11px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff', textAlign: 'center' }}>
               {formattedStudyTime}
             </span>
           </div>
@@ -558,10 +573,10 @@ export const MomentumPage: React.FC = () => {
           {/* Right: Info & Trend */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginLeft: '16px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>Study Time</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>Study Time</span>
               <Clock size={16} color="#06b6d4" />
             </div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px' }}>
               This Week
             </span>
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#10b981', marginTop: '6px' }}>
@@ -572,8 +587,11 @@ export const MomentumPage: React.FC = () => {
 
         {/* Card 3: Achievements */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '18px 20px',
           display: 'flex',
@@ -585,20 +603,20 @@ export const MomentumPage: React.FC = () => {
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {renderCircleRing(badgesCount > 0 ? Math.min(100, badgesCount * 25) : 0, '#8b5cf6', 64, 5)}
             <div style={{ position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Trophy size={20} color="#c084fc" />
+              <Trophy size={20} color={isLight ? '#7c3aed' : '#c084fc'} />
             </div>
           </div>
 
           {/* Right: Info */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginLeft: '16px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>Achievements</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>Achievements</span>
               <Trophy size={16} color="#8b5cf6" />
             </div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px' }}>
               Verified Credentials
             </span>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#c084fc', marginTop: '6px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: isLight ? '#7c3aed' : '#c084fc', marginTop: '6px' }}>
               {badgesCount} {badgesCount === 1 ? 'Badge' : 'Badges'}
             </span>
           </div>
@@ -606,8 +624,11 @@ export const MomentumPage: React.FC = () => {
 
         {/* Card 4: Study Streak */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '18px 20px',
           display: 'flex',
@@ -618,7 +639,7 @@ export const MomentumPage: React.FC = () => {
           {/* Left: Circular Ring with Streak Days */}
           <div style={{ position: 'relative', width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {renderCircleRing(streakDays > 0 ? Math.min(100, streakDays * 20) : 0, '#f97316', 64, 5)}
-            <span style={{ position: 'absolute', fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>
+            <span style={{ position: 'absolute', fontSize: '18px', fontWeight: 800, color: isLight ? '#0F172A' : '#ffffff' }}>
               {streakDays}
             </span>
           </div>
@@ -626,13 +647,13 @@ export const MomentumPage: React.FC = () => {
           {/* Right: Info */}
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginLeft: '16px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: '#ffffff' }}>Study Streak</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>Study Streak</span>
               <Flame size={16} color="#f97316" />
             </div>
-            <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px' }}>
               Days
             </span>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#fb923c', marginTop: '6px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: isLight ? '#ea580c' : '#fb923c', marginTop: '6px' }}>
               Active Streak 🔥
             </span>
           </div>
@@ -648,8 +669,11 @@ export const MomentumPage: React.FC = () => {
       }}>
         {/* Card 1: Learning Progress */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '22px 24px',
           display: 'flex',
@@ -659,8 +683,8 @@ export const MomentumPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                background: 'rgba(37, 99, 235, 0.18)',
-                color: '#3b82f6',
+                background: isLight ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.18)',
+                color: isLight ? '#2563EB' : '#3b82f6',
                 padding: '6px',
                 borderRadius: '8px',
                 display: 'flex',
@@ -669,7 +693,7 @@ export const MomentumPage: React.FC = () => {
               }}>
                 <BarChart2 size={18} />
               </div>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#ffffff' }}>Learning Progress</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: isLight ? '#0F172A' : '#ffffff' }}>Learning Progress</h2>
             </div>
 
             {/* Time Filter Pill */}
@@ -678,13 +702,13 @@ export const MomentumPage: React.FC = () => {
                 type="button"
                 onClick={() => setShowTimeFilterMenu((prev) => !prev)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.06)',
+                  border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.12)',
                   borderRadius: '20px',
                   padding: '6px 14px',
-                  color: '#cbd5e1',
+                  color: isLight ? '#0F172A' : '#cbd5e1',
                   fontSize: '12px',
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -692,7 +716,7 @@ export const MomentumPage: React.FC = () => {
                 }}
               >
                 <span>{timeFilter}</span>
-                <span style={{ fontSize: '10px' }}>∨</span>
+                <span style={{ fontSize: '10px', color: isLight ? '#64748B' : '#94a3b8' }}>∨</span>
               </button>
 
               {showTimeFilterMenu && (
@@ -701,10 +725,12 @@ export const MomentumPage: React.FC = () => {
                   top: '100%',
                   right: 0,
                   marginTop: '6px',
-                  background: '#151b40',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  background: isLight ? '#FFFFFF' : '#151b40',
+                  border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.12)',
                   borderRadius: '10px',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                  boxShadow: isLight
+                    ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+                    : '0 8px 24px rgba(0, 0, 0, 0.4)',
                   zIndex: 20,
                   overflow: 'hidden',
                   minWidth: '120px'
@@ -719,9 +745,14 @@ export const MomentumPage: React.FC = () => {
                       style={{
                         padding: '8px 14px',
                         fontSize: '12px',
-                        color: timeFilter === filter ? '#38bdf8' : '#cbd5e1',
+                        fontWeight: timeFilter === filter ? 600 : 500,
+                        color: timeFilter === filter
+                          ? (isLight ? '#0284c7' : '#38bdf8')
+                          : (isLight ? '#475569' : '#cbd5e1'),
                         cursor: 'pointer',
-                        background: timeFilter === filter ? 'rgba(56, 189, 248, 0.1)' : 'transparent',
+                        background: timeFilter === filter
+                          ? (isLight ? 'rgba(2, 132, 199, 0.08)' : 'rgba(56, 189, 248, 0.1)')
+                          : 'transparent',
                         transition: 'background 0.15s ease'
                       }}
                     >
@@ -762,7 +793,7 @@ export const MomentumPage: React.FC = () => {
                   return (
                     <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: 'rotate(-90deg)' }}>
                       {/* Background Track */}
-                      <circle cx="70" cy="70" r="54" stroke="rgba(255, 255, 255, 0.08)" strokeWidth="12" fill="none" />
+                      <circle cx="70" cy="70" r="54" stroke={isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)'} strokeWidth="12" fill="none" />
                       {/* Green segment (Completed Lessons) */}
                       {greenDash > 0 && (
                         <circle
@@ -812,8 +843,8 @@ export const MomentumPage: React.FC = () => {
                 })()}
 
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                  <span style={{ fontSize: '24px', fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{progressPercent}%</span>
-                  <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Overall Progress</span>
+                  <span style={{ fontSize: '24px', fontWeight: 800, color: isLight ? '#0F172A' : '#ffffff', lineHeight: 1 }}>{progressPercent}%</span>
+                  <span style={{ fontSize: '10px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px', fontWeight: 600 }}>Overall Progress</span>
                 </div>
               </div>
 
@@ -822,23 +853,23 @@ export const MomentumPage: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
-                    <span style={{ color: '#cbd5e1' }}>Completed Lessons</span>
+                    <span style={{ color: isLight ? '#334155' : '#cbd5e1' }}>Completed Lessons</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: '#ffffff' }}>{completedLessons} / {totalLessons}</span>
+                  <span style={{ fontWeight: 600, color: isLight ? '#0F172A' : '#ffffff' }}>{completedLessons} / {totalLessons}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00d2ff' }} />
-                    <span style={{ color: '#cbd5e1' }}>In Progress</span>
+                    <span style={{ color: isLight ? '#334155' : '#cbd5e1' }}>In Progress</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: '#ffffff' }}>{inProgressLessons} / {totalLessons}</span>
+                  <span style={{ fontWeight: 600, color: isLight ? '#0F172A' : '#ffffff' }}>{inProgressLessons} / {totalLessons}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#a855f7' }} />
-                    <span style={{ color: '#cbd5e1' }}>Not Started</span>
+                    <span style={{ color: isLight ? '#334155' : '#cbd5e1' }}>Not Started</span>
                   </div>
-                  <span style={{ fontWeight: 600, color: '#ffffff' }}>{notStartedLessons} / {totalLessons}</span>
+                  <span style={{ fontWeight: 600, color: isLight ? '#0F172A' : '#ffffff' }}>{notStartedLessons} / {totalLessons}</span>
                 </div>
               </div>
             </div>
@@ -849,7 +880,7 @@ export const MomentumPage: React.FC = () => {
                 <svg width="100%" height="100%" viewBox="0 0 280 180" preserveAspectRatio="none">
                   <defs>
                     <linearGradient id="blueLineArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00d2ff" stopOpacity="0.32" />
+                      <stop offset="0%" stopColor="#00d2ff" stopOpacity={isLight ? 0.25 : 0.32} />
                       <stop offset="100%" stopColor="#00d2ff" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
@@ -863,10 +894,10 @@ export const MomentumPage: React.FC = () => {
                     { label: '0%', y: 160 },
                   ].map((grid, idx) => (
                     <g key={idx}>
-                      <text x="0" y={grid.y + 3} fill="#64748b" fontSize="9" fontWeight="500">
+                      <text x="0" y={grid.y + 3} fill={isLight ? '#64748B' : '#64748b'} fontSize="9" fontWeight="500">
                         {grid.label}
                       </text>
-                      <line x1="30" y1={grid.y} x2="280" y2={grid.y} stroke="rgba(255, 255, 255, 0.06)" strokeWidth="1" />
+                      <line x1="30" y1={grid.y} x2="280" y2={grid.y} stroke={isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.06)'} strokeWidth="1" />
                     </g>
                   ))}
 
@@ -883,10 +914,10 @@ export const MomentumPage: React.FC = () => {
                     <path
                       d={linePath}
                       fill="none"
-                      stroke="#00d2ff"
+                      stroke={isLight ? '#0284c7' : '#00d2ff'}
                       strokeWidth="2.5"
                       strokeLinecap="round"
-                      style={{ filter: 'drop-shadow(0 0 6px rgba(0, 210, 255, 0.6))' }}
+                      style={{ filter: isLight ? 'drop-shadow(0 2px 4px rgba(2, 132, 199, 0.3))' : 'drop-shadow(0 0 6px rgba(0, 210, 255, 0.6))' }}
                     />
                   )}
 
@@ -897,8 +928,8 @@ export const MomentumPage: React.FC = () => {
                       cx={pt.x}
                       cy={pt.y}
                       r={pt.minutes > 0 ? 5 : 3.5}
-                      fill={pt.minutes > 0 ? '#00d2ff' : '#64748b'}
-                      stroke="#ffffff"
+                      fill={pt.minutes > 0 ? (isLight ? '#0284c7' : '#00d2ff') : (isLight ? '#94A3B8' : '#64748b')}
+                      stroke={isLight ? '#FFFFFF' : '#ffffff'}
                       strokeWidth={pt.minutes > 0 ? 1.5 : 1}
                     >
                       <title>{`${pt.label} (${pt.dateStr}): ${pt.minutes}m studied (${pt.percent}% of daily goal)`}</title>
@@ -915,7 +946,7 @@ export const MomentumPage: React.FC = () => {
                   marginTop: '4px'
                 }}>
                   {chartPoints.map((pt, idx) => (
-                    <span key={idx} style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>
+                    <span key={idx} style={{ fontSize: '10px', color: isLight ? '#475569' : '#94a3b8', fontWeight: 500 }}>
                       {pt.label}
                     </span>
                   ))}
@@ -927,8 +958,11 @@ export const MomentumPage: React.FC = () => {
 
         {/* Card 2: Learning Calendar */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '22px 24px',
           display: 'flex',
@@ -938,8 +972,8 @@ export const MomentumPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                background: 'rgba(37, 99, 235, 0.18)',
-                color: '#3b82f6',
+                background: isLight ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.18)',
+                color: isLight ? '#2563EB' : '#3b82f6',
                 padding: '6px',
                 borderRadius: '8px',
                 display: 'flex',
@@ -948,7 +982,7 @@ export const MomentumPage: React.FC = () => {
               }}>
                 <Calendar size={18} />
               </div>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#ffffff' }}>Learning Calendar</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: isLight ? '#0F172A' : '#ffffff' }}>Learning Calendar</h2>
             </div>
 
             {/* Navigation: < Month Year > */}
@@ -959,7 +993,7 @@ export const MomentumPage: React.FC = () => {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: isLight ? '#475569' : '#94a3b8',
                   cursor: 'pointer',
                   padding: '4px',
                   display: 'flex',
@@ -970,8 +1004,8 @@ export const MomentumPage: React.FC = () => {
                 <ChevronLeft size={16} />
               </button>
 
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                {monthNameShort} {currentYear} <span style={{ fontSize: '10px', color: '#94a3b8' }}>∨</span>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {monthNameShort} {currentYear} <span style={{ fontSize: '10px', color: isLight ? '#64748B' : '#94a3b8' }}>∨</span>
               </span>
 
               <button
@@ -980,7 +1014,7 @@ export const MomentumPage: React.FC = () => {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: isLight ? '#475569' : '#94a3b8',
                   cursor: 'pointer',
                   padding: '4px',
                   display: 'flex',
@@ -1001,8 +1035,8 @@ export const MomentumPage: React.FC = () => {
               gridTemplateColumns: 'repeat(7, 1fr)',
               textAlign: 'center',
               fontSize: '11px',
-              fontWeight: 600,
-              color: '#64748b'
+              fontWeight: 700,
+              color: isLight ? '#475569' : '#64748b'
             }}>
               <span>Mon</span>
               <span>Tue</span>
@@ -1045,10 +1079,16 @@ export const MomentumPage: React.FC = () => {
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '12px',
-                      fontWeight: isSelected ? 700 : (cell.isCurrentMonth ? 500 : 400),
-                      color: isSelected ? '#ffffff' : (cell.isCurrentMonth ? '#cbd5e1' : 'rgba(255, 255, 255, 0.25)'),
+                      fontWeight: isSelected ? 700 : (cell.isCurrentMonth ? 600 : 400),
+                      color: isSelected
+                        ? '#ffffff'
+                        : cell.isCurrentMonth
+                        ? (isLight ? '#0F172A' : '#cbd5e1')
+                        : (isLight ? '#94A3B8' : 'rgba(255, 255, 255, 0.25)'),
                       background: isSelected ? '#2563eb' : 'transparent',
-                      boxShadow: isSelected ? '0 0 10px rgba(37, 99, 235, 0.7)' : 'none',
+                      boxShadow: isSelected
+                        ? (isLight ? '0 2px 8px rgba(37, 99, 235, 0.35)' : '0 0 10px rgba(37, 99, 235, 0.7)')
+                        : 'none',
                       transition: 'all 0.15s ease'
                     }}>
                       {cell.dayNumber}
@@ -1057,10 +1097,10 @@ export const MomentumPage: React.FC = () => {
                     {/* Small dot below for dates with study activity */}
                     {hasActivity && !isSelected && (
                       <div style={{
-                        width: '3px',
-                        height: '3px',
+                        width: '4px',
+                        height: '4px',
                         borderRadius: '50%',
-                        background: '#00d2ff',
+                        background: isLight ? '#0284c7' : '#00d2ff',
                         marginTop: '1px'
                       }} />
                     )}
@@ -1072,8 +1112,12 @@ export const MomentumPage: React.FC = () => {
 
           {/* Bottom Encouraging Banner */}
           <div style={{
-            background: selectedMinutes > 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.06)',
-            border: `1px solid ${selectedMinutes > 0 ? 'rgba(16, 185, 129, 0.22)' : 'rgba(56, 189, 248, 0.16)'}`,
+            background: isLight
+              ? (selectedMinutes > 0 ? '#ECFDF5' : '#F0F9FF')
+              : (selectedMinutes > 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.06)'),
+            border: isLight
+              ? (selectedMinutes > 0 ? '1px solid #A7F3D0' : '1px solid #BAE6FD')
+              : (selectedMinutes > 0 ? '1px solid rgba(16, 185, 129, 0.22)' : '1px solid rgba(56, 189, 248, 0.16)'),
             borderRadius: '12px',
             padding: '12px 14px',
             marginTop: '16px',
@@ -1082,7 +1126,7 @@ export const MomentumPage: React.FC = () => {
             gap: '12px'
           }}>
             <div style={{
-              background: selectedMinutes > 0 ? '#10b981' : '#38bdf8',
+              background: selectedMinutes > 0 ? '#10b981' : (isLight ? '#0284c7' : '#38bdf8'),
               color: '#ffffff',
               borderRadius: '50%',
               width: '24px',
@@ -1095,14 +1139,26 @@ export const MomentumPage: React.FC = () => {
               {selectedMinutes > 0 ? <Check size={14} strokeWidth={3} /> : <Zap size={14} strokeWidth={2.5} />}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>
+              <span style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: isLight
+                  ? (selectedMinutes > 0 ? '#065F46' : '#0369A1')
+                  : '#ffffff'
+              }}>
                 {selectedMinutes > 0
                   ? `You studied ${formatDuration(selectedMinutes)} ${selectedDateStr === todayDate ? 'today' : 'on ' + new Date(selectedDateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}!`
                   : selectedDateStr === todayDate
                   ? 'No study recorded yet today.'
                   : `No study recorded on ${new Date(selectedDateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`}
               </span>
-              <span style={{ fontSize: '11px', color: selectedMinutes > 0 ? '#a7f3d0' : '#94a3b8', marginTop: '2px' }}>
+              <span style={{
+                fontSize: '11px',
+                color: isLight
+                  ? (selectedMinutes > 0 ? '#047857' : '#0284C7')
+                  : (selectedMinutes > 0 ? '#a7f3d0' : '#94a3b8'),
+                marginTop: '2px'
+              }}>
                 {selectedMinutes > 0
                   ? 'Keep the momentum going! 🚀'
                   : selectedDateStr === todayDate
@@ -1123,8 +1179,11 @@ export const MomentumPage: React.FC = () => {
       }}>
         {/* Card 1: Recent Activity */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '22px 24px',
           display: 'flex',
@@ -1134,8 +1193,8 @@ export const MomentumPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                background: 'rgba(234, 179, 8, 0.18)',
-                color: '#eab308',
+                background: isLight ? 'rgba(234, 179, 8, 0.12)' : 'rgba(234, 179, 8, 0.18)',
+                color: isLight ? '#D97706' : '#eab308',
                 padding: '6px',
                 borderRadius: '8px',
                 display: 'flex',
@@ -1144,13 +1203,13 @@ export const MomentumPage: React.FC = () => {
               }}>
                 <Zap size={18} />
               </div>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#ffffff' }}>Recent Activity</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: isLight ? '#0F172A' : '#ffffff' }}>Recent Activity</h2>
             </div>
 
             <Link
               to="/my-learning"
               style={{
-                color: '#60a5fa',
+                color: isLight ? '#2563EB' : '#60a5fa',
                 fontSize: '13px',
                 fontWeight: 600,
                 textDecoration: 'none',
@@ -1174,7 +1233,7 @@ export const MomentumPage: React.FC = () => {
                 top: '16px',
                 bottom: '16px',
                 width: '2px',
-                background: 'rgba(255, 255, 255, 0.08)',
+                background: isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)',
                 zIndex: 1
               }} />
 
@@ -1215,10 +1274,10 @@ export const MomentumPage: React.FC = () => {
                       )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {act.title}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                      <span style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '2px' }}>
                         {act.courseTitle ? `${act.courseTitle} • ` : ''}{dateLabel}{timeLabel ? ` ${timeLabel}` : ''} • {formatDuration(act.durationMinutes || 15)}{act.score ? ` • Score: ${act.score}` : ''}
                       </span>
                     </div>
@@ -1230,16 +1289,16 @@ export const MomentumPage: React.FC = () => {
             <div style={{
               padding: '28px 16px',
               textAlign: 'center',
-              background: 'rgba(255, 255, 255, 0.02)',
+              background: isLight ? '#F8FAFC' : 'rgba(255, 255, 255, 0.02)',
               borderRadius: '12px',
-              border: '1px dashed rgba(255, 255, 255, 0.08)',
+              border: isLight ? '1px dashed #CBD5E1' : '1px dashed rgba(255, 255, 255, 0.08)',
               margin: 'auto 0'
             }}>
-              <Clock size={24} color="#64748b" style={{ margin: '0 auto 8px', opacity: 0.7 }} />
-              <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
+              <Clock size={24} color={isLight ? '#64748B' : '#64748b'} style={{ margin: '0 auto 8px', opacity: 0.7 }} />
+              <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: isLight ? '#0F172A' : '#ffffff' }}>
                 No study activity recorded {selectedDateStr === todayDate ? 'today' : 'on this date'}
               </p>
-              <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8' }}>
                 Complete a course lesson or start the study timer to record your learning momentum.
               </p>
             </div>
@@ -1248,8 +1307,11 @@ export const MomentumPage: React.FC = () => {
 
         {/* Card 2: Study Timer */}
         <div style={{
-          background: 'rgba(13, 19, 51, 0.92)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: isLight ? '#FFFFFF' : 'rgba(13, 19, 51, 0.92)',
+          border: isLight ? '1px solid #E2E8F0' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: isLight
+            ? '0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03)'
+            : '0 4px 20px rgba(0, 0, 0, 0.3)',
           borderRadius: '16px',
           padding: '22px 24px',
           display: 'flex',
@@ -1260,8 +1322,8 @@ export const MomentumPage: React.FC = () => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
-                background: 'rgba(37, 99, 235, 0.18)',
-                color: '#3b82f6',
+                background: isLight ? 'rgba(37, 99, 235, 0.1)' : 'rgba(37, 99, 235, 0.18)',
+                color: isLight ? '#2563EB' : '#3b82f6',
                 padding: '6px',
                 borderRadius: '8px',
                 display: 'flex',
@@ -1270,9 +1332,9 @@ export const MomentumPage: React.FC = () => {
               }}>
                 <Timer size={18} />
               </div>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#ffffff' }}>Study Timer</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: isLight ? '#0F172A' : '#ffffff' }}>Study Timer</h2>
             </div>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: '12px', color: isLight ? '#64748B' : '#94a3b8', margin: '4px 0 0 0' }}>
               Track your study time manually
             </p>
           </div>
@@ -1289,7 +1351,7 @@ export const MomentumPage: React.FC = () => {
               fontFamily: 'var(--font-mono), monospace',
               fontSize: '32px',
               fontWeight: 800,
-              color: '#ffffff',
+              color: isLight ? '#0F172A' : '#ffffff',
               letterSpacing: '1.5px'
             }}>
               {formatTimerDisplay(localSeconds)}
@@ -1314,7 +1376,7 @@ export const MomentumPage: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: '0 0 12px rgba(37, 99, 235, 0.6)',
+                    boxShadow: isLight ? '0 4px 14px rgba(37, 99, 235, 0.35)' : '0 0 12px rgba(37, 99, 235, 0.6)',
                     transition: 'transform 0.15s ease'
                   }}
                 >
@@ -1324,7 +1386,7 @@ export const MomentumPage: React.FC = () => {
                     <Play size={16} fill="#ffffff" style={{ marginLeft: '2px' }} />
                   )}
                 </button>
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px', fontWeight: 600 }}>
                   {activeSession && !isTimerPaused ? 'Pause' : 'Start'}
                 </span>
               </div>
@@ -1340,9 +1402,11 @@ export const MomentumPage: React.FC = () => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: activeSession && !isTimerPaused ? '#ffffff' : '#64748b',
+                    background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.08)',
+                    border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
+                    color: activeSession && !isTimerPaused
+                      ? (isLight ? '#0F172A' : '#ffffff')
+                      : (isLight ? '#94A3B8' : '#64748b'),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1353,7 +1417,7 @@ export const MomentumPage: React.FC = () => {
                 >
                   <Pause size={16} />
                 </button>
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px', fontWeight: 600 }}>
                   Pause
                 </span>
               </div>
@@ -1369,9 +1433,11 @@ export const MomentumPage: React.FC = () => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: activeSession ? '#ffffff' : '#64748b',
+                    background: isLight ? '#F1F5F9' : 'rgba(255, 255, 255, 0.08)',
+                    border: isLight ? '1px solid #CBD5E1' : '1px solid rgba(255, 255, 255, 0.15)',
+                    color: activeSession
+                      ? (isLight ? '#0F172A' : '#ffffff')
+                      : (isLight ? '#94A3B8' : '#64748b'),
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1380,9 +1446,9 @@ export const MomentumPage: React.FC = () => {
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  <Square size={14} fill={activeSession ? '#ffffff' : '#64748b'} strokeWidth={0} />
+                  <Square size={14} fill={activeSession ? (isLight ? '#0F172A' : '#ffffff') : (isLight ? '#94A3B8' : '#64748b')} strokeWidth={0} />
                 </button>
-                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: isLight ? '#64748B' : '#94a3b8', marginTop: '4px', fontWeight: 600 }}>
                   End
                 </span>
               </div>
@@ -1391,16 +1457,16 @@ export const MomentumPage: React.FC = () => {
 
           {/* Bottom Info Banner */}
           <div style={{
-            background: 'rgba(37, 99, 235, 0.12)',
-            border: '1px solid rgba(59, 130, 246, 0.25)',
+            background: isLight ? '#EFF6FF' : 'rgba(37, 99, 235, 0.12)',
+            border: isLight ? '1px solid #BFDBFE' : '1px solid rgba(59, 130, 246, 0.25)',
             borderRadius: '10px',
             padding: '10px 14px',
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
           }}>
-            <Info size={16} color="#60a5fa" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '12px', color: '#93c5fd', fontWeight: 500 }}>
+            <Info size={16} color={isLight ? '#2563EB' : '#60a5fa'} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '12px', color: isLight ? '#1E40AF' : '#93c5fd', fontWeight: 600 }}>
               Your study time helps grow your learning momentum!
             </span>
           </div>

@@ -1026,6 +1026,41 @@ select.form-select option {
   color: var(--text-main);
 }
 
+/* ============================================================ */
+/* THEME INPUT & CONTROL ENFORCEMENT SHIELD                     */
+/* Eliminates white screens and boxes in dark theme and ensures */
+/* perfect WCAG AA contrast across all form controls.           */
+/* ============================================================ */
+[data-theme="dark"] select,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .lms-form-input,
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="color"]):not([data-allow-custom]),
+[data-theme="dark"] textarea {
+  background-color: var(--bg-input) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+[data-theme="dark"] select option {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme="light"] select,
+[data-theme="light"] .form-select,
+[data-theme="light"] .lms-form-input,
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="color"]):not([data-allow-custom]),
+[data-theme="light"] textarea {
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+[data-theme="light"] select option {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
 .form-helper {
   font-size: 0.75rem;
   color: var(--text-muted);
