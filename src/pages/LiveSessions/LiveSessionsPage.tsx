@@ -26,12 +26,8 @@ import { RecordedClassesView } from './components/RecordedClassesView';
 import { MeetingRecorderWidget } from './components/MeetingRecorderWidget';
 import { useScreenRecorder } from '../../lib/useScreenRecorder';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
-<<<<<<< HEAD
-import { openGoogleMeetSession } from '../../lib/googleMeet';
-import { ConfirmationModal } from '../../components/ConfirmationModal';
-=======
 import { openGoogleMeetSession, isValidGoogleMeetUrl } from '../../lib/googleMeet';
->>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -98,6 +94,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     fetchSessions();
     fetchCohorts();
     fetchCourses();
+    fetchDefaultMeetUrl();
     const interval = setInterval(() => {
       fetchSessions();
     }, 30000);
@@ -105,13 +102,14 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
       fetchSessions();
       fetchCohorts();
       fetchCourses();
+      fetchDefaultMeetUrl();
     };
     window.addEventListener('focus', handleFocus);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [fetchSessions, fetchCohorts, fetchCourses]);
+  }, [fetchSessions, fetchCohorts, fetchCourses, fetchDefaultMeetUrl]);
 
   // Sub-filter for Live Sessions
   const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'upcoming' | 'ended' | 'cancelled'>('all');
@@ -1783,24 +1781,6 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         </div>
       )}
 
-<<<<<<< HEAD
-      {/* Delete Record Confirmation Modal matching user screenshot */}
-      <ConfirmationModal
-        isOpen={Boolean(deleteSessionModal)}
-        title="Delete Session Record"
-        message={`Are you sure you want to permanently remove the record for "${deleteSessionModal?.title}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        isDestructive={true}
-        onConfirm={() => {
-          if (deleteSessionModal) {
-            deleteSession(deleteSessionModal.id);
-            showNotice('Session removed from archives.');
-            setDeleteSessionModal(null);
-          }
-        }}
-        onCancel={() => setDeleteSessionModal(null)}
-=======
       {/* Set Default Google Meet Room Modal */}
       {isDefaultMeetModalOpen && (
         <div className="modal-backdrop" style={{ zIndex: 1200 }}>
@@ -1940,69 +1920,51 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         <div
           className="modal-overlay"
           onClick={() => setConcludeModalSession(null)}
-          style={{ zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)' }}
+          style={{ zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-overlay)' }}
         >
           <div
             className="card"
             onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: '460px', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}
+            style={{ width: '100%', maxWidth: '480px', padding: '24px', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--bg-surface)' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)' }}>
-                  <Radio size={18} />
-                </div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                  Conclude Live Class
-                </h3>
+                <Square size={20} color="var(--danger)" />
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>Conclude Live Class</h3>
               </div>
               <button
+                type="button"
                 className="btn btn-ghost btn-sm"
                 onClick={() => setConcludeModalSession(null)}
-                style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0 }}
+                style={{ padding: '4px' }}
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
-            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              Are you sure you want to conclude the live broadcast for <strong>"{concludeModalSession.title}"</strong>?
+            <p className="text-secondary text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
+              Are you sure you want to end the live broadcast for <strong>"{concludeModalSession.title}"</strong>?
+              This will transition the session to <em>Completed</em> and publish it to the <strong>Recorded Classes</strong> tab.
             </p>
 
-            <div style={{
-              padding: '12px 14px',
-              borderRadius: '8px',
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '10px',
-            }}>
-              <CheckCircle2 size={16} color="#38bdf8" style={{ marginTop: '2px', flexShrink: 0 }} />
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.4 }}>
-                The session will automatically transfer to <strong>Recorded Classes</strong> so any students who missed or were absent can replay the lecture recording, chapters, slides, and attendance roll call.
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Cloud Recording Link <span className="text-muted">(Optional)</span>:
+              </label>
+              <input
+                type="url"
+                className="form-input"
+                placeholder="Google Drive, YouTube, or AWS S3 video link..."
+                defaultValue={concludeModalSession.recordingUrl || ''}
+                id="conclude-recording-url-input"
+                style={{ fontSize: '0.85rem' }}
+              />
+              <span className="text-muted text-xs">
+                Leave empty to automatically use the LMS high-definition lecture cloud recording stream.
+              </span>
             </div>
 
-            {/* Active Recording Notice */}
-            {recorderState.isRecording && recorderState.activeSessionId === concludeModalSession.id && (
-              <div style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-              }}>
-                <Radio size={16} color="#ef4444" />
-                <div style={{ fontSize: '0.8rem', color: '#fca5a5', lineHeight: 1.4 }}>
-                  <strong>Active HD Recording Detected:</strong> The recorded Google Meet stream will be automatically compiled, finalized, and uploaded as the official class recording.
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '10px' }}>
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -2013,41 +1975,38 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
               <button
                 type="button"
                 className="btn btn-primary"
-                style={{ background: 'var(--danger)', borderColor: 'var(--danger)', color: '#ffffff', fontWeight: 700 }}
+                style={{ background: '#ef4444', borderColor: '#ef4444', fontWeight: 700 }}
                 onClick={async () => {
-                  const s = concludeModalSession;
+                  const inputEl = document.getElementById('conclude-recording-url-input') as HTMLInputElement | null;
+                  const customUrl = inputEl ? inputEl.value.trim() : '';
+                  await endSession(concludeModalSession.id, customUrl || undefined);
+                  showNotice(`Broadcast concluded for "${concludeModalSession.title}". Saved to Recorded Classes!`);
                   setConcludeModalSession(null);
-                  let finalRecUrl: string | undefined = undefined;
-
-                  // If this session has an active recording running, finalize it and upload now
-                  if (recorderState.isRecording && recorderState.activeSessionId === s.id) {
-                    showNotice(`Finalizing and uploading recorded Google Meet stream...`);
-                    const recRes = await stopRecording();
-                    if (recRes.success && recRes.recordingUrl) {
-                      finalRecUrl = recRes.recordingUrl;
-                    }
-                  }
-
-                  await endSession(s.id, finalRecUrl);
-                  await fetchSessions();
-                  showNotice(`Live class "${s.title}" concluded and archived in Recorded Classes.`);
                 }}
               >
-                Conclude & Archive Session
+                End Stream & Save
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* FLOATING IN-APP MEETING RECORDER WIDGET */}
-      <MeetingRecorderWidget
-        state={recorderState}
-        onPause={pauseRecording}
-        onResume={resumeRecording}
-        onStop={handleStopAndSaveRecorder}
-        onCancel={cancelRecording}
->>>>>>> cce467a56afe0846f0654a61268227f8616dfaa6
+      {/* Delete Record Confirmation Modal matching user screenshot */}
+      <ConfirmationModal
+        isOpen={Boolean(deleteSessionModal)}
+        title="Delete Session Record"
+        message={`Are you sure you want to permanently remove the record for "${deleteSessionModal?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          if (deleteSessionModal) {
+            deleteSession(deleteSessionModal.id);
+            showNotice('Session removed from archives.');
+            setDeleteSessionModal(null);
+          }
+        }}
+        onCancel={() => setDeleteSessionModal(null)}
       />
     </div>
   );

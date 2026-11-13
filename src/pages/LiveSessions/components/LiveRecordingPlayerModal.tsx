@@ -115,7 +115,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        background: 'rgba(0, 0, 0, 0.85)',
+        background: 'var(--bg-overlay)',
         backdropFilter: 'blur(8px)',
       }}
     >

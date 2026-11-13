@@ -75,48 +75,64 @@ export const Navbar: React.FC<Props> = ({
           <Menu size={18} />
         </button>
 
-        {/* Mobile Brand Logo */}
+        {/* Unified Organization Brand Header */}
         <Link
           to="/"
-          className="mobile-header-logo"
+          className="topbar-brand"
           style={{
-            textDecoration: 'none'
+            textDecoration: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
           }}
+          title={companyName}
         >
-          <div className="brand-logo-card" style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '7px',
+              background: '#ffffff',
+              border: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              padding: '2px',
+              flexShrink: 0,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
             <img
               src={isPlatformAdmin ? '/logo.png' : navbarLogoSrc}
               alt={isPlatformAdmin ? 'VeniLearn Platform' : companyName}
-              className="brand-logo-img"
               style={{
-                height: '26px',
-                width: 'auto',
-                maxWidth: '90px',
-                objectFit: 'contain'
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                display: 'block',
               }}
               onError={() => setNavbarLogoSrc('/logo.png')}
             />
-            {!isPlatformAdmin && (
-              <span
-                style={{
-                  fontSize: '0.8rem',
-                  fontWeight: 700,
-                  color: 'var(--text-main)',
-                  maxWidth: '120px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={companyName}
-              >
-                {companyName}
-              </span>
-            )}
           </div>
+          <span
+            style={{
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              color: 'var(--text-main)',
+              letterSpacing: '-0.01em',
+              maxWidth: '220px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isPlatformAdmin ? 'VeniLearn' : companyName}
+          </span>
         </Link>
 
-        {/* Tenant/Org Switcher (Authorized admins) */}
-        {isPlatformAdmin ? (
+        {/* Tenant/Org Switcher (Authorized Platform Admins Only) */}
+        {isPlatformAdmin && (
           <div className="nav-org-select-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building size={16} color="var(--primary)" />
             <select
@@ -142,60 +158,6 @@ export const Navbar: React.FC<Props> = ({
                 </option>
               ))}
             </select>
-          </div>
-        ) : (
-          <div
-            className="nav-org-select-container"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '0.85rem',
-              color: 'var(--text-secondary)',
-              maxWidth: '320px',
-            }}
-          >
-            <div
-              style={{
-                width: '26px',
-                height: '26px',
-                borderRadius: '6px',
-                background: '#ffffff',
-                border: '1px solid var(--border-subtle)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                padding: '2px',
-                flexShrink: 0,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              }}
-              title={companyName}
-            >
-              <img
-                src={navbarLogoSrc}
-                alt={companyName}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  display: 'block',
-                }}
-                onError={() => setNavbarLogoSrc('/logo.png')}
-              />
-            </div>
-            <span
-              style={{
-                fontWeight: 700,
-                color: 'var(--text-main)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-              title={companyName}
-            >
-              {companyName}
-            </span>
           </div>
         )}
       </div>

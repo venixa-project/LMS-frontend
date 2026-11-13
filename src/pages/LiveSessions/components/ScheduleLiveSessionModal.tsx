@@ -776,7 +776,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        background: 'rgba(5, 8, 16, 0.75)',
+        background: 'var(--bg-overlay)',
         backdropFilter: 'blur(6px)',
       }}
     >
@@ -2312,7 +2312,7 @@ export const ScheduleLiveSessionModal: React.FC<Props> = ({
               right: 0,
               bottom: 0,
               zIndex: 70,
-              background: 'rgba(0, 0, 0, 0.7)',
+              background: 'var(--bg-overlay)',
               backdropFilter: 'blur(4px)',
               display: 'flex',
               alignItems: 'center',

@@ -7,6 +7,7 @@
 import React from 'react';
 import { RankTier, RankTierConfig, RANK_TIERS, getRankForPoints } from '../../lib/gamificationConfig';
 import { Sparkles, Crown, Shield, Award, Zap } from 'lucide-react';
+import { useThemeStore } from '../../lib/themeStore';
 
 export interface RankBadgeProps {
   tier?: RankTier | RankTierConfig | string;
@@ -29,6 +30,9 @@ export const RankBadge: React.FC<RankBadgeProps> = ({
   className = '',
   style = {},
 }) => {
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
+
   // Resolve tier either directly or from points
   const resolvedTierConfig: RankTierConfig = React.useMemo(() => {
     if (tier) {
@@ -44,6 +48,24 @@ export const RankBadge: React.FC<RankBadgeProps> = ({
     }
     return RANK_TIERS[0];
   }, [tier, points]);
+
+  const lightTierStyles: Record<string, { bg: string; border: string; text: string; shadow: string }> = {
+    bronze: { bg: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', border: '#fdba74', text: '#9a3412', shadow: '0 1px 3px rgba(154, 52, 18, 0.12)' },
+    silver: { bg: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', border: '#cbd5e1', text: '#334155', shadow: '0 1px 3px rgba(51, 65, 85, 0.1)' },
+    gold: { bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '#fcd34d', text: '#b45309', shadow: '0 1px 3px rgba(180, 83, 9, 0.15)' },
+    platinum: { bg: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)', border: '#5eead4', text: '#0f766e', shadow: '0 1px 3px rgba(15, 118, 110, 0.15)' },
+    diamond: { bg: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '#7dd3fc', text: '#0369a1', shadow: '0 1px 3px rgba(3, 105, 161, 0.15)' },
+    master: { bg: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)', border: '#d8b4fe', text: '#7e22ce', shadow: '0 1px 3px rgba(126, 34, 206, 0.15)' },
+    legend: { bg: 'linear-gradient(135deg, #fefce8 0%, #fef08a 100%)', border: '#facc15', text: '#854d0e', shadow: '0 1px 3px rgba(133, 77, 14, 0.2)' },
+  };
+
+  const currentTierKey = resolvedTierConfig.tier.toLowerCase();
+  const lightConfig = isLight ? (lightTierStyles[currentTierKey] || lightTierStyles.bronze) : null;
+
+  const bgStyle = lightConfig ? lightConfig.bg : resolvedTierConfig.bgGradient;
+  const borderStyle = lightConfig ? `1.5px solid ${lightConfig.border}` : `1.5px solid ${resolvedTierConfig.borderColor}`;
+  const textStyle = lightConfig ? lightConfig.text : resolvedTierConfig.textColor;
+  const shadowStyle = lightConfig ? lightConfig.shadow : (showAura ? resolvedTierConfig.auraGlow : '0 2px 8px rgba(0,0,0,0.2)');
 
   const sizeStyles = {
     xs: { padding: '2px 8px', fontSize: '0.68rem', iconSize: 10, gap: '4px', borderRadius: '6px' },
@@ -62,13 +84,13 @@ export const RankBadge: React.FC<RankBadgeProps> = ({
         gap: sizeStyles.gap,
         padding: sizeStyles.padding,
         borderRadius: sizeStyles.borderRadius,
-        background: resolvedTierConfig.bgGradient,
-        border: `1.5px solid ${resolvedTierConfig.borderColor}`,
-        color: resolvedTierConfig.textColor,
+        background: bgStyle,
+        border: borderStyle,
+        color: textStyle,
         fontWeight: 800,
         fontSize: sizeStyles.fontSize,
         letterSpacing: '0.04em',
-        boxShadow: showAura ? resolvedTierConfig.auraGlow : '0 2px 8px rgba(0,0,0,0.2)',
+        boxShadow: shadowStyle,
         position: 'relative',
         textTransform: 'uppercase',
         userSelect: 'none',
@@ -79,13 +101,13 @@ export const RankBadge: React.FC<RankBadgeProps> = ({
     >
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
         {resolvedTierConfig.tier === 'Legend' ? (
-          <Crown size={sizeStyles.iconSize} color="#fef08a" strokeWidth={2.5} />
+          <Crown size={sizeStyles.iconSize} color={isLight ? '#854d0e' : '#fef08a'} strokeWidth={2.5} />
         ) : resolvedTierConfig.tier === 'Master' ? (
-          <Sparkles size={sizeStyles.iconSize} color="#e9d5ff" strokeWidth={2.5} />
+          <Sparkles size={sizeStyles.iconSize} color={isLight ? '#7e22ce' : '#e9d5ff'} strokeWidth={2.5} />
         ) : resolvedTierConfig.tier === 'Diamond' ? (
-          <Zap size={sizeStyles.iconSize} color="#7dd3fc" strokeWidth={2.5} />
+          <Zap size={sizeStyles.iconSize} color={isLight ? '#0369a1' : '#7dd3fc'} strokeWidth={2.5} />
         ) : (
-          <Award size={sizeStyles.iconSize} color={resolvedTierConfig.textColor} strokeWidth={2.2} />
+          <Award size={sizeStyles.iconSize} color={textStyle} strokeWidth={2.2} />
         )}
       </span>
 
@@ -98,7 +120,7 @@ export const RankBadge: React.FC<RankBadgeProps> = ({
             fontWeight: 700,
             opacity: 0.85,
             paddingLeft: '4px',
-            borderLeft: `1px solid ${resolvedTierConfig.borderColor}`,
+            borderLeft: lightConfig ? `1px solid ${lightConfig.border}` : `1px solid ${resolvedTierConfig.borderColor}`,
           }}
         >
           {points.toLocaleString()} XP

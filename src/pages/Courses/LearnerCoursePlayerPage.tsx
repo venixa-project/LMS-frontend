@@ -809,9 +809,9 @@ public final class CourseDataService {
       {/* RULE 3: After End Date - Read-Only Enforcement */}
       {isAfterEnd && (
         <div style={{
-          background: '#fffbeb',
-          border: '1px solid #fde68a',
-          color: '#92400e',
+          background: 'var(--warning-bg)',
+          border: '1px solid var(--warning-border)',
+          color: 'var(--warning-text, var(--warning))',
           padding: '12px 18px',
           borderRadius: 'var(--radius-md)',
           display: 'flex',
@@ -820,7 +820,7 @@ public final class CourseDataService {
           fontSize: '0.85rem'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Lock size={16} color="#d97706" />
+            <Lock size={16} color="var(--warning)" />
             <span><strong>Course access period has ended ({new Date(course.endDate!).toLocaleString()}):</strong> Content is in read-only review mode. Lesson progress modifications and submissions are disabled.</span>
           </div>
           <span className="badge badge-warning">Read-Only</span>

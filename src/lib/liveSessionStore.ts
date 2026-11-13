@@ -166,6 +166,7 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
   isLoading: false,
   fetchSessions: async () => {
     set({ isLoading: true });
+    get().fetchDefaultMeetUrl().catch(() => {});
     try {
       const res = await apiClient.get<any[]>('/live-sessions');
       if (res && res.data && Array.isArray(res.data)) {

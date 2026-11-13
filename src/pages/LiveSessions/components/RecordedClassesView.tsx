@@ -935,7 +935,7 @@ export const RecordedClassesView: React.FC<Props> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'var(--bg-overlay)',
             backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',

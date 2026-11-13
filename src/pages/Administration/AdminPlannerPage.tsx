@@ -34,9 +34,12 @@ import { AddEditActivityModal } from '../../admin/components/AddEditActivityModa
 import { useAuthStore } from '../../lib/store';
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
+import { useThemeStore } from '../../lib/themeStore';
 
 export const AdminPlannerPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { resolvedTheme } = useThemeStore();
+  const isLight = resolvedTheme === 'light';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isAdmin = !isStudent && !isTrainer;
@@ -957,34 +960,63 @@ export const AdminPlannerPage: React.FC = () => {
                 const hasMeeting = dayActivities.some((a) => a.type === 'meeting');
                 const hasTask = dayActivities.some((a) => a.type === 'task');
 
-                const badgeColor = hasDeadline
-                  ? '#fb7185'
-                  : hasClass
-                  ? '#38bdf8'
-                  : hasMeeting
-                  ? '#a78bfa'
-                  : hasTask
-                  ? '#34d399'
-                  : '#fbbf24';
-                const badgeBg = hasDeadline
-                  ? 'rgba(244, 63, 94, 0.16)'
-                  : hasClass
-                  ? 'rgba(6, 182, 212, 0.16)'
-                  : hasMeeting
-                  ? 'rgba(139, 92, 246, 0.16)'
-                  : hasTask
-                  ? 'rgba(16, 185, 129, 0.16)'
-                  : 'rgba(245, 158, 11, 0.16)';
-                const badgeBorder = hasDeadline
-                  ? 'rgba(244, 63, 94, 0.35)'
-                  : hasClass
-                  ? 'rgba(6, 182, 212, 0.35)'
-                  : hasMeeting
-                  ? 'rgba(139, 92, 246, 0.35)'
-                  : hasTask
-                  ? 'rgba(16, 185, 129, 0.35)'
-                  : 'rgba(245, 158, 11, 0.35)';
+                const badgeColor = isLight
+                  ? (hasDeadline ? '#e11d48' : hasClass ? '#0284c7' : hasMeeting ? '#7c3aed' : hasTask ? '#059669' : '#d97706')
+                  : (hasDeadline ? '#fb7185' : hasClass ? '#38bdf8' : hasMeeting ? '#a78bfa' : hasTask ? '#34d399' : '#fbbf24');
+
+                const badgeBg = isLight
+                  ? (hasDeadline ? '#fff1f2' : hasClass ? '#f0fdf4' : hasMeeting ? '#f5f3ff' : hasTask ? '#ecfdf5' : '#fefce8')
+                  : (hasDeadline ? 'rgba(244, 63, 94, 0.16)' : hasClass ? 'rgba(6, 182, 212, 0.16)' : hasMeeting ? 'rgba(139, 92, 246, 0.16)' : hasTask ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.16)');
+
+                const badgeBorder = isLight
+                  ? (hasDeadline ? '#fecdd3' : hasClass ? '#bae6fd' : hasMeeting ? '#ddd6fe' : hasTask ? '#a7f3d0' : '#fde68a')
+                  : (hasDeadline ? 'rgba(244, 63, 94, 0.35)' : hasClass ? 'rgba(6, 182, 212, 0.35)' : hasMeeting ? 'rgba(139, 92, 246, 0.35)' : hasTask ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)');
+
                 const badgeSuffix = hasDeadline ? '★' : '✓';
+
+                const tileBackground = isLight
+                  ? (isToday
+                      ? 'linear-gradient(180deg, rgba(37, 99, 235, 0.08) 0%, rgba(240, 246, 255, 0.98) 100%)'
+                      : isSelected
+                      ? 'linear-gradient(180deg, rgba(37, 99, 235, 0.12) 0%, #FFFFFF 100%)'
+                      : day.isCurrentMonth
+                      ? '#FFFFFF'
+                      : '#F8FAFC')
+                  : (isToday
+                      ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                      : isSelected
+                      ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.25) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                      : day.isCurrentMonth
+                      ? (hasActivities ? 'rgba(15, 23, 42, 0.85)' : 'rgba(15, 23, 42, 0.65)')
+                      : 'rgba(15, 23, 42, 0.25)');
+
+                const tileBorder = isLight
+                  ? (isSelected
+                      ? '2.5px solid var(--primary)'
+                      : isToday
+                      ? '2px solid #3b82f6'
+                      : hasActivities
+                      ? '1px solid #cbd5e1'
+                      : '1px solid #e2e8f0')
+                  : (isSelected
+                      ? '2.5px solid #ffffff'
+                      : isToday
+                      ? '2px solid #38bdf8'
+                      : hasActivities
+                      ? '1px solid rgba(56, 189, 248, 0.28)'
+                      : '1px solid rgba(255, 255, 255, 0.08)');
+
+                const tileShadow = isLight
+                  ? (isSelected
+                      ? '0 4px 14px rgba(37, 99, 235, 0.2)'
+                      : isToday
+                      ? '0 2px 8px rgba(59, 130, 246, 0.18)'
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)')
+                  : (isSelected
+                      ? '0 0 18px rgba(255, 255, 255, 0.5)'
+                      : isToday
+                      ? '0 0 14px rgba(56, 189, 248, 0.45), inset 0 0 8px rgba(56, 189, 248, 0.1)'
+                      : 'none');
 
                 return (
                   <div
@@ -999,22 +1031,8 @@ export const AdminPlannerPage: React.FC = () => {
                       }
                     }}
                     style={{
-                      background: isToday
-                        ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(15, 23, 42, 0.9) 100%)'
-                        : isSelected
-                        ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.25) 0%, rgba(15, 23, 42, 0.9) 100%)'
-                        : day.isCurrentMonth
-                        ? hasActivities
-                          ? 'rgba(15, 23, 42, 0.85)'
-                          : 'rgba(15, 23, 42, 0.65)'
-                        : 'rgba(15, 23, 42, 0.25)',
-                      border: isSelected
-                        ? '2.5px solid #ffffff'
-                        : isToday
-                        ? '2px solid #38bdf8'
-                        : hasActivities
-                        ? '1px solid rgba(56, 189, 248, 0.28)'
-                        : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: tileBackground,
+                      border: tileBorder,
                       borderRadius: '10px',
                       padding: '8px 6px',
                       minHeight: '82px',
@@ -1024,15 +1042,11 @@ export const AdminPlannerPage: React.FC = () => {
                       justifyContent: 'space-between',
                       cursor: 'pointer',
                       transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isSelected
-                        ? '0 0 18px rgba(255, 255, 255, 0.5)'
-                        : isToday
-                        ? '0 0 14px rgba(56, 189, 248, 0.45), inset 0 0 8px rgba(56, 189, 248, 0.1)'
-                        : 'none',
+                      boxShadow: tileShadow,
                       position: 'relative',
                       outline: 'none',
-                      opacity: day.isCurrentMonth ? 1 : 0.35,
-                      backdropFilter: 'blur(8px)'
+                      opacity: day.isCurrentMonth ? 1 : (isLight ? 0.55 : 0.35),
+                      backdropFilter: isLight ? 'none' : 'blur(8px)'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = 'translateY(-2px)';
@@ -1047,15 +1061,15 @@ export const AdminPlannerPage: React.FC = () => {
                         style={{
                           position: 'absolute',
                           top: '-8px',
-                          background: '#38bdf8',
-                          color: '#040711',
+                          background: isLight ? '#2563eb' : '#38bdf8',
+                          color: '#ffffff',
                           fontSize: '0.6rem',
                           fontWeight: 900,
                           padding: '1px 6px',
                           borderRadius: '4px',
                           textTransform: 'uppercase',
                           letterSpacing: '0.05em',
-                          boxShadow: '0 2px 8px rgba(56, 189, 248, 0.5)'
+                          boxShadow: isLight ? '0 2px 6px rgba(37, 99, 235, 0.35)' : '0 2px 8px rgba(56, 189, 248, 0.5)'
                         }}
                       >
                         Today
@@ -1067,7 +1081,9 @@ export const AdminPlannerPage: React.FC = () => {
                       style={{
                         fontSize: '0.66rem',
                         fontWeight: 700,
-                        color: isToday ? '#38bdf8' : isSelected ? '#ffffff' : 'var(--text-muted)',
+                        color: isLight
+                          ? (isToday ? '#2563eb' : isSelected ? '#1d4ed8' : '#64748b')
+                          : (isToday ? '#38bdf8' : isSelected ? '#ffffff' : 'var(--text-muted)'),
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em'
                       }}
@@ -1080,7 +1096,9 @@ export const AdminPlannerPage: React.FC = () => {
                       style={{
                         fontSize: '1.22rem',
                         fontWeight: 800,
-                        color: isToday ? '#38bdf8' : isSelected ? '#ffffff' : 'var(--text-main)',
+                        color: isLight
+                          ? (isToday ? '#2563eb' : isSelected ? '#0f172a' : day.isCurrentMonth ? '#0f172a' : '#94a3b8')
+                          : (isToday ? '#38bdf8' : isSelected ? '#ffffff' : 'var(--text-main)'),
                         lineHeight: 1
                       }}
                     >
@@ -1094,9 +1112,9 @@ export const AdminPlannerPage: React.FC = () => {
                           style={{
                             fontSize: '0.66rem',
                             fontWeight: 700,
-                            background: isSelected ? 'rgba(255, 255, 255, 0.2)' : badgeBg,
-                            color: isSelected ? '#ffffff' : badgeColor,
-                            border: isSelected ? '1px solid rgba(255, 255, 255, 0.45)' : `1px solid ${badgeBorder}`,
+                            background: isSelected ? (isLight ? 'rgba(37, 99, 235, 0.15)' : 'rgba(255, 255, 255, 0.2)') : badgeBg,
+                            color: isSelected ? (isLight ? '#1d4ed8' : '#ffffff') : badgeColor,
+                            border: isSelected ? (isLight ? '1px solid var(--primary)' : '1px solid rgba(255, 255, 255, 0.45)') : `1px solid ${badgeBorder}`,
                             padding: '1px 6px',
                             borderRadius: '5px',
                             whiteSpace: 'nowrap',
@@ -1121,7 +1139,7 @@ export const AdminPlannerPage: React.FC = () => {
                         />
                       </div>
                     ) : (
-                      <span style={{ fontSize: '0.65rem', color: 'rgba(255, 255, 255, 0.18)', fontWeight: 600 }}>
+                      <span style={{ fontSize: '0.65rem', color: isLight ? '#cbd5e1' : 'rgba(255, 255, 255, 0.18)', fontWeight: 600 }}>
                         &mdash;
                       </span>
                     )}
@@ -1149,22 +1167,28 @@ export const AdminPlannerPage: React.FC = () => {
                       key={wDay.dateStr}
                       onClick={() => setSelectedDateStr(wDay.dateStr)}
                       style={{
-                        background: isSelected ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-input)',
-                        border: isSelected ? '2px solid #ffffff' : '1px solid var(--border-subtle)',
+                        background: isSelected
+                          ? (isLight ? 'rgba(37, 99, 235, 0.08)' : 'rgba(99, 102, 241, 0.1)')
+                          : (isLight ? '#FFFFFF' : 'var(--bg-input)'),
+                        border: isSelected
+                          ? (isLight ? '2px solid var(--primary)' : '2px solid #ffffff')
+                          : '1px solid var(--border-subtle)',
                         borderRadius: '10px',
                         padding: '10px 8px',
                         minHeight: '340px',
                         display: 'flex',
                         flexDirection: 'column',
                         cursor: 'pointer',
-                        gap: '8px'
+                        gap: '8px',
+                        boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.15)' : 'none',
+                        transition: 'all 0.2s ease',
                       }}
                     >
                       <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
                           {wDay.date.toLocaleDateString('default', { weekday: 'short' })}
                         </div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: wDay.isToday ? '#38bdf8' : 'var(--text-main)', marginTop: '2px' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: wDay.isToday ? (isLight ? '#2563eb' : '#38bdf8') : 'var(--text-main)', marginTop: '2px' }}>
                           {wDay.date.getDate()}
                         </div>
                       </div>
