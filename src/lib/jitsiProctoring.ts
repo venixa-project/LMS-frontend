@@ -73,11 +73,14 @@ export function buildGoogleMeetUrls(params: GoogleMeetProctoringParams): GoogleM
     roomName = custom;
     webUrl = `https://meet.google.com/${custom}`;
   } else {
-    // When no specific real Google Meet code has been provided by the instructor,
-    // open Google Meet instant meeting creator (https://meet.google.com/new).
-    // This creates an authenticated, real live meeting room where camera & mic connect instantly.
-    webUrl = 'https://meet.google.com/new';
-    roomName = 'Instant Google Meet';
+    // Generate a deterministic fixed room code based on assessment ID so all candidates & proctor join the SAME room
+    const clean = (params.assessmentId || 'asm').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+    const p1 = (clean.slice(0, 3) || 'pro').padEnd(3, 'a');
+    const p2 = (clean.slice(3, 7) || 'meet').padEnd(4, 'b');
+    const p3 = (clean.slice(7, 10) || 'inv').padEnd(3, 'c');
+    const fixedCode = `${p1}-${p2}-${p3}`;
+    roomName = fixedCode;
+    webUrl = `https://meet.google.com/${fixedCode}`;
   }
 
   return {

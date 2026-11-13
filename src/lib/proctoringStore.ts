@@ -48,6 +48,7 @@ export interface ProctorParticipant {
   activeWarningCount: number;
   jitsiParticipantId?: string;
   latestSnapshot?: string;
+  latestScreenSnapshot?: string;
   googleMeetUrl?: string;
 }
 
@@ -170,114 +171,9 @@ export const DEFAULT_PROCTORING_POLICIES: Record<ProctoringPolicyLevel, Proctori
   },
 };
 
-const initialParticipants: ProctorParticipant[] = [
-  {
-    id: 'u-007',
-    name: 'Alex Thompson',
-    rollNo: 'STU-2026-007',
-    assessmentId: 'asm-001',
-    status: 'connected',
-    cameraActive: true,
-    micActive: true,
-    audioLevel: 0.12,
-    screenShareActive: false,
-    tabFocused: true,
-    faceDetected: true,
-    joinedAt: new Date(Date.now() - 25 * 60000).toISOString(),
-    lastPingAt: new Date().toISOString(),
-    activeWarningCount: 0,
-  },
-  {
-    id: 'u-009',
-    name: 'Maria Garcia',
-    rollNo: 'STU-2026-009',
-    assessmentId: 'asm-001',
-    status: 'connected',
-    cameraActive: true,
-    micActive: true,
-    audioLevel: 0.45,
-    screenShareActive: false,
-    tabFocused: false,
-    faceDetected: true,
-    joinedAt: new Date(Date.now() - 30 * 60000).toISOString(),
-    lastPingAt: new Date().toISOString(),
-    activeWarningCount: 1,
-  },
-  {
-    id: 'u-010',
-    name: 'David Kim',
-    rollNo: 'STU-2026-010',
-    assessmentId: 'asm-001',
-    status: 'connected',
-    cameraActive: true,
-    micActive: false,
-    audioLevel: 0.05,
-    screenShareActive: false,
-    tabFocused: true,
-    faceDetected: true,
-    joinedAt: new Date(Date.now() - 20 * 60000).toISOString(),
-    lastPingAt: new Date().toISOString(),
-    activeWarningCount: 0,
-  },
-  {
-    id: 'u-006',
-    name: 'Aisha Patel',
-    rollNo: 'STU-2026-008',
-    assessmentId: 'asm-001',
-    status: 'connected',
-    cameraActive: true,
-    micActive: true,
-    audioLevel: 0.18,
-    screenShareActive: false,
-    tabFocused: true,
-    faceDetected: true,
-    joinedAt: new Date(Date.now() - 15 * 60000).toISOString(),
-    lastPingAt: new Date().toISOString(),
-    activeWarningCount: 0,
-  },
-  {
-    id: 'st-5',
-    name: 'Sarah Connor',
-    rollNo: 'STU-2026-015',
-    assessmentId: 'asm-001',
-    status: 'reconnecting',
-    cameraActive: false,
-    micActive: true,
-    audioLevel: 0.02,
-    screenShareActive: false,
-    tabFocused: true,
-    faceDetected: false,
-    joinedAt: new Date(Date.now() - 10 * 60000).toISOString(),
-    lastPingAt: new Date().toISOString(),
-    activeWarningCount: 1,
-  },
-];
+const initialParticipants: ProctorParticipant[] = [];
 
-const initialWarnings: ProctorWarning[] = [
-  {
-    id: 'wrn-001',
-    assessmentId: 'asm-001',
-    learnerId: 'u-009',
-    learnerName: 'Maria Garcia',
-    message: 'Browser focus changed: please keep the examination window active at all times.',
-    reason: 'Tab switch detected (2 occurrences)',
-    sentAt: new Date(Date.now() - 8 * 60000).toISOString(),
-    sentBy: 'Dr. James Wilson (Proctor)',
-    acknowledged: true,
-    acknowledgedAt: new Date(Date.now() - 7 * 60000).toISOString(),
-  },
-  {
-    id: 'wrn-002',
-    assessmentId: 'asm-001',
-    learnerId: 'st-5',
-    learnerName: 'Sarah Connor',
-    message: 'Webcam feed disconnected. Please verify your camera connection immediately.',
-    reason: 'Camera interrupted',
-    sentAt: new Date(Date.now() - 4 * 60000).toISOString(),
-    sentBy: 'Dr. James Wilson (Proctor)',
-    acknowledged: false,
-  },
-];
+const initialWarnings: ProctorWarning[] = [];
 
 const initialAuditLogs: ProctorAuditRecord[] = [
   {
@@ -310,6 +206,14 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
+      if (key === STORAGE_KEY_PROCTORING_PARTICIPANTS) {
+        const now = Date.now();
+        return parsed.map((p: any) => {
+          const pingTime = new Date(p.lastPingAt || 0).getTime();
+          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+          return isFresh ? p : { ...p, status: 'disconnected', cameraActive: false, micActive: false };
+        }) as unknown as T;
+      }
       return parsed.filter((item: any) => !item.id?.startsWith('psess-00')) as unknown as T;
     }
     return parsed && (Array.isArray(parsed) || typeof parsed === 'object') ? parsed : fallback;
@@ -330,6 +234,8 @@ function saveToStorage<T>(key: string, data: T): void {
 export interface ProctoringStoreState {
   isLoadingSessions: boolean;
   fetchMySessions: () => Promise<void>;
+  fetchAssessmentActiveSessions: (assessmentId: string) => Promise<void>;
+  syncFromStorage: () => void;
   // Real-time Jitsi State
   incidents: ProctoringIncident[];
   warnings: ProctorWarning[];
@@ -432,6 +338,7 @@ export interface ProctoringStoreState {
   ) => void;
 
   updatePolicy: (level: ProctoringPolicyLevel, updates: Partial<ProctoringPolicy>) => void;
+  clearAssessmentSessions: (assessmentId: string) => void;
 }
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
@@ -491,6 +398,187 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       console.warn('Failed to fetch proctoring sessions:', e);
     }
     set({ isLoadingSessions: false });
+  },
+
+  fetchAssessmentActiveSessions: async (assessmentId: string) => {
+    if (!assessmentId) return;
+    try {
+      const res = await apiClient.get<any[]>(`/proctoring/assessments/${assessmentId}/active-sessions`);
+      if (res && res.data && Array.isArray(res.data)) {
+        set((state) => {
+          const now = Date.now();
+          const fetchedSessions: ProctoringSession[] = res.data.map((raw: any) => {
+            const learner = raw.attempt?.learner;
+            const learnerName = learner
+              ? `${learner.firstName || ''} ${learner.lastName || ''}`.trim() || learner.email
+              : raw.learnerId;
+            return {
+              id: raw.id,
+              attemptId: raw.attemptId || raw.id,
+              assessmentId: raw.assessmentId,
+              assessmentTitle: raw.attempt?.assessment?.title || 'Live Proctored Examination',
+              learnerId: raw.learnerId,
+              learnerName: learnerName || 'Candidate',
+              policy: raw.policy || state.policies?.monitored || DEFAULT_PROCTORING_POLICIES.monitored,
+              status: raw.status || 'in_progress',
+              startedAt: raw.startedAt ? new Date(raw.startedAt).toISOString() : '',
+              endedAt: raw.endedAt ? new Date(raw.endedAt).toISOString() : undefined,
+              totalDurationSeconds: raw.totalDurationSec || 0,
+              activeWebcam: raw.activeWebcam ?? true,
+              activeMic: raw.activeMic ?? true,
+              activeScreenShare: raw.activeScreenShare ?? false,
+              isFullscreen: raw.isFullscreen ?? true,
+              isOnline: true,
+              events: (raw.events || []).map((e: any) => ({
+                id: e.id,
+                sessionId: e.sessionId,
+                category: e.category,
+                severity: e.severity,
+                title: e.title,
+                description: e.description,
+                timestamp: e.createdAt ? new Date(e.createdAt).toISOString() : '',
+                clientTimestamp: Number(e.clientTimestamp || 0),
+                relativeSeconds: e.relativeSeconds || 0,
+                evidenceSnapshot: e.evidenceSnapshot,
+              })),
+            };
+          });
+
+          // Merge into state.sessions with freshness check
+          const mergedSessions = [...state.sessions];
+          fetchedSessions.forEach((fs) => {
+            const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
+              const t = ev.timestamp ? new Date(ev.timestamp).getTime() : 0;
+              return t > max ? t : max;
+            }, 0);
+            const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
+            const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
+            const isFresh = pingMs > 0 && (now - pingMs) < 20000;
+
+            const adjustedFs: ProctoringSession = {
+              ...fs,
+              status: isFresh ? fs.status : (fs.status === 'submitted' ? 'submitted' : ('disconnected' as any)),
+              isOnline: isFresh,
+            };
+
+            const idx = mergedSessions.findIndex(
+              (s) => s.id === adjustedFs.id || (s.learnerId === adjustedFs.learnerId && s.assessmentId === adjustedFs.assessmentId)
+            );
+            if (idx >= 0) {
+              mergedSessions[idx] = { ...mergedSessions[idx], ...adjustedFs };
+            } else {
+              mergedSessions.unshift(adjustedFs);
+            }
+          });
+
+          // Also mirror into state.participants with strict freshness check
+          const mergedParticipants = [...state.participants];
+          fetchedSessions.forEach((fs) => {
+            const latestSnapshot = fs.events.find((e) => e.evidenceSnapshot)?.evidenceSnapshot;
+            const pIdx = mergedParticipants.findIndex(
+              (p) =>
+                p.id === fs.learnerId ||
+                (p.name && fs.learnerName && p.name.trim().toLowerCase() === fs.learnerName.trim().toLowerCase())
+            );
+            const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
+              const t = ev.timestamp ? new Date(ev.timestamp).getTime() : 0;
+              return t > max ? t : max;
+            }, 0);
+            const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
+            const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
+            const isFresh = pingMs > 0 && (now - pingMs) < 20000;
+
+            const newOrUpdatedP: ProctorParticipant = {
+              id: fs.learnerId,
+              name: fs.learnerName,
+              rollNo: (fs as any).rollNo || `STU-${fs.learnerId.slice(-4)}`,
+              assessmentId: fs.assessmentId,
+              status: isFresh ? (fs.status === 'submitted' ? 'submitted' : 'connected') : 'disconnected',
+              cameraActive: isFresh ? (fs.activeWebcam ?? true) : false,
+              micActive: isFresh ? (fs.activeMic ?? true) : false,
+              audioLevel: isFresh ? 0.2 : 0,
+              screenShareActive: isFresh ? (fs.activeScreenShare ?? false) : false,
+              tabFocused: isFresh ? (fs.isFullscreen ?? true) : false,
+              faceDetected: isFresh ? (fs.activeWebcam ?? true) : false,
+              joinedAt: fs.startedAt,
+              lastPingAt: rawPing,
+              activeWarningCount: 0,
+              latestSnapshot: isFresh ? (latestSnapshot || (pIdx >= 0 ? mergedParticipants[pIdx].latestSnapshot : undefined)) : undefined,
+            };
+
+            if (pIdx >= 0) {
+              mergedParticipants[pIdx] = { ...mergedParticipants[pIdx], ...newOrUpdatedP };
+            } else {
+              mergedParticipants.unshift(newOrUpdatedP);
+            }
+          });
+
+          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, mergedSessions);
+          saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, mergedParticipants);
+          return { sessions: mergedSessions, participants: mergedParticipants };
+        });
+      }
+    } catch (e) {
+      // Graceful fallback for offline / test environments
+    }
+  },
+
+  syncFromStorage: () => {
+    try {
+      const localSessions = loadFromStorage<ProctoringSession[]>(STORAGE_KEY_PROCTORING_SESSIONS, []);
+      const localParticipants = loadFromStorage<ProctorParticipant[]>(STORAGE_KEY_PROCTORING_PARTICIPANTS, []);
+      const now = Date.now();
+
+      // Prune participants whose heartbeat expired (> 20 seconds)
+      const freshParticipants = localParticipants.map((p) => {
+        const pingTime = new Date(p.lastPingAt || 0).getTime();
+        const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+        if (!isFresh && (p.status === 'connected' || p.cameraActive)) {
+          return { ...p, status: 'disconnected' as const, cameraActive: false, micActive: false };
+        }
+        return p;
+      });
+
+      set((state) => {
+        let changed = false;
+        const newSessions = [...state.sessions];
+        localSessions.forEach((ls) => {
+          const idx = newSessions.findIndex((s) => s.id === ls.id);
+          if (idx >= 0) {
+            newSessions[idx] = { ...newSessions[idx], ...ls };
+          } else {
+            newSessions.unshift(ls);
+            changed = true;
+          }
+        });
+
+        const newParticipants = [...state.participants];
+        freshParticipants.forEach((lp) => {
+          const idx = newParticipants.findIndex((p) => p.id === lp.id);
+          if (idx >= 0) {
+            newParticipants[idx] = { ...newParticipants[idx], ...lp };
+          } else {
+            newParticipants.unshift(lp);
+            changed = true;
+          }
+        });
+
+        const sanitizedParticipants = newParticipants.map((p) => {
+          const pingTime = new Date(p.lastPingAt || 0).getTime();
+          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+          if (!isFresh && (p.status === 'connected' || p.cameraActive)) {
+            changed = true;
+            return { ...p, status: 'disconnected' as const, cameraActive: false, micActive: false };
+          }
+          return p;
+        });
+
+        if (changed || newSessions.length !== state.sessions.length || sanitizedParticipants.length !== state.participants.length) {
+          return { sessions: newSessions, participants: sanitizedParticipants };
+        }
+        return state;
+      });
+    } catch (e) {}
   },
   // Real-time Jitsi Initial State
   incidents: [],
@@ -980,6 +1068,16 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       const nextPolicies = { ...state.policies, [level]: updatedPolicy };
       saveToStorage(STORAGE_KEY_PROCTORING_POLICIES, nextPolicies);
       return { policies: nextPolicies };
+    });
+  },
+
+  clearAssessmentSessions: (assessmentId: string) => {
+    set((state) => {
+      const nextSessions = state.sessions.filter((s) => s.assessmentId !== assessmentId);
+      const nextParticipants = state.participants.filter((p) => p.assessmentId !== assessmentId);
+      saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, nextSessions);
+      saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, nextParticipants);
+      return { sessions: nextSessions, participants: nextParticipants };
     });
   },
 }));

@@ -32,6 +32,16 @@ function recordDeletedAssessmentId(id: string) {
   } catch {}
 }
 
+function unmarkDeletedAssessmentId(id: string) {
+  try {
+    const set = getDeletedAssessmentIds();
+    if (set.has(id)) {
+      set.delete(id);
+      localStorage.setItem(STORAGE_KEY_DELETED_ASSESSMENTS, JSON.stringify(Array.from(set)));
+    }
+  } catch {}
+}
+
 // Automatically bust stale client-side caches from previous prototype/mock data
 if (typeof window !== 'undefined') {
   try {
@@ -109,6 +119,8 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
           (a: any) => !deleted.has(a.id) && (!a.slug || !deleted.has(a.slug))
         );
 
+        const existingLocalAssessments = loadFromStorage<Assessment[]>(STORAGE_KEY_ASSESSMENTS, []);
+        const existingLocalMap = new Map(existingLocalAssessments.map((item) => [item.id, item]));
         const extractedQuestions: Question[] = [];
 
         const mappedList: Assessment[] = activeRaw.map((a: any) => {
@@ -145,6 +157,9 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
           const tot = Number(a.totalMarks) || 100;
           const passPct = Number(a.passingPercentage) || 70;
           const passPts = a.passingMarks || Math.round((passPct / 100) * tot);
+          const existing = existingLocalMap.get(a.id);
+          const resolvedMeetUrl = a.googleMeetUrl || a.jitsiRoomId || existing?.googleMeetUrl || existing?.jitsiRoomId;
+          const resolvedProctoringMode = a.proctoringMode || existing?.proctoringMode || (a.proctoringRequired ? 'combined' : 'none');
 
           return {
             ...a,
@@ -162,6 +177,9 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
             maxAttempts: Number(a.maxAttempts) || 1,
             status: (a.status === 'draft' ? 'draft' : 'published') as 'draft' | 'published',
             proctoringRequired: Boolean(a.proctoringRequired),
+            proctoringMode: resolvedProctoringMode,
+            googleMeetUrl: resolvedMeetUrl,
+            jitsiRoomId: resolvedMeetUrl || a.jitsiRoomId,
             aiGradingEnabled: Boolean(a.aiGradingEnabled),
             certificateConfig: a.certificateConfig || {},
             questionIds: qIds,
@@ -172,6 +190,27 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
 
         const published = mappedList.filter((item) => item.status === 'published');
         const draftsFromBackend = mappedList.filter((item) => item.status === 'draft');
+
+        // Merge with existing local published assessments so newly created assessments are NEVER deleted on refresh!
+        const assessmentMap = new Map<string, Assessment>();
+        // 1. Seed with existing local assessments (so user-created assessments in localStorage are preserved)
+        existingLocalAssessments
+          .filter((a) => !deleted.has(a.id) && (!a.slug || !deleted.has(a.slug)))
+          .forEach((a) => assessmentMap.set(a.id, a));
+        // 2. Overlay server assessments
+        published.forEach((a) => {
+          const prev = assessmentMap.get(a.id);
+          assessmentMap.set(a.id, {
+            ...prev,
+            ...a,
+            googleMeetUrl: a.googleMeetUrl || a.jitsiRoomId || prev?.googleMeetUrl || prev?.jitsiRoomId,
+            jitsiRoomId: a.jitsiRoomId || a.googleMeetUrl || prev?.jitsiRoomId || prev?.googleMeetUrl,
+            proctoringMode: a.proctoringMode || prev?.proctoringMode || (a.proctoringRequired ? 'combined' : 'none'),
+            questionsData: (a.questionsData && a.questionsData.length > 0) ? a.questionsData : prev?.questionsData,
+            questionIds: (a.questionIds && a.questionIds.length > 0) ? a.questionIds : prev?.questionIds,
+          });
+        });
+        const mergedAssessments = Array.from(assessmentMap.values());
 
         // Merge with existing local drafts
         const localDrafts = loadFromStorage<Assessment[]>(STORAGE_KEY_DRAFTS, []).filter(
@@ -188,13 +227,13 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
         const mergedQuestions = Array.from(qMap.values());
 
         set({
-          assessments: published,
+          assessments: mergedAssessments,
           drafts: mergedDrafts,
           questions: mergedQuestions,
           isLoading: false
         });
 
-        saveToStorage(STORAGE_KEY_ASSESSMENTS, published);
+        saveToStorage(STORAGE_KEY_ASSESSMENTS, mergedAssessments);
         saveToStorage(STORAGE_KEY_DRAFTS, mergedDrafts);
         saveToStorage(STORAGE_KEY_QUESTIONS, mergedQuestions);
         return;
@@ -277,6 +316,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
     }
 
     const id = assessment.id || `asm-${Date.now()}`;
+    unmarkDeletedAssessmentId(id);
     const qList = questions || assessment.questionsData || [];
     const newAssessment: Assessment = {
       ...assessment,
@@ -329,6 +369,9 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       status: 'published',
       mode: 'automated',
       proctoringRequired: Boolean(newAssessment.proctoringRequired),
+      proctoringMode: newAssessment.proctoringMode,
+      googleMeetUrl: newAssessment.googleMeetUrl,
+      jitsiRoomId: newAssessment.jitsiRoomId,
       certificateConfig: newAssessment.certificateConfig || {},
       questions: qList.map((q, idx) => ({
         prompt: q.prompt,
@@ -400,6 +443,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
   },
 
   updateAssessment: (assessment: Assessment, questions?: Question[]) => {
+    unmarkDeletedAssessmentId(assessment.id);
     const totalQCount = (questions ? questions.length : 0) || (assessment.questionIds ? assessment.questionIds.length : 0);
     if (totalQCount > MAX_ASSESSMENT_QUESTIONS) {
       return {
@@ -461,6 +505,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
     }
 
     const id = draft.id || `draft-${Date.now()}`;
+    unmarkDeletedAssessmentId(id);
     const qList = questions || draft.questionsData || [];
     const newDraft: Assessment = {
       ...draft,
@@ -509,6 +554,9 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       status: 'draft',
       mode: 'automated',
       proctoringRequired: Boolean(newDraft.proctoringRequired),
+      proctoringMode: newDraft.proctoringMode,
+      googleMeetUrl: newDraft.googleMeetUrl,
+      jitsiRoomId: newDraft.jitsiRoomId,
       certificateConfig: newDraft.certificateConfig || {},
       questions: qList.map((q, idx) => ({
         prompt: q.prompt,

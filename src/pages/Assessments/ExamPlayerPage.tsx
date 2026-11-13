@@ -1215,6 +1215,7 @@ export const ExamPlayerPage: React.FC = () => {
           isWebcamActive={isWebcamActive}
           isOnline={isOnline}
           recordingSeconds={recordingSeconds}
+          meetUrl={(assessment as any)?.googleMeetUrl || assessment?.jitsiRoomId}
         />
 
         {/* Availability Status Banners */}

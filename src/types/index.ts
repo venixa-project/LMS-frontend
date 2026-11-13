@@ -647,6 +647,7 @@ export interface Assessment {
   proctoringRequired: boolean;
   proctoringMode?: ProctoringMode;
   jitsiRoomId?: string;
+  googleMeetUrl?: string;
   proctoringSettings?: ProctoringSettings;
   proctoringPolicyLevel?: ProctoringPolicyLevel;
   proctoringPolicy?: ProctoringPolicy;

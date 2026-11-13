@@ -99,6 +99,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const audioMeterBarRef = useRef<HTMLDivElement | null>(null);
   const audioMeterTextRef = useRef<HTMLSpanElement | null>(null);
   const isTransitioningToExamRef = useRef<boolean>(false);
+  const hasOpenedMeetRef = useRef<boolean>(false);
 
   // Check if manual or combined Google Meet invigilation is configured
   const isMeetProctoring =
@@ -570,6 +571,14 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
   const handleStartExam = () => {
     if (!allPrerequisitesSatisfied) return;
+
+    // Automatically launch Google Meet room for the student if not already opened
+    if (!hasOpenedMeetRef.current && isMeetProctoring) {
+      hasOpenedMeetRef.current = true;
+      const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
+      const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
+      launchJitsiConference(finalUrl);
+    }
 
     // Mark transition to live exam to protect media streams from unmount cleanup
     isTransitioningToExamRef.current = true;
@@ -1421,6 +1430,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
                   type="button"
                   className="btn btn-primary btn-sm"
                   onClick={() => {
+                    hasOpenedMeetRef.current = true;
                     const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
                     const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
                     launchJitsiConference(finalUrl);

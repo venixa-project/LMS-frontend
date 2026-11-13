@@ -182,8 +182,27 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     initialDraft?.proctoringRequired ?? (initialDraft?.proctoringMode ? initialDraft.proctoringMode !== 'none' : true)
   );
   const [jitsiRoomId, setJitsiRoomId] = useState<string>(
-    initialDraft?.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`
+    (initialDraft as any)?.googleMeetUrl || initialDraft?.jitsiRoomId || ''
   );
+  const [copyMeetNotice, setCopyMeetNotice] = useState<boolean>(false);
+
+  const handleGenerateMeetLink = () => {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    const r = (len: number) => Array.from({ length: len }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    const code = `${r(3)}-${r(4)}-${r(3)}`;
+    const url = `https://meet.google.com/${code}`;
+    setJitsiRoomId(url);
+    return url;
+  };
+
+  useEffect(() => {
+    if (
+      (proctoringMode === 'manual' || proctoringMode === 'combined') &&
+      (!jitsiRoomId || jitsiRoomId.startsWith('vl-exam-'))
+    ) {
+      handleGenerateMeetLink();
+    }
+  }, [proctoringMode]);
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings>(
     initialDraft?.proctoringSettings || {
       camera: true,
@@ -308,7 +327,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setRawMaxAttempts(String(att));
       setProctoringRequired(initialDraft.proctoringRequired ?? true);
       setProctoringMode(initialDraft.proctoringMode || (initialDraft.proctoringRequired === false ? 'none' : 'combined'));
-      setJitsiRoomId(initialDraft.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`);
+      setJitsiRoomId((initialDraft as any).googleMeetUrl || initialDraft.jitsiRoomId || '');
       if (initialDraft.proctoringSettings) setProctoringSettings(initialDraft.proctoringSettings);
       setProctoringPolicyLevel(initialDraft.proctoringPolicyLevel || 'monitored');
       setAiGradingEnabled(initialDraft.aiGradingEnabled ?? true);
@@ -1142,6 +1161,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       typeBreakdown[q.type] = (typeBreakdown[q.type] || 0) + 1;
     });
 
+    const resolvedMeetUrl = (proctoringMode === 'manual' || proctoringMode === 'combined')
+      ? (jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') ? jitsiRoomId : handleGenerateMeetLink())
+      : undefined;
+
     const newAssessment: Assessment = {
       id: assessmentId,
       title: title.trim(),
@@ -1156,7 +1179,8 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       maxAttempts: attVal,
       proctoringRequired: proctoringRequired || proctoringMode !== 'none',
       proctoringMode,
-      jitsiRoomId: proctoringMode === 'manual' || proctoringMode === 'combined' ? jitsiRoomId : undefined,
+      jitsiRoomId: resolvedMeetUrl,
+      googleMeetUrl: resolvedMeetUrl,
       proctoringSettings,
       proctoringPolicyLevel: proctoringRequired ? proctoringPolicyLevel : 'basic',
       aiGradingEnabled,
@@ -1923,6 +1947,90 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
                 </div>
 
+                {/* Assessment Schedule & Availability Window (Optional) */}
+                <div style={{ marginTop: '16px', marginBottom: '16px', paddingTop: '16px', borderTop: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
+                      <Calendar size={14} color="var(--primary)" />
+                      <span>Assessment Schedule Window</span>
+                      <span className="badge badge-secondary text-xs" style={{ fontWeight: 500, fontSize: '0.7rem', padding: '1px 6px' }}>
+                        Optional
+                      </span>
+                    </label>
+                    {(availabilityStart || availabilityEnd) && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-muted"
+                        onClick={() => {
+                          setAvailabilityStart('');
+                          setAvailabilityEnd('');
+                        }}
+                        style={{ fontSize: '0.72rem', padding: '2px 8px', height: 'auto' }}
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid-2" style={{ gap: '16px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Clock size={12} color="var(--primary)" />
+                        <span>Start Date & Time</span>
+                        <span className="text-muted" style={{ fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={availabilityStart}
+                        onChange={(e) => setAvailabilityStart(e.target.value)}
+                        style={{
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px', fontSize: '0.72rem' }}>
+                        Students cannot start before this time. Leave empty to allow starting anytime.
+                      </span>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Clock size={12} color="var(--primary)" />
+                        <span>End Date & Time</span>
+                        <span className="text-muted" style={{ fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={availabilityEnd}
+                        onChange={(e) => setAvailabilityEnd(e.target.value)}
+                        style={{
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px', fontSize: '0.72rem' }}>
+                        Submissions lock after this deadline. Leave empty for no expiration.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Learner Instructions</label>
                   <textarea
@@ -2125,37 +2233,91 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       background: 'rgba(16, 185, 129, 0.06)',
                       border: '1px solid rgba(16, 185, 129, 0.3)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '12px 14px',
+                      padding: '14px 16px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '8px',
+                      gap: '10px',
                       marginBottom: '12px'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <GoogleMeetIcon size={15} /> Google Meet Invigilation Link or Code
+                      <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <GoogleMeetIcon size={16} /> Fixed Google Meet Invigilation Room
                       </div>
-                      <a
-                        href="https://meet.google.com/new"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: '0.72rem', padding: '3px 8px', gap: '4px', textDecoration: 'none' }}
-                      >
-                        <ExternalLink size={12} /> Create Instant Meet in Google
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateMeetLink()}
+                          className="btn btn-primary btn-xs"
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '4px 10px',
+                            gap: '4px',
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            color: '#fff',
+                            fontWeight: 700,
+                            border: 'none',
+                          }}
+                          title="Generate a fixed Google Meet room link for this assessment"
+                        >
+                          <span>⚡</span> Generate Meet Link
+                        </button>
+                        <a
+                          href="https://meet.google.com/new"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-xs"
+                          style={{ fontSize: '0.72rem', padding: '4px 8px', gap: '4px', textDecoration: 'none' }}
+                          title="Create an instant room in Google Meet in a new tab"
+                        >
+                          <ExternalLink size={12} /> Create on Google
+                        </a>
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="Paste meeting link or code (e.g. https://meet.google.com/abc-defg-hij or abc-defg-hij)"
-                      value={jitsiRoomId.startsWith('vl-exam-') ? '' : jitsiRoomId}
-                      onChange={(e) => setJitsiRoomId(e.target.value.trim())}
-                      style={{ fontSize: '0.82rem', width: '100%' }}
-                    />
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                      Enter your Google Meet link so students join your live invigilation room. If left empty, students will launch an instant meeting via <code style={{ color: 'var(--success)' }}>https://meet.google.com/new</code>.
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Paste or click 'Generate Meet Link' (e.g. https://meet.google.com/abc-defg-hij)"
+                        value={jitsiRoomId.startsWith('vl-exam-') ? '' : jitsiRoomId}
+                        onChange={(e) => setJitsiRoomId(e.target.value.trim())}
+                        style={{ fontSize: '0.82rem', flex: 1, fontFamily: 'monospace' }}
+                      />
+                      {jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(jitsiRoomId);
+                              setCopyMeetNotice(true);
+                              setTimeout(() => setCopyMeetNotice(false), 2000);
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0 10px', fontSize: '0.74rem' }}
+                            title="Copy Google Meet Link"
+                          >
+                            {copyMeetNotice ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
+                            <span>{copyMeetNotice ? 'Copied' : 'Copy'}</span>
+                          </button>
+                          <a
+                            href={jitsiRoomId.startsWith('http') ? jitsiRoomId : `https://meet.google.com/${jitsiRoomId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0 10px', fontSize: '0.74rem', textDecoration: 'none' }}
+                            title="Test open meeting in Google Meet"
+                          >
+                            <ExternalLink size={13} />
+                            <span>Test</span>
+                          </a>
+                        </>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1.4 }}>
+                      <span style={{ color: '#22c55e', fontWeight: 600 }}>🔒 Fixed & Stored:</span>
+                      This meeting link is permanently stored with the assessment. When assigned students start the exam, they will join this exact room to be invigilated.
                     </div>
                   </div>
                 )}

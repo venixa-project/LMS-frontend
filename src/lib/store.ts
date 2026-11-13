@@ -352,6 +352,12 @@ interface AuthState {
     proctoringMode?: string;
     creatorId?: string;
   }) => { success: boolean; count: number };
+  notifyUpcomingExamIn30Minutes: (payload: {
+    assessmentId: string;
+    assessmentTitle: string;
+    creatorId?: string;
+    startTime?: string;
+  }) => { success: boolean; count: number };
   notifyScheduledExamStarted: (payload: {
     assessmentId: string;
     assessmentTitle: string;
@@ -813,6 +819,69 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       userId: uid,
       title: `Live Proctoring Alert: ${studentName} started exam`,
       message: `${studentName} has initialized proctored environment verification and started "${assessmentTitle}". Proctoring Mode: ${proctoringMode}. Click to monitor live webcam, mic levels, and telemetry.`,
+      category: 'proctoring',
+      link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+      isRead: false,
+      timestamp,
+    }));
+
+    const updatedStored = [...newNotifs, ...stored];
+    persistStoredNotifications(updatedStored);
+
+    const currentUser = get().user;
+    if (currentUser) {
+      const refreshed = getUserNotifications(currentUser);
+      set({
+        notifications: refreshed,
+        unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+      });
+    }
+
+    return {
+      success: true,
+      count: newNotifs.length,
+    };
+  },
+
+  notifyUpcomingExamIn30Minutes: ({
+    assessmentId,
+    assessmentTitle,
+    creatorId,
+    startTime,
+  }) => {
+    const stored = loadStoredNotifications();
+    const notifPrefix = `notif-exam-30min-${assessmentId}`;
+    if (stored.some((n) => n.id.startsWith(notifPrefix))) {
+      return { success: false, count: 0 };
+    }
+
+    const timestamp = new Date().toISOString();
+    const targets = new Set<string>([
+      'all-admins',
+      'all-trainers',
+      'u-001',
+      'u-002',
+      'orgadmin@lms.demo',
+      'trainer@lms.demo',
+      'faculty@lms.demo',
+    ]);
+    if (creatorId) {
+      targets.add(creatorId);
+    }
+
+    let timeLabel = 'in 30 minutes';
+    if (startTime) {
+      try {
+        const d = new Date(startTime);
+        timeLabel = `at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      } catch (err) {}
+    }
+
+    const newNotifs: Notification[] = Array.from(targets).map((uid) => ({
+      id: `${notifPrefix}-${uid}`,
+      userId: uid,
+      title: `Upcoming Proctored Exam: "${assessmentTitle}" Starts in 30 Mins`,
+      message: `The scheduled exam "${assessmentTitle}" (Manual Proctoring) begins ${timeLabel}. Please review the candidate list and prepare the Live Invigilation Bridge.`,
       category: 'proctoring',
       link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
       isRead: false,

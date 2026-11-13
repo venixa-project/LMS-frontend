@@ -62,6 +62,19 @@ export const AppShell: React.FC = () => {
           if (asm.proctoringMode === 'manual' || asm.proctoringMode === 'combined' || asm.proctoringRequired) {
             if (asm.availabilityStart) {
               const start = new Date(asm.availabilityStart);
+              const diffMinutes = (start.getTime() - now.getTime()) / (1000 * 60);
+
+              // 30-minute advance notification
+              if (diffMinutes > 0 && diffMinutes <= 30) {
+                useAuthStore.getState().notifyUpcomingExamIn30Minutes({
+                  assessmentId: asm.id,
+                  assessmentTitle: asm.title,
+                  creatorId: (asm as any).createdBy || (asm as any).instructorId || (asm as any).trainerId,
+                  startTime: asm.availabilityStart,
+                });
+              }
+
+              // Scheduled start notification
               if (now >= start) {
                 useAuthStore.getState().notifyScheduledExamStarted({
                   assessmentId: asm.id,
