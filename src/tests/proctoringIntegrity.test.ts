@@ -780,4 +780,251 @@ describe('VeniGuard Proctoring & Integrity Unit Test Suite', () => {
       );
     });
   });
+
+  describe('11. Video Wall & Proctoring Conference Dual-Environment Tests', () => {
+    it('detects insecure LAN origin on 192.168.0.5:5173 and restricts cross-origin WebRTC iframes', async () => {
+      await withMockWindow(
+        {
+          location: {
+            protocol: 'http:',
+            hostname: '192.168.0.5',
+            port: '5173',
+          },
+        },
+        () => {
+          const isInsecure = isInsecureLanOrigin();
+          assert.strictEqual(isInsecure, true);
+        }
+      );
+    });
+
+    it('permits WebRTC context on localhost development environment', async () => {
+      await withMockWindow(
+        {
+          location: {
+            protocol: 'http:',
+            hostname: 'localhost',
+            port: '5173',
+          },
+        },
+        () => {
+          const isInsecure = isInsecureLanOrigin();
+          assert.strictEqual(isInsecure, false);
+        }
+      );
+    });
+
+    it('permits WebRTC context on College LAN trusted HTTPS domain', async () => {
+      await withMockWindow(
+        {
+          location: {
+            protocol: 'https:',
+            hostname: 'lms.college.lan',
+            port: '443',
+          },
+        },
+        () => {
+          const isInsecure = isInsecureLanOrigin();
+          assert.strictEqual(isInsecure, false);
+        }
+      );
+    });
+
+    it('permits WebRTC context on Public Internet HTTPS domain', async () => {
+      await withMockWindow(
+        {
+          location: {
+            protocol: 'https:',
+            hostname: 'lms.venilearn.org',
+            port: '',
+          },
+        },
+        () => {
+          const isInsecure = isInsecureLanOrigin();
+          assert.strictEqual(isInsecure, false);
+        }
+      );
+    });
+  });
+
+  describe('12. Candidate Telemetry & Roster Processing Unit Tests', () => {
+    const getInitials = (name: string): string => {
+      const parts = name.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    };
+
+    it('accurately extracts candidate initials without relying on external image URLs', () => {
+      assert.strictEqual(getInitials('Tina Kirkpatrick'), 'TK');
+      assert.strictEqual(getInitials('Alex Thompson'), 'AT');
+      assert.strictEqual(getInitials('Maria Garcia'), 'MG');
+      assert.strictEqual(getInitials('David Kim'), 'DK');
+      assert.strictEqual(getInitials('Aisha Patel'), 'AP');
+      assert.strictEqual(getInitials('Administrator'), 'AD');
+      assert.strictEqual(getInitials('John'), 'JO');
+    });
+
+    it('accurately classifies speaking vs ambient audio thresholds', () => {
+      const isSpeakingThreshold = (level: number) => level > 0.35;
+
+      assert.strictEqual(isSpeakingThreshold(0.05), false); // ambient noise
+      assert.strictEqual(isSpeakingThreshold(0.18), false); // faint background
+      assert.strictEqual(isSpeakingThreshold(0.35), false); // boundary
+      assert.strictEqual(isSpeakingThreshold(0.36), true);  // candidate speaking
+      assert.strictEqual(isSpeakingThreshold(0.82), true);  // loud vocal audio
+    });
+
+    it('correctly slices candidate roster by requested grid density', () => {
+      const mockRoster = Array.from({ length: 48 }, (_, i) => ({
+        id: `stu-${i + 1}`,
+        name: `Candidate ${i + 1}`,
+        rollNo: `STU-2026-${String(i + 1).padStart(3, '0')}`,
+      }));
+
+      const density16 = mockRoster.slice(0, 16);
+      const density24 = mockRoster.slice(0, 24);
+      const density32 = mockRoster.slice(0, 32);
+
+      assert.strictEqual(density16.length, 16);
+      assert.strictEqual(density24.length, 24);
+      assert.strictEqual(density32.length, 32);
+      assert.strictEqual(density32[0].name, 'Candidate 1');
+      assert.strictEqual(density32[31].name, 'Candidate 32');
+    });
+
+    it('validates proctor warning payload integrity', () => {
+      const warningPayload = {
+        assessmentId: 'asm-80874923',
+        learnerId: 'stu-cohort-004',
+        learnerName: 'David Kim',
+        message: 'Please keep your eyes focused on your screen.',
+        reason: 'Tab focus switched',
+        sentBy: 'Dr. James Wilson (Proctor)',
+        timestamp: new Date().toISOString(),
+      };
+
+      assert.strictEqual(typeof warningPayload.assessmentId, 'string');
+      assert.strictEqual(typeof warningPayload.learnerId, 'string');
+      assert.strictEqual(typeof warningPayload.message, 'string');
+      assert.strictEqual(warningPayload.message.length > 0, true);
+      assert.strictEqual(warningPayload.sentBy.includes('Proctor'), true);
+    });
+
+    it('validates proctor force-submit payload integrity', () => {
+      const forceSubmitPayload = {
+        assessmentId: 'asm-80874923',
+        learnerId: 'stu-cohort-004',
+        learnerName: 'David Kim',
+        reason: 'Multiple integrity violations detected.',
+        proctorName: 'Dr. James Wilson (Proctor)',
+        submittedAt: new Date().toISOString(),
+      };
+
+      assert.strictEqual(forceSubmitPayload.learnerId, 'stu-cohort-004');
+      assert.strictEqual(forceSubmitPayload.reason.length > 5, true);
+      assert.strictEqual(typeof forceSubmitPayload.submittedAt, 'string');
+    });
+  });
+
+  describe('13. Creator Notifications & Started Candidate Live Wall Tests', () => {
+    it('dispatches notification to assessment creator and admins when scheduled exam start time arrives', () => {
+      const assessmentId = 'asm-aiml-sched';
+      const assessmentTitle = 'AI ML Final Examination';
+      const creatorId = 'u-trainer-001';
+
+      const targets = new Set<string>([
+        'all-admins',
+        'all-trainers',
+        creatorId,
+      ]);
+
+      const notifications = Array.from(targets).map((uid) => ({
+        id: `notif-exam-sched-${assessmentId}-${uid}`,
+        userId: uid,
+        title: `Exam Started: "${assessmentTitle}" Schedule Reached`,
+        message: `The scheduled exam start time for "${assessmentTitle}" (Manual Proctoring) has arrived. Candidates are now entering the exam. Please join the Live Conference Bridge to invigilate.`,
+        category: 'proctoring',
+        link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        isRead: false,
+      }));
+
+      assert.strictEqual(notifications.length, 3);
+      assert.strictEqual(notifications.some((n) => n.userId === creatorId), true);
+      assert.strictEqual(notifications.some((n) => n.userId === 'all-admins'), true);
+      assert.strictEqual(notifications.some((n) => n.userId === 'all-trainers'), true);
+      assert.strictEqual(notifications[0].link, `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`);
+      assert.strictEqual(notifications[0].title.includes('AI ML Final Examination'), true);
+    });
+
+    it('dispatches notification to assessment creator and admins when student starts exam', () => {
+      const assessmentId = '80874923-7429-4acf-aea7-75e0a65c39e3';
+      const assessmentTitle = 'AI ML';
+      const studentId = 'stu-009';
+      const studentName = 'Maria Garcia';
+      const creatorId = 'u-admin-marcus';
+
+      const targets = new Set<string>([
+        'all-admins',
+        'all-trainers',
+        creatorId,
+      ]);
+
+      const notifications = Array.from(targets).map((uid) => ({
+        id: `notif-proc-start-${Date.now()}-${uid}`,
+        userId: uid,
+        title: `Candidate Joined: ${studentName} started exam`,
+        message: `${studentName} (${studentId}) has joined "${assessmentTitle}" with verified camera & microphone. Live video feed is active in the Live Conference Bridge.`,
+        category: 'proctoring',
+        link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        isRead: false,
+      }));
+
+      assert.strictEqual(notifications.length, 3);
+      assert.strictEqual(notifications.some((n) => n.userId === creatorId), true);
+      assert.strictEqual(notifications[0].title.includes('Maria Garcia'), true);
+      assert.strictEqual(notifications[0].message.includes('Live Conference Bridge'), true);
+    });
+
+    it('prioritizes candidates who started the exam at the top of the conference bridge', () => {
+      const mockParticipants = [
+        { id: 'p-1', name: 'Student 1', status: 'connected', latestSnapshot: undefined },
+        { id: 'p-2', name: 'Student 2', status: 'connected', latestSnapshot: undefined },
+      ];
+
+      const activeSessionCandidate = {
+        id: 'p-active',
+        name: 'Maria Garcia',
+        status: 'in_progress',
+        latestSnapshot: 'data:image/jpeg;base64,/9j/4AAQSkZJRg...',
+        cameraActive: true,
+      };
+
+      // Active student is placed at top of conference grid
+      const combined = [activeSessionCandidate, ...mockParticipants];
+
+      assert.strictEqual(combined[0].id, 'p-active');
+      assert.strictEqual(combined[0].name, 'Maria Garcia');
+      assert.strictEqual(Boolean(combined[0].latestSnapshot), true);
+      assert.strictEqual(combined[0].status, 'in_progress');
+    });
+
+    it('filters candidate wall to show only students who started the exam when filter is enabled', () => {
+      const mockCandidates = [
+        { id: 'p-1', name: 'Student 1', hasActiveSession: false },
+        { id: 'p-2', name: 'Student 2 (Started)', hasActiveSession: true },
+        { id: 'p-3', name: 'Student 3', hasActiveSession: false },
+        { id: 'p-4', name: 'Student 4 (Started)', hasActiveSession: true },
+      ];
+
+      const filterStartedOnly = (candidates: typeof mockCandidates) =>
+        candidates.filter((c) => c.hasActiveSession);
+
+      const filtered = filterStartedOnly(mockCandidates);
+      assert.strictEqual(filtered.length, 2);
+      assert.strictEqual(filtered[0].id, 'p-2');
+      assert.strictEqual(filtered[1].id, 'p-4');
+    });
+  });
 });

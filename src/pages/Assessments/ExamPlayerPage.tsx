@@ -17,7 +17,6 @@ import { VeniGuardSetup } from './components/VeniGuardSetup';
 import { VeniGuardStatusPanel } from './components/VeniGuardStatusPanel';
 import { VeniGuardAlertToast, AlertNotification } from './components/VeniGuardAlertToast';
 import { VeniGuardPauseOverlay } from './components/VeniGuardPauseOverlay';
-import { VeniGuardJitsiDock } from './components/VeniGuardJitsiDock';
 import { buildJitsiUrls, launchJitsiConference } from '../../lib/jitsiProctoring';
 import {
   requestScreenCapture,
@@ -127,10 +126,10 @@ export const ExamPlayerPage: React.FC = () => {
   // Active proctoring session reference
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  // Authenticated candidate details for Jitsi Meet
+  // Authenticated candidate details
   const candidateName = user?.displayName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Maria Garcia');
   const candidateEmail = user?.email || 'student@venilearn.org';
-  const candidateId = user?.id || 'u-009';
+  const candidateId = user?.rollNo || user?.id || 'u-009';
 
   // Google Meet endpoints and pre-configured proctoring room
   const jitsiEndpoints = useMemo(() => {
@@ -683,6 +682,20 @@ export const ExamPlayerPage: React.FC = () => {
     setCurrentSessionId(session.id);
     setSessionStatus(session.id, 'in_progress');
 
+    // Dispatch immediate proctoring notification to admin & assessment creator
+    try {
+      useAuthStore.getState().notifyStudentStartedProctoredExam({
+        assessmentId: assessment.id,
+        assessmentTitle: assessment.title,
+        studentId: candidateId,
+        studentName: candidateName,
+        proctoringMode: (assessment as any).proctoringMode || assessment.mode || 'Manual / Monitored Live Proctor',
+        creatorId: (assessment as any).createdBy || (assessment as any).instructorId || (assessment as any).trainerId,
+      });
+    } catch (notifErr) {
+      console.warn('Notice: Failed to dispatch proctoring notification:', notifErr);
+    }
+
     // Initialize attempt in PostgreSQL if assessment exists in backend
     if (assessment.id && assessment.id.length === 36) {
       startAttemptApi(assessment.id)
@@ -1195,23 +1208,13 @@ export const ExamPlayerPage: React.FC = () => {
         {/* VeniGuard Monitoring Status Header */}
         <VeniGuardStatusPanel
           policy={policy}
+          candidateName={candidateName}
+          candidateId={candidateId}
           isScreenSharing={isScreenSharing}
           isMicActive={isMicActive}
           isWebcamActive={isWebcamActive}
           isOnline={isOnline}
           recordingSeconds={recordingSeconds}
-          jitsiRoomName={jitsiEndpoints.roomName}
-          onOpenJitsi={() => launchJitsiConference(jitsiEndpoints.webUrl)}
-        />
-
-        {/* Live Jitsi Meet Proctoring Dock (Collapsible/Embeddable) */}
-        <VeniGuardJitsiDock
-          endpoints={jitsiEndpoints}
-          candidateName={candidateName}
-          assessmentTitle={assessment.title}
-          isMicActive={isMicActive}
-          isWebcamActive={isWebcamActive}
-          isScreenSharing={isScreenSharing}
         />
 
         {/* Availability Status Banners */}

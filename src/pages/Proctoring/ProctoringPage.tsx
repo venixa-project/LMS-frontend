@@ -21,9 +21,11 @@ export const ProctoringPage: React.FC = () => {
   const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as 'live_monitor' | 'queue' | 'policy' | 'appeals' | null;
+  const assessmentIdParam = searchParams.get('assessmentId');
 
   const {
     sessions,
+    participants,
     policies,
     submitInstructorDecision,
     updatePolicy,
@@ -49,8 +51,22 @@ export const ProctoringPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [assessmentFilter, setAssessmentFilter] = useState<string>('all');
+  const [assessmentFilter, setAssessmentFilter] = useState<string>(
+    assessmentIdParam || 'all'
+  );
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  React.useEffect(() => {
+    if (tabParam && ['live_monitor', 'queue', 'policy', 'appeals'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  React.useEffect(() => {
+    if (assessmentIdParam) {
+      setAssessmentFilter(assessmentIdParam);
+    }
+  }, [assessmentIdParam]);
 
   const isLearner =
     user?.activeRole === 'student' ||
@@ -96,8 +112,16 @@ export const ProctoringPage: React.FC = () => {
   const uniqueAssessments = useMemo(() => {
     const map = new Map<string, string>();
     sessions.forEach((s) => map.set(s.assessmentId, s.assessmentTitle));
+    participants.forEach((p) => {
+      if (p.assessmentId && !map.has(p.assessmentId)) {
+        map.set(p.assessmentId, `Assessment (${p.assessmentId.slice(0, 8)}...)`);
+      }
+    });
+    if (assessmentIdParam && !map.has(assessmentIdParam)) {
+      map.set(assessmentIdParam, `Assessment (${assessmentIdParam.slice(0, 8)}...)`);
+    }
     return Array.from(map.entries());
-  }, [sessions]);
+  }, [sessions, participants, assessmentIdParam]);
 
   // Filtered Sessions
   const filteredSessions = useMemo(() => {
@@ -144,12 +168,19 @@ export const ProctoringPage: React.FC = () => {
   }, [sessions, searchQuery, assessmentFilter, severityFilter, categoryFilter, statusFilter]);
 
   // Statistics
-  const totalSessions = sessions.length;
-  const sessionsWithEvents = sessions.filter((s) => s.events.some((e) => e.category !== 'timing_event')).length;
-  const pendingReviews = sessions.filter((s) => s.status !== 'reviewed' && s.events.some((e) => e.category !== 'timing_event')).length;
-  const clearedSessions = sessions.filter((s) => s.reviewDecision?.outcome === 'no_violation').length;
-  const acceptedTechnical = sessions.filter((s) => s.reviewDecision?.outcome === 'technical_incident_accepted').length;
-  const pendingAppeals = sessions.filter((s) => s.studentAppeal && s.studentAppeal.status === 'pending').length;
+  const targetSessions = assessmentFilter !== 'all'
+    ? sessions.filter((s) => s.assessmentId === assessmentFilter)
+    : sessions;
+  const assessmentParticipants = assessmentFilter !== 'all'
+    ? participants.filter((p) => p.assessmentId === assessmentFilter)
+    : participants;
+
+  const totalSessions = Math.max(targetSessions.length, assessmentParticipants.length);
+  const sessionsWithEvents = targetSessions.filter((s) => s.events.some((e) => e.category !== 'timing_event')).length;
+  const pendingReviews = targetSessions.filter((s) => s.status !== 'reviewed' && s.events.some((e) => e.category !== 'timing_event')).length;
+  const clearedSessions = targetSessions.filter((s) => s.reviewDecision?.outcome === 'no_violation').length;
+  const acceptedTechnical = targetSessions.filter((s) => s.reviewDecision?.outcome === 'technical_incident_accepted').length;
+  const pendingAppeals = targetSessions.filter((s) => s.studentAppeal && s.studentAppeal.status === 'pending').length;
 
   const handleOpenInspection = (session: ProctoringSession) => {
     setSelectedSession(session);
@@ -306,7 +337,7 @@ export const ProctoringPage: React.FC = () => {
       </div >
 
       {/* Tabs */}
-      < div className="tabs-nav" style={{ marginBottom: '24px' }}>
+      <div className="tabs-nav" style={{ marginBottom: '24px' }}>
         <button
           className={`tab-btn ${activeTab === 'live_monitor' ? 'active' : ''}`}
           onClick={() => handleTabChange('live_monitor')}
@@ -335,7 +366,14 @@ export const ProctoringPage: React.FC = () => {
           <UserCheck size={16} />
           Learner Explanations & Appeals ({pendingAppeals})
         </button>
-      </div >
+      </div>
+
+      {/* Tab 0: Live Proctoring & Google Meet Monitor */}
+      {activeTab === 'live_monitor' && (
+        <JitsiProctorDashboard
+          initialAssessmentId={assessmentIdParam || (assessmentFilter !== 'all' ? assessmentFilter : undefined)}
+        />
+      )}
 
       {/* Tab 1: Queue */}
       {

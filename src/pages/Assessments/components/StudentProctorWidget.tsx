@@ -73,42 +73,103 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             audioContextRef.current = audioCtx;
             const source = audioCtx.createMediaStreamSource(s);
             const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.2;
             source.connect(analyser);
             analyserRef.current = analyser;
 
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const checkAudio = () => {
-              if (analyserRef.current) {
-                analyserRef.current.getByteFrequencyData(dataArray);
-                let sum = 0;
-                for (let i = 0; i < dataArray.length; i++) {
-                  sum += dataArray[i];
-                }
-                const avg = sum / dataArray.length;
-                const normalized = Math.min(1.0, avg / 128);
-                setAudioLevel(normalized);
+            const hasFloat = typeof analyser.getFloatTimeDomainData === 'function';
+            const floatData = hasFloat ? new Float32Array(analyser.fftSize) : null;
+            const byteData = !hasFloat ? new Uint8Array(analyser.fftSize) : null;
 
-                // Check for noise spike
-                if (normalized > 0.45 && isExamActive) {
-                  // Audio noise event
-                  recordIncident({
-                    attemptId: `att-${currentLearnerId}-${assessmentId}`,
-                    learnerId: currentLearnerId,
-                    learnerName: currentLearnerName,
-                    assessmentId,
-                    assessmentTitle: 'Proctored Assessment',
-                    eventType: 'audio_spike',
-                    severity: 'medium',
-                    description: `Unusual ambient sound level detected (${Math.round(normalized * 100)}% RMS)`,
-                    timestamp: new Date().toISOString(),
-                    status: 'new',
-                  });
+            let smoothedLevel = 0;
+            let lastUpdate = 0;
+            let lastSnapshotTime = 0;
+
+            const checkAudio = (timestamp: number) => {
+              if (analyserRef.current) {
+                let sumSquares = 0;
+                if (hasFloat && floatData) {
+                  analyserRef.current.getFloatTimeDomainData(floatData);
+                  for (let i = 0; i < floatData.length; i++) {
+                    const val = floatData[i];
+                    sumSquares += val * val;
+                  }
+                } else if (byteData) {
+                  analyserRef.current.getByteTimeDomainData(byteData);
+                  for (let i = 0; i < byteData.length; i++) {
+                    const val = (byteData[i] - 128) / 128;
+                    sumSquares += val * val;
+                  }
+                }
+                const sampleCount = floatData?.length || byteData?.length || 512;
+                const rms = Math.sqrt(sumSquares / sampleCount);
+
+                let target = 0;
+                if (rms > 0.008) {
+                  const db = 20 * Math.log10(rms);
+                  const minDb = -45;
+                  const maxDb = -13;
+                  const ratio = (db - minDb) / (maxDb - minDb);
+                  target = Math.max(0, Math.min(1.0, ratio));
+                }
+
+                if (target > smoothedLevel) {
+                  smoothedLevel = smoothedLevel * 0.3 + target * 0.7;
+                } else {
+                  smoothedLevel = smoothedLevel * 0.85 + target * 0.15;
+                  if (smoothedLevel < 0.01) smoothedLevel = 0;
+                }
+
+                // Capture periodic live video snapshot for proctor monitor
+                if (timestamp - lastSnapshotTime > 2500 && videoRef.current && videoRef.current.videoWidth > 0) {
+                  lastSnapshotTime = timestamp;
+                  try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 240;
+                    canvas.height = 180;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                      const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+                      updateParticipantTelemetry(currentLearnerId, {
+                        latestSnapshot: dataUrl,
+                        audioLevel: smoothedLevel,
+                        cameraActive: true,
+                        micActive: true,
+                        tabFocused,
+                        assessmentId,
+                        name: currentLearnerName,
+                        rollNo: user?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+                      });
+                    }
+                  } catch (err) {}
+                }
+
+                if (timestamp - lastUpdate > 120) {
+                  setAudioLevel(smoothedLevel);
+                  lastUpdate = timestamp;
+
+                  // Check for noise spike (loud ambient sound)
+                  if (smoothedLevel > 0.75 && isExamActive) {
+                    recordIncident({
+                      attemptId: `att-${currentLearnerId}-${assessmentId}`,
+                      learnerId: currentLearnerId,
+                      learnerName: currentLearnerName,
+                      assessmentId,
+                      assessmentTitle: 'Proctored Assessment',
+                      eventType: 'audio_spike',
+                      severity: 'medium',
+                      description: `Unusual ambient sound level detected (${Math.round(smoothedLevel * 100)}% RMS)`,
+                      timestamp: new Date().toISOString(),
+                      status: 'new',
+                    });
+                  }
                 }
               }
               animationFrameRef.current = requestAnimationFrame(checkAudio);
             };
-            checkAudio();
+            animationFrameRef.current = requestAnimationFrame(checkAudio);
           } catch (e) {
             console.warn('Web Audio API not supported for RMS analysis:', e);
           }

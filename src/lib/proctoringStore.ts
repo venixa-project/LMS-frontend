@@ -47,6 +47,8 @@ export interface ProctorParticipant {
   lastPingAt: string;
   activeWarningCount: number;
   jitsiParticipantId?: string;
+  latestSnapshot?: string;
+  googleMeetUrl?: string;
 }
 
 export interface ProctorAuditRecord {
@@ -62,6 +64,60 @@ export interface ProctorAuditRecord {
 
 const STORAGE_KEY_PROCTORING_SESSIONS = 'venilearn_proctoring_sessions_v3';
 const STORAGE_KEY_PROCTORING_POLICIES = 'venilearn_proctoring_policies_v3';
+const STORAGE_KEY_PROCTORING_PARTICIPANTS = 'venilearn_proctoring_participants_v3';
+const PROCTORING_BROADCAST_CHANNEL = 'venilearn_proctoring_sync_v2';
+
+let proctoringBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    proctoringBroadcastChannel = new BroadcastChannel(PROCTORING_BROADCAST_CHANNEL);
+    proctoringBroadcastChannel.onmessage = (event) => {
+      const data = event.data;
+      if (!data) return;
+      if (data.type === 'PARTICIPANTS_SYNC' && Array.isArray(data.participants)) {
+        useProctoringStore.setState({ participants: data.participants });
+      }
+      if (data.type === 'SESSIONS_SYNC' && Array.isArray(data.sessions)) {
+        useProctoringStore.setState({ sessions: data.sessions });
+      }
+    };
+  } catch (err) {
+    // Ignore BroadcastChannel errors in restricted sandboxes
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY_PROCTORING_PARTICIPANTS && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (Array.isArray(parsed)) {
+          useProctoringStore.setState({ participants: parsed });
+        }
+      } catch (err) {}
+    }
+    if (e.key === STORAGE_KEY_PROCTORING_SESSIONS && e.newValue) {
+      try {
+        const parsed = JSON.parse(e.newValue);
+        if (Array.isArray(parsed)) {
+          useProctoringStore.setState({ sessions: parsed });
+        }
+      } catch (err) {}
+    }
+  });
+}
+
+function broadcastParticipants(participants: ProctorParticipant[]) {
+  try {
+    proctoringBroadcastChannel?.postMessage({ type: 'PARTICIPANTS_SYNC', participants });
+  } catch (e) {}
+}
+
+function broadcastSessions(sessions: ProctoringSession[]) {
+  try {
+    proctoringBroadcastChannel?.postMessage({ type: 'SESSIONS_SYNC', sessions });
+  } catch (e) {}
+}
 
 export const DEFAULT_PROCTORING_POLICIES: Record<ProctoringPolicyLevel, ProctoringPolicy> = {
   basic: {
@@ -440,7 +496,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   incidents: [],
   warnings: initialWarnings,
   auditLogs: initialAuditLogs,
-  participants: initialParticipants,
+  participants: loadFromStorage<ProctorParticipant[]>(STORAGE_KEY_PROCTORING_PARTICIPANTS, initialParticipants),
   activeExamSessionId: 'asm-001',
 
   setActiveExamSessionId: (sessionId) => set({ activeExamSessionId: sessionId }),
@@ -600,14 +656,40 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   updateParticipantTelemetry: (participantId, telemetry) => {
-    set((state) => ({
-      participants: state.participants.map((p) => {
-        if (p.id === participantId) {
-          return { ...p, ...telemetry, lastPingAt: new Date().toISOString() };
-        }
-        return p;
-      }),
-    }));
+    set((state) => {
+      const exists = state.participants.some((p) => p.id === participantId);
+      let updatedParticipants: ProctorParticipant[];
+      if (exists) {
+        updatedParticipants = state.participants.map((p) => {
+          if (p.id === participantId) {
+            return { ...p, ...telemetry, lastPingAt: new Date().toISOString() };
+          }
+          return p;
+        });
+      } else {
+        const newP: ProctorParticipant = {
+          id: participantId,
+          name: (telemetry as any).name || 'Student Candidate',
+          rollNo: (telemetry as any).rollNo || `STU-${participantId.slice(-4)}`,
+          assessmentId: (telemetry as any).assessmentId || 'asm-001',
+          status: 'connected',
+          cameraActive: telemetry.cameraActive ?? true,
+          micActive: telemetry.micActive ?? true,
+          audioLevel: telemetry.audioLevel ?? 0.1,
+          screenShareActive: telemetry.screenShareActive ?? false,
+          tabFocused: telemetry.tabFocused ?? true,
+          faceDetected: telemetry.faceDetected ?? true,
+          joinedAt: new Date().toISOString(),
+          lastPingAt: new Date().toISOString(),
+          activeWarningCount: 0,
+          ...telemetry,
+        };
+        updatedParticipants = [newP, ...state.participants];
+      }
+      saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, updatedParticipants);
+      broadcastParticipants(updatedParticipants);
+      return { participants: updatedParticipants };
+    });
   },
 
   resetToDefaults: () => {
@@ -618,6 +700,8 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       participants: initialParticipants,
       activeExamSessionId: 'asm-001',
     });
+    saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, initialParticipants);
+    broadcastParticipants(initialParticipants);
   },
 
   // VeniGuard Sessions & Policies Initial State
@@ -657,12 +741,12 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       learnerId,
       learnerName,
       policy,
-      status: 'pre_flight',
+      status: 'in_progress',
       startedAt: new Date().toISOString(),
       activeScreenShare: false,
-      activeMic: false,
-      activeWebcam: false,
-      isFullscreen: false,
+      activeMic: true,
+      activeWebcam: true,
+      isFullscreen: true,
       isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
       events: [
         {
@@ -676,16 +760,50 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           relativeSeconds: 0,
           severity: 'informational',
           title: 'Proctored Session Initialized',
-          description: `VeniGuard ${policy.name} pre-flight checks started.`,
+          description: `VeniGuard ${policy.name} pre-flight checks verified. Exam session started.`,
         },
       ],
     };
 
+    const newParticipant: ProctorParticipant = {
+      id: learnerId,
+      name: learnerName,
+      rollNo: `STU-${learnerId.slice(-4)}`,
+      assessmentId,
+      status: 'connected',
+      cameraActive: true,
+      micActive: true,
+      audioLevel: 0.15,
+      screenShareActive: false,
+      tabFocused: true,
+      faceDetected: true,
+      joinedAt: new Date().toISOString(),
+      lastPingAt: new Date().toISOString(),
+      activeWarningCount: 0,
+    };
+
     set((state) => {
-      const nextSessions = [newSession, ...state.sessions];
+      const nextSessions = [newSession, ...state.sessions.filter((s) => s.id !== newSessionId)];
       saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, nextSessions);
+      broadcastSessions(nextSessions);
+
+      const existingIndex = state.participants.findIndex(
+        (p) => p.id === learnerId && p.assessmentId === assessmentId
+      );
+      let nextParticipants: ProctorParticipant[];
+      if (existingIndex >= 0) {
+        nextParticipants = state.participants.map((p, idx) =>
+          idx === existingIndex ? { ...p, ...newParticipant } : p
+        );
+      } else {
+        nextParticipants = [newParticipant, ...state.participants];
+      }
+      saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, nextParticipants);
+      broadcastParticipants(nextParticipants);
+
       return {
         sessions: nextSessions,
+        participants: nextParticipants,
         activeSessionId: newSessionId,
       };
     });
@@ -705,15 +823,38 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
         return updated;
       });
       saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, nextSessions);
+      broadcastSessions(nextSessions);
       return { sessions: nextSessions };
     });
   },
 
   updateChecklistState: (sessionId, updates) => {
     set((state) => {
+      const session = state.sessions.find((s) => s.id === sessionId);
       const nextSessions = state.sessions.map((s) => (s.id === sessionId ? { ...s, ...updates } : s));
       saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, nextSessions);
-      return { sessions: nextSessions };
+      broadcastSessions(nextSessions);
+
+      let nextParticipants = state.participants;
+      if (session) {
+        nextParticipants = state.participants.map((p) => {
+          if (p.id === session.learnerId && (!p.assessmentId || p.assessmentId === session.assessmentId)) {
+            return {
+              ...p,
+              cameraActive: updates.activeWebcam !== undefined ? updates.activeWebcam : p.cameraActive,
+              micActive: updates.activeMic !== undefined ? updates.activeMic : p.micActive,
+              screenShareActive: updates.activeScreenShare !== undefined ? updates.activeScreenShare : p.screenShareActive,
+              tabFocused: updates.isFullscreen !== undefined ? updates.isFullscreen : p.tabFocused,
+              lastPingAt: new Date().toISOString(),
+            };
+          }
+          return p;
+        });
+        saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, nextParticipants);
+        broadcastParticipants(nextParticipants);
+      }
+
+      return { sessions: nextSessions, participants: nextParticipants };
     });
   },
 

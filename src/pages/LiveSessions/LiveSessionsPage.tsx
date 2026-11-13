@@ -1873,7 +1873,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                           setDefaultMeetInput(clipText.trim());
                           setDefaultMeetError(null);
                         }
-                      } catch {}
+                      } catch { }
                     }}
                     title="Paste from clipboard"
                     style={{ padding: '8px 12px', fontSize: '0.78rem', gap: '4px' }}
@@ -1991,22 +1991,13 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
         </div>
       )}
 
-      {/* Delete Record Confirmation Modal matching user screenshot */}
-      <ConfirmationModal
-        isOpen={Boolean(deleteSessionModal)}
-        title="Delete Session Record"
-        message={`Are you sure you want to permanently remove the record for "${deleteSessionModal?.title}"? This action cannot be undone.`}
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        isDestructive={true}
-        onConfirm={() => {
-          if (deleteSessionModal) {
-            deleteSession(deleteSessionModal.id);
-            showNotice('Session removed from archives.');
-            setDeleteSessionModal(null);
-          }
-        }}
-        onCancel={() => setDeleteSessionModal(null)}
+      {/* FLOATING IN-APP MEETING RECORDER WIDGET */}
+      <MeetingRecorderWidget
+        state={recorderState}
+        onPause={pauseRecording}
+        onResume={resumeRecording}
+        onStop={handleStopAndSaveRecorder}
+        onCancel={cancelRecording}
       />
     </div>
   );

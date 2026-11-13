@@ -14,6 +14,7 @@ import { RankUpModal } from './Gamification/RankUpModal';
 import { LoginRewardToast, LoginRewardToastData } from './Gamification/LoginRewardToast';
 import { usePeopleStore } from '../lib/peopleStore';
 import { useCourseStore } from '../lib/courseStore';
+import { useAssessmentStore } from '../lib/assessmentStore';
 
 export const AppShell: React.FC = () => {
   // 1. Auth & Router Hooks (always called at top level)
@@ -28,7 +29,7 @@ export const AppShell: React.FC = () => {
       usePeopleStore.getState().fetchPeople().catch(() => {});
       useCourseStore.getState().fetchCourses().catch(() => {});
 
-      // Cross-tab and multi-window sync: refresh notifications on storage changes
+      // Cross-tab and multi-window sync: refresh notifications on storage changes and BroadcastChannel
       const handleStorage = (e: StorageEvent) => {
         if (e.key === 'venilearn_notifications') {
           fetchNotifications();
@@ -36,13 +37,54 @@ export const AppShell: React.FC = () => {
       };
       window.addEventListener('storage', handleStorage);
 
-      // Periodic refresh for new notifications
+      const notifBc = typeof BroadcastChannel !== 'undefined'
+        ? new BroadcastChannel('venilearn_notifications_broadcast_v1')
+        : null;
+      if (notifBc) {
+        notifBc.onmessage = () => {
+          fetchNotifications();
+        };
+      }
+
+      // Check scheduled exams for manual proctoring and notify trainers/admins
+      const checkScheduledExams = () => {
+        const isAdminOrTrainer =
+          (user.activeRole as any) === 'admin' ||
+          user.activeRole === 'org_admin' ||
+          user.activeRole === 'platform_admin' ||
+          user.activeRole === 'trainer' ||
+          user.activeRole === 'instructor';
+        if (!isAdminOrTrainer) return;
+
+        const allAssessments = useAssessmentStore.getState().assessments;
+        const now = new Date();
+        allAssessments.forEach((asm) => {
+          if (asm.proctoringMode === 'manual' || asm.proctoringMode === 'combined' || asm.proctoringRequired) {
+            if (asm.availabilityStart) {
+              const start = new Date(asm.availabilityStart);
+              if (now >= start) {
+                useAuthStore.getState().notifyScheduledExamStarted({
+                  assessmentId: asm.id,
+                  assessmentTitle: asm.title,
+                  creatorId: (asm as any).createdBy || (asm as any).instructorId || (asm as any).trainerId,
+                });
+              }
+            }
+          }
+        });
+      };
+
+      checkScheduledExams();
+
+      // Periodic refresh for new notifications and scheduled exams
       const pollTimer = setInterval(() => {
         fetchNotifications();
-      }, 20000);
+        checkScheduledExams();
+      }, 15000);
 
       return () => {
         window.removeEventListener('storage', handleStorage);
+        if (notifBc) notifBc.close();
         clearInterval(pollTimer);
       };
     }
