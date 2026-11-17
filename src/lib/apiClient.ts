@@ -26,6 +26,10 @@ export function buildFullUrl(endpoint: string): string {
     return endpoint;
   }
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (cleanEndpoint.startsWith('/storage')) {
+    const baseOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+    return `${baseOrigin}${cleanEndpoint}`;
+  }
   if (cleanEndpoint.startsWith('/api/v1')) {
     if (API_BASE_URL.endsWith('/api/v1')) {
       const basePrefix = API_BASE_URL.slice(0, -7);

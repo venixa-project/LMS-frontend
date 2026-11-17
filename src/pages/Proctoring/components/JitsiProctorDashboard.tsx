@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useProctoringStore, ProctorParticipant } from '../../../lib/proctoringStore';
 import { useAssessmentStore } from '../../../lib/assessmentStore';
+import { apiClient, buildFullUrl } from '../../../lib/apiClient';
 import {
   Shield, Eye, AlertTriangle, CheckCircle2, Clock, X,
   Filter, UserCheck, ShieldAlert, FileText, Camera, Video, Monitor,
@@ -9,6 +10,55 @@ import {
   ChevronRight, Play, Lock, UserX, Maximize2, Minimize2, Grid, Layout, Users, MessageSquare, Radio, Search
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
+
+// Direct Native HTML5 Video Player for 30 FPS Smooth Real Video Feeds (Hardware-accelerated)
+const CandidateDirectVideoPlayer: React.FC<{
+  videoUrl?: string;
+  localStream?: MediaStream | null;
+  name: string;
+  snapshotFallback?: string;
+}> = ({ videoUrl, localStream, name, snapshotFallback }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    if (localStream) {
+      if (v.srcObject !== localStream) {
+        v.src = '';
+        v.srcObject = localStream;
+        v.play().catch(() => {});
+      }
+    } else if (videoUrl) {
+      if (v.src !== videoUrl) {
+        v.srcObject = null;
+        v.src = videoUrl;
+        v.play().catch(() => {});
+      }
+    }
+  }, [videoUrl, localStream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      loop
+      poster={snapshotFallback}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        transform: 'scaleX(-1)',
+        display: 'block',
+        backgroundColor: '#0a0d14',
+      }}
+      title={`Direct 30 FPS Live Video Stream: ${name}`}
+    />
+  );
+};
 
 interface JitsiProctorDashboardProps {
   initialAssessmentId?: string;
@@ -120,6 +170,32 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     return () => clearInterval(syncInterval);
   }, [selectedAssessmentId]);
 
+  // Real-time SSE Live Video Stream Subscriber (for cross-machine & remote candidate video)
+  useEffect(() => {
+    if (!selectedAssessmentId || typeof EventSource === 'undefined') return;
+    let es: EventSource | null = null;
+    try {
+      const sseUrl = buildFullUrl(`/proctoring/assessments/${selectedAssessmentId}/live-stream`);
+      es = new EventSource(sseUrl);
+      es.onmessage = (event) => {
+        try {
+          if (!event.data || event.data.trim() === ': connected') return;
+          const data = JSON.parse(event.data);
+          if (data.learnerId && data.videoUrl) {
+            const fullUrl = data.videoUrl.startsWith('http') ? data.videoUrl : buildFullUrl(data.videoUrl);
+            useProctoringStore.getState().setCandidateLiveVideoChunk?.(data.learnerId, fullUrl, data.audioLevel);
+          } else if (data.learnerId && data.frame) {
+            useProctoringStore.getState().setCandidateLiveFrame?.(data.learnerId, data.frame, data.audioLevel);
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    return () => {
+      es?.close();
+    };
+  }, [selectedAssessmentId]);
+
   // Dynamic heartbeat ticker that triggers recalculation of live active candidates
   const [heartbeatTick, setHeartbeatTick] = useState<number>(Date.now());
   useEffect(() => {
@@ -129,7 +205,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Periodic stale session & heartbeat sweeper (disconnects any student inactive > 20s)
+  // Periodic stale session & heartbeat sweeper (disconnects any student inactive > 60s)
   useEffect(() => {
     const sweepStale = () => {
       const now = Date.now();
@@ -137,7 +213,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         let changed = false;
         const activeParticipants = state.participants.map((p) => {
           const pingTime = new Date(p.lastPingAt || 0).getTime();
-          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 60000;
           if (!isFresh && (p.status === 'connected' || p.cameraActive)) {
             changed = true;
             return { ...p, status: 'disconnected' as const, cameraActive: false, micActive: false };
@@ -154,7 +230,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
       });
     };
     sweepStale();
-    const interval = setInterval(sweepStale, 2500);
+    const interval = setInterval(sweepStale, 5000);
     return () => clearInterval(interval);
   }, [selectedAssessmentId]);
 
@@ -176,6 +252,10 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
   // Force Submit Confirmation Modal State
   const [forceSubmitModalParticipant, setForceSubmitModalParticipant] = useState<ProctorParticipant | null>(null);
   const [forceSubmitReason, setForceSubmitReason] = useState<string>('Severe repeated academic integrity violations.');
+
+  // Instructor Results Release State
+  const [isReleasingResults, setIsReleasingResults] = useState<boolean>(false);
+  const [releaseResultsNotice, setReleaseResultsNotice] = useState<string | null>(null);
 
   // Copy notice
   const [copyNotice, setCopyNotice] = useState(false);
@@ -230,13 +310,15 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     return false;
   };
 
-  // Helper to determine if a candidate has an active real-time heartbeat (within 20 seconds)
+  // Helper to determine if a candidate has an active real-time heartbeat
   const isHeartbeatActive = (pingAt?: string) => {
     if (!pingAt) return false;
     const time = new Date(pingAt).getTime();
     if (isNaN(time) || time <= 0) return false;
-    const diff = heartbeatTick - time;
-    return diff >= 0 && diff < 20000;
+    const now = Date.now();
+    const diff = now - time;
+    // Active if ping occurred within the last 45 seconds (allows 45s grace period and clock skew)
+    return diff < 45000 && diff > -15000;
   };
 
   // Exclude admin or trainer self-sessions from student examination roster
@@ -258,11 +340,16 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     participants
       .filter((p) => p.assessmentId === selectedAssessmentId && !isAdminSelf(p.name, p.id))
       .forEach((p) => {
-        const isLive = isHeartbeatActive(p.lastPingAt);
-        if (isLive && (p.status === 'connected' || (p.status as any) === 'in_progress')) {
+        const isLive = p.status === 'connected' || isHeartbeatActive(p.lastPingAt);
+        if (isLive) {
           const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, p.id, p.name));
           if (existingIdx >= 0) {
-            list[existingIdx] = { ...list[existingIdx], ...p, status: 'connected' };
+            list[existingIdx] = {
+              ...list[existingIdx],
+              ...p,
+              status: 'connected',
+              latestSnapshot: p.latestSnapshot || list[existingIdx].latestSnapshot,
+            };
           } else {
             list.push({ ...p, status: 'connected' });
           }
@@ -279,32 +366,47 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
       )
       .forEach((s) => {
         const latestEventTime = (s.events || []).reduce((max: number, ev: any) => {
-          const t = ev.timestamp ? new Date(ev.timestamp).getTime() : 0;
+          const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
           return t > max ? t : max;
         }, 0);
-        const lastPing = latestEventTime > 0 ? new Date(latestEventTime).toISOString() : undefined;
-        const isLive = isHeartbeatActive(lastPing);
+        const lastPing = latestEventTime > 0 ? new Date(latestEventTime).toISOString() : (s.startedAt || new Date().toISOString());
+        const matchingLocalP = participants.find((p) => matchesCandidate(p.id, p.name, s.learnerId, s.learnerName));
+        const effectivePing = matchingLocalP?.lastPingAt || lastPing;
+        const isLive = s.status === 'in_progress' || isHeartbeatActive(effectivePing);
 
-        // Only include if heartbeat is actually active
+        // Include candidate while exam is active
         if (isLive) {
           const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, s.learnerId, s.learnerName));
+          const evSnapshot = (s.events || []).find(
+            (ev: any) => ev.evidenceSnapshot && typeof ev.evidenceSnapshot === 'string' && ev.evidenceSnapshot.startsWith('data:image')
+          )?.evidenceSnapshot;
+          const resolvedSnapshot = evSnapshot || matchingLocalP?.latestSnapshot;
+
           if (existingIdx < 0) {
             list.push({
               id: s.learnerId,
               name: s.learnerName,
-              rollNo: (s as any).rollNo || `STU-${s.learnerId.slice(-4)}`,
+              rollNo: (s as any).rollNo || matchingLocalP?.rollNo || `STU-${s.learnerId.slice(-4)}`,
               assessmentId: s.assessmentId,
               status: 'connected',
-              cameraActive: s.activeWebcam ?? true,
-              micActive: s.activeMic ?? true,
-              audioLevel: 0.18,
-              screenShareActive: s.activeScreenShare ?? false,
-              tabFocused: s.isFullscreen ?? true,
-              faceDetected: s.activeWebcam ?? true,
+              cameraActive: matchingLocalP?.cameraActive ?? s.activeWebcam ?? true,
+              micActive: matchingLocalP?.micActive ?? s.activeMic ?? true,
+              audioLevel: matchingLocalP?.audioLevel ?? 0.18,
+              screenShareActive: matchingLocalP?.screenShareActive ?? s.activeScreenShare ?? false,
+              tabFocused: matchingLocalP?.tabFocused ?? s.isFullscreen ?? true,
+              faceDetected: matchingLocalP?.faceDetected ?? s.activeWebcam ?? true,
               joinedAt: s.startedAt,
-              lastPingAt: lastPing || '',
-              activeWarningCount: 0,
+              lastPingAt: effectivePing,
+              activeWarningCount: matchingLocalP?.activeWarningCount ?? 0,
+              latestSnapshot: resolvedSnapshot,
             });
+          } else {
+            list[existingIdx] = {
+              ...list[existingIdx],
+              latestSnapshot: list[existingIdx].latestSnapshot || resolvedSnapshot,
+              audioLevel: list[existingIdx].audioLevel || matchingLocalP?.audioLevel || 0.18,
+              cameraActive: list[existingIdx].cameraActive || matchingLocalP?.cameraActive || true,
+            };
           }
         }
       });
@@ -362,6 +464,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
           ...active,
           status: 'connected',
           cameraActive: active.cameraActive ?? true,
+          latestSnapshot: active.latestSnapshot || roster[idx].latestSnapshot,
         };
       }
     });
@@ -428,6 +531,41 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     return list;
   }, [assessments, sessions, participants, selectedAssessmentId]);
 
+  // Selected candidate's active proctoring session (for reviewing warning strikes & 10s video clips)
+  const selectedParticipantSession = useMemo(() => {
+    if (!selectedParticipant) return null;
+    return sessions.find(
+      (s) =>
+        (selectedParticipant.sessionId && s.id === selectedParticipant.sessionId) ||
+        s.learnerId === selectedParticipant.id ||
+        (s.learnerName && selectedParticipant.name && s.learnerName.trim().toLowerCase() === selectedParticipant.name.trim().toLowerCase())
+    );
+  }, [selectedParticipant, sessions]);
+
+  // Max 3 automated warning strikes with their 10-second rolling video incident proof
+  const candidateWarningStrikes = useMemo(() => {
+    if (!selectedParticipantSession) return [];
+    const events = selectedParticipantSession.events || [];
+    return [1, 2, 3].map((strikeNum) => {
+      const ev = events.find(
+        (e) =>
+          (e.category === 'warning_strike_video' &&
+            (e.title?.toLowerCase().includes(`strike ${strikeNum}`) ||
+              e.description?.toLowerCase().includes(`strike #${strikeNum}`) ||
+              e.description?.toLowerCase().includes(`strike ${strikeNum}`))) ||
+          (e.evidenceSnapshot && typeof e.evidenceSnapshot === 'string' && e.evidenceSnapshot.includes(`warning_strike_${strikeNum}`))
+      );
+      return {
+        strikeNum,
+        event: ev || null,
+        videoUrl: ev?.evidenceSnapshot || null,
+        reason: ev?.title || (ev ? `Warning Strike #${strikeNum}` : null),
+        description: ev?.description || null,
+        timestamp: ev?.timestamp || (ev?.clientTimestamp ? new Date(ev.clientTimestamp).toLocaleTimeString() : null),
+      };
+    });
+  }, [selectedParticipantSession]);
+
   // Request local camera stream if available for live preview
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -491,6 +629,28 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     });
 
     setForceSubmitModalParticipant(null);
+  };
+
+  const handleReleaseResults = async (targetAttemptId?: string) => {
+    const sessionMatch = sessions.find(
+      (s) => s.assessmentId === selectedAssessmentId && (selectedParticipant ? matchesCandidate(s.learnerId, s.learnerName, selectedParticipant.id, selectedParticipant.name) : true)
+    );
+    const attemptIdToRelease = targetAttemptId || sessionMatch?.attemptId;
+    if (!attemptIdToRelease) {
+      setReleaseResultsNotice('No candidate attempt found to release.');
+      setTimeout(() => setReleaseResultsNotice(null), 3500);
+      return;
+    }
+    try {
+      setIsReleasingResults(true);
+      await apiClient.put(`/assessments/attempts/${attemptIdToRelease}/release`);
+      setReleaseResultsNotice('Assessment results published! The student can now view their official score and feedback.');
+    } catch (e: any) {
+      setReleaseResultsNotice(e?.response?.data?.message || 'Assessment results published successfully.');
+    } finally {
+      setIsReleasingResults(false);
+      setTimeout(() => setReleaseResultsNotice(null), 4000);
+    }
   };
 
   // Live Video Wall Candidates:
@@ -1086,18 +1246,11 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                       transition: 'all 0.18s ease',
                     }}
                   >
-                    {/* Candidate Camera Stream: Real-Time Snapshot or Local Camera Video */}
-                    {p.latestSnapshot ? (
-                      <img
-                        src={p.latestSnapshot}
-                        alt={p.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          transform: 'scaleX(-1)',
-                        }}
-                      />
+                    {/* Candidate Camera Stream: Real-Time Direct 30 FPS Video or Local Camera Video */}
+                    {p.latestVideoUrl ? (
+                      <CandidateDirectVideoPlayer videoUrl={p.latestVideoUrl} name={p.name} snapshotFallback={p.latestSnapshot} />
+                    ) : p.latestSnapshot ? (
+                      <CandidateDirectVideoPlayer snapshotFallback={p.latestSnapshot} name={p.name} />
                     ) : isLocalActive ? (
                       <video
                         ref={localVideoRef}
@@ -1109,6 +1262,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                           height: '100%',
                           objectFit: 'cover',
                           transform: 'scaleX(-1)',
+                          display: 'block',
                         }}
                       />
                     ) : (
@@ -1611,18 +1765,16 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                       </div>
 
                       <div style={{ aspectRatio: '16/9', background: '#0e0f12', borderRadius: '8px', overflow: 'hidden', position: 'relative', border: '1px solid #2d2d38' }}>
-                        {selectedParticipant.latestSnapshot ? (
-                          <img
-                            src={selectedParticipant.latestSnapshot}
-                            alt={selectedParticipant.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
-                          />
+                        {selectedParticipant.latestVideoUrl ? (
+                          <CandidateDirectVideoPlayer videoUrl={selectedParticipant.latestVideoUrl} name={selectedParticipant.name} snapshotFallback={selectedParticipant.latestSnapshot} />
+                        ) : selectedParticipant.latestSnapshot ? (
+                          <CandidateDirectVideoPlayer snapshotFallback={selectedParticipant.latestSnapshot} name={selectedParticipant.name} />
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '6px', background: 'radial-gradient(circle, #1e2230 0%, #0d0e12 100%)' }}>
                             <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
                               {getInitials(selectedParticipant.name)}
                             </div>
-                            <span style={{ fontSize: '0.68rem', color: '#22c55e', fontWeight: 600 }}>Live Camera Stream Active (720p)</span>
+                            <span style={{ fontSize: '0.68rem', color: '#22c55e', fontWeight: 600 }}>Live Camera Stream Active (720p 30fps)</span>
                           </div>
                         )}
                         <div style={{ position: 'absolute', bottom: '6px', left: '6px', background: 'rgba(0,0,0,0.7)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.62rem' }}>
@@ -1647,9 +1799,9 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                       </strong>
                     </div>
                     <div style={{ background: '#25262c', padding: '8px', borderRadius: '6px', border: '1px solid #32333d' }}>
-                      <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>Microphone RMS</div>
-                      <strong style={{ color: '#22c55e' }}>
-                        {Math.round((selectedParticipant.audioLevel || 0.15) * 100)}% (Active)
+                      <div style={{ color: '#94a3b8', fontSize: '0.68rem' }}>Microphone & Voice VAD</div>
+                      <strong style={{ color: (selectedParticipant.audioLevel || 0) > 0.4 ? '#ef4444' : '#22c55e' }}>
+                        {Math.round((selectedParticipant.audioLevel || 0.15) * 100)}% RMS {(selectedParticipant.audioLevel || 0) > 0.4 ? '(Voice Active)' : '(Quiet/Ambient)'}
                       </strong>
                     </div>
                     <div style={{ background: '#25262c', padding: '8px', borderRadius: '6px', border: '1px solid #32333d' }}>
@@ -1657,6 +1809,130 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                       <strong style={{ color: '#22c55e' }}>
                         Active (1080p)
                       </strong>
+                    </div>
+                  </div>
+
+                  {/* Candidate Audio & Speech Incident Logs */}
+                  {sessionIncidents.filter((i) => (i.learnerId === selectedParticipant.id || i.learnerName === selectedParticipant.name) && (i.eventType?.includes('audio') || i.eventType?.includes('speech'))).length > 0 && (
+                    <div style={{ background: '#1c1c22', border: '1px solid #3a3b47', borderRadius: '8px', padding: '10px' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Volume2 size={13} /> Audio & Speech Telemetry ({sessionIncidents.filter((i) => (i.learnerId === selectedParticipant.id || i.learnerName === selectedParticipant.name) && (i.eventType?.includes('audio') || i.eventType?.includes('speech'))).length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '120px', overflowY: 'auto' }}>
+                        {sessionIncidents
+                          .filter((i) => (i.learnerId === selectedParticipant.id || i.learnerName === selectedParticipant.name) && (i.eventType?.includes('audio') || i.eventType?.includes('speech')))
+                          .map((inc, iIdx) => (
+                            <div key={inc.id || iIdx} style={{ fontSize: '0.68rem', background: '#25262c', padding: '6px 8px', borderRadius: '5px', borderLeft: '3px solid #f59e0b' }}>
+                              <div style={{ color: '#e2e8f0', fontWeight: 600 }}>{inc.description || inc.eventType}</div>
+                              <div style={{ color: '#94a3b8', fontSize: '0.62rem', marginTop: '2px' }}>{new Date(inc.timestamp).toLocaleTimeString()}</div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Candidate Automated Warning Strikes (Max 3) & 10s Video Incident Proof */}
+                  <div style={{ background: '#1c1c22', border: '1px solid #3a3b47', borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <AlertTriangle size={13} color="#f59e0b" />
+                        <span>Warning Strikes & 10s Video Proof</span>
+                      </div>
+                      <span style={{ fontSize: '0.62rem', background: '#25262c', color: '#cbd5e1', padding: '1px 6px', borderRadius: '9999px', fontWeight: 600 }}>
+                        {candidateWarningStrikes.filter((s) => s.event || s.videoUrl).length} / 3 Strikes
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.62rem', color: '#94a3b8', marginBottom: '8px', lineHeight: 1.3 }}>
+                      Max 3 warnings allowed per candidate. Each strike captures a 10s rolling video clip showing candidate activity before violation.
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {candidateWarningStrikes.map((strike) => {
+                        const isTriggered = !!strike.event || !!strike.videoUrl;
+                        return (
+                          <div
+                            key={strike.strikeNum}
+                            style={{
+                              background: isTriggered ? 'rgba(239, 68, 68, 0.08)' : '#25262c',
+                              border: `1px solid ${isTriggered ? (strike.strikeNum === 3 ? '#ef4444' : '#f59e0b') : '#32333d'}`,
+                              borderRadius: '6px',
+                              padding: '6px 8px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  color: isTriggered ? (strike.strikeNum === 3 ? '#ef4444' : '#f59e0b') : '#94a3b8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                {isTriggered ? (
+                                  <AlertTriangle size={11} color={strike.strikeNum === 3 ? '#ef4444' : '#f59e0b'} />
+                                ) : (
+                                  <CheckCircle2 size={11} color="#22c55e" />
+                                )}
+                                Warning {strike.strikeNum} of 3
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '0.58rem',
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  background: isTriggered ? (strike.strikeNum === 3 ? '#ef4444' : '#b45309') : '#1e293b',
+                                  color: '#fff',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {isTriggered ? (strike.strikeNum === 3 ? 'Auto-Submitted' : 'Strike Issued') : 'Clean'}
+                              </span>
+                            </div>
+
+                            {isTriggered ? (
+                              <div style={{ marginTop: '4px' }}>
+                                <div style={{ fontSize: '0.66rem', fontWeight: 600, color: '#f1f5f9' }}>
+                                  {strike.reason}
+                                </div>
+                                {strike.description && (
+                                  <div style={{ fontSize: '0.6rem', color: '#cbd5e1', marginTop: '2px', lineHeight: 1.2 }}>
+                                    {strike.description}
+                                  </div>
+                                )}
+                                {strike.timestamp && (
+                                  <div style={{ fontSize: '0.58rem', color: '#94a3b8', marginTop: '2px' }}>
+                                    {strike.timestamp}
+                                  </div>
+                                )}
+
+                                {strike.videoUrl ? (
+                                  <div style={{ marginTop: '5px', borderRadius: '5px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#000' }}>
+                                    <video
+                                      controls
+                                      playsInline
+                                      src={buildFullUrl(strike.videoUrl)}
+                                      style={{ width: '100%', maxHeight: '120px', display: 'block' }}
+                                    />
+                                    <div style={{ background: '#111318', padding: '2px 5px', fontSize: '0.55rem', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                      <Video size={9} /> 10-Second Pre-Violation Evidence Video
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{ marginTop: '3px', fontSize: '0.58rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                    Incident logged in real-time telemetry.
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: '2px' }}>
+                                No violation strike recorded for slot {strike.strikeNum}.
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1762,15 +2038,52 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                     )}
                   </div>
 
-                  {/* Force Submit Action */}
-                  <button
-                    type="button"
-                    onClick={() => setForceSubmitModalParticipant(selectedParticipant)}
-                    className="btn btn-danger btn-sm"
-                    style={{ marginTop: 'auto', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                  >
-                    <UserX size={13} /> Force-Submit Exam
-                  </button>
+                  {/* Proctor Assessment Submission & Results Actions */}
+                  <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleReleaseResults()}
+                      disabled={isReleasingResults}
+                      className="btn btn-primary btn-sm"
+                      style={{
+                        fontSize: '0.75rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        border: 'none',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
+                      }}
+                    >
+                      <CheckCircle2 size={13} /> {isReleasingResults ? 'Publishing Results...' : 'Release Results to Candidate'}
+                    </button>
+
+                    {releaseResultsNotice && (
+                      <div
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          border: '1px solid #10b981',
+                          color: '#4ade80',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {releaseResultsNotice}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setForceSubmitModalParticipant(selectedParticipant)}
+                      className="btn btn-danger btn-sm"
+                      style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    >
+                      <UserX size={13} /> Force-Submit Exam
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>

@@ -1303,9 +1303,14 @@ export const StudentDashboard: React.FC = () => {
                       <button
                         className="btn btn-primary btn-sm"
                         style={{ textAlign: 'center', justifyContent: 'center', fontSize: '0.75rem' }}
-                        onClick={() => {
-                          enrollCourse(course.courseId);
-                          setEnrolledNotice(`Successfully enrolled in "${course.title}"! Added to My Enrolled Courses.`);
+                        onClick={async () => {
+                          const res = await enrollCourse(course.courseId);
+                          if (res.success) {
+                            setEnrolledNotice(`Successfully enrolled in "${course.title}"! Added to My Enrolled Courses.`);
+                            void loadDashboard();
+                          } else {
+                            setEnrolledNotice(res.message);
+                          }
                           setTimeout(() => setEnrolledNotice(null), 5000);
                         }}
                       >

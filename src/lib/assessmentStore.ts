@@ -20,7 +20,7 @@ function getDeletedAssessmentIds(): Set<string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_DELETED_ASSESSMENTS);
     if (raw) return new Set(JSON.parse(raw));
-  } catch {}
+  } catch { }
   return new Set();
 }
 
@@ -29,7 +29,7 @@ function recordDeletedAssessmentId(id: string) {
     const set = getDeletedAssessmentIds();
     set.add(id);
     localStorage.setItem(STORAGE_KEY_DELETED_ASSESSMENTS, JSON.stringify(Array.from(set)));
-  } catch {}
+  } catch { }
 }
 
 function unmarkDeletedAssessmentId(id: string) {
@@ -39,7 +39,7 @@ function unmarkDeletedAssessmentId(id: string) {
       set.delete(id);
       localStorage.setItem(STORAGE_KEY_DELETED_ASSESSMENTS, JSON.stringify(Array.from(set)));
     }
-  } catch {}
+  } catch { }
 }
 
 // Automatically bust stale client-side caches from previous prototype/mock data
@@ -53,7 +53,7 @@ if (typeof window !== 'undefined') {
       localStorage.removeItem('venilearn_assignments');
       localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
     }
-  } catch {}
+  } catch { }
 }
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -130,25 +130,25 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
 
           const qObjs: Question[] = hasQObjects
             ? rawQList.map((q: any) => ({
-                id: q.id,
-                assessmentId: a.id,
-                prompt: q.prompt,
-                type: q.type || 'single_choice',
-                points: Number(q.points) || 1,
-                difficulty: q.difficulty || 'medium',
-                explanation: q.explanation || '',
-                instructions: q.instructions || '',
-                topic: q.topic || '',
-                correctAnswer: q.correctAnswerText || q.answerKey,
-                options: Array.isArray(q.options)
-                  ? q.options.map((opt: any, optIdx: number) => ({
-                      id: opt.id,
-                      text: opt.text,
-                      isCorrect: Boolean(opt.isCorrect),
-                      order: opt.order ?? optIdx
-                    }))
-                  : []
-              }))
+              id: q.id,
+              assessmentId: a.id,
+              prompt: q.prompt,
+              type: q.type || 'single_choice',
+              points: Number(q.points) || 1,
+              difficulty: q.difficulty || 'medium',
+              explanation: q.explanation || '',
+              instructions: q.instructions || '',
+              topic: q.topic || '',
+              correctAnswer: q.correctAnswerText || q.answerKey,
+              options: Array.isArray(q.options)
+                ? q.options.map((opt: any, optIdx: number) => ({
+                  id: opt.id,
+                  text: opt.text,
+                  isCorrect: Boolean(opt.isCorrect),
+                  order: opt.order ?? optIdx
+                }))
+                : []
+            }))
             : (Array.isArray(a.questionsData) ? a.questionsData : []);
 
           qObjs.forEach((q) => extractedQuestions.push(q));
@@ -156,8 +156,9 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
 
           const tot = Number(a.totalMarks) || 100;
           const passPct = Number(a.passingPercentage) || 70;
-          const passPts = a.passingMarks || Math.round((passPct / 100) * tot);
           const existing = existingLocalMap.get(a.id);
+          const certCfg = (typeof a.certificateConfig === 'object' && a.certificateConfig) ? a.certificateConfig : {};
+          const passPts = certCfg.passingMarks || a.passingMarks || existing?.passingMarks || Math.max(1, Math.round((passPct / 100) * tot));
           const resolvedMeetUrl = a.googleMeetUrl || a.jitsiRoomId || existing?.googleMeetUrl || existing?.jitsiRoomId;
           const resolvedProctoringMode = a.proctoringMode || existing?.proctoringMode || (a.proctoringRequired ? 'combined' : 'none');
 
@@ -355,8 +356,10 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
 
     // Calculate passing percentage safely (clamped 1-100)
     const totMarks = Number(newAssessment.totalMarks) || 100;
-    const passMarks = Number(newAssessment.passingMarks) || Number(newAssessment.passmark) || 70;
-    const passPercentage = Math.min(100, Math.max(1, Math.round(newAssessment.passmark ? Number(newAssessment.passmark) : (passMarks / totMarks) * 100)));
+    const passMarks = Number(newAssessment.passingMarks) !== undefined && !isNaN(Number(newAssessment.passingMarks))
+      ? Number(newAssessment.passingMarks)
+      : (Number(newAssessment.passmark) || 70);
+    const passPercentage = Math.min(100, Math.max(1, Math.round((passMarks / totMarks) * 100)));
 
     const backendPayload = {
       title: newAssessment.title,
@@ -372,7 +375,10 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       proctoringMode: newAssessment.proctoringMode,
       googleMeetUrl: newAssessment.googleMeetUrl,
       jitsiRoomId: newAssessment.jitsiRoomId,
-      certificateConfig: newAssessment.certificateConfig || {},
+      certificateConfig: {
+        ...(newAssessment.certificateConfig || {}),
+        passingMarks: passMarks,
+      },
       questions: qList.map((q, idx) => ({
         prompt: q.prompt,
         type: q.type || 'single_choice',
@@ -393,25 +399,32 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
         const backendId = res.data.id;
         const backendQuestions: Question[] = Array.isArray(res.data.questions)
           ? res.data.questions.map((q: any) => ({
-              id: q.id,
-              assessmentId: backendId,
-              prompt: q.prompt,
-              type: q.type,
-              points: Number(q.points) || 1,
-              difficulty: q.difficulty || 'medium',
-              explanation: q.explanation || '',
-              options: (q.options || []).map((o: any, idx: number) => ({
-                id: o.id,
-                text: o.text,
-                isCorrect: Boolean(o.isCorrect),
-                order: o.order ?? idx
-              }))
+            id: q.id,
+            assessmentId: backendId,
+            prompt: q.prompt,
+            type: q.type,
+            points: Number(q.points) || 1,
+            difficulty: q.difficulty || 'medium',
+            explanation: q.explanation || '',
+            options: (q.options || []).map((o: any, idx: number) => ({
+              id: o.id,
+              text: o.text,
+              isCorrect: Boolean(o.isCorrect),
+              order: o.order ?? idx
             }))
+          }))
           : qList;
 
         set((state) => {
           const syncedAssessments = state.assessments.map((a) =>
-            a.id === id ? { ...a, id: backendId, questionsData: backendQuestions, questionIds: backendQuestions.map(bq => bq.id) } : a
+            a.id === id ? {
+              ...a,
+              id: backendId,
+              passingMarks: passMarks,
+              passmark: passPercentage,
+              questionsData: backendQuestions,
+              questionIds: backendQuestions.map(bq => bq.id)
+            } : a
           );
           const qMap = new Map(state.questions.map(q => [q.id, q]));
           backendQuestions.forEach(bq => qMap.set(bq.id, bq));
@@ -456,11 +469,11 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       const updatedAssessments = state.assessments.map((a) =>
         a.id === assessment.id
           ? {
-              ...assessment,
-              updatedAt: new Date().toISOString(),
-              questionIds: questions ? questions.map((q) => q.id) : a.questionIds,
-              questionsData: questions || a.questionsData
-            }
+            ...assessment,
+            updatedAt: new Date().toISOString(),
+            questionIds: questions ? questions.map((q) => q.id) : a.questionIds,
+            questionsData: questions || a.questionsData
+          }
           : a
       );
 
@@ -540,8 +553,10 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
 
     // Synchronize draft to PostgreSQL database
     const totMarks = Number(newDraft.totalMarks) || 100;
-    const passMarks = Number(newDraft.passingMarks) || Number(newDraft.passmark) || 70;
-    const passPercentage = Math.min(100, Math.max(1, Math.round(newDraft.passmark ? Number(newDraft.passmark) : (passMarks / totMarks) * 100)));
+    const passMarks = Number(newDraft.passingMarks) !== undefined && !isNaN(Number(newDraft.passingMarks))
+      ? Number(newDraft.passingMarks)
+      : (Number(newDraft.passmark) || 70);
+    const passPercentage = Math.min(100, Math.max(1, Math.round((passMarks / totMarks) * 100)));
 
     const draftPayload = {
       title: newDraft.title,
@@ -557,7 +572,10 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       proctoringMode: newDraft.proctoringMode,
       googleMeetUrl: newDraft.googleMeetUrl,
       jitsiRoomId: newDraft.jitsiRoomId,
-      certificateConfig: newDraft.certificateConfig || {},
+      certificateConfig: {
+        ...(newDraft.certificateConfig || {}),
+        passingMarks: passMarks,
+      },
       questions: qList.map((q, idx) => ({
         prompt: q.prompt,
         type: q.type || 'single_choice',
@@ -577,7 +595,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
         const backendId = res.data.id;
         set((state) => {
           const syncedDrafts = state.drafts.map((d) =>
-            d.id === id ? { ...d, id: backendId } : d
+            d.id === id ? { ...d, id: backendId, passingMarks: passMarks, passmark: passPercentage } : d
           );
           saveToStorage(STORAGE_KEY_DRAFTS, syncedDrafts);
           return { drafts: syncedDrafts };
@@ -606,9 +624,15 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
         saveToStorage(STORAGE_KEY_ASSESSMENTS, updatedAssessments);
         return { drafts: updatedDrafts, assessments: updatedAssessments };
       });
-      apiClient.patch(`/assessments/${assessmentId}/publish`).catch((err) => {
-        console.warn('Backend publish sync note:', err);
-      });
+
+      if (assessmentId.length === 36) {
+        apiClient.patch(`/assessments/${assessmentId}/publish`).catch((err) => {
+          console.warn('Backend publish sync note:', err);
+        });
+      } else {
+        // Sync to backend database as published assessment
+        get().addAssessment(published, published.questionsData);
+      }
 
       // Notify students of published assessment
       try {
@@ -632,7 +656,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       saveToStorage(STORAGE_KEY_ASSESSMENTS, updated);
       return { assessments: updated };
     });
-    apiClient.patch(`/assessments/${assessmentId}/publish`).catch(() => {});
+    apiClient.patch(`/assessments/${assessmentId}/publish`).catch(() => { });
 
     const existingTarget = state.assessments.find((a) => a.id === assessmentId);
     if (existingTarget) {
@@ -680,7 +704,7 @@ export const useAssessmentStore = create<AssessmentStoreState>((set, get) => ({
       saveToStorage(STORAGE_KEY_DRAFTS, updatedDrafts);
       return { drafts: updatedDrafts };
     });
-    apiClient.delete(`/assessments/${draftId}`).catch(() => {});
+    apiClient.delete(`/assessments/${draftId}`).catch(() => { });
     return { success: true };
   },
 

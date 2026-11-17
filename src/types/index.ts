@@ -927,7 +927,12 @@ export type ProctoringEventCategory =
   | 'webcam_interruption'
   | 'network_interruption'
   | 'jitsi_conference'
-  | 'timing_event';
+  | 'timing_event'
+  | 'warning_strike_video'
+  | 'audio_incident'
+  | 'candidate_baseline_photo'
+  | 'live_webcam_frame'
+  | (string & {});
 
 export type ProctoringSeverity = 'informational' | 'warning' | 'critical' | 'review_required';
 
@@ -985,6 +990,7 @@ export interface ProctoringSession {
   jitsiRoomUrl?: string;
   jitsiStatus?: 'connected' | 'connecting' | 'disconnected';
   events: ProctoringEvent[];
+  warnings?: any[];
   recordingUrl?: string;
   recordingDuration?: number;
   isSimulatedRecording?: boolean;

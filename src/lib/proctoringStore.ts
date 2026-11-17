@@ -48,8 +48,10 @@ export interface ProctorParticipant {
   activeWarningCount: number;
   jitsiParticipantId?: string;
   latestSnapshot?: string;
+  latestVideoUrl?: string;
   latestScreenSnapshot?: string;
   googleMeetUrl?: string;
+  sessionId?: string;
 }
 
 export interface ProctorAuditRecord {
@@ -81,10 +83,40 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       if (data.type === 'SESSIONS_SYNC' && Array.isArray(data.sessions)) {
         useProctoringStore.setState({ sessions: data.sessions });
       }
+      if (data.type === 'LIVE_FRAME' && data.learnerId && data.frame) {
+        useProctoringStore.getState().setCandidateLiveFrame?.(data.learnerId, data.frame, data.audioLevel);
+      }
+      if (data.type === 'LIVE_VIDEO_CHUNK' && data.learnerId && data.videoUrl) {
+        useProctoringStore.getState().setCandidateLiveVideoChunk?.(data.learnerId, data.videoUrl, data.audioLevel);
+      }
     };
   } catch (err) {
     // Ignore BroadcastChannel errors in restricted sandboxes
   }
+}
+
+export function broadcastLiveFrame(learnerId: string, assessmentId: string, frame: string, audioLevel?: number) {
+  try {
+    proctoringBroadcastChannel?.postMessage({
+      type: 'LIVE_FRAME',
+      learnerId,
+      assessmentId,
+      frame,
+      audioLevel,
+    });
+  } catch (e) {}
+}
+
+export function broadcastLiveVideoChunk(learnerId: string, assessmentId: string, videoUrl: string, audioLevel?: number) {
+  try {
+    proctoringBroadcastChannel?.postMessage({
+      type: 'LIVE_VIDEO_CHUNK',
+      learnerId,
+      assessmentId,
+      videoUrl,
+      audioLevel,
+    });
+  } catch (e) {}
 }
 
 if (typeof window !== 'undefined') {
@@ -267,6 +299,8 @@ export interface ProctoringStoreState {
     participantId: string,
     telemetry: Partial<ProctorParticipant>
   ) => void;
+  setCandidateLiveFrame: (learnerId: string, frame: string, audioLevel?: number) => void;
+  setCandidateLiveVideoChunk: (learnerId: string, videoUrl: string, audioLevel?: number) => void;
   resetToDefaults: () => void;
 
   // VeniGuard Sessions & Policies State
@@ -448,12 +482,12 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           const mergedSessions = [...state.sessions];
           fetchedSessions.forEach((fs) => {
             const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
-              const t = ev.timestamp ? new Date(ev.timestamp).getTime() : 0;
+              const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
               return t > max ? t : max;
             }, 0);
             const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
             const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
-            const isFresh = pingMs > 0 && (now - pingMs) < 20000;
+            const isFresh = fs.status === 'in_progress' || (pingMs > 0 && (now - pingMs) < 60000);
 
             const adjustedFs: ProctoringSession = {
               ...fs,
@@ -474,19 +508,24 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           // Also mirror into state.participants with strict freshness check
           const mergedParticipants = [...state.participants];
           fetchedSessions.forEach((fs) => {
-            const latestSnapshot = fs.events.find((e) => e.evidenceSnapshot)?.evidenceSnapshot;
+            const latestSnapshot = (fs.events || []).find(
+              (e: any) => e.evidenceSnapshot && typeof e.evidenceSnapshot === 'string' && e.evidenceSnapshot.startsWith('data:image')
+            )?.evidenceSnapshot;
             const pIdx = mergedParticipants.findIndex(
               (p) =>
                 p.id === fs.learnerId ||
                 (p.name && fs.learnerName && p.name.trim().toLowerCase() === fs.learnerName.trim().toLowerCase())
             );
             const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
-              const t = ev.timestamp ? new Date(ev.timestamp).getTime() : 0;
+              const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
               return t > max ? t : max;
             }, 0);
             const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
             const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
-            const isFresh = pingMs > 0 && (now - pingMs) < 20000;
+            const isFresh = fs.status === 'in_progress' || (pingMs > 0 && (now - pingMs) < 60000);
+
+            const existingSnapshot = pIdx >= 0 ? mergedParticipants[pIdx].latestSnapshot : undefined;
+            const resolvedSnapshot = latestSnapshot || existingSnapshot;
 
             const newOrUpdatedP: ProctorParticipant = {
               id: fs.learnerId,
@@ -501,9 +540,10 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
               tabFocused: isFresh ? (fs.isFullscreen ?? true) : false,
               faceDetected: isFresh ? (fs.activeWebcam ?? true) : false,
               joinedAt: fs.startedAt,
-              lastPingAt: rawPing,
+              lastPingAt: rawPing || (pIdx >= 0 ? mergedParticipants[pIdx].lastPingAt : new Date().toISOString()),
               activeWarningCount: 0,
-              latestSnapshot: isFresh ? (latestSnapshot || (pIdx >= 0 ? mergedParticipants[pIdx].latestSnapshot : undefined)) : undefined,
+              latestSnapshot: isFresh ? resolvedSnapshot : existingSnapshot,
+              sessionId: fs.id,
             };
 
             if (pIdx >= 0) {
@@ -529,10 +569,10 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       const localParticipants = loadFromStorage<ProctorParticipant[]>(STORAGE_KEY_PROCTORING_PARTICIPANTS, []);
       const now = Date.now();
 
-      // Prune participants whose heartbeat expired (> 20 seconds)
+      // Prune participants whose heartbeat expired (> 60 seconds)
       const freshParticipants = localParticipants.map((p) => {
         const pingTime = new Date(p.lastPingAt || 0).getTime();
-        const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+        const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 60000;
         if (!isFresh && (p.status === 'connected' || p.cameraActive)) {
           return { ...p, status: 'disconnected' as const, cameraActive: false, micActive: false };
         }
@@ -556,7 +596,11 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
         freshParticipants.forEach((lp) => {
           const idx = newParticipants.findIndex((p) => p.id === lp.id);
           if (idx >= 0) {
-            newParticipants[idx] = { ...newParticipants[idx], ...lp };
+            newParticipants[idx] = {
+              ...newParticipants[idx],
+              ...lp,
+              latestSnapshot: lp.latestSnapshot || newParticipants[idx].latestSnapshot,
+            };
           } else {
             newParticipants.unshift(lp);
             changed = true;
@@ -565,7 +609,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
 
         const sanitizedParticipants = newParticipants.map((p) => {
           const pingTime = new Date(p.lastPingAt || 0).getTime();
-          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
+          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 60000;
           if (!isFresh && (p.status === 'connected' || p.cameraActive)) {
             changed = true;
             return { ...p, status: 'disconnected' as const, cameraActive: false, micActive: false };
@@ -750,7 +794,12 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       if (exists) {
         updatedParticipants = state.participants.map((p) => {
           if (p.id === participantId) {
-            return { ...p, ...telemetry, lastPingAt: new Date().toISOString() };
+            return {
+              ...p,
+              ...telemetry,
+              latestSnapshot: telemetry.latestSnapshot || p.latestSnapshot,
+              lastPingAt: new Date().toISOString(),
+            };
           }
           return p;
         });
@@ -777,6 +826,49 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, updatedParticipants);
       broadcastParticipants(updatedParticipants);
       return { participants: updatedParticipants };
+    });
+  },
+
+  setCandidateLiveFrame: (learnerId: string, frame: string, audioLevel?: number) => {
+    set((state) => {
+      const idx = state.participants.findIndex((p) => p.id === learnerId);
+      if (idx >= 0) {
+        const currentP = state.participants[idx];
+        if (currentP.latestSnapshot === frame && (audioLevel === undefined || currentP.audioLevel === audioLevel)) {
+          return state;
+        }
+        const updated = [...state.participants];
+        updated[idx] = {
+          ...currentP,
+          latestSnapshot: frame,
+          audioLevel: audioLevel !== undefined ? audioLevel : currentP.audioLevel,
+          cameraActive: true,
+          status: 'connected',
+          lastPingAt: new Date().toISOString(),
+        };
+        return { participants: updated };
+      }
+      return state;
+    });
+  },
+
+  setCandidateLiveVideoChunk: (learnerId: string, videoUrl: string, audioLevel?: number) => {
+    set((state) => {
+      const idx = state.participants.findIndex((p) => p.id === learnerId);
+      if (idx >= 0) {
+        const currentP = state.participants[idx];
+        const updated = [...state.participants];
+        updated[idx] = {
+          ...currentP,
+          latestVideoUrl: videoUrl,
+          audioLevel: audioLevel !== undefined ? audioLevel : currentP.audioLevel,
+          cameraActive: true,
+          status: 'connected',
+          lastPingAt: new Date().toISOString(),
+        };
+        return { participants: updated };
+      }
+      return state;
     });
   },
 

@@ -848,9 +848,37 @@ export const ProctoringPage: React.FC = () => {
                       {selectedSession.id}
                     </span>
                   </div>
-                  <p className="text-muted text-xs" style={{ marginTop: '2px' }}>
-                    Student: <strong>{selectedSession.learnerName}</strong> ({selectedSession.learnerId}) &bull; Policy:{' '}
-                    {selectedSession.policy.name}
+                  <p className="text-muted text-xs" style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>
+                      Student: <strong>{selectedSession.learnerName}</strong> ({selectedSession.learnerId}) &bull; Policy:{' '}
+                      {selectedSession.policy.name}
+                    </span>
+                    {selectedSession.events.some(e => e.category === 'mobile_phone_detected' || e.title.includes('Mobile')) ? (
+                      <span className="badge badge-failed" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        📱 Mobile Phone Incident Detected
+                      </span>
+                    ) : (
+                      <span className="badge badge-active" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        ✓ Clean Device Scan
+                      </span>
+                    )}
+                    {selectedSession.events.some(e => e.category === 'face_mismatch' || e.title.includes('Mismatch')) ? (
+                      <span className="badge badge-failed" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        👤 ArcFace Identity Mismatch
+                      </span>
+                    ) : selectedSession.events.some(e => e.category === 'multiple_faces_detected' || e.title.includes('Multiple Faces')) ? (
+                      <span className="badge badge-failed" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        👥 Multiple Faces Detected
+                      </span>
+                    ) : selectedSession.events.some(e => e.category === 'face_not_detected' || e.title.includes('Absent')) ? (
+                      <span className="badge badge-warning" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        ⚠️ Face Absent (&gt;5s)
+                      </span>
+                    ) : (
+                      <span className="badge badge-active" style={{ fontSize: '0.65rem', padding: '2px 7px' }}>
+                        👤 ArcFace Verified
+                      </span>
+                    )}
                   </p>
                 </div>
                 <button onClick={() => setSelectedSession(null)} style={{ color: 'var(--text-muted)' }}>
@@ -1039,6 +1067,28 @@ export const ProctoringPage: React.FC = () => {
                           {evt.description}
                         </p>
 
+                        {evt.evidenceSnapshot && (
+                          <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                              <Camera size={13} color="#F59E0B" />
+                              Captured AI Video Frame & Evidence Snapshot:
+                            </div>
+                            <img
+                              src={evt.evidenceSnapshot}
+                              alt="Proctoring Incident Snapshot"
+                              style={{
+                                maxWidth: '340px',
+                                maxHeight: '200px',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                display: 'block',
+                                objectFit: 'contain',
+                                background: '#000',
+                              }}
+                            />
+                          </div>
+                        )}
+
                         {evt.studentExplanation && (
                           <div
                             style={{
@@ -1111,8 +1161,8 @@ export const ProctoringPage: React.FC = () => {
                     {[
                       {
                         id: 'no_violation',
-                        label: 'No Violation Established',
-                        desc: 'Benign telemetry signal, external alert, or accidental OS notification with immediate recovery.',
+                        label: 'No Violation Established / Dismiss False Detection',
+                        desc: 'Benign telemetry signal, external alert, false positive detection, or accidental movement with immediate recovery.',
                       },
                       {
                         id: 'technical_incident_accepted',
@@ -1126,8 +1176,8 @@ export const ProctoringPage: React.FC = () => {
                       },
                       {
                         id: 'further_review',
-                        label: 'Escalate for Academic Integrity Board Review',
-                        desc: 'Signal pattern requires formal secondary review by institutional department committee.',
+                        label: 'Mark for Investigation / Escalated for Review',
+                        desc: 'Flagged for formal department or academic integrity review board audit.',
                       },
                       {
                         id: 'violation_confirmed',

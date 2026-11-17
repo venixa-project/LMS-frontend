@@ -150,15 +150,16 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const [availabilityEnd, setAvailabilityEnd] = useState<string>(
     initialDraft?.availabilityEnd ? initialDraft.availabilityEnd.slice(0, 16) : ''
   );
-  const [completionPercentageRequired, setCompletionPercentageRequired] = useState<number>(
+  const [completionPercentageRequired, setCompletionPercentageRequired] = useState<number | string>(
     initialDraft?.completionPercentageRequired ?? (initialDraft?.certificateConfig?.requiredCompletionPercentage ?? 100)
   );
   const [certificateEnabled, setCertificateEnabled] = useState<boolean>(
     initialDraft?.certificateConfig?.enabled ?? true
   );
-  const [completionPoints, setCompletionPoints] = useState<number>(
+  const [completionPoints, setCompletionPoints] = useState<number | string>(
     initialDraft?.completionPoints ?? (initialDraft?.certificateConfig?.completionPoints ?? 50)
   );
+  const [publishedSuccessAssessment, setPublishedSuccessAssessment] = useState<Assessment | null>(null);
   const [certTemplateId, setCertTemplateId] = useState<'standard' | 'executive' | 'distinction' | 'technical'>(
     initialDraft?.certificateConfig?.templateId || 'distinction'
   );
@@ -542,11 +543,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     const newQuestionsList = [...questions, ...selectedQuestions];
     setQuestions(newQuestionsList);
 
-    // Auto-update total marks
+    // Auto-update total marks and preserve configured pass marks
     const newTotalMarks = newQuestionsList.reduce((sum, q) => sum + (q.points || 0), 0);
     if (newTotalMarks > 0) {
       setTotalMarks(newTotalMarks);
-      setPassingMarks(Math.round(newTotalMarks * 0.7));
+      setRawTotalMarks(String(newTotalMarks));
+      const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+      const validPass = (curPass >= 1 && curPass <= newTotalMarks)
+        ? curPass
+        : Math.min(newTotalMarks, Math.max(1, Math.round(newTotalMarks * 0.7)));
+      setPassingMarks(validPass);
+      setRawPassMarks(String(validPass));
     }
 
     setStep('review_edit');
@@ -731,7 +738,13 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
       if (totalPoints > 0) {
         setTotalMarks(totalPoints);
-        setPassingMarks(Math.round(totalPoints * 0.7));
+        setRawTotalMarks(String(totalPoints));
+        const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+        const validPass = (curPass >= 1 && curPass <= totalPoints)
+          ? curPass
+          : Math.min(totalPoints, Math.max(1, Math.round(totalPoints * 0.7)));
+        setPassingMarks(validPass);
+        setRawPassMarks(String(validPass));
       }
 
       setIsGenerating(false);
@@ -896,7 +909,13 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
       if (totalPoints > 0) {
         setTotalMarks(totalPoints);
-        setPassingMarks(Math.round(totalPoints * 0.7));
+        setRawTotalMarks(String(totalPoints));
+        const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+        const validPass = (curPass >= 1 && curPass <= totalPoints)
+          ? curPass
+          : Math.min(totalPoints, Math.max(1, Math.round(totalPoints * 0.7)));
+        setPassingMarks(validPass);
+        setRawPassMarks(String(validPass));
       }
 
       setIsVideoProcessing(false);
@@ -1041,9 +1060,12 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const handleSyncMarks = () => {
     setTotalMarks(sumOfQuestionMarks);
     setRawTotalMarks(String(sumOfQuestionMarks));
-    const newPass = Math.round(sumOfQuestionMarks * 0.7);
-    setPassingMarks(newPass);
-    setRawPassMarks(String(newPass));
+    const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+    const validPass = (curPass >= 1 && curPass <= sumOfQuestionMarks)
+      ? curPass
+      : Math.min(sumOfQuestionMarks, Math.max(1, Math.round(sumOfQuestionMarks * 0.7)));
+    setPassingMarks(validPass);
+    setRawPassMarks(String(validPass));
     setNumericErrors((prev) => ({ ...prev, totalMarks: undefined, passMarks: undefined }));
   };
 
@@ -1104,12 +1126,15 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       }
     }
 
-    if (completionPercentageRequired < 1 || completionPercentageRequired > 100) {
-      alert('Required completion percentage must be between 1% and 100%.');
+    const effectiveCompletionRate = completionPercentageRequired === '' ? 0 : Number(completionPercentageRequired);
+    const effectivePoints = completionPoints === '' ? 0 : Math.max(0, Number(completionPoints));
+
+    if (effectiveCompletionRate < 0 || effectiveCompletionRate > 100) {
+      alert('Required completion percentage must be between 0% and 100%.');
       return;
     }
 
-    if (isNaN(completionPoints) || completionPoints < 0) {
+    if (isNaN(effectivePoints) || effectivePoints < 0) {
       alert('Reward points must be a non-negative whole number (e.g. 0 or 50).');
       return;
     }
@@ -1207,15 +1232,15 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       questionTypeDistribution: typeBreakdown,
       availabilityStart: availabilityStart ? new Date(availabilityStart).toISOString() : undefined,
       availabilityEnd: availabilityEnd ? new Date(availabilityEnd).toISOString() : undefined,
-      completionPercentageRequired,
-      completionPoints: Math.max(0, completionPoints),
+      completionPercentageRequired: effectiveCompletionRate,
+      completionPoints: effectivePoints,
       certificateConfig: {
         enabled: certificateEnabled,
         title: `${title.trim()} Certificate of Achievement`,
         templateId: certTemplateId,
         minimumScore: passVal,
-        requiredCompletionPercentage: completionPercentageRequired,
-        completionPoints: Math.max(0, completionPoints),
+        requiredCompletionPercentage: effectiveCompletionRate,
+        completionPoints: effectivePoints,
         authorizedSignerName: certSignerName.trim(),
         authorizedSignerTitle: certSignerTitle.trim(),
         authorizedSignatureImage: certSignerImage || undefined,
@@ -1226,7 +1251,11 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     };
 
     onAssessmentSaved(newAssessment, publish ? 'published' : 'draft');
-    onClose();
+    if (publish) {
+      setPublishedSuccessAssessment(newAssessment);
+    } else {
+      onClose();
+    }
   };
 
   // Filter items in Bulk Import preview
@@ -5102,11 +5131,28 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="100"
                         className="form-input"
                         value={completionPercentageRequired}
-                        onChange={(e) => setCompletionPercentageRequired(Math.min(100, Math.max(1, parseInt(e.target.value) || 100)))}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setCompletionPercentageRequired('');
+                            return;
+                          }
+                          const clean = raw.length > 1 ? raw.replace(/^0+(?=\d)/, '') : raw;
+                          const num = Number(clean);
+                          if (!isNaN(num)) {
+                            setCompletionPercentageRequired(Math.min(100, Math.max(0, num)));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (completionPercentageRequired === '' || isNaN(Number(completionPercentageRequired))) {
+                            setCompletionPercentageRequired(0);
+                          }
+                        }}
                         style={{ 
                           fontSize: '0.9rem', 
                           fontWeight: 600,
@@ -5134,23 +5180,45 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
 
                   <div>
-                    <label className="form-label text-xs">Minimum Passing Score</label>
-                    <div style={{
-                      height: '42px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0 12px',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.88rem',
-                      fontWeight: 700,
-                      color: 'var(--success)'
-                    }}>
-                      {passingMarks} / {totalMarks} Marks ({Math.round((passingMarks / totalMarks) * 100)}%)
+                    <label className="form-label text-xs" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Minimum Passing Score</span>
+                      <span style={{ color: 'var(--success)', fontWeight: 700 }}>
+                        {passingMarks} pts ({Math.round((passingMarks / (totalMarks || 1)) * 100)}%)
+                      </span>
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max={totalMarks}
+                        className="form-input text-xs"
+                        style={{ height: '42px', fontWeight: 700 }}
+                        value={rawPassMarks}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRawPassMarks(val);
+                          const num = parseInt(val, 10);
+                          if (!isNaN(num) && num >= 1 && num <= totalMarks) {
+                            setPassingMarks(num);
+                          }
+                        }}
+                        onBlur={() => {
+                          const num = parseInt(rawPassMarks, 10);
+                          if (isNaN(num) || num < 1) {
+                            setRawPassMarks('1');
+                            setPassingMarks(1);
+                          } else if (num > totalMarks) {
+                            setRawPassMarks(String(totalMarks));
+                            setPassingMarks(totalMarks);
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        / {totalMarks} Marks
+                      </span>
                     </div>
                     <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
-                      Configured in assessment parameters. Satisfies passing criteria.
+                      Candidate must score at least this mark to pass the assessment.
                     </span>
                   </div>
 
@@ -5162,7 +5230,24 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         min="0"
                         className="form-input"
                         value={completionPoints}
-                        onChange={(e) => setCompletionPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setCompletionPoints('');
+                            return;
+                          }
+                          const clean = raw.length > 1 ? raw.replace(/^0+(?=\d)/, '') : raw;
+                          const num = Number(clean);
+                          if (!isNaN(num)) {
+                            setCompletionPoints(Math.max(0, num));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (completionPoints === '' || isNaN(Number(completionPoints))) {
+                            setCompletionPoints(0);
+                          }
+                        }}
                         style={{ 
                           fontSize: '0.9rem', 
                           fontWeight: 600,
@@ -5695,6 +5780,127 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         onCancel={() => setQuestionToDelete(null)}
         isDestructive={true}
       />
+
+      {/* Published Successfully Confirmation Popup Modal */}
+      {publishedSuccessAssessment && (
+        <div
+          className="modal-overlay"
+          style={{
+            zIndex: 1300,
+            background: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '520px',
+              width: '92vw',
+              background: '#181920',
+              border: '1px solid rgba(16, 185, 129, 0.45)',
+              borderRadius: '16px',
+              padding: '28px 24px',
+              textAlign: 'center',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75)',
+            }}
+          >
+            {/* Green Success Badge */}
+            <div
+              style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '50%',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#10B981',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+                border: '2px solid rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 0 25px rgba(16, 185, 129, 0.25)',
+              }}
+            >
+              <CheckCircle2 size={38} />
+            </div>
+
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
+              Assessment Published Successfully!
+            </h3>
+            <p style={{ fontSize: '0.86rem', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.5 }}>
+              <strong style={{ color: '#f8fafc' }}>{publishedSuccessAssessment.title}</strong> is now live and published for enrolled learners.
+            </p>
+
+            {/* Assessment Parameters Overview */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '10px',
+                padding: '14px',
+                marginBottom: '22px',
+                textAlign: 'left',
+              }}
+            >
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Total Questions</span>
+                <strong style={{ color: '#fff', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.questionsData?.length || publishedSuccessAssessment.questionIds?.length || 0} Questions
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Scoring Marks</span>
+                <strong style={{ color: '#fff', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.totalMarks} Marks (Pass: {publishedSuccessAssessment.passingMarks})
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Required Completion</span>
+                <strong style={{ color: '#38bdf8', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.completionPercentageRequired ?? 0}% Rate
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Reward Points</span>
+                <strong style={{ color: '#fbbf24', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.completionPoints ?? 0} pts
+                </strong>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setPublishedSuccessAssessment(null);
+                  onClose();
+                }}
+                style={{
+                  fontWeight: 700,
+                  padding: '10px 28px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                  cursor: 'pointer',
+                  fontSize: '0.88rem',
+                }}
+              >
+                Close & View Assessments
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
   );

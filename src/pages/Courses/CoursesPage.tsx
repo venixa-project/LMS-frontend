@@ -13,7 +13,7 @@ import {
   GraduationCap, Check, X, UserPlus, Award, Send, Share2,
   Link2, Compass, ShieldCheck, Sparkles, Building,
   MoreVertical, ChevronDown, Trash2, ArrowRight, RotateCcw,
-  AlertTriangle, CheckCircle, Info
+  AlertTriangle, CheckCircle, Info, Loader2
 } from 'lucide-react';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
 import { ConfirmationModal } from './components/ConfirmationModal';
@@ -329,9 +329,36 @@ const CoursesManagementPage: React.FC = () => {
     setTimeout(() => setNotice(null), 3500);
   };
 
-  const handleEnrollCourse = (course: Course) => {
-    enrollCourse(course.id);
-    showNotice(`Enrolled in "${course.title}" successfully! You can now access curriculum and materials.`);
+  // Enrollment Popup Modals State
+  const [enrollingCourse, setEnrollingCourse] = useState<Course | null>(null);
+  const [enrolledSuccessCourse, setEnrolledSuccessCourse] = useState<Course | null>(null);
+  const [isSubmittingEnrollment, setIsSubmittingEnrollment] = useState(false);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+
+  const handleOpenEnrollModal = (course: Course) => {
+    setEnrollingCourse(course);
+    setEnrollmentError(null);
+  };
+
+  const handleConfirmEnroll = async () => {
+    if (!enrollingCourse) return;
+    setIsSubmittingEnrollment(true);
+    setEnrollmentError(null);
+    try {
+      const res = await enrollCourse(enrollingCourse.id, user?.id);
+      if (res.success) {
+        const newlyEnrolled = enrollingCourse;
+        setEnrollingCourse(null);
+        setEnrolledSuccessCourse(newlyEnrolled);
+        showNotice(`Enrolled in "${newlyEnrolled.title}" successfully! Stored in database.`);
+      } else {
+        setEnrollmentError(res.message || 'Unable to complete enrollment. Please try again.');
+      }
+    } catch (err: any) {
+      setEnrollmentError(err?.message || 'Database error occurred while enrolling. Please try again.');
+    } finally {
+      setIsSubmittingEnrollment(false);
+    }
   };
 
   // Primary tenant equivalence helper: 'org-001' is the canonical mock/seed alias for tenant '871abf8a-e563-4d0f-afc7-416d8da3df14'
@@ -1157,7 +1184,7 @@ const CoursesManagementPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                           <button
                             type="button"
-                            onClick={() => handleEnrollCourse(c)}
+                            onClick={() => handleOpenEnrollModal(c)}
                             className="btn btn-primary btn-sm"
                             style={{ flex: 1.2, justifyContent: 'center', gap: '6px', fontWeight: 600 }}
                           >
@@ -2441,6 +2468,317 @@ const CoursesManagementPage: React.FC = () => {
         }}
         onCancel={() => setArchiveModalCourse(null)}
       />
+
+      {/* Student Course Enrollment Confirmation Popup Modal */}
+      {enrollingCourse && (
+        <div className="modal-overlay" onClick={() => !isSubmittingEnrollment && setEnrollingCourse(null)}>
+          <div
+            className="modal-card"
+            style={{ maxWidth: '560px', width: '100%', borderRadius: '16px', overflow: 'hidden' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="modal-header"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.08) 100%)',
+                borderBottom: '1px solid var(--border-subtle)',
+                padding: '1.25rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple, #a855f7) 100%)',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)'
+                  }}
+                >
+                  <GraduationCap size={22} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.18rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
+                    Course Enrollment Confirmation
+                  </h3>
+                  <p className="text-muted text-xs" style={{ margin: '2px 0 0 0' }}>
+                    Confirm your registration to unlock curriculum, lessons, and live sessions
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmittingEnrollment}
+                onClick={() => setEnrollingCourse(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: isSubmittingEnrollment ? 'not-allowed' : 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '1.25rem 1.5rem' }}>
+              {/* Course Card Preview */}
+              <div
+                style={{
+                  background: 'var(--bg-subtle, rgba(255,255,255,0.03))',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      color: 'var(--primary-light, #818cf8)'
+                    }}
+                  >
+                    {enrollingCourse.category || 'General'}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#34d399'
+                    }}
+                  >
+                    Open For Enrollment
+                  </span>
+                </div>
+
+                <h4 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {enrollingCourse.title}
+                </h4>
+
+                {enrollingCourse.description && (
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {enrollingCourse.shortDescription || enrollingCourse.description}
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Clock size={14} color="var(--primary)" /> {enrollingCourse.durationHours || 40} hrs curriculum
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Layers size={14} color="var(--primary)" /> {enrollingCourse.modules?.length || 2} Modules
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <BookOpen size={14} color="var(--primary)" /> {(enrollingCourse.modules?.reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 3)} Lessons
+                  </span>
+                </div>
+              </div>
+
+              {/* Benefits Checklist */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)' }}>
+                  <CheckCircle2 size={16} color="#10B981" style={{ flexShrink: 0 }} />
+                  <span><strong>Instant Full Access:</strong> Unrestricted access to all syllabus lessons, code repositories, and recorded media.</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)' }}>
+                  <CheckCircle2 size={16} color="#10B981" style={{ flexShrink: 0 }} />
+                  <span><strong>Real-Time Schedule Sync:</strong> Classes and assessments will immediately reflect in your Personal Timetable.</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)' }}>
+                  <CheckCircle2 size={16} color="#10B981" style={{ flexShrink: 0 }} />
+                  <span><strong>Verifiable Certificate:</strong> Complete 100% of lessons to receive an authenticated digital credential.</span>
+                </div>
+              </div>
+
+              {/* Database Record Badge */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                  borderRadius: '10px',
+                  fontSize: '0.78rem',
+                  color: '#60a5fa',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Info size={16} style={{ flexShrink: 0 }} />
+                <span>Enrolling will write your permanent academic record to the PostgreSQL database for <strong>{user?.displayName || 'Alex Thompson'}</strong> ({user?.email || 'student@lms.demo'}).</span>
+              </div>
+
+              {enrollmentError && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span>{enrollmentError}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={isSubmittingEnrollment}
+                className="btn btn-secondary"
+                onClick={() => setEnrollingCourse(null)}
+                style={{ padding: '9px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingEnrollment}
+                className="btn btn-primary"
+                onClick={handleConfirmEnroll}
+                style={{
+                  padding: '9px 24px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple, #a855f7) 100%)',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                  cursor: isSubmittingEnrollment ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSubmittingEnrollment ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Enrolling into Database...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} /> Confirm & Enroll Now
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Course Enrollment Success Popup Modal */}
+      {enrolledSuccessCourse && (
+        <div className="modal-overlay" onClick={() => setEnrolledSuccessCourse(null)}>
+          <div
+            className="modal-card"
+            style={{ maxWidth: '520px', width: '100%', borderRadius: '16px', overflow: 'hidden', textAlign: 'center' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '2rem 1.5rem 1.5rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Celebration Icon */}
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.28) 100%)',
+                  border: '2px solid rgba(16, 185, 129, 0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10B981',
+                  marginBottom: '1rem',
+                  boxShadow: '0 0 24px rgba(16, 185, 129, 0.35)'
+                }}
+              >
+                <Sparkles size={32} />
+              </div>
+
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
+                🎉 Enrollment Confirmed!
+              </h3>
+              <p style={{ margin: '0 0 18px 0', color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.5 }}>
+                You have successfully enrolled in <strong style={{ color: 'var(--text-primary)' }}>"{enrolledSuccessCourse.title}"</strong>.
+              </p>
+
+              {/* Database Sync Status Box */}
+              <div
+                style={{
+                  width: '100%',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.28)',
+                  borderRadius: '12px',
+                  padding: '14px 16px',
+                  textAlign: 'left',
+                  marginBottom: '20px',
+                  fontSize: '0.82rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10B981', fontWeight: 700, marginBottom: '6px' }}>
+                  <CheckCircle2 size={16} /> Saved to Database & Synchronized
+                </div>
+                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+                  Your enrollment is recorded in PostgreSQL. The course is now active on your <strong>Student Dashboard</strong>, your <strong>My Learning</strong> catalog, and the <strong>Faculty Class Roster</strong>.
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                <Link
+                  to={`/course-player/${enrolledSuccessCourse.id}`}
+                  className="btn btn-primary"
+                  style={{
+                    justifyContent: 'center',
+                    padding: '12px',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    gap: '8px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent-purple, #a855f7) 100%)',
+                    boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35)'
+                  }}
+                >
+                  <Play size={16} /> Start Course Now &rarr;
+                </Link>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <Link
+                    to="/my-learning"
+                    className="btn btn-secondary"
+                    style={{ justifyContent: 'center', padding: '10px', fontSize: '0.86rem', gap: '6px' }}
+                  >
+                    <BookOpen size={15} /> My Learning
+                  </Link>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setEnrolledSuccessCourse(null)}
+                    style={{ justifyContent: 'center', padding: '10px', fontSize: '0.86rem' }}
+                  >
+                    Browse More
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

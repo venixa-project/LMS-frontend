@@ -28,6 +28,7 @@ import {
   stopAllMediaTracks,
   BrowserCapabilityReport,
 } from '../../../lib/proctoringMedia';
+import { arcFaceRecognizer } from '../../../lib/arcFaceRecognizer';
 
 interface Props {
   assessment: Assessment;
@@ -35,6 +36,8 @@ interface Props {
   onReadyToStart: (streams: {
     screenStream?: MediaStream;
     userMediaStream?: MediaStream;
+    candidatePhoto?: string;
+    candidateEmbedding?: Float32Array;
   }) => void;
   onCancel: () => void;
 }
@@ -80,6 +83,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const [micError, setMicError] = useState<string | null>(null);
   const [audioDeviceLabel, setAudioDeviceLabel] = useState<string>('');
   const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [audioCalibrationStatus, setAudioCalibrationStatus] = useState<'idle' | 'calibrating' | 'calibrated'>('idle');
+  const [ambientNoiseBaseline, setAmbientNoiseBaseline] = useState<number>(10);
 
   const [webcamStatus, setWebcamStatus] = useState<CheckStatus>(() => needsWebcam ? 'permission_required' : 'not_required');
   const [webcamError, setWebcamError] = useState<string | null>(null);
@@ -103,10 +108,13 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
   // Check if manual or combined Google Meet invigilation is configured
   const isMeetProctoring =
-    assessment.proctoringMode === 'manual' ||
-    assessment.proctoringMode === 'combined' ||
-    Boolean(assessment.jitsiRoomId) ||
-    Boolean((assessment as any).googleMeetUrl);
+    (assessment.proctoringMode === 'manual' || assessment.proctoringMode === 'combined') &&
+    (Boolean(assessment.jitsiRoomId) || Boolean((assessment as any).googleMeetUrl));
+
+  // Candidate Identity Baseline Photo Capture State
+  const [candidatePhoto, setCandidatePhoto] = useState<string | null>(null);
+  const [candidateEmbedding, setCandidateEmbedding] = useState<Float32Array | null>(null);
+  const [photoVerified, setPhotoVerified] = useState<boolean>(false);
 
   // Consent & accommodations
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
@@ -311,6 +319,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
       let smoothedLevel = 0;
       let lastThrottleUpdate = 0;
+      const calibrationSamples: number[] = [];
+      const calibrationStartTime = Date.now();
+      let hasCompletedCalibration = false;
+      setAudioCalibrationStatus('calibrating');
 
       const updateMeter = (timestamp: number) => {
         if (!analyserRef.current) return;
@@ -352,6 +364,21 @@ export const VeniGuardSetup: React.FC<Props> = ({
         } else {
           smoothedLevel = Math.round(smoothedLevel * 0.82 + targetLevel * 0.18);
           if (smoothedLevel < 1) smoothedLevel = 0;
+        }
+
+        // Room Noise Floor Calibration (First 3 seconds of passive background listening)
+        if (!hasCompletedCalibration) {
+          calibrationSamples.push(smoothedLevel);
+          const elapsed = Date.now() - calibrationStartTime;
+          if (elapsed >= 3000 && calibrationSamples.length >= 15) {
+            hasCompletedCalibration = true;
+            const avg = Math.max(5, Math.round(calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length));
+            setAmbientNoiseBaseline(avg);
+            setAudioCalibrationStatus('calibrated');
+            try {
+              sessionStorage.setItem('veniguard_audio_baseline', String(avg));
+            } catch (e) {}
+          }
         }
 
         // 1. Direct DOM update (hardware-accelerated 60fps with zero React re-render stutter)
@@ -532,6 +559,34 @@ export const VeniGuardSetup: React.FC<Props> = ({
     setNetLatency(latencyMs);
   };
 
+  // 6. Capture Candidate Baseline Photo from Live Webcam
+  const handleCaptureCandidatePhoto = () => {
+    const v = webcamVideoElementRef.current;
+    if (!v) return;
+    try {
+      const c = document.createElement('canvas');
+      c.width = v.videoWidth || 640;
+      c.height = v.videoHeight || 480;
+      const ctx = c.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        const dataUrl = c.toDataURL('image/jpeg', 0.85);
+        setCandidatePhoto(dataUrl);
+        setPhotoVerified(true);
+
+        // Generate ArcFace 512-D reference embedding from baseline photo
+        arcFaceRecognizer.generateEmbedding(c).then((embedding) => {
+          arcFaceRecognizer.setReferenceEmbedding(embedding);
+          setCandidateEmbedding(embedding);
+        }).catch((err) => {
+          console.warn('Could not extract ArcFace embedding from baseline photo:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to capture candidate photo:', e);
+    }
+  };
+
   // Verify active prerequisites based on assessment configuration
   const isScreenSatisfied = !needsScreen || screenStatus === 'connected' || screenStatus === 'not_required';
   const isMicSatisfied = !needsMic || micStatus === 'connected' || micStatus === 'not_required';
@@ -539,6 +594,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const isFullscreenSatisfied = !needsFullscreen || fullscreenStatus === 'connected';
   const isNetSatisfied = netStatus === 'connected';
   const isBrowserSatisfied = browserStatus === 'connected';
+  const isPhotoSatisfied = !needsWebcam || Boolean(candidatePhoto);
 
   const allPrerequisitesSatisfied =
     isScreenSatisfied &&
@@ -547,6 +603,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
     isFullscreenSatisfied &&
     isNetSatisfied &&
     isBrowserSatisfied &&
+    isPhotoSatisfied &&
     consentAcknowledged;
 
   const totalRequiredChecks = [
@@ -556,6 +613,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
     needsFullscreen,
     true, // Network
     true, // Browser
+    needsWebcam, // Candidate Photo
   ].filter(Boolean).length;
 
   // Calculate pass percentage safely
@@ -572,7 +630,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const handleStartExam = () => {
     if (!allPrerequisitesSatisfied) return;
 
-    // Automatically launch Google Meet room for the student if not already opened
+    // Automatically launch Google Meet room for the student if manual or combined mode
     if (!hasOpenedMeetRef.current && isMeetProctoring) {
       hasOpenedMeetRef.current = true;
       const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
@@ -601,6 +659,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
     onReadyToStart({
       screenStream: screenStreamRef.current || undefined,
       userMediaStream,
+      candidatePhoto: candidatePhoto || undefined,
+      candidateEmbedding: candidateEmbedding || undefined,
     });
   };
 
@@ -852,6 +912,25 @@ export const VeniGuardSetup: React.FC<Props> = ({
                       borderRadius: '4px',
                     }}
                   />
+                </div>
+
+                {/* Room Acoustic Noise Calibration & Hardware DSP Status */}
+                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '0.74rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {audioCalibrationStatus === 'calibrating' ? (
+                      <span style={{ color: '#F59E0B', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                        <RefreshCw size={12} className="spin-slow" /> Calibrating Room Acoustics (3s)... Please remain quiet.
+                      </span>
+                    ) : (
+                      <span style={{ color: ambientNoiseBaseline > 40 ? '#F59E0B' : 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                        <CheckCircle2 size={12} /> Room Ambient Baseline: {ambientNoiseBaseline}% RMS
+                        ({ambientNoiseBaseline < 25 ? 'Optimal Quiet Room' : ambientNoiseBaseline <= 40 ? 'Moderate Filtered' : 'High Background Noise'})
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    DSP Noise Suppression + Vocal Activity Filter Active
+                  </span>
                 </div>
               </div>
             )}
@@ -1380,156 +1459,269 @@ export const VeniGuardSetup: React.FC<Props> = ({
             </div>
           </div>
 
-                    {/* 7. Google Meet Video Conference Bridge Card */}
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: '16px 20px',
-              borderRadius: 'var(--radius-md)',
-              background: 'linear-gradient(135deg, rgba(84, 71, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)',
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    color: '#FFFFFF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <GoogleMeetIcon size={22} />
+          {/* 7. Proctoring Mode Card: Google Meet (Manual) OR Automated Instructions & Candidate Photo Verification */}
+          {isMeetProctoring ? (
+            <div
+              style={{
+                gridColumn: '1 / -1',
+                padding: '16px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'linear-gradient(135deg, rgba(84, 71, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <GoogleMeetIcon size={22} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Google Meet Live Video Conference
+                      <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Ready to Join</span>
+                    </div>
+                    <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                      {jitsiEndpoints.webUrl === 'https://meet.google.com/new'
+                        ? 'Launch an instant Google Meet room (creates active video call with live camera & microphone).'
+                        : <span>Live meeting room: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong></span>}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Google Meet Live Video Conference
-                    <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Ready to Join</span>
-                  </div>
-                  <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-                    {jitsiEndpoints.webUrl === 'https://meet.google.com/new'
-                      ? 'Launch an instant Google Meet room (creates active video call with live camera & microphone).'
-                      : <span>Live meeting room: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong></span>}
-                  </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      hasOpenedMeetRef.current = true;
+                      const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
+                      const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
+                      launchJitsiConference(finalUrl);
+                    }}
+                    style={{
+                      fontSize: '0.8rem',
+                      padding: '7px 16px',
+                      fontWeight: 700,
+                      gap: '6px',
+                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      border: 'none',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                    }}
+                  >
+                    <ExternalLink size={14} /> Open in Google Meet &rarr;
+                  </button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+              {/* Custom Meet Code or Link Join Bar */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'rgba(5, 8, 22, 0.45)',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  Join with teacher's code:
+                </span>
+                <input
+                  type="text"
+                  value={customMeetInput}
+                  onChange={(e) => setCustomMeetInput(e.target.value)}
+                  placeholder="e.g. abc-defg-hij or meet.google.com/abc-defg-hij"
+                  style={{
+                    flex: '1 1 200px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    fontSize: '0.78rem',
+                    color: '#fff',
+                  }}
+                />
                 <button
                   type="button"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-secondary btn-sm"
                   onClick={() => {
-                    hasOpenedMeetRef.current = true;
-                    const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
+                    if (!customMeetInput.trim()) {
+                      launchJitsiConference('https://meet.google.com/new');
+                      return;
+                    }
+                    const target = customMeetInput.trim();
                     const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
                     launchJitsiConference(finalUrl);
                   }}
-                  style={{
-                    fontSize: '0.8rem',
-                    padding: '7px 16px',
-                    fontWeight: 700,
-                    gap: '6px',
-                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                    border: 'none',
-                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                  }}
+                  style={{ fontSize: '0.74rem', padding: '4px 10px', gap: '4px' }}
                 >
-                  <ExternalLink size={14} /> Open in Google Meet &rarr;
+                  Join Code
                 </button>
               </div>
             </div>
-
-            {/* Custom Meet Code or Link Join Bar */}
+          ) : (
+            /* Automated Proctoring: Official Instructions + Candidate Identity Photo Capture */
             <div
               style={{
+                gridColumn: '1 / -1',
                 display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(5, 8, 22, 0.45)',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                flexWrap: 'wrap',
+                flexDirection: 'column',
+                gap: '16px',
               }}
             >
-              <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                Join with teacher's code:
-              </span>
-              <input
-                type="text"
-                value={customMeetInput}
-                onChange={(e) => setCustomMeetInput(e.target.value)}
-                placeholder="e.g. abc-defg-hij or meet.google.com/abc-defg-hij"
+              {/* Instructions Card */}
+              <div
                 style={{
-                  flex: '1 1 200px',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '0.78rem',
-                  color: '#fff',
+                  padding: '18px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(37, 99, 235, 0.05) 100%)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
                 }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  if (!customMeetInput.trim()) {
-                    launchJitsiConference('https://meet.google.com/new');
-                    return;
-                  }
-                  const target = customMeetInput.trim();
-                  const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
-                  launchJitsiConference(finalUrl);
-                }}
-                style={{ fontSize: '0.74rem', padding: '4px 10px', gap: '4px' }}
               >
-                Join Code
-              </button>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Shield size={22} color="var(--primary)" />
+                  <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-main)' }}>
+                    Automated Examination Integrity Rules & Candidate Instructions
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', fontSize: '0.82rem' }}>
+                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    <strong style={{ color: '#38bdf8' }}>1. Single Candidate Only</strong>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Only you must be present in the camera frame. If more than 1 face is detected, a critical violation is logged.
+                    </p>
+                  </div>
+                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    <strong style={{ color: '#f59e0b' }}>2. Strict 3-Warning Rule</strong>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      You receive a maximum of 3 warnings. On the 3rd strike, your examination is immediately terminated and auto-submitted!
+                    </p>
+                  </div>
+                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    <strong style={{ color: '#ef4444' }}>3. No Tab or Window Switching</strong>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Navigating away, clicking other windows, or exiting full-screen mode counts directly towards your 3 warnings.
+                    </p>
+                  </div>
+                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    <strong style={{ color: '#10b981' }}>4. 7-Day Proof & Withheld Results</strong>
+                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Results are withheld upon completion. Your trainer/admin will review the 7-day proof video and release your grades.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-            {/* Info details forwarded to Google Meet */}
-            <div
-              style={{
-                background: 'rgba(5, 8, 22, 0.55)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                fontSize: '0.78rem',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '8px',
-              }}
-            >
-              <div>
-                <span className="text-muted">Candidate Identity:</span>{' '}
-                <strong style={{ color: 'var(--text-main)' }}>{candidateName}</strong>
-              </div>
-              <div>
-                <span className="text-muted">Account Email:</span>{' '}
-                <strong style={{ color: 'var(--text-main)' }}>{candidateEmail}</strong>
-              </div>
-              <div>
-                <span className="text-muted">Media Permissions:</span>{' '}
-                <span style={{ color: '#10B981', fontWeight: 600 }}>Webcam & Audio Ready</span>
-              </div>
-              <div>
-                <span className="text-muted">Platform:</span>{' '}
-                <span style={{ color: '#10B981', fontWeight: 600 }}>Google Meet</span>
-              </div>
+              {/* Candidate Baseline Identity Photo Capture Card */}
+              {needsWebcam && (
+                <div
+                  style={{
+                    padding: '18px 20px',
+                    borderRadius: 'var(--radius-md)',
+                    background: candidatePhoto ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)',
+                    border: candidatePhoto ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    {candidatePhoto ? (
+                      <img
+                        src={candidatePhoto}
+                        alt="Candidate Identity Photo"
+                        style={{
+                          width: '72px',
+                          height: '72px',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          border: '2px solid #10b981',
+                          boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '64px',
+                          height: '64px',
+                          borderRadius: '50%',
+                          background: 'rgba(99, 102, 241, 0.12)',
+                          color: 'var(--primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '2px dashed var(--primary)',
+                        }}
+                      >
+                        <Camera size={26} />
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Candidate Identity Photo Verification
+                        {candidatePhoto ? (
+                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={13} /> Photo Verified
+                          </span>
+                        ) : (
+                          <span style={{ color: '#f59e0b', fontSize: '0.75rem', fontWeight: 700 }}>*Photo Required</span>
+                        )}
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: '4px 0 0 0', lineHeight: 1.4 }}>
+                        {candidatePhoto
+                          ? `Identity snapshot registered for ${candidateName}. Only this student is permitted to write the examination.`
+                          : 'Position your face clearly in front of the camera and capture your identity photo before starting.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      className={candidatePhoto ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+                      onClick={handleCaptureCandidatePhoto}
+                      disabled={webcamStatus !== 'connected'}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 700,
+                        padding: '8px 16px',
+                      }}
+                    >
+                      <Camera size={15} />
+                      {candidatePhoto ? 'Retake Photo' : 'Capture Candidate Photo'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         
 </div>
 
