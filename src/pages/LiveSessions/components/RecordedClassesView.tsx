@@ -429,7 +429,6 @@ export const RecordedClassesView: React.FC<Props> = ({
               { id: 'all', label: 'All Recordings' },
               { id: 'completed', label: 'Watched' },
               { id: 'in_progress', label: 'In Progress' },
-              { id: 'unwatched', label: 'Unwatched' },
               { id: 'bookmarked', label: '★ Bookmarked' },
             ].map((tab) => (
               <button
@@ -792,11 +791,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                         <span style={{ color: 'var(--primary)' }}>
                           {progress}% Watched
                         </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          Not started
-                        </span>
-                      )}
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -932,9 +927,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                           <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>Watched</span>
                         ) : progress > 0 ? (
                           <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>{progress}%</span>
-                        ) : (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Unwatched</span>
-                        )}
+                        ) : null}
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
