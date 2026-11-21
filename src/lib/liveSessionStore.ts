@@ -46,6 +46,11 @@ interface LiveSessionState {
   updateRecordingUrl: (sessionId: string, recordingUrl: string) => Promise<{ success: boolean }>;
   deleteSession: (sessionId: string) => { success: boolean };
   toggleBookmark: (sessionId: string) => void;
+  recordAttendance: (
+    sessionId: string,
+    records: { userId: string; status: 'present' | 'absent' | 'late' | 'excused'; notes?: string }[]
+  ) => Promise<{ success: boolean; message?: string }>;
+  studentJoinSession: (sessionId: string) => Promise<{ success: boolean; attendance?: any; error?: string }>;
 }
 
 const STORAGE_KEY_SESSIONS = 'venilearn_live_sessions';
@@ -623,5 +628,30 @@ export const useLiveSessionStore = create<LiveSessionState>((set, get) => ({
     );
     set({ sessions: updated });
     persistSessions(updated);
+  },
+
+  studentJoinSession: async (sessionId: string) => {
+    try {
+      const res = await apiClient.post<any>(`/live-sessions/${sessionId}/join`);
+      await get().fetchSessions();
+      return { success: true, attendance: res?.data };
+    } catch (err: any) {
+      console.warn('Student join session error:', err);
+      return { success: false, error: err?.message };
+    }
+  },
+
+  recordAttendance: async (
+    sessionId: string,
+    records: { userId: string; status: 'present' | 'absent' | 'late' | 'excused'; notes?: string }[]
+  ) => {
+    try {
+      const res = await apiClient.put<any>(`/live-sessions/${sessionId}/attendance`, { records });
+      await get().fetchSessions();
+      return { success: true, message: res?.message || 'Attendance updated successfully' };
+    } catch (err: any) {
+      console.error('Record attendance error:', err);
+      return { success: false, message: err?.response?.data?.message || err?.message || 'Failed to record attendance' };
+    }
   },
 }));

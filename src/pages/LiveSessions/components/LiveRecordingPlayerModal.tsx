@@ -1,6 +1,8 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { LiveSession } from '../../../types';
 import { useAuthStore } from '../../../lib/store';
+import { usePeopleStore } from '../../../lib/peopleStore';
+import { apiClient } from '../../../lib/apiClient';
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, X, Download, FileText,
   Clock, CheckCircle2, Bookmark, Sparkles, MessageSquare,
@@ -25,8 +27,24 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [actualDuration, setActualDuration] = useState<number>(0);
   const [activeBottomTab, setActiveBottomTab] = useState<'chapters' | 'chat' | 'attendance' | 'takeaways'>('chapters');
+  const [realAttendance, setRealAttendance] = useState<any[]>([]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !session?.id) return;
+    apiClient
+      .get(`/live-sessions/${session.id}/attendance`)
+      .then((res) => {
+        if (res && res.data) {
+          const list = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
+          if (list.length > 0) {
+            setRealAttendance(list);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, session?.id]);
 
   const totalDuration = useMemo(() => {
     if (actualDuration > 0) return Math.floor(actualDuration);
@@ -123,14 +141,54 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     { id: '6', sender: 'Sophia Patel', role: 'Student', text: 'Could you please re-highlight the difference between compilation and runtime execution?', time: '10:38' },
   ], [session]);
 
-  // Class Attendance Roster
-  const attendanceRoster = useMemo(() => [
-    { id: '1', name: 'Alex Thompson', rollNo: 'CS-2024-007', status: 'Present (Checked In)', joinTime: '10:01' },
-    { id: '2', name: 'Maria Garcia', rollNo: 'CS-2024-012', status: 'Present (Checked In)', joinTime: '10:02' },
-    { id: '3', name: 'David Kim', rollNo: 'CS-2024-019', status: 'Present (Checked In)', joinTime: '10:04' },
-    { id: '4', name: 'Sophia Patel', rollNo: 'CS-2024-025', status: 'Present (Checked In)', joinTime: '10:05' },
-    { id: '5', name: `${user?.displayName || 'Ravi Varma'} (You)`, rollNo: user?.rollNo || '26', status: 'Absent (Replaying Recording)', joinTime: 'Watched Replay' },
-  ], [user?.displayName, user?.rollNo]);
+  // Class Attendance Roster dynamically resolved from database
+  const attendanceRoster = useMemo(() => {
+    if (realAttendance.length > 0) {
+      return realAttendance.map((att: any, idx: number) => {
+        const isSelf = att.userId === user?.id;
+        return {
+          id: att.userId || String(idx),
+          name: isSelf ? `${user?.displayName || att.name} (You)` : (att.name || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || att.rollNo || '26') : (att.rollNo || 'STU-001'),
+          status: att.status === 'present' ? 'Present (Checked In)' : att.status === 'late' ? 'Joined Late' : (isSelf ? 'Watched Replay' : 'Absent (Did Not Join)'),
+          joinTime: att.joinedAt ? new Date(att.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (att.status === 'present' ? 'Attended' : (isSelf ? 'Watched Replay' : 'Not Joined')),
+        };
+      });
+    }
+
+    if (session?.attendance && session.attendance.length > 0) {
+      return session.attendance.map((att: any, idx: number) => {
+        const isSelf = att.userId === user?.id;
+        return {
+          id: att.userId || String(idx),
+          name: isSelf ? `${user?.displayName || att.user?.displayName} (You)` : (att.user?.displayName || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || att.user?.rollNo || '26') : (att.user?.rollNo || 'STU-001'),
+          status: att.status === 'present' ? 'Present (Checked In)' : att.status === 'late' ? 'Joined Late' : (isSelf ? 'Watched Replay' : 'Absent'),
+          joinTime: att.joinedAt ? new Date(att.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Attended',
+        };
+      });
+    }
+
+    const registeredScholars = usePeopleStore.getState().users.filter(
+      (u) => u.activeRole === 'student' || u.activeRole === 'learner'
+    );
+    if (registeredScholars.length > 0) {
+      return registeredScholars.map((u, idx) => {
+        const isSelf = u.id === user?.id;
+        return {
+          id: u.id || String(idx),
+          name: isSelf ? `${user?.displayName || u.displayName} (You)` : (u.displayName || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || u.rollNo || '26') : (u.rollNo || 'STU-001'),
+          status: isSelf ? 'Watched Replay' : 'Absent',
+          joinTime: isSelf ? 'Watched Replay' : 'Not Joined',
+        };
+      });
+    }
+
+    return [
+      { id: '1', name: `${user?.displayName || 'Ravi Varma'} (You)`, rollNo: user?.rollNo || '26', status: 'Watched Replay', joinTime: 'Watched Replay' },
+    ];
+  }, [realAttendance, session?.attendance, user]);
 
   if (!isOpen || !session) return null;
 

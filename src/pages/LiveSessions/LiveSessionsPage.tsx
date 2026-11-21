@@ -28,6 +28,7 @@ import { useScreenRecorder } from '../../lib/useScreenRecorder';
 import { MeetingProviderBadge, GoogleMeetJoinButton, GoogleMeetIcon } from '../../components/GoogleMeet';
 import { openGoogleMeetSession, isValidGoogleMeetUrl } from '../../lib/googleMeet';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { apiClient } from '../../lib/apiClient';
 
 // Dedicated Sub-Pages for Backward Compatibility & Direct Routing
 import { TimetablePage } from './TimetablePage';
@@ -1476,6 +1477,9 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                       href={selectedDetailSession.meetingUrl || selectedDetailSession.joinLink}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        apiClient.post(`/live-sessions/${selectedDetailSession.id}/join`).catch(() => {});
+                      }}
                       style={{
                         color: '#38bdf8',
                         fontSize: '0.8rem',
