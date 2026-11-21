@@ -548,6 +548,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       notifications,
       unreadNotifications: notifications.filter((n) => !n.isRead).length,
     });
+
+    // Notify listeners to refresh domain stores for the new role context
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('venilearn_role_switched', { detail: { role: targetRole } }));
+      } catch {}
+    }
   },
 
   can: (action: PermissionAction, resource: PermissionResource) => {

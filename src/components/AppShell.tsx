@@ -37,6 +37,15 @@ export const AppShell: React.FC = () => {
       };
       window.addEventListener('storage', handleStorage);
 
+      // Invalidate and refresh secondary domain stores on role switch
+      const handleRoleSwitch = () => {
+        fetchNotifications();
+        usePeopleStore.getState().fetchPeople().catch(() => {});
+        useCourseStore.getState().fetchCourses().catch(() => {});
+        useAssessmentStore.getState().fetchAssessments().catch(() => {});
+      };
+      window.addEventListener('venilearn_role_switched', handleRoleSwitch);
+
       const notifBc = typeof BroadcastChannel !== 'undefined'
         ? new BroadcastChannel('venilearn_notifications_broadcast_v1')
         : null;
@@ -84,6 +93,7 @@ export const AppShell: React.FC = () => {
 
       return () => {
         window.removeEventListener('storage', handleStorage);
+        window.removeEventListener('venilearn_role_switched', handleRoleSwitch);
         if (notifBc) notifBc.close();
         clearInterval(pollTimer);
       };
