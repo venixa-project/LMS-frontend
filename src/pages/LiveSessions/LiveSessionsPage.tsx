@@ -160,7 +160,10 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     cancelRecording,
   } = useScreenRecorder();
 
-  const handleStartMeetingRecording = async (s: LiveSession) => {
+  const [recordingGuideSession, setRecordingGuideSession] = useState<LiveSession | null>(null);
+
+  const confirmStartRecording = async (s: LiveSession) => {
+    setRecordingGuideSession(null);
     const res = await startRecording({ id: s.id, title: s.title, withMic: true });
     if (res.success) {
       showNotice(`Screen recorder active! In Chrome's popup, select the Google Meet tab to capture your webcam, motions & audio.`);
@@ -169,7 +172,17 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
     }
   };
 
+  const handleStartMeetingRecording = (s: LiveSession) => {
+    setRecordingGuideSession(s);
+  };
+
   const handleStopAndSaveRecorder = async () => {
+    if (recorderState.duration < 10) {
+      const ok = window.confirm(
+        `Notice: Your recording is only ${recorderState.duration} second(s) long.\n\nIf you were still in the Google Meet lobby ("Getting ready..."), saving now will only record that preview screen.\n\nDo you want to save this short recording anyway? Click Cancel to keep recording.`
+      );
+      if (!ok) return;
+    }
     const res = await stopRecording();
     if (res.success) {
       await fetchSessions();
@@ -1279,6 +1292,127 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
           isOpen={Boolean(recordingModalSession)}
           onClose={() => setRecordingModalSession(null)}
         />
+      )}
+
+      {/* MODAL: GOOGLE MEET RECORDING PRE-FLIGHT GUIDANCE */}
+      {recordingGuideSession && (
+        <div
+          className="modal-overlay"
+          onClick={() => setRecordingGuideSession(null)}
+          style={{
+            zIndex: 75,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '520px',
+              width: '90%',
+              borderRadius: '16px',
+              padding: '24px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Radio size={20} color="#ef4444" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Start Live Class Recording
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    Standard 480p SD • Mixed Microphone & Tab Audio
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecordingGuideSession(null)}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: 4, borderRadius: '50%' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                marginBottom: '18px',
+                fontSize: '0.85rem',
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={16} /> Important Checklist Before Starting:
+              </div>
+              <ol style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-main)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <li>
+                  Make sure you have clicked <strong>"Join now"</strong> in Google Meet and are inside the active meeting room (not on the "Getting ready..." lobby screen).
+                </li>
+                <li>
+                  In Chrome's next popup, select the <strong>Chrome Tab</strong> containing Google Meet.
+                </li>
+                <li>
+                  Ensure <strong>"Also share tab audio"</strong> is checked so student and trainer voices are recorded.
+                </li>
+              </ol>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setRecordingGuideSession(null)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '8px 16px', fontSize: '0.82rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmStartRecording(recordingGuideSession)}
+                className="btn btn-primary btn-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  borderColor: '#ef4444',
+                  padding: '8px 18px',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Radio size={14} /> I'm In The Meeting — Start Recording
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* MODAL 4: SESSION TARGET AUDIENCE & ROSTER */}

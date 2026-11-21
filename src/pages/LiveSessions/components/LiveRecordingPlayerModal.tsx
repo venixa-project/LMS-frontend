@@ -46,21 +46,47 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
       .catch(() => {});
   }, [isOpen, session?.id]);
 
+  const metaDurationSeconds = useMemo(() => {
+    if (session?.durationSeconds && session.durationSeconds > 0) return session.durationSeconds;
+    if (Array.isArray(session?.materials)) {
+      const recMeta = (session.materials as any[]).find((m: any) => m && m.type === 'recording_meta');
+      if (recMeta && typeof recMeta.durationSeconds === 'number' && recMeta.durationSeconds > 0) {
+        return recMeta.durationSeconds;
+      }
+    }
+    return null;
+  }, [session?.durationSeconds, session?.materials]);
+
   const totalDuration = useMemo(() => {
     if (actualDuration > 0) return Math.floor(actualDuration);
-    if (session?.durationSeconds && session.durationSeconds > 0) {
-      return session.durationSeconds;
-    }
+    if (metaDurationSeconds && metaDurationSeconds > 0) return metaDurationSeconds;
     if (session?.durationMinutes && session.durationMinutes > 0) {
       return session.durationMinutes * 60;
     }
     return 60;
-  }, [actualDuration, session?.durationSeconds, session?.durationMinutes]);
+  }, [actualDuration, metaDurationSeconds, session?.durationMinutes]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleSeek = (timeSecs: number) => {
+    const maxDur = actualDuration > 0 ? actualDuration : totalDuration;
+    const clamped = Math.max(0, Math.min(timeSecs, maxDur));
+    setCurrentTime(clamped);
+    if (videoRef.current) {
+      try {
+        videoRef.current.currentTime = clamped;
+      } catch (err) {
+        console.warn('Seek error:', err);
+      }
+      if (!isPlaying) {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
   };
 
   const handleSpeedChange = (speed: number) => {
@@ -106,7 +132,13 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
       }
     }
 
-    if (totalDuration <= 30) {
+    if (totalDuration <= 10) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Session Recording Start' },
+        { time: formatTime(Math.max(1, totalDuration - 1)), seconds: Math.max(1, totalDuration - 1), title: 'Class Concluded' },
+      ];
+    }
+    if (totalDuration <= 45) {
       return [
         { time: '00:00', seconds: 0, title: 'Session Recording Start' },
         { time: formatTime(Math.floor(totalDuration * 0.5)), seconds: Math.floor(totalDuration * 0.5), title: 'Live Demonstration & Class Topic' },
@@ -296,6 +328,26 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               autoPlay
               playsInline
               onLoadedMetadata={(e) => {
+                const vid = e.currentTarget;
+                const d = vid.duration;
+                if (d && !isNaN(d) && isFinite(d) && d > 0) {
+                  setActualDuration(d);
+                } else if (metaDurationSeconds && metaDurationSeconds > 0) {
+                  setActualDuration(metaDurationSeconds);
+                } else {
+                  // Chromium WebM Infinity duration workaround: seek to end to read true duration
+                  const onTimeUpdateTemp = () => {
+                    vid.removeEventListener('timeupdate', onTimeUpdateTemp);
+                    vid.currentTime = 0;
+                    if (isFinite(vid.duration) && vid.duration > 0) {
+                      setActualDuration(vid.duration);
+                    }
+                  };
+                  vid.addEventListener('timeupdate', onTimeUpdateTemp);
+                  vid.currentTime = 1e101;
+                }
+              }}
+              onDurationChange={(e) => {
                 const d = e.currentTarget.duration;
                 if (d && !isNaN(d) && isFinite(d) && d > 0) {
                   setActualDuration(d);
@@ -304,6 +356,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               onTimeUpdate={(e) => {
                 setCurrentTime(Math.floor(e.currentTarget.currentTime));
               }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
@@ -421,7 +475,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
                   min={0}
                   max={totalDuration}
                   value={currentTime}
-                  onChange={(e) => setCurrentTime(Number(e.target.value))}
+                  onChange={(e) => handleSeek(Number(e.target.value))}
                   style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer', height: '4px' }}
                 />
 
@@ -586,10 +640,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
                     border: '1px solid var(--border-subtle)',
                     transition: 'all 0.15s ease',
                   }}
-                  onClick={() => {
-                    setCurrentTime(ch.seconds);
-                    setIsPlaying(true);
-                  }}
+                  onClick={() => handleSeek(ch.seconds)}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Play size={12} color="var(--primary)" />

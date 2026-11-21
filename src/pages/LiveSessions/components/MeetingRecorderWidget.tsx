@@ -28,6 +28,16 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleStopClick = () => {
+    if (state.duration < 10) {
+      const ok = window.confirm(
+        `Notice: Your recording is only ${state.duration} second(s) long.\n\nIf you were still in the Google Meet lobby ("Getting ready..."), saving now will only record that preview screen.\n\nDo you want to save this short recording anyway? Click Cancel to keep recording.`
+      );
+      if (!ok) return;
+    }
+    onStop();
+  };
+
   return (
     <div
       style={{
@@ -159,7 +169,7 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
 
             <button
               type="button"
-              onClick={onStop}
+              onClick={handleStopClick}
               className="btn btn-primary btn-sm"
               title="Stop and save recording to Recorded Classes"
               style={{
