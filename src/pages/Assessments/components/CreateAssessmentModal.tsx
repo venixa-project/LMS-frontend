@@ -65,11 +65,12 @@ import {
 } from '../../../lib/bulkImportService';
 import { useAuthStore } from '../../../lib/store';
 import { useSignatureStore } from '../../../lib/signatureStore';
+import { apiClient } from '../../../lib/apiClient';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onAssessmentSaved: (assessment: Assessment, status: 'published' | 'draft') => void;
+  onAssessmentSaved: (assessment: Assessment, status: 'published' | 'draft') => Promise<{ success: boolean; error?: string }> | void;
   initialDraft?: Assessment | null;
   defaultCourseId?: string;
 }
@@ -214,6 +215,28 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       tabSwitchDetection: true,
     }
   );
+  // Configurable Auto-Proctoring Warning Interval (default: 120s / 2 minutes)
+  const [warningIntervalSeconds, setWarningIntervalSeconds] = useState<number>(() => {
+    if (initialDraft?.warningIntervalSeconds !== undefined) {
+      return Number(initialDraft.warningIntervalSeconds);
+    }
+    if (initialDraft?.proctoringSettings?.warningIntervalSeconds !== undefined) {
+      return Number(initialDraft.proctoringSettings.warningIntervalSeconds);
+    }
+    return 120;
+  });
+  const [isCustomInterval, setIsCustomInterval] = useState<boolean>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return ![30, 60, 120, 180, 300, 600].includes(Number(current));
+  });
+  const [customIntervalValue, setCustomIntervalValue] = useState<number>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return Number(current) % 60 === 0 ? Number(current) / 60 : Number(current);
+  });
+  const [customIntervalUnit, setCustomIntervalUnit] = useState<'minutes' | 'seconds'>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return Number(current) % 60 === 0 ? 'minutes' : 'seconds';
+  });
   const [proctoringPolicyLevel, setProctoringPolicyLevel] = useState<ProctoringPolicyLevel>(
     initialDraft?.proctoringPolicyLevel || 'monitored'
   );
@@ -252,6 +275,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   } | null>(null);
   const [isPinging, setIsPinging] = useState<boolean>(false);
   const [transcriptSearch, setTranscriptSearch] = useState<string>('');
+  const [videoS3Url, setVideoS3Url] = useState<string | null>(null);
+  const [isPersisting, setIsPersisting] = useState<boolean>(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   // AI Configuration State
   const [aiDifficulty, setAiDifficulty] = useState<AssessmentDifficultySetting>('mixed');
@@ -673,6 +699,20 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         return;
       }
 
+      // Persist document binary directly to AWS S3 storage
+      try {
+        setUploadStageText('Persisting document to AWS S3 bucket...');
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadRes = await apiClient.upload<{ url: string; s3Key: string }>('/assessments/upload-media', formData);
+        if (uploadRes?.data?.url) {
+          result.docInfo.url = uploadRes.data.url;
+          (result.docInfo as any).s3Key = uploadRes.data.s3Key;
+        }
+      } catch (uploadErr) {
+        console.warn('Document AWS S3 upload warning (continuing with local text):', uploadErr);
+      }
+
       setUploadedDoc(result.docInfo);
       setIsUploading(false);
       setUploadProgress(100);
@@ -902,6 +942,19 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setVideoTranscript(res.transcript);
       setVideoSegments(res.segments || []);
 
+      // Persist video to secure AWS S3 storage
+      try {
+        setVideoStageText('Uploading video to secure AWS S3 bucket...');
+        const formData = new FormData();
+        formData.append('file', videoFile);
+        const uploadRes = await apiClient.upload<{ url: string; s3Key: string }>('/assessments/upload-media', formData);
+        if (uploadRes?.data?.url) {
+          setVideoS3Url(uploadRes.data.url);
+        }
+      } catch (s3Err) {
+        console.warn('Video AWS S3 upload warning:', s3Err);
+      }
+
       // Set verified questions matching exact requested count
       const merged = res.questions;
       setQuestions(merged);
@@ -1070,7 +1123,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   };
 
   // Final Publish or Save Draft Validation
-  const handleFinalizeAssessment = (publish: boolean) => {
+  const handleFinalizeAssessment = async (publish: boolean) => {
     if (!title.trim()) {
       alert('Assessment title is required.');
       return;
@@ -1190,6 +1243,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       ? (jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') ? jitsiRoomId : handleGenerateMeetLink())
       : undefined;
 
+    const effectiveWarningInterval = isCustomInterval
+      ? Math.max(10, Math.min(3600, customIntervalUnit === 'minutes' ? (customIntervalValue || 2) * 60 : (customIntervalValue || 120)))
+      : (warningIntervalSeconds || 120);
+
+    const mergedProctoringSettings: ProctoringSettings = {
+      ...proctoringSettings,
+      warningIntervalSeconds: effectiveWarningInterval,
+      maxProctoringWarnings: 3,
+      thirdWarningAction: 'auto_submit',
+    };
+
     const newAssessment: Assessment = {
       id: assessmentId,
       title: title.trim(),
@@ -1206,7 +1270,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       proctoringMode,
       jitsiRoomId: resolvedMeetUrl,
       googleMeetUrl: resolvedMeetUrl,
-      proctoringSettings,
+      warningIntervalSeconds: effectiveWarningInterval,
+      maxProctoringWarnings: 3,
+      thirdWarningAction: 'auto_submit',
+      proctoringSettings: mergedProctoringSettings,
       proctoringPolicyLevel: proctoringRequired ? proctoringPolicyLevel : 'basic',
       aiGradingEnabled,
       questionIds: convertedQuestions.map((q) => q.id),
@@ -1218,16 +1285,21 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             name: uploadedDoc.name,
             size: uploadedDoc.size,
             type: uploadedDoc.type,
-            extractedWordCount: uploadedDoc.wordCount || 0
+            extractedWordCount: uploadedDoc.wordCount || 0,
+            url: uploadedDoc.url,
+            s3Key: (uploadedDoc as any).s3Key
           }
         : videoFile
         ? {
             name: videoFile.name,
             size: videoFile.size,
             type: 'video/mp4',
-            extractedWordCount: videoTranscript ? videoTranscript.split(/\s+/).length : 0
+            extractedWordCount: videoTranscript ? videoTranscript.split(/\s+/).length : 0,
+            url: videoS3Url || undefined
           }
         : undefined,
+      mediaUrl: videoS3Url || uploadedDoc?.url,
+      videoUrl: videoS3Url || undefined,
       difficultyDistribution: difficultyBreakdown,
       questionTypeDistribution: typeBreakdown,
       availabilityStart: availabilityStart ? new Date(availabilityStart).toISOString() : undefined,
@@ -1244,17 +1316,38 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         authorizedSignerName: certSignerName.trim(),
         authorizedSignerTitle: certSignerTitle.trim(),
         authorizedSignatureImage: certSignerImage || undefined,
+        sourceDocument: uploadedDoc ? {
+          name: uploadedDoc.name,
+          size: uploadedDoc.size,
+          type: uploadedDoc.type,
+          url: uploadedDoc.url,
+          s3Key: (uploadedDoc as any).s3Key
+        } : undefined,
+        videoUrl: videoS3Url || undefined,
+        mediaUrl: videoS3Url || uploadedDoc?.url,
       },
       status: publish ? 'published' : 'draft',
       createdAt: initialDraft?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    onAssessmentSaved(newAssessment, publish ? 'published' : 'draft');
-    if (publish) {
-      setPublishedSuccessAssessment(newAssessment);
-    } else {
-      onClose();
+    setIsPersisting(true);
+    setPersistError(null);
+    try {
+      const res = await onAssessmentSaved(newAssessment, publish ? 'published' : 'draft');
+      setIsPersisting(false);
+      if (res && res.success === false) {
+        setPersistError(res.error || 'Failed to save assessment to server database.');
+        return;
+      }
+      if (publish) {
+        setPublishedSuccessAssessment(newAssessment);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setIsPersisting(false);
+      setPersistError(err?.message || 'Server error while persisting assessment to database.');
     }
   };
 
@@ -2251,6 +2344,99 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         />
                         <span>Screen sharing</span>
                       </label>
+                    </div>
+
+                    {/* Auto-Proctoring Warning Interval & Three-Strike Configuration */}
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        paddingTop: '10px',
+                        borderTop: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <AlertTriangle size={14} color="#F59E0B" /> Warning Interval (Time Between Warnings)
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                            Max Warnings: 3
+                          </span>
+                          <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                            Action After 3rd Strike: Auto-Submit
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: '0 0 8px 0', lineHeight: 1.35 }}>
+                        Minimum cooldown enforced between consecutive proctoring warnings. Strikes increment only after this interval has elapsed.
+                      </p>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <select
+                          className="input input-sm"
+                          value={isCustomInterval ? 'custom' : String(warningIntervalSeconds)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'custom') {
+                              setIsCustomInterval(true);
+                            } else {
+                              setIsCustomInterval(false);
+                              setWarningIntervalSeconds(Number(val));
+                            }
+                          }}
+                          style={{
+                            maxWidth: '220px',
+                            fontWeight: 600,
+                            fontSize: '0.82rem',
+                            background: 'var(--bg-card)',
+                            borderColor: 'rgba(245, 158, 11, 0.4)',
+                          }}
+                        >
+                          <option value="30">30 Seconds</option>
+                          <option value="60">1 Minute</option>
+                          <option value="120">2 Minutes (Default)</option>
+                          <option value="180">3 Minutes</option>
+                          <option value="300">5 Minutes</option>
+                          <option value="600">10 Minutes</option>
+                          <option value="custom">Custom Interval</option>
+                        </select>
+
+                        {isCustomInterval && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <input
+                              type="number"
+                              min={customIntervalUnit === 'minutes' ? 1 : 10}
+                              max={customIntervalUnit === 'minutes' ? 60 : 3600}
+                              className="input input-sm"
+                              value={customIntervalValue}
+                              onChange={(e) => {
+                                const num = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                setCustomIntervalValue(num);
+                                const totalSec = customIntervalUnit === 'minutes' ? num * 60 : num;
+                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                              }}
+                              style={{ width: '85px', fontSize: '0.82rem' }}
+                            />
+                            <select
+                              className="input input-sm"
+                              value={customIntervalUnit}
+                              onChange={(e) => {
+                                const unit = e.target.value as 'minutes' | 'seconds';
+                                setCustomIntervalUnit(unit);
+                                const totalSec = unit === 'minutes' ? customIntervalValue * 60 : customIntervalValue;
+                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                              }}
+                              style={{ fontSize: '0.82rem' }}
+                            >
+                              <option value="minutes">Minutes</option>
+                              <option value="seconds">Seconds</option>
+                            </select>
+                            <span className="text-muted text-xs">
+                              (Min 10s, Max 60m)
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -5488,25 +5674,56 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={isPersisting}
                   onClick={() => setStep('review_edit')}
                 >
                   <ArrowLeft size={16} /> Back to Question Review
                 </button>
 
+                {persistError && (
+                  <div style={{
+                    width: '100%',
+                    background: 'var(--danger-bg, #fee2e2)',
+                    border: '1px solid var(--danger, #ef4444)',
+                    color: 'var(--danger, #dc2626)',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    marginTop: '12px',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    fontSize: '0.875rem'
+                  }}>
+                    <AlertTriangle size={18} />
+                    <span>{persistError}</span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    disabled={isPersisting}
                     onClick={() => handleFinalizeAssessment(false)}
                   >
-                    Save as Draft
+                    {isPersisting ? 'Saving...' : 'Save as Draft'}
                   </button>
                   <button
                     type="button"
                     className="btn btn-primary"
+                    disabled={isPersisting}
                     onClick={() => handleFinalizeAssessment(true)}
                   >
-                    <CheckCircle2 size={16} /> Publish Assessment
+                    {isPersisting ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin" /> Persisting to Database...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} /> Publish Assessment
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

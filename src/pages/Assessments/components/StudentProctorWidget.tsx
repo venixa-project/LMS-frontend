@@ -10,6 +10,8 @@ import { yoloMobileDetector, YOLODetectionResult } from '../../../lib/yoloDetect
 import { byteObjectTracker, TrackedObject } from '../../../lib/objectTracker';
 import { aiEventEngine, ProctoringAIEvent, MobilePhoneDetectedEvent } from '../../../lib/aiEventEngine';
 import { arcFaceRecognizer, ArcFaceVerificationResult } from '../../../lib/arcFaceRecognizer';
+import { proctoringSuites, PROCTORING_MODEL_SUITES, ProctoringSuiteType } from '../../../lib/proctoringSuites';
+import { proctoringSocket } from '../../../lib/proctoringSocket';
 
 interface StudentProctorWidgetProps {
   assessmentId: string;
@@ -54,14 +56,33 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   const [tabFocused, setTabFocused] = useState<boolean>(true);
   const [unacknowledgedWarning, setUnacknowledgedWarning] = useState<any | null>(null);
 
-  // Automated 3-Warning Strike System state
+  // Warning Strike System state (Automated + Manual)
   const [automatedStrikes, setAutomatedStrikes] = useState<number>(0);
   const [activeStrikeModal, setActiveStrikeModal] = useState<{
     strike: number;
+    totalAllowed?: number;
+    remainingWarnings?: number;
+    warningIntervalSeconds?: number;
     title: string;
     message: string;
     category: string;
+    source?: 'automated' | 'manual';
+    adminName?: string;
+    timestamp?: string;
+    autoSubmitted?: boolean;
   } | null>(null);
+  const lastSeenEventIdRef = useRef<string | null>(null);
+
+  // Administrative exam termination state
+  const [terminatedState, setTerminatedState] = useState<{
+    isTerminated: boolean;
+    reason: string;
+    adminName: string;
+  }>({
+    isTerminated: false,
+    reason: '',
+    adminName: '',
+  });
 
   // Face & Room Integrity analysis tracking
   const [faceStatus, setFaceStatus] = useState<'single_face' | 'no_face' | 'multiple_faces' | 'device_detected' | 'scanning'>('scanning');
@@ -74,9 +95,21 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   const [yoloStatus, setYoloStatus] = useState<string>('ready');
   const [trackedPhones, setTrackedPhones] = useState<TrackedObject[]>([]);
   const [trackedFaces, setTrackedFaces] = useState<TrackedObject[]>([]);
-  const [faceVerificationStatus, setFaceVerificationStatus] = useState<'MATCH' | 'MISMATCH' | 'INCONCLUSIVE' | 'SCANNING'>('SCANNING');
+  const [faceVerificationStatus, setFaceVerificationStatus] = useState<'MATCH' | 'MISMATCH' | 'UNCERTAIN' | 'INCONCLUSIVE' | 'SCANNING'>('SCANNING');
   const [similarityScore, setSimilarityScore] = useState<number>(0);
   const [latestPhoneEvent, setLatestPhoneEvent] = useState<MobilePhoneDetectedEvent | null>(null);
+  const [uncertainGuidance, setUncertainGuidance] = useState<string | null>(null);
+
+  // AI Proctoring Model Suites (Recommended: YuNet+AdaFace+ByteTrack+MiniFASNet+MediaPipe+YOLO+ONNX / Alternative: SCRFD+ArcFace+SORT+AntiSpoof+6DRepNet+RT-DETR+OpenVINO)
+  const [activeSuiteType, setActiveSuiteType] = useState<ProctoringSuiteType>(proctoringSuites.getActiveSuite());
+  const [suiteTelemetry, setSuiteTelemetry] = useState<any>(null);
+  const [showSuiteModal, setShowSuiteModal] = useState<boolean>(false);
+
+  const toggleSuite = () => {
+    const nextSuite: ProctoringSuiteType = activeSuiteType === 'recommended' ? 'alternative' : 'recommended';
+    proctoringSuites.setActiveSuite(nextSuite);
+    setActiveSuiteType(nextSuite);
+  };
 
   // Lock reference biometric identity
   useEffect(() => {
@@ -86,8 +119,31 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       arcFaceRecognizer.generateEmbedding(candidatePhoto).then((emb) => {
         arcFaceRecognizer.setReferenceEmbedding(emb);
       }).catch(() => {});
+    } else if (sessionId) {
+      // Reconnect/refresh recovery: retrieve locked reference embedding and photo from backend
+      apiClient
+        .get(`/proctoring/sessions/${sessionId}/reference-embedding`)
+        .then((res: any) => {
+          const emb = res.data?.data?.embedding || res.data?.embedding;
+          if (emb && Array.isArray(emb)) {
+            arcFaceRecognizer.setReferenceEmbedding(new Float32Array(emb));
+          }
+        })
+        .catch(() => {});
+
+      apiClient
+        .get(`/proctoring/sessions/${sessionId}/reference-photo`)
+        .then((res: any) => {
+          const photoUrl = res.data?.data?.photoUrl || res.data?.photoUrl;
+          if (photoUrl && !arcFaceRecognizer.isLocked() && arcFaceRecognizer.isModelReady()) {
+            arcFaceRecognizer.generateEmbedding(photoUrl).then((emb) => {
+              arcFaceRecognizer.setReferenceEmbedding(emb);
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
-  }, [candidateEmbedding, candidatePhoto]);
+  }, [candidateEmbedding, candidatePhoto, sessionId]);
 
   useEffect(() => {
     yoloMobileDetector.initialize().then(() => {
@@ -189,7 +245,22 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             })
             .catch(() => {});
         }
+      } else if (event.eventType === 'FACE_UNCERTAIN') {
+        // Non-punitive: Guidance advisory only, strictly 0 strikes
+        setUncertainGuidance(event.message);
+        if (sessionId) {
+          apiClient
+            .post(`/proctoring/sessions/${sessionId}/telemetry`, {
+              category: 'face_uncertain',
+              severity: 'informational',
+              title: 'Face Position Uncertain',
+              description: event.message,
+              clientTimestamp: event.detectionTimestamp,
+            })
+            .catch(() => {});
+        }
       } else if (event.eventType === 'FACE_RECOVERED' || event.eventType === 'FACE_VERIFIED') {
+        setUncertainGuidance(null);
         if (sessionId) {
           apiClient
             .post(`/proctoring/sessions/${sessionId}/telemetry`, {
@@ -314,71 +385,153 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     } catch (e) {}
   };
 
-  // Automated 3-Warning Strike Dispatcher
+  // Automated Proctoring Violation Dispatcher
+  // Forwards violation to backend; backend strictly validates server-side cooldown interval
+  // and issues confirmed warnings/strikes back via WebSocket
   const triggerAutomatedStrike = (category: string, title: string, message: string) => {
-    const now = Date.now();
-    // 8-second cooldown between strikes so user can read and acknowledge
-    if (now - lastViolationTimeRef.current < 8000) return;
-    lastViolationTimeRef.current = now;
-
     // If audio or speech violation, record audio proof clip immediately
     if (category.startsWith('audio_') || category.startsWith('speech_')) {
       captureAudioProof(title, message);
     }
 
-    setAutomatedStrikes((prev) => {
-      const nextStrike = Math.min(3, prev + 1);
-      playAlertChime(nextStrike);
-
-      // Upload 10-second video evidence captured right before and during THIS warning strike
-      captureWarningVideoProof(nextStrike, title, message);
-
-      // 1. Record incident in Zustand store
-      recordIncident({
-        attemptId: `att-${currentLearnerId}-${assessmentId}`,
-        learnerId: currentLearnerId,
-        learnerName: currentLearnerName,
-        assessmentId,
-        assessmentTitle: 'Automated Proctored Exam',
-        eventType: category,
-        severity: nextStrike >= 3 ? 'critical' : 'high',
-        description: `Warning ${nextStrike} of 3: ${title} - ${message}`,
-        timestamp: new Date().toISOString(),
-        status: 'new',
-      });
-
-      // 2. Transmit to backend telemetry
-      if (sessionId) {
-        apiClient
-          .post(`/proctoring/sessions/${sessionId}/telemetry`, {
-            category,
-            severity: nextStrike >= 3 ? 'critical' : 'warning',
-            title: `Automated Strike ${nextStrike}/3: ${title}`,
-            description: message,
-            clientTimestamp: Date.now(),
-            evidenceSnapshot: lastValidSnapshotRef.current,
-          })
-          .catch(() => {});
-      }
-
-      // 3. Show strike modal
-      setActiveStrikeModal({
-        strike: nextStrike,
-        title: `Warning ${nextStrike} of 3: ${title}`,
-        message,
-        category,
-      });
-
-      // 4. If 3 strikes reached: auto-terminate exam!
-      if (nextStrike >= 3) {
-        setTimeout(() => {
-          onForceSubmit?.(`Automated Proctoring Violation: Exceeded maximum allowed 3 warnings (${title}).`);
-        }, 3200);
-      }
-
-      return nextStrike;
+    // Transmit detection violation to backend for server-side cooldown interval validation
+    proctoringSocket.emit('PROCTORING_WARNING', {
+      studentId: currentLearnerId,
+      studentName: currentLearnerName,
+      assessmentId,
+      sessionId,
+      eventType: category,
+      title,
+      message,
+      source: 'automated',
+      evidenceSnapshot: lastValidSnapshotRef.current,
+      clientTimestamp: Date.now(),
     });
   };
+
+  // Real-time proctoring socket connection for live monitoring, WebRTC, and proctor control
+  useEffect(() => {
+    const rawAuth = typeof localStorage !== 'undefined' ? localStorage.getItem('venilearn_auth_session') : null;
+    let token = '';
+    if (rawAuth) {
+      try {
+        token = JSON.parse(rawAuth).token || '';
+      } catch {}
+    }
+    proctoringSocket.connect(token || 'student-token', assessmentId, 'student');
+
+    if (isExamActive) {
+      proctoringSocket.emit('STUDENT_EXAM_STARTED', {
+        studentId: currentLearnerId,
+        studentName: currentLearnerName,
+        rollNo: (user as any)?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+        assessmentId,
+        sessionId,
+        startedAt: new Date().toISOString(),
+      });
+    }
+
+    // Listen for confirmed proctoring warnings (automated or manual) from server
+    const unsubWarning = proctoringSocket.on('PROCTORING_WARNING', (data: any) => {
+      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+        // Prevent duplicate popups for the exact same event ID
+        if (data.eventId && lastSeenEventIdRef.current === data.eventId) {
+          return;
+        }
+        if (data.eventId) {
+          lastSeenEventIdRef.current = data.eventId;
+        }
+
+        const strikeNum = Number(data.warningNumber || data.warningCount || 1);
+        const totalAllowed = Number(data.totalAllowed || 3);
+        const remaining = typeof data.remainingWarnings === 'number' ? data.remainingWarnings : Math.max(0, totalAllowed - strikeNum);
+
+        setAutomatedStrikes(strikeNum);
+        playAlertChime(strikeNum);
+
+        // Upload 10-second video evidence captured right before and during THIS warning strike
+        captureWarningVideoProof(strikeNum, data.title || `Warning ${strikeNum} of ${totalAllowed}`, data.reason || data.message || '');
+
+        setActiveStrikeModal({
+          strike: strikeNum,
+          totalAllowed,
+          remainingWarnings: remaining,
+          warningIntervalSeconds: data.warningIntervalSeconds || 120,
+          title: `Warning ${strikeNum} of ${totalAllowed}`,
+          message: data.reason || data.message || 'Proctoring violation detected. Please adhere to examination integrity guidelines.',
+          category: data.eventType || 'proctoring_warning',
+          source: data.source || 'automated',
+          adminName: data.issuedBy || (data.source === 'manual' ? 'Exam Proctor' : undefined),
+          timestamp: data.timestamp || new Date().toISOString(),
+          autoSubmitted: Boolean(data.autoSubmitted || strikeNum >= totalAllowed),
+        });
+
+        // Record in local store for audit
+        recordIncident({
+          attemptId: `att-${currentLearnerId}-${assessmentId}`,
+          learnerId: currentLearnerId,
+          learnerName: currentLearnerName,
+          assessmentId,
+          assessmentTitle: 'Automated Proctored Exam',
+          eventType: data.eventType || 'PROCTORING_WARNING',
+          severity: strikeNum >= 3 ? 'critical' : 'high',
+          description: `Warning ${strikeNum} of ${totalAllowed}: ${data.reason || data.message}`,
+          timestamp: data.timestamp || new Date().toISOString(),
+          status: 'new',
+        });
+
+        // If 3rd strike reached: Execute automatic exam submission
+        if (data.autoSubmitted || strikeNum >= totalAllowed) {
+          setTimeout(() => {
+            onForceSubmit?.('PROCTORING_THIRD_WARNING');
+          }, 3500);
+        }
+      }
+    });
+
+    // Listen for manual proctor warnings issued by the administrator
+    const unsubManual = proctoringSocket.on('MANUAL_WARNING', (data: any) => {
+      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+        // Handled through unified PROCTORING_WARNING handler with exact strike counts
+      }
+    });
+
+    // Listen for automatic submission trigger
+    const unsubAutoSubmit = proctoringSocket.on('EXAM_AUTO_SUBMITTED', (data: any) => {
+      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+        setTerminatedState({
+          isTerminated: true,
+          reason: 'Your examination was automatically submitted due to reaching the maximum 3 proctoring warnings (Three-Strike Policy).',
+          adminName: 'Automated Proctor Policy Engine',
+        });
+        setTimeout(() => {
+          onForceSubmit?.('PROCTORING_THIRD_WARNING');
+        }, 3000);
+      }
+    });
+
+    // Listen for admin force-stop examination
+    const unsubTerminated = proctoringSocket.on('EXAM_TERMINATED', (data: any) => {
+      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+        setTerminatedState({
+          isTerminated: true,
+          reason: data.reason || 'Your examination was concluded by the examination administrator.',
+          adminName: data.adminName || 'Exam Proctor',
+        });
+        setTimeout(() => {
+          onForceSubmit?.(data.reason || 'Exam ended by administrator.');
+        }, 3500);
+      }
+    });
+
+    return () => {
+      unsubWarning();
+      unsubManual();
+      unsubAutoSubmit();
+      unsubTerminated();
+      proctoringSocket.disconnect();
+    };
+  }, [assessmentId, currentLearnerId, onForceSubmit]);
 
   // Initialize MediaStream (Camera & Mic) - reuse passed mediaStream if present
   useEffect(() => {
@@ -399,6 +552,43 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         videoRef.current.srcObject = s;
         videoRef.current.play().catch(() => {});
       }
+
+      // Register local media stream with WebRTC Hub to stream directly to Admin Video Wall
+      proctoringSocket.registerLocalMediaStream(s, {
+        studentId: currentLearnerId,
+        studentName: currentLearnerName,
+        assessmentId,
+        sessionId,
+      });
+
+      s.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          proctoringSocket.emit('STUDENT_VIDEO_DISCONNECTED', {
+            studentId: currentLearnerId,
+            assessmentId,
+            sessionId,
+            reason: 'Camera track ended',
+            timestamp: new Date().toISOString(),
+          });
+        };
+        track.onmute = () => {
+          proctoringSocket.emit('STUDENT_VIDEO_DISCONNECTED', {
+            studentId: currentLearnerId,
+            assessmentId,
+            sessionId,
+            reason: 'Camera muted',
+            timestamp: new Date().toISOString(),
+          });
+        };
+        track.onunmute = () => {
+          proctoringSocket.emit('STUDENT_VIDEO_RECONNECTED', {
+            studentId: currentLearnerId,
+            assessmentId,
+            sessionId,
+            timestamp: new Date().toISOString(),
+          });
+        };
+      });
 
       // Setup Web Audio API RMS & Frequency VAD Voice Formant Analyzer
       try {
@@ -750,8 +940,26 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           faceVerificationMap
         );
 
+        // Periodically sync frame features with the active AI Model Suite (Recommended vs Alternative)
+        if (v.videoWidth > 0 && Math.random() < 0.25) {
+          proctoringSuites.analyzeActiveFrame({
+            sessionId: sessionId || `local-sess-${assessmentId}`,
+            frameIndex: Date.now(),
+            timestamp: Date.now(),
+            imageWidth: v.videoWidth,
+            imageHeight: v.videoHeight,
+            detectedFaces: faceTracks.map((ft) => ({ box: ft.box, confidence: ft.confidence })),
+            detectedObjects: phoneTracks.map((pt) => ({ box: pt.box, confidence: pt.confidence, classId: 67, className: 'cell phone' })),
+          }).then((res) => {
+            if (res?.telemetry) {
+              setSuiteTelemetry(res.telemetry);
+            }
+          }).catch(() => {});
+        }
+
+        const confirmedFaces = byteObjectTracker.getConfirmedFaceTracks();
         const effectiveFaceCount = faceTracks.length;
-        const confirmedPhone = phoneTracks.find((t) => t.state === 'confirmed' || t.hits >= 2 || t.confidence >= 0.70);
+        const confirmedPhone = phoneTracks.find((t) => t.state === 'confirmed' && (t.isTemporallyConfirmed || t.hits >= 8));
         const isDeviceVisible = Boolean(confirmedPhone);
 
         // --- STEP 4: Prioritized Alert State Machine ---
@@ -775,35 +983,21 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             );
           }
         }
-        // Priority 2: Unauthorized Mobile Phone (YOLO Confirmed Track or 2+ consecutive frames)
+        // Priority 2: Unauthorized Mobile Phone (Strictly after temporal confirmation 8/12 frames)
         else if (isDeviceVisible) {
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           setFaceStatus('device_detected');
-
-          const confPercent = Math.round((confirmedPhone?.confidence || 0.85) * 100);
-          const trkId = confirmedPhone?.trackingId || 'trk-1';
-
-          triggerAutomatedStrike(
-            'unauthorized_device',
-            'Unauthorized Mobile Phone Detected',
-            `Mobile phone detected in examination frame (Confidence: ${confPercent}%, Tracking ID: ${trkId}). Holding or using mobile devices is strictly prohibited.`
-          );
+          // Note: Automatic strike is triggered exclusively via AIEventEngine verified event listener
+          // preventing premature strikes for unconfirmed, transient, or non-phone objects.
         }
-        // Priority 3: Multiple Persons (Candidate IS present and another person is visible)
-        else if (effectiveFaceCount > 1) {
+        // Priority 3: Multiple Persons (Candidate IS present and another person is confirmed)
+        else if (confirmedFaces.length > 1) {
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
-          consecutiveMultiFaceSecondsRef.current += 0.8;
-
-          if (consecutiveMultiFaceSecondsRef.current >= 3.2) {
-            setFaceStatus('multiple_faces');
-            triggerAutomatedStrike(
-              'multiple_faces',
-              'Multiple Persons / Extra Face Detected',
-              `Multiple persons (${effectiveFaceCount} faces) were detected in camera view (> 3s)! Only the registered candidate may be present.`
-            );
-          }
+          setFaceStatus('multiple_faces');
+          // Note: Automatic warning strikes are triggered exclusively via AIEventEngine
+          // after rigorous 8/12 temporal validation, preventing false-positive strikes.
         }
         // Priority 4: Candidate Seated & Normal (Single Face)
         else {
@@ -1183,10 +1377,13 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
                 const isVerified = isMainFace && (faceVerificationStatus === 'MATCH' || similarityScore >= 0.65);
                 const isMismatch = isMainFace && faceVerificationStatus === 'MISMATCH';
                 const isExtra = !isMainFace;
+                const isExtraConfirmed = isExtra && (track.isTemporallyConfirmed || track.hits >= 8);
 
-                const strokeColor = isExtra || isMismatch ? '#EF4444' : (isVerified ? '#10B981' : '#F59E0B');
-                const labelText = isExtra
+                const strokeColor = isExtraConfirmed || isMismatch ? '#EF4444' : (isVerified ? '#10B981' : '#F59E0B');
+                const labelText = isExtraConfirmed
                   ? `EXTRA [${track.trackingId}]`
+                  : isExtra
+                  ? `ANALYZING...`
                   : isMismatch
                   ? `MISMATCH ${Math.round(similarityScore * 100)}%`
                   : isVerified
@@ -1269,7 +1466,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             </svg>
           )}
 
-          {/* YOLO Model & Tracker Status Pill */}
+          {/* AI Proctoring Suite & YOLO / RT-DETR Status Pill */}
           <div
             style={{
               position: 'absolute',
@@ -1278,20 +1475,73 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              background: 'rgba(15, 23, 42, 0.88)',
-              border: '1px solid rgba(255, 255, 255, 0.18)',
-              padding: '2px 5px',
-              borderRadius: '4px',
-              fontSize: '0.62rem',
-              color: '#38BDF8',
-              fontWeight: 600,
-              fontFamily: 'monospace',
             }}
           >
-            <span>YOLO:</span>
-            <span style={{ color: trackedPhones.length > 0 ? '#F87171' : '#4ADE80' }}>
-              {trackedPhones.length > 0 ? `${trackedPhones[0].trackingId} (${Math.round(trackedPhones[0].confidence * 100)}%)` : 'Active'}
-            </span>
+            {/* AI Suite Selector Pill (Primary vs Failover Standby) */}
+            <button
+              type="button"
+              onClick={toggleSuite}
+              title={
+                activeSuiteType === 'recommended'
+                  ? 'Primary AI Suite Active: Recommended (YuNet + AdaFace + ONNX Runtime). Alternative Suite is on standby.'
+                  : 'Failover Active: Alternative (SCRFD + ArcFace + OpenVINO) is engaged. Click to switch or restore primary.'
+              }
+              style={{
+                background: activeSuiteType === 'recommended' ? 'rgba(30, 58, 138, 0.92)' : 'rgba(120, 53, 15, 0.95)',
+                border: activeSuiteType === 'recommended' ? '1px solid #60A5FA' : '1px solid #F59E0B',
+                color: activeSuiteType === 'recommended' ? '#93C5FD' : '#FDE68A',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '0.60rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <span>{activeSuiteType === 'recommended' ? 'PRIMARY (ONNX):' : 'STANDBY (OpenVINO):'}</span>
+              <span>{activeSuiteType === 'recommended' ? 'YuNet+Ada' : 'SCRFD+Arc'}</span>
+            </button>
+
+            {/* Object Detection Pill */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                background: 'rgba(15, 23, 42, 0.88)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
+                padding: '2px 5px',
+                borderRadius: '4px',
+                fontSize: '0.60rem',
+                color: '#38BDF8',
+                fontWeight: 600,
+                fontFamily: 'monospace',
+              }}
+            >
+              <span>{activeSuiteType === 'recommended' ? 'YOLO:' : 'RT-DETR:'}</span>
+              {(() => {
+                const confirmedTrack = trackedPhones.find((t) => t.state === 'confirmed' && (t.isTemporallyConfirmed || t.hits >= 8));
+                const tentativeTrack = trackedPhones.find((t) => t.state === 'tentative');
+                if (confirmedTrack) {
+                  return (
+                    <span style={{ color: '#F87171' }}>
+                      {confirmedTrack.trackingId} ({Math.round(confirmedTrack.confidence * 100)}%)
+                    </span>
+                  );
+                }
+                if (tentativeTrack) {
+                  return (
+                    <span style={{ color: '#F59E0B' }}>
+                      Verifying ({tentativeTrack.hits}/8)
+                    </span>
+                  );
+                }
+                return <span style={{ color: '#4ADE80' }}>Active</span>;
+              })()}
+            </div>
           </div>
 
           {/* Mic audio meter */}
@@ -1318,9 +1568,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
         {/* Small footer information */}
         <div style={{ padding: '6px 8px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {faceStatus === 'multiple_faces' || trackedFaces.length > 1 ? (
+          {faceStatus === 'multiple_faces' ? (
             <span style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
-              <AlertTriangle size={11} color="#ef4444" /> Multiple Faces ({trackedFaces.length})
+              <AlertTriangle size={11} color="#ef4444" /> Multiple Persons Confirmed ({trackedFaces.length})
             </span>
           ) : faceVerificationStatus === 'MISMATCH' ? (
             <span style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -1338,6 +1588,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             <span style={{ color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
               <CheckCircle2 size={11} color="#10b981" /> Face Verified ({Math.round(similarityScore * 100)}%)
             </span>
+          ) : (faceVerificationStatus === 'UNCERTAIN' || faceVerificationStatus === 'INCONCLUSIVE') ? (
+            <span style={{ color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <AlertTriangle size={11} color="#f59e0b" /> Position Face ({Math.round(similarityScore * 100)}%)
+            </span>
           ) : (
             <span style={{ color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
               <CheckCircle2 size={11} color="#10b981" /> Integrity Active
@@ -1347,7 +1601,192 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             {tabFocused ? 'Focused' : 'Unfocused'}
           </span>
         </div>
+
+        {/* Active AI Proctoring Pipeline Spec Badge */}
+        <div style={{ padding: '3px 8px 6px', fontSize: '0.60rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#94a3b8' }}>
+          <span style={{ fontFamily: 'monospace' }}>
+            {activeSuiteType === 'recommended'
+              ? 'YuNet • AdaFace • ByteTrack • YOLO (ONNX)'
+              : 'SCRFD • ArcFace • SORT • RT-DETR (OpenVINO)'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowSuiteModal(true)}
+            style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.60rem', padding: 0, textDecoration: 'underline' }}
+          >
+            Config
+          </button>
+        </div>
       </div>
+
+      {/* AI Proctoring Suite Specifications Modal */}
+      {showSuiteModal && (
+        <div
+          className="modal-overlay"
+          style={{
+            zIndex: 3000,
+            background: 'rgba(15, 23, 42, 0.82)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '560px',
+              width: '92%',
+              background: '#0f172a',
+              color: '#f8fafc',
+              border: '1px solid #334155',
+              borderRadius: '12px',
+              padding: '20px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Shield size={18} color="#38bdf8" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>AI Proctoring Architecture Specifications</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSuiteModal(false)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Primary & Standby Architecture Notice */}
+            <div
+              style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                marginBottom: '14px',
+                fontSize: '0.72rem',
+                lineHeight: 1.5,
+                color: '#cbd5e1',
+              }}
+            >
+              <div style={{ fontWeight: 700, color: '#38bdf8', marginBottom: '3px' }}>
+                Operational Architecture: Primary Suite with Standby Failover
+              </div>
+              The system prioritizes the <strong>Recommended Suite (YuNet + AdaFace + ByteTrack + YOLO + ONNX)</strong> as the primary engine. The <strong>Alternative Suite (SCRFD + ArcFace + SORT + RT-DETR + OpenVINO)</strong> is kept on standby and will automatically engage if the primary suite encounters performance degradation or network anomalies.
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  proctoringSuites.restorePrimarySuite();
+                  setActiveSuiteType('recommended');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  background: activeSuiteType === 'recommended' ? '#1e3a8a' : '#1e293b',
+                  border: activeSuiteType === 'recommended' ? '2px solid #3b82f6' : '1px solid #334155',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#93c5fd' }}>Recommended Suite (Primary Active)</div>
+                <div style={{ fontSize: '0.70rem', color: '#cbd5e1' }}>YuNet + AdaFace + ByteTrack + ONNX</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  proctoringSuites.triggerManualFailover('Candidate / Proctor manual selection');
+                  setActiveSuiteType('alternative');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  background: activeSuiteType === 'alternative' ? '#581c87' : '#1e293b',
+                  border: activeSuiteType === 'alternative' ? '2px solid #a855f7' : '1px solid #334155',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#d8b4fe' }}>Alternative Suite (Standby / Failover)</div>
+                <div style={{ fontSize: '0.70rem', color: '#cbd5e1' }}>SCRFD + ArcFace + SORT + OpenVINO</div>
+              </button>
+            </div>
+
+            {/* Model Architecture Comparison Table */}
+            <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #334155', color: '#94a3b8' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px' }}>Component</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#60a5fa' : '#94a3b8' }}>Recommended Model</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#c084fc' : '#94a3b8' }}>Alternative Model</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Face detection</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>YuNet</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>SCRFD</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Face recognition</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>AdaFace</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>ArcFace</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Face alignment</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>5-point landmarks</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>RetinaFace landmarks</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Face tracking</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>ByteTrack</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>SORT</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Face liveness</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>MiniFASNet</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>Fourier Texture PAD</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Head pose</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>MediaPipe Landmarker</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>6DRepNet</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Object detection</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>YOLO</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>RT-DETR</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>Inference engine</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'recommended' ? '#38bdf8' : '#e2e8f0' }}>ONNX Runtime</td>
+                    <td style={{ padding: '6px 8px', color: activeSuiteType === 'alternative' ? '#e879f9' : '#e2e8f0' }}>OpenVINO</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowSuiteModal(false)}
+                className="btn btn-primary"
+                style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+              >
+                Apply & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Official Proctor Warning Banner Modal (Shown to student when proctor issues a warning) */}
       {unacknowledgedWarning && (
@@ -1477,68 +1916,210 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
                 <AlertTriangle size={34} />
               </div>
 
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 10px 0', color: activeStrikeModal.strike >= 3 ? 'var(--danger)' : 'var(--text-main)' }}>
-                {activeStrikeModal.title}
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 8px 0', color: activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? 'var(--danger)' : '#F59E0B' }}>
+                Warning {activeStrikeModal.strike} of {activeStrikeModal.totalAllowed || 3}
               </h3>
 
-              {/* Visual 3-Strike Meter */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Strike Count:</span>
-                {[1, 2, 3].map((num) => (
-                  <div
-                    key={num}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      fontSize: '0.78rem',
-                      fontWeight: 800,
-                      background: num <= activeStrikeModal.strike ? (num === 3 ? 'var(--danger)' : 'var(--warning)') : 'var(--bg-input)',
-                      color: num <= activeStrikeModal.strike ? '#fff' : 'var(--text-muted)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    Strike {num} {num === 3 ? '(Auto-Submit)' : ''}
-                  </div>
-                ))}
+              {/* Visual Warning Count, Timestamp & Source Badges */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <span
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    background: activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? 'var(--danger)' : '#F59E0B',
+                    color: '#fff',
+                  }}
+                >
+                  Strike {activeStrikeModal.strike} / {activeStrikeModal.totalAllowed || 3}
+                </span>
+
+                <span
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    background: activeStrikeModal.source === 'manual' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                    color: activeStrikeModal.source === 'manual' ? '#60A5FA' : '#FBBF24',
+                    border: '1px solid currentColor',
+                  }}
+                >
+                  {activeStrikeModal.source === 'manual' ? 'Manual Proctor Observation' : 'Automated Violation Signal'}
+                </span>
+
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {activeStrikeModal.timestamp ? new Date(activeStrikeModal.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}
+                </span>
+                {activeStrikeModal.adminName && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    by {activeStrikeModal.adminName}
+                  </span>
+                )}
               </div>
 
+              {/* Violation Reason Card */}
               <div
                 style={{
                   background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${activeStrikeModal.strike >= 3 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
                   borderRadius: 'var(--radius-md)',
-                  padding: '14px',
-                  fontSize: '0.88rem',
+                  padding: '16px',
+                  fontSize: '0.92rem',
                   lineHeight: 1.5,
                   color: 'var(--text-main)',
-                  fontWeight: 500,
-                  marginBottom: '16px',
+                  fontWeight: 600,
+                  marginBottom: '14px',
                   textAlign: 'left',
                 }}
               >
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Violation Reason:
+                </div>
                 {activeStrikeModal.message}
               </div>
 
-              <p className="text-secondary text-xs" style={{ marginBottom: '22px', lineHeight: 1.4 }}>
-                {activeStrikeModal.strike >= 3
-                  ? 'Your examination session is being terminated and submitted for proctoring review.'
-                  : 'Please adhere strictly to examination guidelines. You have only 3 warnings before automatic termination.'}
-              </p>
+              {/* Policy & Remaining Warnings Notice */}
+              <div
+                style={{
+                  background: activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                  border: `1px solid ${activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 14px',
+                  marginBottom: '20px',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.45,
+                  textAlign: 'left',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <div style={{ fontWeight: 700, color: activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? 'var(--danger)' : '#F59E0B', marginBottom: '2px' }}>
+                  {activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3)
+                    ? 'Final warning. Your examination will be automatically submitted according to the configured policy.'
+                    : `${activeStrikeModal.remainingWarnings ?? Math.max(0, 3 - activeStrikeModal.strike)} warning(s) remaining before automatic exam submission.`}
+                </div>
+                <div>
+                  Academic Policy: Three confirmed proctoring strikes will automatically submit the examination with all completed answers preserved.
+                </div>
+              </div>
 
-              {activeStrikeModal.strike < 3 ? (
+              {activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? (
+                <div
+                  style={{
+                    padding: '12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--danger)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    textAlign: 'center',
+                  }}
+                >
+                  Final Warning Reached — Auto-Submitting Exam...
+                </div>
+              ) : (
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => setActiveStrikeModal(null)}
+                  onClick={() => {
+                    proctoringSocket.acknowledgeWarning({
+                      studentId: currentLearnerId,
+                      assessmentId,
+                      sessionId,
+                      warningCount: activeStrikeModal.strike,
+                      timestamp: new Date().toISOString(),
+                    });
+                    setActiveStrikeModal(null);
+                  }}
                   style={{ width: '100%', fontWeight: 700, padding: '10px 0' }}
                 >
                   I Acknowledge & Return to Exam
                 </button>
-              ) : (
-                <div style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '0.9rem' }}>
-                  Submitting Examination Responses...
-                </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Force-Stop Examination Modal */}
+      {terminatedState.isTerminated && (
+        <div
+          className="modal-overlay"
+          style={{
+            zIndex: 10000,
+            background: 'rgba(15, 23, 42, 0.94)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '500px',
+              width: '92%',
+              border: '2px solid var(--danger)',
+              background: 'var(--bg-card)',
+              boxShadow: '0 16px 50px rgba(239, 68, 68, 0.3)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '28px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px auto',
+              }}
+            >
+              <Lock size={32} />
+            </div>
+
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 8px 0', color: 'var(--danger)' }}>
+              Examination Concluded by Proctor
+            </h3>
+
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-main)', marginBottom: '16px' }}>
+              Your examination session was ended by invigilator <strong>{terminatedState.adminName}</strong>.
+            </p>
+
+            <div
+              style={{
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 14px',
+                fontSize: '0.85rem',
+                color: 'var(--text-main)',
+                textAlign: 'left',
+                marginBottom: '18px',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Reason:</span>{' '}
+              {terminatedState.reason}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                color: 'var(--success)',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+              }}
+            >
+              <CheckCircle2 size={16} /> All responses recorded up to this point have been safely preserved.
             </div>
           </div>
         </div>

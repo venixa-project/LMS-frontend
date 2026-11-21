@@ -7,6 +7,7 @@ import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
 import { getAssessmentApi, startAttemptApi, saveAnswerApi, submitAttemptApi } from '../../api/assessment.api';
 import { apiClient } from '../../lib/apiClient';
+import { proctoringSocket } from '../../lib/proctoringSocket';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, EyeOff, ArrowLeft, Award, HelpCircle, X,
@@ -56,7 +57,7 @@ export const ExamPlayerPage: React.FC = () => {
   }, [storeAssessment, fetchAssessments]);
 
   useEffect(() => {
-    if (id && id.length === 36) {
+    if (id) {
       setIsLoadingApi(true);
       getAssessmentApi(id)
         .then((data) => {
@@ -706,6 +707,9 @@ export const ExamPlayerPage: React.FC = () => {
         .post(`/proctoring/sessions/${session.id}/baseline-photo`, {
           photo: streams.candidatePhoto,
           candidateName,
+          studentId: candidateId,
+          examId: assessment.id,
+          sessionId: session.id,
         })
         .catch(() => {});
     }
@@ -819,6 +823,18 @@ export const ExamPlayerPage: React.FC = () => {
       title: 'Assessment Timer Started',
       description: `Exam session launched with ${questions.length} questions under policy: ${policy.name}.`,
     });
+
+    // Notify real-time proctoring wall that candidate has officially started the exam
+    try {
+      proctoringSocket.emit('STUDENT_EXAM_STARTED', {
+        studentId: candidateId,
+        studentName: candidateName,
+        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+        assessmentId: assessment.id,
+        sessionId: serverSessionId || currentSessionId || '',
+        startedAt: new Date().toISOString(),
+      });
+    } catch (e) {}
 
     setStage('in_exam');
   };
@@ -1046,6 +1062,21 @@ export const ExamPlayerPage: React.FC = () => {
     stopAllMediaTracks(screenStreamRef.current);
     stopAllMediaTracks(userMediaStreamRef.current);
 
+    // Notify real-time proctoring wall that candidate has ended and submitted the exam
+    try {
+      proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
+        studentId: candidateId,
+        studentName: candidateName,
+        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+        assessmentId: assessment.id,
+        sessionId: serverSessionId || currentSessionId || '',
+        reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
+        submittedAt: new Date().toISOString(),
+      });
+      useProctoringStore.getState().removeLiveCandidate(candidateId, assessment.id);
+      proctoringSocket.disconnect();
+    } catch (e) {}
+
     setStage('results');
   };
 
@@ -1055,16 +1086,39 @@ export const ExamPlayerPage: React.FC = () => {
       exitFullscreen().catch(() => {});
       stopAllMediaTracks(screenStreamRef.current);
       stopAllMediaTracks(userMediaStreamRef.current);
+      proctoringSocket.disconnect();
     }
   }, [stage]);
 
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        if (stage === 'in_exam') {
+          proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
+            studentId: candidateId,
+            studentName: candidateName,
+            rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+            assessmentId: assessment?.id,
+            sessionId: serverSessionId || currentSessionId || '',
+            reason: 'Candidate navigated away or closed exam tab',
+            submittedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {}
+      proctoringSocket.disconnect();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleBeforeUnload();
       exitFullscreen().catch(() => {});
       stopAllMediaTracks(screenStreamRef.current);
       stopAllMediaTracks(userMediaStreamRef.current);
+      proctoringSocket.disconnect();
     };
-  }, []);
+  }, [stage, candidateId, candidateName, assessment?.id, serverSessionId, currentSessionId, user?.rollNo]);
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1487,6 +1541,7 @@ export const ExamPlayerPage: React.FC = () => {
       <VeniGuardSetup
         assessment={assessment}
         policy={policy}
+        sessionId={serverSessionId || currentSessionId || undefined}
         onReadyToStart={handleReadyToStart}
         onCancel={() => navigate('/assessments')}
       />

@@ -5,11 +5,12 @@
 import { AUTH_SESSION_KEY } from './authConstants';
 
 export function getApiBaseUrl(): string {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL as string;
+  const env = (import.meta as any)?.env;
+  if (env?.VITE_API_BASE_URL) {
+    return env.VITE_API_BASE_URL as string;
   }
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL as string;
+  if (env?.VITE_API_URL) {
+    return env.VITE_API_URL as string;
   }
   if (typeof window !== 'undefined') {
     // In browser, use relative '/api/v1' so Vite dev proxy forwards requests cleanly
@@ -94,7 +95,7 @@ function getStoredToken(): string | null {
   }
 }
 
-let legacyStudentLoginInFlight: Promise<void> | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 let lastFailedReauthTime = 0;
 
 function isMockAuthToken(token: string | null): boolean {
@@ -102,29 +103,12 @@ function isMockAuthToken(token: string | null): boolean {
   return token.startsWith('venilearn-token-') || token.startsWith('demo-') || token.length < 20 || !token.includes('.');
 }
 
-function getDemoCredentialsForRole(role?: string, email?: string): { email: string; password: string } {
-  if (email && email.trim()) {
-    return { email: email.trim(), password: 'Password@123' };
-  }
-  const normRole = (role || '').toLowerCase();
-  if (normRole === 'platform_admin' || normRole === 'superadmin') {
-    return { email: 'superadmin@acuity.com', password: 'Password@123' };
-  }
-  if (normRole === 'student' || normRole === 'learner') {
-    return { email: 'student@lms.demo', password: 'Password@123' };
-  }
-  if (normRole === 'trainer' || normRole === 'instructor') {
-    return { email: 'trainer@lms.demo', password: 'Password@123' };
-  }
-  return { email: 'orgadmin@lms.demo', password: 'Password@123' };
-}
-
 function isJwtExpired(token: string | null): boolean {
   if (!token) return true;
-  if (isMockAuthToken(token)) return true;
+  if (isMockAuthToken(token)) return false;
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return true;
+    if (parts.length !== 3) return false;
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
@@ -139,11 +123,15 @@ function isJwtExpired(token: string | null): boolean {
     }
     return false;
   } catch {
-    return true;
+    return false;
   }
 }
 
-async function reauthenticateSession(): Promise<boolean> {
+/**
+ * Standard authorized session refresh using HttpOnly cookie or stored refresh session.
+ * Never elevates roles or falls back to hardcoded passwords.
+ */
+async function refreshAccessToken(): Promise<boolean> {
   const rawSession = localStorage.getItem(AUTH_SESSION_KEY);
   if (!rawSession) return false;
 
@@ -154,7 +142,6 @@ async function reauthenticateSession(): Promise<boolean> {
     return false;
   }
 
-  // 1. Try refresh-token endpoint first
   try {
     const refreshRes = await fetch(buildFullUrl('/auth/refresh-token'), {
       method: 'POST',
@@ -177,37 +164,10 @@ async function reauthenticateSession(): Promise<boolean> {
     console.warn('Silent refresh-token failed:', err);
   }
 
-  // 2. Fall back to role/email re-login
-  try {
-    const creds = getDemoCredentialsForRole(session.activeRole, session.email);
-    const response = await fetch(buildFullUrl('/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(creds),
-    });
-    const isJson = response.headers.get('content-type')?.includes('application/json');
-    const body = isJson ? await response.json() as { success?: boolean; data?: { accessToken?: string; user?: { tenantId?: string } } } : null;
-
-    if (response.ok && body?.success && body.data?.accessToken) {
-      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
-        ...session,
-        token: body.data.accessToken,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      }));
-      if (body.data.user?.tenantId) {
-        localStorage.setItem('venilearn_active_tenant_id', body.data.user.tenantId);
-      }
-      return true;
-    }
-  } catch (err) {
-    console.warn('Auto-reauth failed:', err);
-  }
-
   return false;
 }
 
-async function migrateLegacyStudentSession(endpoint: string): Promise<void> {
+async function ensureValidSession(endpoint: string): Promise<void> {
   if (endpoint.replace(/\/+$/, '').endsWith('/auth/login')) return;
   if (endpoint.replace(/\/+$/, '').endsWith('/auth/refresh-token')) return;
   if (Date.now() - lastFailedReauthTime < 60000) return;
@@ -223,18 +183,19 @@ async function migrateLegacyStudentSession(endpoint: string): Promise<void> {
   }
 
   const token = session.token || null;
-  if (!token || isMockAuthToken(token) || isJwtExpired(token)) {
-    if (!legacyStudentLoginInFlight) {
-      legacyStudentLoginInFlight = reauthenticateSession().then((success) => {
+  if (!token || isJwtExpired(token)) {
+    if (!refreshInFlight) {
+      refreshInFlight = refreshAccessToken().then((success) => {
         if (!success) {
           lastFailedReauthTime = Date.now();
         } else {
           lastFailedReauthTime = 0;
         }
+        return success;
       });
     }
-    await legacyStudentLoginInFlight;
-    legacyStudentLoginInFlight = null;
+    await refreshInFlight;
+    refreshInFlight = null;
   }
 }
 
@@ -264,7 +225,7 @@ async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  await migrateLegacyStudentSession(endpoint);
+  await ensureValidSession(endpoint);
   const url = buildFullUrl(endpoint);
 
   const headers: Record<string, string> = {
@@ -319,14 +280,17 @@ async function request<T = any>(
   const body = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
+    // Only attempt silent token refresh on 401 Unauthorized (expired token).
+    // On 403 Forbidden, NEVER retry with another role or elevate permissions.
     if (response.status === 401 && !(options.headers as any)?._isRetry) {
-      const recovered = await reauthenticateSession();
+      const recovered = await refreshAccessToken();
       if (recovered) {
         return request<T>(endpoint, {
           ...options,
           headers: {
             ...(options.headers as Record<string, string>),
             _isRetry: 'true',
+            Authorization: `Bearer ${getStoredToken()}`,
           },
         });
       }

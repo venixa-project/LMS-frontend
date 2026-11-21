@@ -1241,7 +1241,7 @@ describe('VeniGuard Proctoring & Integrity Unit Test Suite', () => {
       assert.strictEqual(candidatesWhoStartedExam.length, 1);
       assert.strictEqual(candidatesWhoStartedExam[0].name, 'Alex Thompson');
       assert.strictEqual(candidatesWhoStartedExam[0].status, 'connected');
-      assert.strictEqual(candidatesWhoStartedExam[0].cameraActive, true);
+      assert.strictEqual((candidatesWhoStartedExam[0] as any).cameraActive, true);
 
       // Remaining cohort students must remain disconnected / Awaiting Entry
       const tina = roster.find((r) => r.name === 'Tina Kirkpatrick');
@@ -1569,7 +1569,7 @@ describe('VeniGuard Proctoring & Integrity Unit Test Suite', () => {
         assessmentMap.set(a.id, {
           ...prev,
           ...a,
-          googleMeetUrl: a.googleMeetUrl || prev?.googleMeetUrl,
+          googleMeetUrl: (a as any).googleMeetUrl || (prev as any)?.googleMeetUrl,
         });
       });
 

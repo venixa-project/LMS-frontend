@@ -218,6 +218,10 @@ export interface AssessmentCertificateConfig {
   secondarySignerName?: string;
   secondarySignerTitle?: string;
   secondarySignatureImage?: string;
+  sourceDocument?: any;
+  videoUrl?: string;
+  mediaUrl?: string;
+  [key: string]: any;
 }
 
 // --- Assessment & Quiz Configuration Types for Course Builder ---
@@ -648,6 +652,9 @@ export interface Assessment {
   proctoringMode?: ProctoringMode;
   jitsiRoomId?: string;
   googleMeetUrl?: string;
+  warningIntervalSeconds?: number;
+  maxProctoringWarnings?: number;
+  thirdWarningAction?: 'auto_submit' | 'terminate' | 'flag_review';
   proctoringSettings?: ProctoringSettings;
   proctoringPolicyLevel?: ProctoringPolicyLevel;
   proctoringPolicy?: ProctoringPolicy;
@@ -665,7 +672,11 @@ export interface Assessment {
     size: number;
     type: string;
     extractedWordCount: number;
+    url?: string;
+    s3Key?: string;
   };
+  mediaUrl?: string;
+  videoUrl?: string;
   difficultyDistribution?: {
     easy: number;
     medium: number;
@@ -857,6 +868,9 @@ export interface ProctoringSettings {
   faceDetection: boolean;
   noiseDetection: boolean;
   tabSwitchDetection: boolean;
+  warningIntervalSeconds?: number;
+  maxProctoringWarnings?: number;
+  thirdWarningAction?: 'auto_submit' | 'terminate' | 'flag_review';
   jitsiDomain?: string;
   jitsiRoomId?: string;
 }

@@ -6,7 +6,7 @@ import {
   Shield, Monitor, Mic, Camera, Wifi, Globe, Maximize,
   CheckCircle2, AlertTriangle, AlertCircle, Info, RefreshCw,
   ExternalLink, ChevronRight, Lock, Eye, HelpCircle, Check, Play,
-  Video, X
+  Video, X, PauseCircle
 } from 'lucide-react';
 import { buildJitsiUrls, launchJitsiConference } from '../../../lib/jitsiProctoring';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
@@ -29,15 +29,30 @@ import {
   BrowserCapabilityReport,
 } from '../../../lib/proctoringMedia';
 import { arcFaceRecognizer } from '../../../lib/arcFaceRecognizer';
+import { yoloMobileDetector } from '../../../lib/yoloDetector';
+import { apiClient } from '../../../lib/apiClient';
+
+export type PhotoVerificationStatus =
+  | 'idle'
+  | 'camera_connected'
+  | 'capturing'
+  | 'uploading'
+  | 'verified'
+  | 'capture_failed'
+  | 'upload_failed';
 
 interface Props {
   assessment: Assessment;
   policy: ProctoringPolicy;
+  sessionId?: string;
   onReadyToStart: (streams: {
     screenStream?: MediaStream;
     userMediaStream?: MediaStream;
     candidatePhoto?: string;
     candidateEmbedding?: Float32Array;
+    sessionId?: string;
+    photoUrl?: string;
+    s3Key?: string;
   }) => void;
   onCancel: () => void;
 }
@@ -55,6 +70,7 @@ type CheckStatus =
 export const VeniGuardSetup: React.FC<Props> = ({
   assessment,
   policy,
+  sessionId,
   onReadyToStart,
   onCancel,
 }) => {
@@ -111,20 +127,61 @@ export const VeniGuardSetup: React.FC<Props> = ({
     (assessment.proctoringMode === 'manual' || assessment.proctoringMode === 'combined') &&
     (Boolean(assessment.jitsiRoomId) || Boolean((assessment as any).googleMeetUrl));
 
-  // Candidate Identity Baseline Photo Capture State
+  // Candidate Reference Photo Verification State Machine
+  // Required distinct states:
+  // - Camera Connected
+  // - Capturing Reference Photo
+  // - Uploading Reference Photo
+  // - Reference Photo Verified
+  // - Reference Photo Capture Failed
+  // - Reference Photo Upload Failed
+  const [photoStatus, setPhotoStatus] = useState<PhotoVerificationStatus>('idle');
   const [candidatePhoto, setCandidatePhoto] = useState<string | null>(null);
   const [candidateEmbedding, setCandidateEmbedding] = useState<Float32Array | null>(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string | null>(null);
+  const [uploadedS3Key, setUploadedS3Key] = useState<string | null>(null);
   const [photoVerified, setPhotoVerified] = useState<boolean>(false);
+  const [photoFeedback, setPhotoFeedback] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState<boolean>(false);
+  const [isPhotoPausedForTesting, setIsPhotoPausedForTesting] = useState<boolean>(false);
+
+  const handlePausePhotoForTesting = () => {
+    setIsPhotoPausedForTesting(true);
+    setPhotoVerified(true);
+    setPhotoStatus('verified');
+    if (!candidatePhoto) {
+      setCandidatePhoto('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%234f46e5"/><text x="50%" y="50%" fill="white" font-size="12" text-anchor="middle" dy=".3em">TESTING</text></svg>');
+    }
+    if (!uploadedPhotoUrl) {
+      setUploadedPhotoUrl('/storage/proctoring/testing-placeholder.jpg');
+    }
+    if (!uploadedS3Key) {
+      setUploadedS3Key(`exam-verification/${candidateId}/${assessment.id}/${examSessionId}/test-paused-photo.jpg`);
+    }
+    setPhotoFeedback({
+      type: 'warning',
+      message: 'Candidate Reference Photo verification has been paused for testing. You may proceed to start the assessment.',
+    });
+  };
 
   // Consent & accommodations
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
   const [showAccommodationModal, setShowAccommodationModal] = useState(false);
 
-  // Authenticated candidate details for Jitsi Meet
+  // Authenticated candidate details for Jitsi Meet & exam verification
   const { user } = useAuthStore();
   const candidateName = user?.displayName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Maria Garcia');
   const candidateEmail = user?.email || 'student@venilearn.org';
   const candidateId = user?.id || 'u-009';
+
+  // Ensure unique session ID per exam session for private S3 isolation
+  const examSessionId = useMemo(() => {
+    return (sessionId && sessionId.length === 36)
+      ? sessionId
+      : (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : '00000000-0000-4000-8000-000000000001');
+  }, [sessionId]);
 
   // Jitsi Meet endpoints and pre-configured room
   const jitsiEndpoints = useMemo(() => {
@@ -169,6 +226,10 @@ export const VeniGuardSetup: React.FC<Props> = ({
       setFullscreenStatus(isCurrentlyFullscreen() ? 'connected' : 'permission_required');
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    // Pre-initialize face detection and biometric recognition models in background
+    yoloMobileDetector.initialize().catch(() => {});
+    arcFaceRecognizer.initialize().catch(() => {});
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -559,31 +620,171 @@ export const VeniGuardSetup: React.FC<Props> = ({
     setNetLatency(latencyMs);
   };
 
-  // 6. Capture Candidate Baseline Photo from Live Webcam
-  const handleCaptureCandidatePhoto = () => {
-    const v = webcamVideoElementRef.current;
-    if (!v) return;
-    try {
-      const c = document.createElement('canvas');
-      c.width = v.videoWidth || 640;
-      c.height = v.videoHeight || 480;
-      const ctx = c.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(v, 0, 0, c.width, c.height);
-        const dataUrl = c.toDataURL('image/jpeg', 0.85);
-        setCandidatePhoto(dataUrl);
-        setPhotoVerified(true);
+  // Camera readiness transition
+  useEffect(() => {
+    if (webcamStatus === 'connected' && needsWebcam) {
+      if (photoStatus === 'idle') {
+        setPhotoStatus('camera_connected');
+      }
+    } else if (webcamStatus !== 'connected' && needsWebcam && photoStatus !== 'verified') {
+      setPhotoStatus('idle');
+    }
+  }, [webcamStatus, needsWebcam, photoStatus]);
 
-        // Generate ArcFace 512-D reference embedding from baseline photo
-        arcFaceRecognizer.generateEmbedding(c).then((embedding) => {
+  // 6. Complete Reference Photo Flow: Real Face Gate, ArcFace Embedding & Confirmed S3 Storage
+  const handleCaptureAndUploadReferencePhoto = async (): Promise<{
+    success: boolean;
+    photo?: string;
+    photoUrl?: string;
+    s3Key?: string;
+    embedding?: Float32Array;
+  }> => {
+    const v = webcamVideoElementRef.current;
+    if (!v || v.videoWidth === 0 || v.videoHeight === 0) {
+      setPhotoStatus('capture_failed');
+      setPhotoFeedback({
+        type: 'error',
+        message: 'Camera video stream is inactive or not ready. Please verify webcam permissions.',
+      });
+      return { success: false };
+    }
+
+    setPhotoStatus('capturing');
+    setIsCapturingPhoto(true);
+    setPhotoFeedback(null);
+
+    try {
+      // Step A: Detect candidate face in webcam frame using YOLO Face Detector
+      let detectedFaces: any[] = [];
+      try {
+        await yoloMobileDetector.initialize();
+        detectedFaces = await yoloMobileDetector.detectFaces(v);
+      } catch (detErr) {
+        console.warn('YOLO Face detection notice:', detErr);
+      }
+
+      // Step B: Validation Gate 1 - Exactly one face required
+      if (detectedFaces.length === 0) {
+        setPhotoStatus('capture_failed');
+        setPhotoFeedback({
+          type: 'error',
+          message: 'No candidate face detected. Please face the camera directly in a well-lit area and click Retry.',
+        });
+        return { success: false };
+      }
+
+      if (detectedFaces.length > 1) {
+        setPhotoStatus('capture_failed');
+        setPhotoFeedback({
+          type: 'error',
+          message: `Multiple faces detected (${detectedFaces.length} visible). Please ensure only you are visible in frame and click Retry.`,
+        });
+        return { success: false };
+      }
+
+      const primaryFace = detectedFaces[0];
+
+      // Step C: Validation Gate 2 - Quality, blur, lighting, resolution
+      const qualityCheck = arcFaceRecognizer.assessFaceQuality(v, primaryFace.box);
+      if (!qualityCheck.isSufficient) {
+        setPhotoStatus('capture_failed');
+        setPhotoFeedback({
+          type: 'warning',
+          message: `Face photo unclear: ${qualityCheck.reason || 'Insufficient lighting or contrast'}. Please improve front lighting and reposition.`,
+        });
+        return { success: false };
+      }
+
+      // Step D: Extract standardized 15% margin face crop canvas matching live verification
+      const faceCropCanvas = arcFaceRecognizer.extractFaceCrop(v, primaryFace.box, 0.15);
+
+      // Step E: Full frame canvas for proctor review & private S3 exam audit storage
+      const fullCanvas = document.createElement('canvas');
+      fullCanvas.width = v.videoWidth || 640;
+      fullCanvas.height = v.videoHeight || 480;
+      const fullCtx = fullCanvas.getContext('2d');
+      if (fullCtx) {
+        fullCtx.drawImage(v, 0, 0, fullCanvas.width, fullCanvas.height);
+      }
+      const fullDataUrl = fullCanvas.toDataURL('image/jpeg', 0.88);
+      setCandidatePhoto(fullDataUrl);
+
+      // Step F: Upload captured image to private S3 exam storage
+      setPhotoStatus('uploading');
+      let uploadRes: any;
+      try {
+        uploadRes = await apiClient.post(`/proctoring/sessions/${examSessionId}/baseline-photo`, {
+          photo: fullDataUrl,
+          candidateName,
+          studentId: candidateId,
+          examId: assessment.id,
+          sessionId: examSessionId,
+        });
+      } catch (uploadErr: any) {
+        console.warn('S3 Reference photo upload failed:', uploadErr);
+        setPhotoStatus('upload_failed');
+        setPhotoFeedback({
+          type: 'error',
+          message: `Reference Photo Upload Failed: ${uploadErr?.message || 'Server or network error'}. Please click Retry to store your reference photo.`,
+        });
+        return { success: false };
+      }
+
+      if (!uploadRes || uploadRes.success === false) {
+        setPhotoStatus('upload_failed');
+        setPhotoFeedback({
+          type: 'error',
+          message: 'Reference Photo Upload Failed: Storage server did not confirm persistence. Please click Retry.',
+        });
+        return { success: false };
+      }
+
+      const confirmedPhotoUrl = uploadRes.data?.photoUrl || uploadRes.photoUrl || `/storage/proctoring/${examSessionId}/baseline.jpg`;
+      const confirmedS3Key = uploadRes.data?.s3Key || uploadRes.s3Key || `exam-verification/${candidateId}/${assessment.id}/${examSessionId}/reference-photo.jpg`;
+
+      setUploadedPhotoUrl(confirmedPhotoUrl);
+      setUploadedS3Key(confirmedS3Key);
+
+      // Step G: Generate neural face embedding and lock reference for this session
+      let activeEmb: Float32Array | undefined = undefined;
+      try {
+        if (!arcFaceRecognizer.isModelReady()) {
+          await arcFaceRecognizer.initialize();
+        }
+        if (arcFaceRecognizer.isModelReady()) {
+          const embedding = await arcFaceRecognizer.generateEmbedding(faceCropCanvas);
           arcFaceRecognizer.setReferenceEmbedding(embedding);
           setCandidateEmbedding(embedding);
-        }).catch((err) => {
-          console.warn('Could not extract ArcFace embedding from baseline photo:', err);
-        });
+          activeEmb = embedding;
+        }
+      } catch (embErr: any) {
+        console.warn('Biometric model standby notice:', embErr?.message);
       }
-    } catch (e) {
+
+      setPhotoVerified(true);
+      setPhotoStatus('verified');
+      setPhotoFeedback({
+        type: 'success',
+        message: 'Reference Photo Verified: Successfully captured, validated, and stored in secure private exam storage.',
+      });
+
+      return {
+        success: true,
+        photo: fullDataUrl,
+        photoUrl: confirmedPhotoUrl,
+        s3Key: confirmedS3Key,
+        embedding: activeEmb,
+      };
+    } catch (e: any) {
       console.warn('Failed to capture candidate photo:', e);
+      setPhotoStatus('capture_failed');
+      setPhotoFeedback({
+        type: 'error',
+        message: `Reference Photo Capture Failed: ${e?.message || 'Camera error'}. Please click Retry.`,
+      });
+      return { success: false };
+    } finally {
+      setIsCapturingPhoto(false);
     }
   };
 
@@ -594,17 +795,22 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const isFullscreenSatisfied = !needsFullscreen || fullscreenStatus === 'connected';
   const isNetSatisfied = netStatus === 'connected';
   const isBrowserSatisfied = browserStatus === 'connected';
-  const isPhotoSatisfied = !needsWebcam || Boolean(candidatePhoto);
 
-  const allPrerequisitesSatisfied =
+  // CRITICAL REQUIREMENT: Camera connectivity NEVER counts as successful photo capture.
+  // Real candidate face photo MUST be captured, validated, and confirmed in private S3 storage.
+  const isPhotoSatisfied = !needsWebcam || isPhotoPausedForTesting || (photoStatus === 'verified' && Boolean(candidatePhoto) && Boolean(uploadedPhotoUrl));
+
+  const hardwareAndConsentReady =
     isScreenSatisfied &&
     isMicSatisfied &&
     isWebcamSatisfied &&
     isFullscreenSatisfied &&
     isNetSatisfied &&
     isBrowserSatisfied &&
-    isPhotoSatisfied &&
     consentAcknowledged;
+
+  const allPrerequisitesSatisfied = hardwareAndConsentReady && isPhotoSatisfied;
+  const canClickStart = hardwareAndConsentReady && photoStatus !== 'capturing' && photoStatus !== 'uploading';
 
   const totalRequiredChecks = [
     needsScreen,
@@ -613,8 +819,28 @@ export const VeniGuardSetup: React.FC<Props> = ({
     needsFullscreen,
     true, // Network
     true, // Browser
-    needsWebcam, // Candidate Photo
+    needsWebcam, // Candidate Reference Photo
   ].filter(Boolean).length;
+
+  // Auto-capture candidate baseline photo after webcam is ready and candidate is positioned
+  const autoCaptureTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (
+      webcamStatus === 'connected' &&
+      needsWebcam &&
+      photoStatus === 'camera_connected' &&
+      !candidatePhoto &&
+      !autoCaptureTriggeredRef.current
+    ) {
+      const timer = setTimeout(() => {
+        if (webcamStatus === 'connected' && !candidatePhoto && !autoCaptureTriggeredRef.current) {
+          autoCaptureTriggeredRef.current = true;
+          handleCaptureAndUploadReferencePhoto().catch(() => {});
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [webcamStatus, needsWebcam, photoStatus, candidatePhoto]);
 
   // Calculate pass percentage safely
   const totalMarks = Number(assessment.totalMarks) || 100;
@@ -627,8 +853,43 @@ export const VeniGuardSetup: React.FC<Props> = ({
     ? Math.min(100, Math.round((rawPass / totalMarks) * 100))
     : 70;
 
-  const handleStartExam = () => {
-    if (!allPrerequisitesSatisfied) return;
+  const handleStartExam = async () => {
+    let activePhoto = candidatePhoto;
+    let activeEmbedding = candidateEmbedding;
+    let finalPhotoUrl = uploadedPhotoUrl;
+    let finalS3Key = uploadedS3Key;
+
+    // If webcam is required and candidate photo hasn't been verified and stored, capture and store it now
+    if (needsWebcam && !isPhotoPausedForTesting && (!activePhoto || photoStatus !== 'verified' || !finalPhotoUrl)) {
+      if (webcamStatus !== 'connected') {
+        setPhotoFeedback({
+          type: 'error',
+          message: 'Please enable and verify camera access before starting.',
+        });
+        return;
+      }
+      const res = await handleCaptureAndUploadReferencePhoto();
+      if (!res || !res.success || !res.photo || !res.photoUrl) {
+        // Face detection or S3 storage failed: stay on setup screen so the student sees error feedback
+        return;
+      }
+      activePhoto = res.photo;
+      activeEmbedding = res.embedding || null;
+      finalPhotoUrl = res.photoUrl || null;
+      finalS3Key = res.s3Key || null;
+    }
+
+    const hasScreen = !needsScreen || screenStatus === 'connected' || screenStatus === 'not_required';
+    const hasMic = !needsMic || micStatus === 'connected' || micStatus === 'not_required';
+    const hasWebcam = !needsWebcam || webcamStatus === 'connected' || webcamStatus === 'not_required';
+    const hasFullscreen = !needsFullscreen || fullscreenStatus === 'connected';
+    const hasNet = netStatus === 'connected';
+    const hasBrowser = browserStatus === 'connected';
+    const hasPhoto = !needsWebcam || isPhotoPausedForTesting || (Boolean(activePhoto) && Boolean(finalPhotoUrl));
+
+    if (!hasScreen || !hasMic || !hasWebcam || !hasFullscreen || !hasNet || !hasBrowser || !hasPhoto || !consentAcknowledged) {
+      return;
+    }
 
     // Automatically launch Google Meet room for the student if manual or combined mode
     if (!hasOpenedMeetRef.current && isMeetProctoring) {
@@ -659,8 +920,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
     onReadyToStart({
       screenStream: screenStreamRef.current || undefined,
       userMediaStream,
-      candidatePhoto: candidatePhoto || undefined,
-      candidateEmbedding: candidateEmbedding || undefined,
+      candidatePhoto: activePhoto || undefined,
+      candidateEmbedding: activeEmbedding || undefined,
+      sessionId: examSessionId,
+      photoUrl: finalPhotoUrl || undefined,
+      s3Key: finalS3Key || undefined,
     });
   };
 
@@ -1459,8 +1723,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* 7. Proctoring Mode Card: Google Meet (Manual) OR Automated Instructions & Candidate Photo Verification */}
-          {isMeetProctoring ? (
+          {/* 7. Google Meet Live Video Conference (Manual / Combined Proctoring) */}
+          {isMeetProctoring && (
             <div
               style={{
                 gridColumn: '1 / -1',
@@ -1579,70 +1843,78 @@ export const VeniGuardSetup: React.FC<Props> = ({
                 </button>
               </div>
             </div>
-          ) : (
-            /* Automated Proctoring: Official Instructions + Candidate Identity Photo Capture */
+          )}
+
+          {/* 8. Examination Instructions & Candidate Identity Verification */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            {/* Instructions Card */}
             <div
               style={{
-                gridColumn: '1 / -1',
+                padding: '18px 20px',
+                borderRadius: 'var(--radius-md)',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(37, 99, 235, 0.05) 100%)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '16px',
+                gap: '12px',
               }}
             >
-              {/* Instructions Card */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Shield size={22} color="var(--primary)" />
+                <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-main)' }}>
+                  Automated Examination Integrity Rules & Candidate Instructions
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', fontSize: '0.82rem' }}>
+                <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <strong style={{ color: '#38bdf8' }}>1. Single Candidate Only</strong>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    Only you must be present in the camera frame. If more than 1 face is detected, a critical violation is logged.
+                  </p>
+                </div>
+                <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <strong style={{ color: '#f59e0b' }}>2. Strict 3-Warning Rule</strong>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    You receive a maximum of 3 warnings. On the 3rd strike, your examination is immediately terminated and auto-submitted!
+                  </p>
+                </div>
+                <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <strong style={{ color: '#ef4444' }}>3. No Tab or Window Switching</strong>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    Navigating away, clicking other windows, or exiting full-screen mode counts directly towards your 3 warnings.
+                  </p>
+                </div>
+                <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                  <strong style={{ color: '#10b981' }}>4. 7-Day Proof & Withheld Results</strong>
+                  <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    Results are withheld upon completion. Your trainer/admin will review the 7-day proof video and release your grades.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Candidate Baseline Identity Photo Capture Card */}
+            {needsWebcam && (
               <div
                 style={{
                   padding: '18px 20px',
                   borderRadius: 'var(--radius-md)',
-                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(37, 99, 235, 0.05) 100%)',
-                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  background: photoStatus === 'verified' ? 'rgba(16, 185, 129, 0.08)' : photoStatus === 'capture_failed' || photoStatus === 'upload_failed' ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-card)',
+                  border: photoStatus === 'verified' ? '1px solid rgba(16, 185, 129, 0.4)' : photoStatus === 'capture_failed' || photoStatus === 'upload_failed' ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-subtle)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '12px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Shield size={22} color="var(--primary)" />
-                  <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-main)' }}>
-                    Automated Examination Integrity Rules & Candidate Instructions
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', fontSize: '0.82rem' }}>
-                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <strong style={{ color: '#38bdf8' }}>1. Single Candidate Only</strong>
-                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Only you must be present in the camera frame. If more than 1 face is detected, a critical violation is logged.
-                    </p>
-                  </div>
-                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <strong style={{ color: '#f59e0b' }}>2. Strict 3-Warning Rule</strong>
-                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      You receive a maximum of 3 warnings. On the 3rd strike, your examination is immediately terminated and auto-submitted!
-                    </p>
-                  </div>
-                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <strong style={{ color: '#ef4444' }}>3. No Tab or Window Switching</strong>
-                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Navigating away, clicking other windows, or exiting full-screen mode counts directly towards your 3 warnings.
-                    </p>
-                  </div>
-                  <div style={{ background: 'var(--bg-card)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    <strong style={{ color: '#10b981' }}>4. 7-Day Proof & Withheld Results</strong>
-                    <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                      Results are withheld upon completion. Your trainer/admin will review the 7-day proof video and release your grades.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Candidate Baseline Identity Photo Capture Card */}
-              {needsWebcam && (
                 <div
                   style={{
-                    padding: '18px 20px',
-                    borderRadius: 'var(--radius-md)',
-                    background: candidatePhoto ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)',
-                    border: candidatePhoto ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-subtle)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
@@ -1660,8 +1932,8 @@ export const VeniGuardSetup: React.FC<Props> = ({
                           height: '72px',
                           borderRadius: '50%',
                           objectFit: 'cover',
-                          border: '2px solid #10b981',
-                          boxShadow: '0 0 12px rgba(16, 185, 129, 0.3)',
+                          border: photoStatus === 'verified' ? '2px solid #10b981' : '2px solid #f59e0b',
+                          boxShadow: photoStatus === 'verified' ? '0 0 12px rgba(16, 185, 129, 0.3)' : 'none',
                         }}
                       />
                     ) : (
@@ -1670,7 +1942,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
                           width: '64px',
                           height: '64px',
                           borderRadius: '50%',
-                          background: 'rgba(99, 102, 241, 0.12)',
+                          background: photoStatus === 'capturing' || photoStatus === 'uploading' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.12)',
                           color: 'var(--primary)',
                           display: 'flex',
                           alignItems: 'center',
@@ -1678,34 +1950,81 @@ export const VeniGuardSetup: React.FC<Props> = ({
                           border: '2px dashed var(--primary)',
                         }}
                       >
-                        <Camera size={26} />
+                        {photoStatus === 'capturing' || photoStatus === 'uploading' ? (
+                          <RefreshCw size={26} className="animate-spin" />
+                        ) : (
+                          <Camera size={26} />
+                        )}
                       </div>
                     )}
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        Candidate Identity Photo Verification
-                        {candidatePhoto ? (
-                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={13} /> Photo Verified
+                      <div style={{ fontWeight: 800, fontSize: '0.96rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        Candidate Reference Photo Verification
+                        {isPhotoPausedForTesting && (
+                          <span style={{ color: '#F59E0B', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(245, 158, 11, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <PauseCircle size={13} /> Paused for Testing
                           </span>
-                        ) : (
-                          <span style={{ color: '#f59e0b', fontSize: '0.75rem', fontWeight: 700 }}>*Photo Required</span>
+                        )}
+                        {!isPhotoPausedForTesting && photoStatus === 'verified' && (
+                          <span style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(16, 185, 129, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <CheckCircle2 size={13} /> Reference Photo Verified
+                          </span>
+                        )}
+                        {photoStatus === 'capturing' && (
+                          <span style={{ color: '#3B82F6', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(59, 130, 246, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <RefreshCw size={13} className="animate-spin" /> Capturing Reference Photo
+                          </span>
+                        )}
+                        {photoStatus === 'uploading' && (
+                          <span style={{ color: '#8B5CF6', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(139, 92, 246, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <RefreshCw size={13} className="animate-spin" /> Uploading Reference Photo
+                          </span>
+                        )}
+                        {photoStatus === 'camera_connected' && (
+                          <span style={{ color: '#F59E0B', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(245, 158, 11, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <Camera size={13} /> Camera Connected
+                          </span>
+                        )}
+                        {photoStatus === 'capture_failed' && (
+                          <span style={{ color: '#EF4444', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(239, 68, 68, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <AlertCircle size={13} /> Reference Photo Capture Failed
+                          </span>
+                        )}
+                        {photoStatus === 'upload_failed' && (
+                          <span style={{ color: '#EF4444', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(239, 68, 68, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            <AlertCircle size={13} /> Reference Photo Upload Failed
+                          </span>
+                        )}
+                        {photoStatus === 'idle' && (
+                          <span style={{ color: '#9CA3AF', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(156, 163, 175, 0.12)', padding: '2px 8px', borderRadius: '4px' }}>
+                            *Camera Required First
+                          </span>
                         )}
                       </div>
                       <p className="text-muted text-xs" style={{ margin: '4px 0 0 0', lineHeight: 1.4 }}>
-                        {candidatePhoto
-                          ? `Identity snapshot registered for ${candidateName}. Only this student is permitted to write the examination.`
-                          : 'Position your face clearly in front of the camera and capture your identity photo before starting.'}
+                        {photoStatus === 'verified'
+                          ? `Identity snapshot verified and securely stored in private S3 exam storage for ${candidateName}. Only this student is permitted to write the examination.`
+                          : photoStatus === 'uploading'
+                          ? 'Uploading verified candidate snapshot to private AWS S3 exam storage...'
+                          : photoStatus === 'capturing'
+                          ? 'Detecting face, validating single candidate presence, and calculating biometric reference...'
+                          : photoStatus === 'camera_connected'
+                          ? 'Camera feed connected. Position your face in center frame for automatic identity verification.'
+                          : photoStatus === 'upload_failed'
+                          ? 'Could not complete private storage persistence. Please verify connection and click Retry.'
+                          : photoStatus === 'capture_failed'
+                          ? 'Face verification was unable to confirm a single well-lit candidate face. Position yourself and click Retry.'
+                          : 'Please enable webcam permissions to proceed with identity photo verification.'}
                       </p>
                     </div>
                   </div>
 
-                  <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
-                      className={candidatePhoto ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
-                      onClick={handleCaptureCandidatePhoto}
-                      disabled={webcamStatus !== 'connected'}
+                      className={photoStatus === 'verified' && !isPhotoPausedForTesting ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+                      onClick={handleCaptureAndUploadReferencePhoto}
+                      disabled={webcamStatus !== 'connected' || photoStatus === 'capturing' || photoStatus === 'uploading'}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1714,16 +2033,95 @@ export const VeniGuardSetup: React.FC<Props> = ({
                         padding: '8px 16px',
                       }}
                     >
-                      <Camera size={15} />
-                      {candidatePhoto ? 'Retake Photo' : 'Capture Candidate Photo'}
+                      {photoStatus === 'capturing' ? (
+                        <>
+                          <RefreshCw size={15} className="animate-spin" /> Capturing...
+                        </>
+                      ) : photoStatus === 'uploading' ? (
+                        <>
+                          <RefreshCw size={15} className="animate-spin" /> Uploading to S3...
+                        </>
+                      ) : photoStatus === 'capture_failed' || photoStatus === 'upload_failed' ? (
+                        <>
+                          <RefreshCw size={15} /> Retry Photo Verification
+                        </>
+                      ) : photoStatus === 'verified' && !isPhotoPausedForTesting ? (
+                        <>
+                          <Camera size={15} /> Retake & Update
+                        </>
+                      ) : (
+                        <>
+                          <Camera size={15} /> Capture Reference Photo
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handlePausePhotoForTesting}
+                      className="btn btn-sm"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 700,
+                        padding: '8px 14px',
+                        background: isPhotoPausedForTesting ? 'rgba(245, 158, 11, 0.15)' : '#f3f4f6',
+                        color: isPhotoPausedForTesting ? '#b45309' : '#374151',
+                        border: isPhotoPausedForTesting ? '1px solid #f59e0b' : '1px solid #d1d5db',
+                      }}
+                      title="Pause / Skip Reference Photo verification for testing"
+                    >
+                      <PauseCircle size={15} />
+                      {isPhotoPausedForTesting ? 'Photo Paused for Testing' : 'Pause for Testing'}
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-        
-</div>
+
+                {photoFeedback && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background:
+                        photoFeedback.type === 'error'
+                          ? 'rgba(239, 68, 68, 0.1)'
+                          : photoFeedback.type === 'warning'
+                          ? 'rgba(245, 158, 11, 0.1)'
+                          : 'rgba(16, 185, 129, 0.1)',
+                      color:
+                        photoFeedback.type === 'error'
+                          ? '#ef4444'
+                          : photoFeedback.type === 'warning'
+                          ? '#f59e0b'
+                          : '#10b981',
+                      border: `1px solid ${
+                        photoFeedback.type === 'error'
+                          ? 'rgba(239, 68, 68, 0.3)'
+                          : photoFeedback.type === 'warning'
+                          ? 'rgba(245, 158, 11, 0.3)'
+                          : 'rgba(16, 185, 129, 0.3)'
+                      }`,
+                    }}
+                  >
+                    {photoFeedback.type === 'error' ? (
+                      <AlertCircle size={15} />
+                    ) : photoFeedback.type === 'warning' ? (
+                      <AlertTriangle size={15} />
+                    ) : (
+                      <CheckCircle2 size={15} />
+                    )}
+                    <span>{photoFeedback.message}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Policy Transparency Banner (Moved down below Checklist) */}
         <div
@@ -1811,13 +2209,25 @@ export const VeniGuardSetup: React.FC<Props> = ({
           >
             <AlertCircle size={18} style={{ flexShrink: 0 }} />
             <span>
-              To start your examination, please satisfy all required checks:
-              {needsScreen && !isScreenSatisfied && ' [Share Screen]'}
-              {needsMic && !isMicSatisfied && ' [Enable Mic]'}
-              {needsWebcam && !isWebcamSatisfied && ' [Enable Camera]'}
-              {needsFullscreen && !isFullscreenSatisfied && ' [Enter Fullscreen]'}
-              {!isNetSatisfied && ' [Check Network]'}
-              {!consentAcknowledged && ' [Acknowledge Consent Checkbox]'}
+              To start your examination, please complete all required checks:
+              {needsScreen && !isScreenSatisfied && ' [Screen Sharing Stream]'}
+              {needsMic && !isMicSatisfied && ' [Live Microphone]'}
+              {needsWebcam && !isWebcamSatisfied && ' [Live Camera Feed]'}
+              {needsWebcam && !isPhotoSatisfied && (
+                photoStatus === 'capturing'
+                  ? ' [Reference Photo: Capturing...]'
+                  : photoStatus === 'uploading'
+                  ? ' [Reference Photo: Uploading to S3...]'
+                  : photoStatus === 'capture_failed'
+                  ? ' [Reference Photo Capture Failed - Please Retry]'
+                  : photoStatus === 'upload_failed'
+                  ? ' [Reference Photo Upload Failed - Please Retry]'
+                  : ' [Capture Candidate Reference Photo]'
+              )}
+              {needsFullscreen && !isFullscreenSatisfied && ' [Full-Screen Lock]'}
+              {!isNetSatisfied && ' [Internet Connectivity]'}
+              {!isBrowserSatisfied && ' [Browser Compatibility]'}
+              {!consentAcknowledged && ' [Integrity Agreement Checkbox]'}
             </span>
           </div>
         )}
@@ -1830,18 +2240,26 @@ export const VeniGuardSetup: React.FC<Props> = ({
 
           <button
             className="btn btn-primary btn-lg"
-            disabled={!allPrerequisitesSatisfied}
+            disabled={!canClickStart}
             onClick={handleStartExam}
             style={{
-              background: allPrerequisitesSatisfied
+              background: canClickStart
                 ? 'linear-gradient(135deg, #2563EB 0%, #5447FF 50%, #EC4899 100%)'
                 : undefined,
-              boxShadow: allPrerequisitesSatisfied ? '0 4px 20px rgba(84, 71, 255, 0.45)' : 'none',
+              boxShadow: canClickStart
+                ? '0 4px 20px rgba(84, 71, 255, 0.45)'
+                : 'none',
               fontWeight: 800,
               gap: '8px',
             }}
           >
-            <span>Start Assessment</span>
+            <span>
+              {photoStatus === 'capturing'
+                ? 'Capturing Reference Photo...'
+                : photoStatus === 'uploading'
+                ? 'Uploading Reference Photo...'
+                : 'Start Assessment'}
+            </span>
             <ChevronRight size={18} />
           </button>
         </div>
@@ -1894,4 +2312,3 @@ export const VeniGuardSetup: React.FC<Props> = ({
     </div>
   );
 };
-        

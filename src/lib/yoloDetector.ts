@@ -138,36 +138,117 @@ export class YOLOMobileDetector {
   }
 
   /**
-   * Class-Aware Non-Maximum Suppression (NMS).
-   * Boxes of different classes (e.g. face vs cell phone) never suppress each other.
+   * Class-Aware Non-Maximum Suppression (NMS) with Face Deduplication & Spatial Merging.
+   * - Boxes of different classes (e.g. face vs cell phone) never suppress each other.
+   * - Human faces: Merges overlapping or adjacent face bounding boxes (IoU >= 0.15,
+   *   containment >= 0.35, or close centroid proximity) into a single encompassing face bounding box.
+   *   Two distinct humans in front of a laptop webcam have spatially separated heads.
    */
   private nonMaxSuppression(candidates: YOLODetectionResult[]): YOLODetectionResult[] {
     if (candidates.length <= 1) return candidates;
 
-    // Sort by confidence descending
-    candidates.sort((a, b) => b.confidence - a.confidence);
+    // Separate face candidates from object candidates
+    const faceCandidates: YOLODetectionResult[] = candidates.filter(c => c.classId === 0);
+    const otherCandidates: YOLODetectionResult[] = candidates.filter(c => c.classId !== 0);
 
-    const selected: YOLODetectionResult[] = [];
-    const suppressed = new Set<number>();
+    // 1. Process Face Detections: Spatial Cluster Merging & Deduplication
+    const mergedFaces: YOLODetectionResult[] = [];
+    if (faceCandidates.length > 0) {
+      faceCandidates.sort((a, b) => b.confidence - a.confidence);
+      const faceSuppressed = new Set<number>();
 
-    for (let i = 0; i < candidates.length; i++) {
-      if (suppressed.has(i)) continue;
-      const current = candidates[i];
-      selected.push(current);
+      for (let i = 0; i < faceCandidates.length; i++) {
+        if (faceSuppressed.has(i)) continue;
+        const current = { ...faceCandidates[i], box: { ...faceCandidates[i].box }, normalizedBox: { ...faceCandidates[i].normalizedBox } };
 
-      for (let j = i + 1; j < candidates.length; j++) {
-        if (suppressed.has(j)) continue;
-        // Suppress only if same class
-        if (current.classId === candidates[j].classId) {
-          const iou = this.calculateIoU(current.box, candidates[j].box);
-          if (iou >= this.config.iouThreshold) {
-            suppressed.add(j);
+        for (let j = i + 1; j < faceCandidates.length; j++) {
+          if (faceSuppressed.has(j)) continue;
+          const other = faceCandidates[j];
+
+          const iou = this.calculateIoU(current.box, other.box);
+
+          // Calculate containment (intersection over smaller box area)
+          const xA = Math.max(current.box.x, other.box.x);
+          const yA = Math.max(current.box.y, other.box.y);
+          const xB = Math.min(current.box.x + current.box.width, other.box.x + other.box.width);
+          const yB = Math.min(current.box.y + current.box.height, other.box.y + other.box.height);
+          const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+          const minArea = Math.min(current.box.width * current.box.height, other.box.width * other.box.height);
+          const containment = minArea > 0 ? interArea / minArea : 0;
+
+          // Calculate Euclidean centroid distance
+          const c1x = current.box.x + current.box.width / 2;
+          const c1y = current.box.y + current.box.height / 2;
+          const c2x = other.box.x + other.box.width / 2;
+          const c2y = other.box.y + other.box.height / 2;
+          const dist = Math.hypot(c1x - c2x, c1y - c2y);
+          const avgWidth = (current.box.width + other.box.width) / 2;
+          const avgHeight = (current.box.height + other.box.height) / 2;
+
+          // Two boxes represent the same human face if:
+          // 1) IoU >= 0.15 (significant overlap)
+          // 2) Containment >= 0.35 (one box is inside or largely overlapping the other)
+          // 3) Centroid distance < 0.65 * width and vertical alignment is close (split facial components)
+          const isSamePhysicalFace = (
+            iou >= 0.15 ||
+            containment >= 0.35 ||
+            (dist < avgWidth * 0.65 && Math.abs(c1y - c2y) < avgHeight * 0.45)
+          );
+
+          if (isSamePhysicalFace) {
+            faceSuppressed.add(j);
+            // Merge other into current (enclosing bounding box)
+            const minX = Math.min(current.box.x, other.box.x);
+            const minY = Math.min(current.box.y, other.box.y);
+            const maxX = Math.max(current.box.x + current.box.width, other.box.x + other.box.width);
+            const maxY = Math.max(current.box.y + current.box.height, other.box.y + other.box.height);
+
+            current.box.x = minX;
+            current.box.y = minY;
+            current.box.width = maxX - minX;
+            current.box.height = maxY - minY;
+            current.confidence = Math.max(current.confidence, other.confidence);
+
+            const nMinX = Math.min(current.normalizedBox.x, other.normalizedBox.x);
+            const nMinY = Math.min(current.normalizedBox.y, other.normalizedBox.y);
+            const nMaxX = Math.max(current.normalizedBox.x + current.normalizedBox.width, other.normalizedBox.x + other.normalizedBox.width);
+            const nMaxY = Math.max(current.normalizedBox.y + current.normalizedBox.height, other.normalizedBox.y + other.normalizedBox.height);
+
+            current.normalizedBox.x = nMinX;
+            current.normalizedBox.y = nMinY;
+            current.normalizedBox.width = nMaxX - nMinX;
+            current.normalizedBox.height = nMaxY - nMinY;
+          }
+        }
+
+        mergedFaces.push(current);
+      }
+    }
+
+    // 2. Process Non-Face Detections (Mobile Phones): Standard Class-Specific NMS
+    const selectedOthers: YOLODetectionResult[] = [];
+    if (otherCandidates.length > 0) {
+      otherCandidates.sort((a, b) => b.confidence - a.confidence);
+      const otherSuppressed = new Set<number>();
+
+      for (let i = 0; i < otherCandidates.length; i++) {
+        if (otherSuppressed.has(i)) continue;
+        const current = otherCandidates[i];
+        selectedOthers.push(current);
+
+        for (let j = i + 1; j < otherCandidates.length; j++) {
+          if (otherSuppressed.has(j)) continue;
+          if (current.classId === otherCandidates[j].classId) {
+            const iou = this.calculateIoU(current.box, otherCandidates[j].box);
+            if (iou >= this.config.iouThreshold) {
+              otherSuppressed.add(j);
+            }
           }
         }
       }
     }
 
-    return selected;
+    return [...mergedFaces, ...selectedOthers];
   }
 
   /**
@@ -400,18 +481,51 @@ export class YOLOMobileDetector {
           r > g && r > b && (r - b) >= 14
         );
 
-        // Dark facial features (eyes, eyebrows, nostrils, mouth, beard)
+        // Dark facial features (eyes, eyebrows, nostrils, mouth, beard, dark glasses rims)
         const isDarkFeature = (
-          luma <= 60 && Math.abs(r - g) <= 22 && Math.abs(r - b) <= 22
+          luma <= 80 && Math.abs(r - g) <= 28 && Math.abs(r - b) <= 28
         );
 
         if (isSkin) {
           skinGrid[cellIdx] = 1;
         }
 
-        // Face score: skin cell in upper 85% of frame (or dark feature only if adjacent to verified skin)
+        // Face score: skin cell in upper 85% of frame
         if (gy < Math.floor(gridRows * 0.85) && isSkin) {
           faceScoreGrid[cellIdx] = 0.88;
+        }
+      }
+    }
+
+    // Pass 1.5: Bridge facial features (dark glasses rims, eyes, eyebrows, beard, nose shadows) adjacent to skin
+    for (let gy = 0; gy < Math.floor(gridRows * 0.85); gy++) {
+      for (let gx = 0; gx < gridCols; gx++) {
+        const cellIdx = gy * gridCols + gx;
+        if (skinGrid[cellIdx] === 0) {
+          const luma = lumaGrid[cellIdx];
+          const r = rGrid[cellIdx];
+          const g = gGrid[cellIdx];
+          const b = bGrid[cellIdx];
+          const isDarkFeature = (luma <= 80 && Math.abs(r - g) <= 28 && Math.abs(r - b) <= 28);
+          if (isDarkFeature) {
+            let hasSkinNeighbor = false;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                const ny = gy + dy;
+                const nx = gx + dx;
+                if (nx >= 0 && nx < gridCols && ny >= 0 && ny < gridRows) {
+                  if (skinGrid[ny * gridCols + nx] === 1) {
+                    hasSkinNeighbor = true;
+                    break;
+                  }
+                }
+              }
+              if (hasSkinNeighbor) break;
+            }
+            if (hasSkinNeighbor) {
+              faceScoreGrid[cellIdx] = 0.72;
+            }
+          }
         }
       }
     }
@@ -421,6 +535,16 @@ export class YOLOMobileDetector {
 
     // Pass 2: Face Connected-Component Spatial Clustering (BFS)
     const visitedFace = new Uint8Array(totalCells);
+    interface FaceCluster {
+      minGx: number;
+      maxGx: number;
+      minGy: number;
+      maxGy: number;
+      cellCount: number;
+      skinPoints: number;
+      confSum: number;
+    }
+    const rawFaceClusters: FaceCluster[] = [];
 
     for (let gy = 0; gy < gridRows; gy++) {
       for (let gx = 0; gx < gridCols; gx++) {
@@ -468,54 +592,124 @@ export class YOLOMobileDetector {
           }
         }
 
-        // Validate human face cluster properties
-        // A human face at normal webcam distance occupies at least 12 cells with >= 8 skin points (at least 35% skin)
-        if (faceCellCount < 12 || skinPointsInCluster < 8 || (skinPointsInCluster / faceCellCount) < 0.30) {
-          continue;
+        if (faceCellCount >= 8 && skinPointsInCluster >= 6) {
+          rawFaceClusters.push({
+            minGx: fMinGx,
+            maxGx: fMaxGx,
+            minGy: fMinGy,
+            maxGy: fMaxGy,
+            cellCount: faceCellCount,
+            skinPoints: skinPointsInCluster,
+            confSum: faceConfSum,
+          });
         }
-
-        const boxPxX = fMinGx * cellSize;
-        const boxPxY = fMinGy * cellSize;
-        const boxPxW = (fMaxGx - fMinGx + 1) * cellSize;
-        const boxPxH = (fMaxGy - fMinGy + 1) * cellSize;
-
-        const wRatio = boxPxW / w;
-        const hRatio = boxPxH / h;
-
-        // Human face dimensions
-        if (wRatio < 0.08 || wRatio > 0.70 || hRatio < 0.10 || hRatio > 0.75) {
-          continue;
-        }
-
-        // Face vertical oval aspect ratio: Height / Width between 0.90 and 2.20
-        const aspectHW = boxPxH / Math.max(1, boxPxW);
-        if (aspectHW < 0.85 || aspectHW > 2.30) {
-          continue;
-        }
-
-        const conf = Math.min(0.98, Math.max(0.65, faceConfSum / faceCellCount));
-        const videoX = Math.round(boxPxX * scaleX);
-        const videoY = Math.round(boxPxY * scaleY);
-        const videoW = Math.round(boxPxW * scaleX);
-        const videoH = Math.round(boxPxH * scaleY);
-
-        faceBoxes.push({ x: fMinGx, y: fMinGy, width: fMaxGx - fMinGx + 1, height: fMaxGy - fMinGy + 1 });
-
-        detections.push({
-          classId: 0,
-          className: 'face',
-          confidence: Number(conf.toFixed(3)),
-          box: { x: videoX, y: videoY, width: videoW, height: videoH },
-          normalizedBox: {
-            x: Number((videoX / sourceWidth).toFixed(4)),
-            y: Number((videoY / sourceHeight).toFixed(4)),
-            width: Number((videoW / sourceWidth).toFixed(4)),
-            height: Number((videoH / sourceHeight).toFixed(4)),
-          },
-          orientation: 'portrait',
-          isPartiallyVisible: videoX <= 10 || videoY <= 10 || (videoX + videoW) >= (sourceWidth - 10) || (videoY + videoH) >= (sourceHeight - 10),
-        });
       }
+    }
+
+    // Merge adjacent / overlapping face clusters (e.g. left and right cheek, or forehead and chin)
+    const mergedClusters: FaceCluster[] = [];
+    const clusterMerged = new Set<number>();
+
+    for (let i = 0; i < rawFaceClusters.length; i++) {
+      if (clusterMerged.has(i)) continue;
+      const c1 = { ...rawFaceClusters[i] };
+
+      for (let j = i + 1; j < rawFaceClusters.length; j++) {
+        if (clusterMerged.has(j)) continue;
+        const c2 = rawFaceClusters[j];
+
+        const w1 = c1.maxGx - c1.minGx + 1;
+        const h1 = c1.maxGy - c1.minGy + 1;
+        const w2 = c2.maxGx - c2.minGx + 1;
+        const h2 = c2.maxGy - c2.minGy + 1;
+
+        const xA = Math.max(c1.minGx, c2.minGx);
+        const yA = Math.max(c1.minGy, c2.minGy);
+        const xB = Math.min(c1.maxGx, c2.maxGx);
+        const yB = Math.min(c1.maxGy, c2.maxGy);
+        const interW = Math.max(0, xB - xA + 1);
+        const interH = Math.max(0, yB - yA + 1);
+        const interArea = (xB >= xA && yB >= yA) ? interW * interH : 0;
+        const minArea = Math.min(w1 * h1, w2 * h2);
+        const unionArea = w1 * h1 + w2 * h2 - interArea;
+        const iou = unionArea > 0 ? interArea / unionArea : 0;
+        const containment = minArea > 0 ? interArea / minArea : 0;
+
+        const c1x = (c1.minGx + c1.maxGx) / 2;
+        const c1y = (c1.minGy + c1.maxGy) / 2;
+        const c2x = (c2.minGx + c2.maxGx) / 2;
+        const c2y = (c2.minGy + c2.maxGy) / 2;
+        const dist = Math.hypot(c1x - c2x, c1y - c2y);
+        const avgW = (w1 + w2) / 2;
+        const avgH = (h1 + h2) / 2;
+
+        const isSamePhysicalFace = (
+          iou >= 0.10 ||
+          containment >= 0.25 ||
+          (dist < avgW * 0.75 && Math.abs(c1y - c2y) < avgH * 0.50)
+        );
+
+        if (isSamePhysicalFace) {
+          clusterMerged.add(j);
+          c1.minGx = Math.min(c1.minGx, c2.minGx);
+          c1.maxGx = Math.max(c1.maxGx, c2.maxGx);
+          c1.minGy = Math.min(c1.minGy, c2.minGy);
+          c1.maxGy = Math.max(c1.maxGy, c2.maxGy);
+          c1.cellCount += c2.cellCount;
+          c1.skinPoints += c2.skinPoints;
+          c1.confSum += c2.confSum;
+        }
+      }
+      mergedClusters.push(c1);
+    }
+
+    // Convert validated face clusters into YOLO Face detections
+    for (const cluster of mergedClusters) {
+      if (cluster.cellCount < 12 || cluster.skinPoints < 8 || (cluster.skinPoints / cluster.cellCount) < 0.30) {
+        continue;
+      }
+
+      const boxPxX = cluster.minGx * cellSize;
+      const boxPxY = cluster.minGy * cellSize;
+      const boxPxW = (cluster.maxGx - cluster.minGx + 1) * cellSize;
+      const boxPxH = (cluster.maxGy - cluster.minGy + 1) * cellSize;
+
+      const wRatio = boxPxW / w;
+      const hRatio = boxPxH / h;
+
+      // Human face dimensions filter
+      if (wRatio < 0.08 || wRatio > 0.70 || hRatio < 0.10 || hRatio > 0.75) {
+        continue;
+      }
+
+      // Face vertical oval aspect ratio: Height / Width between 0.85 and 2.30
+      const aspectHW = boxPxH / Math.max(1, boxPxW);
+      if (aspectHW < 0.85 || aspectHW > 2.30) {
+        continue;
+      }
+
+      const conf = Math.min(0.98, Math.max(0.65, cluster.confSum / cluster.cellCount));
+      const videoX = Math.round(boxPxX * scaleX);
+      const videoY = Math.round(boxPxY * scaleY);
+      const videoW = Math.round(boxPxW * scaleX);
+      const videoH = Math.round(boxPxH * scaleY);
+
+      faceBoxes.push({ x: cluster.minGx, y: cluster.minGy, width: cluster.maxGx - cluster.minGx + 1, height: cluster.maxGy - cluster.minGy + 1 });
+
+      detections.push({
+        classId: 0,
+        className: 'face',
+        confidence: Number(conf.toFixed(3)),
+        box: { x: videoX, y: videoY, width: videoW, height: videoH },
+        normalizedBox: {
+          x: Number((videoX / sourceWidth).toFixed(4)),
+          y: Number((videoY / sourceHeight).toFixed(4)),
+          width: Number((videoW / sourceWidth).toFixed(4)),
+          height: Number((videoH / sourceHeight).toFixed(4)),
+        },
+        orientation: 'portrait',
+        isPartiallyVisible: videoX <= 10 || videoY <= 10 || (videoX + videoW) >= (sourceWidth - 10) || (videoY + videoH) >= (sourceHeight - 10),
+      });
     }
 
     // Pass 3: Mobile Phone Feature Scoring (Excluding human facial skin)
@@ -548,46 +742,48 @@ export class YOLOMobileDetector {
 
         // Feature 1: Metallic / Gold / Champagne / Bronze / Yellow-Tan smartphone backplate
         const isGoldMetallic = (
-          r >= 95 && g >= 65 && b <= 180 &&
-          (r - b) >= 12 && (g - b) >= 4 &&
-          Math.abs(r - g) <= 75
+          r >= 105 && g >= 75 && b <= 165 &&
+          (r - b) >= 16 && (g - b) >= 6 &&
+          Math.abs(r - g) <= 65 &&
+          edgeGradient >= 16
         );
 
-        // Feature 2: Dark Camera Bump Island or Circular Camera Lens Module
+        // Feature 2: Dark Camera Bump Island or Circular Camera Lens Module (Distinct high-contrast hardware module)
         const isCameraLensModule = (
-          luma <= 85 &&
-          Math.abs(r - g) <= 24 && Math.abs(r - b) <= 24 &&
-          edgeGradient >= 10
+          luma <= 65 &&
+          Math.abs(r - g) <= 20 && Math.abs(r - b) <= 20 &&
+          edgeGradient >= 20
         );
 
-        // Feature 3: Active glowing smartphone display screen
+        // Feature 3: Active glowing smartphone display screen (Uniform high illumination with defined border)
         const isGlowingDisplay = (
-          luma >= 165 &&
-          (b >= 95 || luma >= 210) &&
-          edgeGradient >= 10
+          luma >= 170 &&
+          (b >= 100 || luma >= 215) &&
+          edgeGradient >= 18
         );
 
-        // Feature 4: Matte / Glossy Dark phone casing or bezel
+        // Feature 4: Matte / Glossy Dark phone casing with high-contrast sharp perimeter
         const isDarkPhoneBody = (
-          luma <= 80 && edgeGradient >= 12
+          luma <= 65 && edgeGradient >= 22 && Math.abs(r - g) <= 15 && Math.abs(r - b) <= 15
         );
 
-        // Feature 5: Uniform colored / silver / white smartphone body with edge
+        // Feature 5: Uniform colored / silver / blue / ceramic smartphone body with sharp bezel
         const isNeutralPhoneBody = (
-          Math.abs(r - g) <= 18 && Math.abs(r - b) <= 18 &&
-          edgeGradient >= 14
+          Math.abs(r - g) <= 12 && Math.abs(r - b) <= 12 &&
+          luma >= 80 && luma <= 200 &&
+          edgeGradient >= 22
         );
 
         if (isCameraLensModule) {
-          phoneScoreGrid[cellIdx] = 0.92;
+          phoneScoreGrid[cellIdx] = 0.94;
         } else if (isGoldMetallic) {
-          phoneScoreGrid[cellIdx] = 0.86;
-        } else if (isGlowingDisplay) {
           phoneScoreGrid[cellIdx] = 0.88;
+        } else if (isGlowingDisplay) {
+          phoneScoreGrid[cellIdx] = 0.89;
         } else if (isDarkPhoneBody) {
-          phoneScoreGrid[cellIdx] = 0.82;
+          phoneScoreGrid[cellIdx] = 0.80;
         } else if (isNeutralPhoneBody) {
-          phoneScoreGrid[cellIdx] = 0.76;
+          phoneScoreGrid[cellIdx] = 0.74;
         }
       }
     }
@@ -609,6 +805,9 @@ export class YOLOMobileDetector {
         let clusterConfidenceSum = 0;
         let cMinGx = gx, cMaxGx = gx, cMinGy = gy, cMaxGy = gy;
         let hasCameraLensOrScreen = false;
+        let maxClusterEdge = 0;
+        let internalSkinPoints = 0;
+        let lumaVarianceSum = 0;
 
         while (queue.length > 0) {
           const curr = queue.shift()!;
@@ -618,7 +817,11 @@ export class YOLOMobileDetector {
           clusterCellCount++;
           const score = phoneScoreGrid[curr];
           clusterConfidenceSum += score;
-          if (score >= 0.85) hasCameraLensOrScreen = true;
+          if (score >= 0.88) hasCameraLensOrScreen = true;
+          if (skinGrid[curr] === 1) internalSkinPoints++;
+
+          const cLuma = lumaGrid[curr];
+          lumaVarianceSum += cLuma;
 
           if (cx < cMinGx) cMinGx = cx;
           if (cx > cMaxGx) cMaxGx = cx;
@@ -641,7 +844,11 @@ export class YOLOMobileDetector {
           }
         }
 
-        if (clusterCellCount < 4 || clusterCellCount > 85) {
+        // --- FALSE-POSITIVE OBJECT DISCRIMINATION FILTER ---
+
+        // 1. Minimum & Maximum Cell Bounds
+        // Pens: < 8 cells; Large books/notebooks: > 75 cells
+        if (clusterCellCount < 8 || clusterCellCount > 75) {
           continue;
         }
 
@@ -653,22 +860,43 @@ export class YOLOMobileDetector {
         const widthRatio = boxPxW / w;
         const heightRatio = boxPxH / h;
 
-        if (widthRatio < 0.04 || widthRatio > 0.50 || heightRatio < 0.05 || heightRatio > 0.65) {
+        // 2. Reject Pens & Styluses: Too narrow/thin, or extreme aspect ratio
+        const aspect = boxPxH > 0 ? boxPxW / boxPxH : 1;
+        const isPenLike = (aspect > 3.6 || aspect < 0.28) || (boxPxW < 20 || boxPxH < 20) || (cMaxGx - cMinGx < 2) || (cMaxGy - cMinGy < 2);
+        if (isPenLike) {
           continue;
         }
 
-        const aspect = boxPxH > 0 ? boxPxW / boxPxH : 1;
+        // 3. Reject Books, Notebooks, Binders & Large Sheets of Paper
+        const isBookOrNotebook = widthRatio > 0.32 || heightRatio > 0.38 || (widthRatio * heightRatio > 0.10);
+        if (isBookOrNotebook) {
+          continue;
+        }
+
+        // 4. Reject Smartwatches & Wristbands: Small square/circular profile on wrists
+        const isWatchLike = (boxPxW <= 28 && boxPxH <= 28 && aspect >= 0.80 && aspect <= 1.25);
+        if (isWatchLike) {
+          continue;
+        }
+
+        // 5. Reject Bare Hands & Arms: Clusters with high internal skin chrominance
+        if ((internalSkinPoints / clusterCellCount) > 0.20) {
+          continue;
+        }
+
+        // 6. Realistic Smartphone Aspect Ratio Check
+        // Modern smartphones: 1.7 to 2.2 aspect ratio (portrait: ~0.45 - 0.65, landscape: ~1.6 - 2.3, tilted: ~0.68 - 1.50)
         const isRealisticAspect = (
-          (aspect >= 0.30 && aspect <= 0.95) || // portrait
-          (aspect >= 0.65 && aspect <= 1.55) || // tilted / angled
-          (aspect >= 1.15 && aspect <= 2.80)    // landscape
+          (aspect >= 0.38 && aspect <= 0.72) || // portrait
+          (aspect >= 0.68 && aspect <= 1.50) || // tilted / angled
+          (aspect >= 1.40 && aspect <= 2.50)    // landscape
         );
 
         if (!isRealisticAspect) {
           continue;
         }
 
-        // Hand Grip Verification: Skin adjacent or surrounding the cluster
+        // 7. Hand Grip Verification: Skin adjacent to or holding the phone perimeter
         let handGripPoints = 0;
         for (let py = Math.max(0, cMinGy - 2); py <= Math.min(gridRows - 1, cMaxGy + 3); py++) {
           for (let px = Math.max(0, cMinGx - 2); px <= Math.min(gridCols - 1, cMaxGx + 2); px++) {
@@ -676,7 +904,7 @@ export class YOLOMobileDetector {
           }
         }
 
-        // Phone call / Ear proximity verification: near candidate head/ear
+        // 8. Phone call / Ear proximity verification: near candidate head/ear
         let nearFaceOrEar = false;
         for (const fb of faceBoxes) {
           const distGx = Math.max(0, Math.max(fb.x - (cMaxGx + 1), cMinGx - (fb.x + fb.width)));
@@ -687,20 +915,29 @@ export class YOLOMobileDetector {
           }
         }
 
-        // A valid mobile phone MUST either:
-        // 1. Have camera lens or screen feature, OR
-        // 2. Be held by hand (handGripPoints >= 1), OR
-        // 3. Be held near the ear / face (phone call)
-        if (!hasCameraLensOrScreen && handGripPoints < 1 && !nearFaceOrEar) {
-          continue;
+        // --- STRICT MOBILE PHONE HARDWARE & USAGE VALIDATION ---
+        // A genuine mobile phone in an exam session MUST satisfy one of:
+        // A) Definite Hardware Feature (Camera Lens Module or Glowing Display Screen) AND (held by hand OR near face/ear)
+        // B) Distinct metallic/backplate chassis held in hand with verified hand grip (handGripPoints >= 3) AND near face/ear
+        // Generic objects on desk (pens, calculators, notebooks, shadows, dark clothing) lacking these are REJECTED.
+        if (!hasCameraLensOrScreen) {
+          // Without camera module or glowing display, MUST be verified handheld chassis near candidate ear/face
+          if (handGripPoints < 3 || !nearFaceOrEar) {
+            continue;
+          }
+        } else {
+          // Even with camera/screen, must establish physical student possession (held by hand or near ear)
+          if (handGripPoints < 1 && !nearFaceOrEar) {
+            continue;
+          }
         }
 
         let baseConf = clusterConfidenceSum / clusterCellCount;
-        if (nearFaceOrEar) baseConf += 0.08;
-        if (handGripPoints >= 1) baseConf += 0.06;
+        if (nearFaceOrEar) baseConf += 0.05;
+        if (handGripPoints >= 2) baseConf += 0.05;
         if (hasCameraLensOrScreen) baseConf += 0.06;
 
-        const finalConfidence = Math.min(0.96, Math.max(0.52, Number(baseConf.toFixed(3))));
+        const finalConfidence = Math.min(0.95, Math.max(0.55, Number(baseConf.toFixed(3))));
         if (finalConfidence < this.config.confidenceThreshold) {
           continue;
         }

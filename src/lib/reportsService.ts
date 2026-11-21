@@ -7,14 +7,7 @@
 // and grading task data without fabricated metrics.
 // ============================================================
 import * as XLSX from 'xlsx';
-import { User, Course, Cohort, Department, Enrollment, AssessmentAttempt, GradingTask } from '../types';
-import { useDepartmentStore } from './departmentStore';
-import { useAssessmentStore } from './assessmentStore';
-
-import { useCourseStore } from './courseStore';
-import { useCohortStore } from './cohortStore';
-import { usePeopleStore } from './peopleStore';
-import { useGradingStore } from './gradingStore';
+import type { User, Course, Cohort, Department, Enrollment, AssessmentAttempt, GradingTask } from '../types';
 
 export type ReportType =
   | 'completion'
@@ -199,15 +192,28 @@ export function getReportEntities(orgId?: string) {
     ? (sessionStorage.getItem('venilearn_active_org_id') || 'org-001')
     : 'org-001');
 
-  const allCourses = useCourseStore.getState().courses ?? [];
-  const courses = allCourses.filter(c => (c.organizationId || 'org-001') === effectiveOrgId);
+  let courses: Course[] = [];
+  let users: User[] = [];
+  let cohorts: Cohort[] = [];
+  let enrollments: Enrollment[] = [];
+  let attempts: AssessmentAttempt[] = [];
+  let gradingTasks: GradingTask[] = [];
+  let departments: Department[] = [];
 
-  const users = usePeopleStore.getState().users || [];
-  const cohorts = useCohortStore.getState().cohorts || [];
-  const enrollments = useCourseStore.getState().enrollments ?? [];
-  const attempts = useGradingStore.getState().attempts || [];
-  const gradingTasks = useGradingStore.getState().tasks || [];
-  const departments = useDepartmentStore.getState().departments || [];
+  try {
+    const w = typeof window !== 'undefined' ? (window as any) : null;
+    if (w?.__courseStore?.getState) {
+      courses = (w.__courseStore.getState().courses || []).filter((c: any) => (c.organizationId || 'org-001') === effectiveOrgId);
+      enrollments = w.__courseStore.getState().enrollments || [];
+    }
+    if (w?.__peopleStore?.getState) users = w.__peopleStore.getState().users || [];
+    if (w?.__cohortStore?.getState) cohorts = w.__cohortStore.getState().cohorts || [];
+    if (w?.__gradingStore?.getState) {
+      attempts = w.__gradingStore.getState().attempts || [];
+      gradingTasks = w.__gradingStore.getState().tasks || [];
+    }
+    if (w?.__departmentStore?.getState) departments = w.__departmentStore.getState().departments || [];
+  } catch {}
 
   return { users, courses, cohorts, enrollments, attempts, gradingTasks, departments };
 }
@@ -1042,3 +1048,162 @@ export function exportReportToExcel(
   XLSX.utils.book_append_sheet(wb, ws, sheetTitle || 'Report Data');
   XLSX.writeFile(wb, filename);
 }
+
+export interface FilterOptionsResponse {
+  departments: Array<{ id: string; name: string }>;
+  courses: Array<{ id: string; title: string; courseCode?: string }>;
+  cohorts: Array<{ id: string; name: string }>;
+  trainers: Array<{ id: string; name: string; email: string }>;
+}
+
+export interface ReportScheduleItem {
+  id: string;
+  tenantId: string;
+  userId: string;
+  reportType: string;
+  cadence: 'daily' | 'weekly' | 'monthly';
+  format: 'xlsx' | 'csv' | 'both';
+  recipients: string[];
+  scheduledTime: string;
+  status: 'active' | 'paused';
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Convert ReportFilterState to URL query string
+export function buildFilterQueryParams(filters: Partial<ReportFilterState>): string {
+  const params = new URLSearchParams();
+  if (filters.dateRange) params.set('datePeriod', filters.dateRange);
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  if (filters.departmentId && filters.departmentId !== 'all') params.set('departmentId', filters.departmentId);
+  if (filters.courseId && filters.courseId !== 'all') params.set('courseId', filters.courseId);
+  if (filters.trainerId && filters.trainerId !== 'all') params.set('trainerId', filters.trainerId);
+  if (filters.cohortId && filters.cohortId !== 'all') params.set('cohortId', filters.cohortId);
+  if (filters.studentId && filters.studentId !== 'all') params.set('studentId', filters.studentId);
+  if (filters.searchQuery && filters.searchQuery.trim()) params.set('search', filters.searchQuery.trim());
+  return params.toString();
+}
+
+let clientInstance: any = null;
+async function getApiClient() {
+  if (!clientInstance) {
+    const mod = await import('./apiClient');
+    clientInstance = mod.apiClient;
+  }
+  return clientInstance;
+}
+
+export async function fetchFilterOptions(): Promise<FilterOptionsResponse> {
+  const client = await getApiClient();
+  const res = await client.get('/reports/filter-options');
+  return res.data;
+}
+
+export async function fetchReportKpis(filters: Partial<ReportFilterState>): Promise<ReportMetricsSummary> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/kpis${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchCourseEnrollmentReport(filters: Partial<ReportFilterState>): Promise<CourseEnrollmentRow[]> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/course-enrollments${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchCourseCompletionReport(filters: Partial<ReportFilterState>): Promise<CourseCompletionRow[]> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/course-completion${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchLearnerProgressReport(filters: Partial<ReportFilterState>): Promise<LearnerProgressRow[]> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/learner-progress${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchAssessmentPerformanceReport(filters: Partial<ReportFilterState>): Promise<AssessmentPerformanceRow[]> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/assessment-performance${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchPendingSubmissionsReport(filters: Partial<ReportFilterState>): Promise<PendingSubmissionRow[]> {
+  const client = await getApiClient();
+  const qs = buildFilterQueryParams(filters);
+  const res = await client.get(`/reports/pending-submissions${qs ? `?${qs}` : ''}`);
+  return res.data;
+}
+
+export async function fetchReportSchedules(): Promise<ReportScheduleItem[]> {
+  const client = await getApiClient();
+  const res = await client.get('/reports/schedules');
+  return res.data;
+}
+
+export async function createReportSchedule(payload: {
+  reportType: string;
+  cadence: 'daily' | 'weekly' | 'monthly';
+  format: 'xlsx' | 'csv' | 'both';
+  recipients: string[];
+  scheduledTime?: string;
+}): Promise<ReportScheduleItem> {
+  const client = await getApiClient();
+  const res = await client.post('/reports/schedules', payload);
+  return res.data;
+}
+
+export async function updateReportSchedule(id: string, payload: Partial<ReportScheduleItem>): Promise<ReportScheduleItem> {
+  const client = await getApiClient();
+  const res = await client.patch(`/reports/schedules/${id}`, payload);
+  return res.data;
+}
+
+export async function deleteReportSchedule(id: string): Promise<boolean> {
+  const client = await getApiClient();
+  const res = await client.delete(`/reports/schedules/${id}`);
+  return res.success;
+}
+
+export async function downloadServerReport(
+  reportType: ReportType,
+  format: 'xlsx' | 'csv',
+  filters: Partial<ReportFilterState>
+): Promise<void> {
+  const qs = buildFilterQueryParams(filters);
+  const sep = qs ? `?${qs}&format=${format}` : `?format=${format}`;
+  const url = `/api/v1/reports/export/${reportType}${sep}`;
+  
+  const token = localStorage.getItem('venilearn_auth_session') 
+    ? JSON.parse(localStorage.getItem('venilearn_auth_session')!).token 
+    : undefined;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Export failed with HTTP ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = `VeniLearn_${reportType}_report_${Date.now()}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(blobUrl);
+}
+

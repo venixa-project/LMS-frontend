@@ -1,19 +1,27 @@
 /**
- * ArcFace Deep Face Recognition Engine
+ * MobileFaceNet / ArcFace Deep Face Recognition Engine
  * 
- * Model: ArcFace (Additive Angular Margin Loss for Deep Face Recognition)
- * Hypersphere Embedding: 512-dimensional L2-normalized feature vector
+ * Model: MobileFaceNet with SFace Hypersphere Angular Margin Loss
+ * License: Apache 2.0 (OpenCV Zoo Official Pretrained Weights)
+ * Pretrained Weights: /models/mobilefacenet.onnx (or /models/face_recognition_sface_2021dec.onnx)
+ * Input: [1, 3, 112, 112] RGB float32 normalized
+ * Hypersphere Embedding: 128-dimensional (or 512-dimensional for ArcFace-ResNet) L2-normalized feature vector
  * Similarity Metric: Cosine Similarity on Unit Hypersphere
  * 
- * Classifications:
- * - MATCH: Cosine Similarity >= 0.65 (Verified registered student)
- * - MISMATCH: Cosine Similarity < 0.45 (Different individual)
- * - INCONCLUSIVE: 0.45 <= Cosine Similarity < 0.65 or Low Frame Quality / Poor Lighting
+ * Calibrated Verification Thresholds:
+ * - MATCH: Cosine Similarity >= 0.50 (Verified registered candidate)
+ * - MISMATCH: Cosine Similarity < 0.35 (Different individual / impostor)
+ * - UNCERTAIN: 0.35 <= Cosine Similarity < 0.50 or Low Frame Quality / Poor Lighting
+ * 
+ * Architectural Integrity Rules:
+ * - NO fake embeddings, mathematical feature vectors, random vectors, or synthetic fallbacks.
+ * - If neural model is uninitialized or unavailable, throws explicit error or reports UNINITIALIZED state.
+ * - Reference biometric embedding is locked write-once to prevent mid-exam identity tampering.
  */
 
 import type { YOLOBoundingBox } from './yoloDetector.ts';
 
-export type ArcFaceMatchStatus = 'MATCH' | 'MISMATCH' | 'INCONCLUSIVE';
+export type ArcFaceMatchStatus = 'MATCH' | 'MISMATCH' | 'UNCERTAIN' | 'INCONCLUSIVE';
 
 export interface ArcFaceVerificationResult {
   similarity: number; // 0.00 to 1.00
@@ -24,12 +32,14 @@ export interface ArcFaceVerificationResult {
 }
 
 export interface ArcFaceConfig {
-  matchThreshold: number; // default: 0.65
-  mismatchThreshold: number; // default: 0.45
+  matchThreshold: number; // default: 0.50 for 128-D MobileFaceNet, 0.65 for 512-D ArcFace
+  mismatchThreshold: number; // default: 0.35 for 128-D MobileFaceNet, 0.45 for 512-D ArcFace
   minFaceResolution: number; // default: 40px width/height
-  embeddingDimension: number; // default: 512
+  embeddingDimension: number; // default: 128 (MobileFaceNet) or 512 (ArcFace)
   modelPath?: string;
 }
+
+export type ModelLifecycleStatus = 'UNINITIALIZED' | 'LOADING' | 'READY' | 'ERROR';
 
 export class ArcFaceRecognizer {
   private config: Required<ArcFaceConfig>;
@@ -38,47 +48,157 @@ export class ArcFaceRecognizer {
   private ortSession: any = null;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private offscreenCtx: CanvasRenderingContext2D | null = null;
+  private modelStatus: ModelLifecycleStatus = 'UNINITIALIZED';
+  private modelErrorMessage: string | null = null;
+  private mockInferenceSession: ((canvas: HTMLCanvasElement) => Promise<Float32Array>) | null = null;
 
   constructor(config?: Partial<ArcFaceConfig>) {
+    const dim = config?.embeddingDimension ?? 128;
     this.config = {
-      matchThreshold: config?.matchThreshold ?? 0.65,
-      mismatchThreshold: config?.mismatchThreshold ?? 0.45,
+      // Default thresholds calibrated based on embedding dimension:
+      // MobileFaceNet 128-D: MATCH >= 0.50, MISMATCH < 0.35
+      // ArcFace 512-D: MATCH >= 0.65, MISMATCH < 0.45
+      matchThreshold: config?.matchThreshold ?? (dim === 512 ? 0.65 : 0.50),
+      mismatchThreshold: config?.mismatchThreshold ?? (dim === 512 ? 0.45 : 0.35),
       minFaceResolution: config?.minFaceResolution ?? 40,
-      embeddingDimension: config?.embeddingDimension ?? 512,
-      modelPath: config?.modelPath ?? '/models/arcface_w600k.onnx',
+      embeddingDimension: dim,
+      modelPath: config?.modelPath ?? '/models/mobilefacenet.onnx',
     };
 
     if (typeof document !== 'undefined') {
       this.offscreenCanvas = document.createElement('canvas');
-      this.offscreenCanvas.width = 112; // Standard ArcFace input: 112x112
+      this.offscreenCanvas.width = 112; // Standard face input: 112x112
       this.offscreenCanvas.height = 112;
       this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
     }
   }
 
   /**
-   * Initializes ONNX runtime session if available.
+   * Helper to ensure ONNX Runtime Web is loaded in browser runtime.
    */
-  public async initialize(): Promise<boolean> {
-    try {
-      if (typeof window !== 'undefined' && (window as any).ort) {
-        try {
-          const ort = (window as any).ort;
-          this.ortSession = await ort.InferenceSession.create(this.config.modelPath, {
-            executionProviders: ['wasm', 'webgl'],
-          });
-        } catch (e) {
-          this.ortSession = null;
-        }
+  private async ensureOnnxRuntimeWeb(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    if ((window as any).ort) return true;
+
+    return new Promise<boolean>((resolve) => {
+      const scriptId = 'onnxruntime-web-script';
+      const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
+      if (existingScript) {
+        if ((window as any).ort) return resolve(true);
+        let checks = 0;
+        const interval = setInterval(() => {
+          checks++;
+          if ((window as any).ort) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (checks > 40) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 50);
+        return;
       }
-      return true;
-    } catch {
+
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.min.js';
+      script.async = true;
+      script.onload = () => resolve(Boolean((window as any).ort));
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Initializes genuine pretrained neural network weights via ONNX Runtime.
+   * Probes /models/mobilefacenet.onnx, /models/face_recognition_sface_2021dec.onnx, or custom path.
+   */
+  public async initialize(customModelPath?: string): Promise<boolean> {
+    const modelToLoad = customModelPath || this.config.modelPath;
+    this.modelStatus = 'LOADING';
+    this.modelErrorMessage = null;
+
+    try {
+      if (typeof window !== 'undefined') {
+        const hasOrt = await this.ensureOnnxRuntimeWeb();
+        if (hasOrt && (window as any).ort) {
+          const ort = (window as any).ort;
+          const candidatePaths = [
+            modelToLoad,
+            '/models/mobilefacenet.onnx',
+            '/models/face_recognition_sface_2021dec.onnx',
+            '/models/arcface_w600k.onnx',
+          ];
+
+          let loaded = false;
+          for (const p of candidatePaths) {
+            try {
+              this.ortSession = await ort.InferenceSession.create(p, {
+                executionProviders: ['wasm', 'webgl'],
+              });
+              this.config.modelPath = p;
+              loaded = true;
+              break;
+            } catch {
+              // Try next candidate model path
+            }
+          }
+
+          if (loaded && this.ortSession) {
+            this.modelStatus = 'READY';
+            return true;
+          }
+        }
+
+        // If in browser but runtime/weights failed
+        this.modelStatus = 'ERROR';
+        this.modelErrorMessage = 'Face recognition neural network could not be initialized. Please check network connection and model files.';
+        return false;
+      }
+
+      // In Node environment / testing without window.ort
+      this.modelStatus = 'UNINITIALIZED';
+      return false;
+    } catch (err: any) {
+      this.modelStatus = 'ERROR';
+      this.modelErrorMessage = err?.message || 'Failed to initialize face recognition model';
+      this.ortSession = null;
       return false;
     }
   }
 
   /**
-   * L2-Normalizes a vector onto the 512-D unit hypersphere.
+   * Status and readiness checks.
+   */
+  public isModelReady(): boolean {
+    return this.modelStatus === 'READY' || this.mockInferenceSession !== null;
+  }
+
+  public getModelStatus(): ModelLifecycleStatus {
+    return this.modelStatus;
+  }
+
+  public getModelErrorMessage(): string | null {
+    return this.modelErrorMessage;
+  }
+
+  /**
+   * Testing hook for mocking neural network inference in headless test environments.
+   * In production runtime, this is null and real ONNX weights are required.
+   */
+  public setMockInferenceSession(fn: ((canvas: HTMLCanvasElement) => Promise<Float32Array>) | null): void {
+    this.mockInferenceSession = fn;
+    if (fn) {
+      this.modelStatus = 'READY';
+    } else if (!this.ortSession) {
+      this.modelStatus = 'UNINITIALIZED';
+    }
+  }
+
+  /**
+   * L2-Normalizes a feature vector onto the unit hypersphere:
+   * ||v||_2 = sqrt(sum(v_i^2))
+   * v_norm = v / ||v||_2
    */
   public normalizeEmbedding(vector: Float32Array): Float32Array {
     let sumSq = 0;
@@ -96,8 +216,8 @@ export class ArcFaceRecognizer {
   }
 
   /**
-   * Calculates Cosine Similarity between two L2-normalized embeddings.
-   * Since vectors are normalized to unit length, cosine similarity is simply the dot product.
+   * Calculates Cosine Similarity between two L2-normalized hypersphere embeddings:
+   * sim(A, B) = A • B (dot product on unit sphere)
    */
   public calculateCosineSimilarity(embeddingA: Float32Array, embeddingB: Float32Array): number {
     if (!embeddingA || !embeddingB || embeddingA.length !== embeddingB.length) {
@@ -126,13 +246,13 @@ export class ArcFaceRecognizer {
     if (box) {
       width = box.width;
       height = box.height;
-    } else if (source instanceof ImageData) {
+    } else if (typeof ImageData !== 'undefined' && source instanceof ImageData) {
       width = source.width;
       height = source.height;
-    } else if (source instanceof HTMLVideoElement) {
+    } else if (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement) {
       width = source.videoWidth;
       height = source.videoHeight;
-    } else if (source instanceof HTMLCanvasElement) {
+    } else if (typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement) {
       width = source.width;
       height = source.height;
     }
@@ -141,7 +261,6 @@ export class ArcFaceRecognizer {
       return { isSufficient: false, qualityScore: 0.2, reason: 'Face resolution too low (< 40px)' };
     }
 
-    // Sample pixels to verify luminance and contrast
     const cropCanvas = this.offscreenCanvas;
     const ctx = this.offscreenCtx;
     if (!cropCanvas || !ctx) {
@@ -149,12 +268,22 @@ export class ArcFaceRecognizer {
     }
 
     try {
-      if (source instanceof ImageData) {
+      if (typeof ImageData !== 'undefined' && source instanceof ImageData) {
         ctx.putImageData(source, 0, 0);
       } else if (box) {
-        ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, 112, 112);
+        const imageSource = source as CanvasImageSource;
+        const sW = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoWidth : (source as HTMLCanvasElement).width;
+        const sH = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoHeight : (source as HTMLCanvasElement).height;
+        const marginX = box.width * 0.15;
+        const marginY = box.height * 0.15;
+        const cropX = Math.max(0, box.x - marginX);
+        const cropY = Math.max(0, box.y - marginY);
+        const cropW = Math.min(sW - cropX, box.width + 2 * marginX);
+        const cropH = Math.min(sH - cropY, box.height + 2 * marginY);
+        ctx.drawImage(imageSource, cropX, cropY, cropW, cropH, 0, 0, 112, 112);
       } else {
-        ctx.drawImage(source, 0, 0, width, height, 0, 0, 112, 112);
+        const imageSource = source as CanvasImageSource;
+        ctx.drawImage(imageSource, 0, 0, width, height, 0, 0, 112, 112);
       }
 
       const imgData = ctx.getImageData(0, 0, 112, 112);
@@ -193,19 +322,26 @@ export class ArcFaceRecognizer {
   }
 
   /**
-   * Generates a 512-dimensional L2-normalized ArcFace embedding vector from a face crop.
+   * Generates a genuine L2-normalized feature embedding using neural network inference.
+   * Strictly enforces neural inference: NO fake/synthetic mathematical feature extractor fallback.
    */
   public async generateEmbedding(
     source: HTMLVideoElement | HTMLCanvasElement | ImageData | string,
     box?: YOLOBoundingBox
   ): Promise<Float32Array> {
-    const dim = this.config.embeddingDimension;
+    // 1. Strict model check: refuse to run or fake features if neural model is not loaded
+    if (!this.ortSession && !this.mockInferenceSession) {
+      throw new Error(
+        `Face recognition neural network is uninitialized or unavailable (Status: ${this.modelStatus}). ` +
+        'Biometric identity verification requires authentic neural model weights.'
+      );
+    }
 
     // Handle base64 image string (e.g. from candidate baseline photo)
     if (typeof source === 'string') {
-      return new Promise<Float32Array>((resolve) => {
+      return new Promise<Float32Array>((resolve, reject) => {
         if (typeof Image === 'undefined') {
-          resolve(this.generateSyntheticFeatureVector(source, dim));
+          reject(new Error('Cannot process base64 image in non-browser environment without Image constructor'));
           return;
         }
         const img = new Image();
@@ -217,197 +353,92 @@ export class ArcFaceRecognizer {
           const ctx = c.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0);
-            this.generateEmbedding(c, box).then(resolve);
+            this.generateEmbedding(c, box).then(resolve).catch(reject);
           } else {
-            resolve(this.generateSyntheticFeatureVector(source, dim));
+            reject(new Error('Failed to create 2D canvas context for base64 image embedding'));
           }
         };
         img.onerror = () => {
-          resolve(this.generateSyntheticFeatureVector(source, dim));
+          reject(new Error('Failed to load candidate baseline image source'));
         };
         img.src = source;
       });
     }
 
-    // ONNX Runtime inference if loaded
-    if (this.ortSession && this.offscreenCtx) {
-      try {
-        const ort = (window as any).ort;
-        const width = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
-        const height = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
-
-        if (typeof ImageData !== 'undefined' && source instanceof ImageData) {
-          this.offscreenCtx.putImageData(source, 0, 0);
-        } else if (box) {
-          this.offscreenCtx.drawImage(source as CanvasImageSource, box.x, box.y, box.width, box.height, 0, 0, 112, 112);
-        } else {
-          this.offscreenCtx.drawImage(source as CanvasImageSource, 0, 0, width, height, 0, 0, 112, 112);
-        }
-
-        const imgData = this.offscreenCtx.getImageData(0, 0, 112, 112);
-        const data = imgData.data;
-
-        // ArcFace input: [1, 3, 112, 112] normalized: (pixel / 127.5) - 1.0
-        const floatData = new Float32Array(3 * 112 * 112);
-        for (let i = 0; i < 112 * 112; i++) {
-          floatData[i] = (data[i * 4] / 127.5) - 1.0;
-          floatData[112 * 112 + i] = (data[i * 4 + 1] / 127.5) - 1.0;
-          floatData[2 * 112 * 112 + i] = (data[i * 4 + 2] / 127.5) - 1.0;
-        }
-
-        const tensor = new ort.Tensor('float32', floatData, [1, 3, 112, 112]);
-        const feeds: Record<string, any> = {};
-        feeds[this.ortSession.inputNames[0]] = tensor;
-        const outputMap = await this.ortSession.run(feeds);
-        const outputData = outputMap[this.ortSession.outputNames[0]].data;
-
-        return this.normalizeEmbedding(new Float32Array(outputData));
-      } catch {
-        // Fallback to deep mathematical feature extractor below
-      }
-    }
-
-    // Deep Mathematical ArcFace Feature Extractor:
-    // Extracts multi-scale localized facial spatial gradients, landmark geometries,
-    // and chrominance distributions projected onto a 512-D unit hypersphere.
-    return this.extractDeepVisualFeatureVector(source, box, dim);
-  }
-
-  /**
-   * Deep multi-scale visual feature extractor modeling ArcFace embedding space.
-   */
-  private extractDeepVisualFeatureVector(
-    source: HTMLVideoElement | HTMLCanvasElement | ImageData,
-    box?: YOLOBoundingBox,
-    dim: number = 512
-  ): Float32Array {
-    const rawVector = new Float32Array(dim);
-
-    const canvas = this.offscreenCanvas || (typeof document !== 'undefined' ? document.createElement('canvas') : null);
-    if (!canvas) {
-      return this.generateSyntheticFeatureVector('fallback', dim);
-    }
-
-    canvas.width = 112;
-    canvas.height = 112;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return this.generateSyntheticFeatureVector('fallback', dim);
-
-    const sWidth = source instanceof ImageData ? source.width : (source instanceof HTMLVideoElement ? source.videoWidth : source.width);
-    const sHeight = source instanceof ImageData ? source.height : (source instanceof HTMLVideoElement ? source.videoHeight : source.height);
-
-    if (source instanceof ImageData) {
-      ctx.putImageData(source, 0, 0);
-    } else if (box) {
-      ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, 112, 112);
+    // Render source crop into 112x112 standardized canvas
+    let cropCanvas: HTMLCanvasElement;
+    if (box && (typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement || typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement)) {
+      cropCanvas = this.extractFaceCrop(source as (HTMLVideoElement | HTMLCanvasElement), box, 0.15);
+    } else if (typeof HTMLCanvasElement !== 'undefined' && source instanceof HTMLCanvasElement && source.width === 112 && source.height === 112) {
+      cropCanvas = source;
     } else {
-      ctx.drawImage(source, 0, 0, sWidth, sHeight, 0, 0, 112, 112);
-    }
-
-    const imgData = ctx.getImageData(0, 0, 112, 112);
-    const data = imgData.data;
-
-    // Sub-region spatial divisions (8x8 = 64 spatial cells)
-    const gridSize = 8;
-    const cellW = Math.floor(112 / gridSize);
-    const cellH = Math.floor(112 / gridSize);
-
-    let vIdx = 0;
-
-    // Features 0..255: Multi-region luminance gradients & high-frequency spatial texture
-    for (let gy = 0; gy < gridSize; gy++) {
-      for (let gx = 0; gx < gridSize; gx++) {
-        let cellLumaSum = 0;
-        let cellGradSum = 0;
-        let count = 0;
-
-        for (let py = gy * cellH; py < (gy + 1) * cellH; py += 2) {
-          for (let px = gx * cellW; px < (gx + 1) * cellW; px += 2) {
-            const idx = (py * 112 + px) * 4;
-            const r = data[idx];
-            const g = data[idx + 1];
-            const b = data[idx + 2];
-            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-            cellLumaSum += luma;
-
-            if (px < 110 && py < 110) {
-              const rightIdx = (py * 112 + (px + 1)) * 4;
-              const downIdx = ((py + 1) * 112 + px) * 4;
-              const rLuma = 0.299 * data[rightIdx] + 0.587 * data[rightIdx + 1] + 0.114 * data[rightIdx + 2];
-              const dLuma = 0.299 * data[downIdx] + 0.587 * data[downIdx + 1] + 0.114 * data[downIdx + 2];
-              cellGradSum += Math.abs(luma - rLuma) + Math.abs(luma - dLuma);
-            }
-            count++;
-          }
-        }
-
-        const avgLuma = count > 0 ? (cellLumaSum / count) : 128;
-        const avgGrad = count > 0 ? (cellGradSum / count) : 10;
-
-        if (vIdx < 256) {
-          rawVector[vIdx++] = (avgLuma - 128) / 128;
-          rawVector[vIdx++] = avgGrad / 40;
-          rawVector[vIdx++] = (avgLuma * avgGrad) / (128 * 40);
-          rawVector[vIdx++] = Math.sin((avgLuma / 255) * Math.PI);
+      cropCanvas = document.createElement('canvas');
+      cropCanvas.width = 112;
+      cropCanvas.height = 112;
+      const ctx = cropCanvas.getContext('2d');
+      if (ctx) {
+        if (typeof ImageData !== 'undefined' && source instanceof ImageData) {
+          ctx.putImageData(source, 0, 0);
+        } else {
+          const sW = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoWidth : (source as HTMLCanvasElement).width;
+          const sH = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoHeight : (source as HTMLCanvasElement).height;
+          ctx.drawImage(source as CanvasImageSource, 0, 0, sW, sH, 0, 0, 112, 112);
         }
       }
     }
 
-    // Features 256..383: Normalized YCbCr chrominance histogram
-    const cbBins = new Float32Array(64);
-    const crBins = new Float32Array(64);
-    for (let i = 0; i < data.length; i += 8) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-      const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-
-      const cbIdx = Math.max(0, Math.min(63, Math.floor((cb / 256) * 64)));
-      const crIdx = Math.max(0, Math.min(63, Math.floor((cr / 256) * 64)));
-      cbBins[cbIdx]++;
-      crBins[crIdx]++;
-    }
-    for (let i = 0; i < 64 && vIdx < dim; i++) {
-      rawVector[vIdx++] = cbBins[i] / 500;
-    }
-    for (let i = 0; i < 64 && vIdx < dim; i++) {
-      rawVector[vIdx++] = crBins[i] / 500;
+    // 1. Mock inference hook (for unit tests in headless environments)
+    if (this.mockInferenceSession) {
+      const mockResult = await this.mockInferenceSession(cropCanvas);
+      return this.normalizeEmbedding(mockResult);
     }
 
-    // Features 384..511: Central facial landmark symmetry (eyes, nose, jawline)
-    while (vIdx < dim) {
-      const offset = vIdx - 384;
-      const refIdx1 = (offset * 2) % 256;
-      const refIdx2 = (offset * 3 + 17) % 256;
-      rawVector[vIdx] = (rawVector[refIdx1] - rawVector[refIdx2]) * 0.75;
-      vIdx++;
+    // 2. Genuine ONNX Runtime Web inference
+    if (this.ortSession) {
+      const ort = (window as any).ort;
+      const ctx = cropCanvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Canvas 2D context unavailable for face crop preprocessing');
+      }
+
+      const imgData = ctx.getImageData(0, 0, 112, 112);
+      const data = imgData.data;
+
+      // MobileFaceNet / SFace input tensor: [1, 3, 112, 112] RGB normalized
+      // Normalized as: (pixel - 127.5) / 128.0
+      const floatData = new Float32Array(3 * 112 * 112);
+      for (let i = 0; i < 112 * 112; i++) {
+        floatData[i] = (data[i * 4] - 127.5) / 128.0;               // R
+        floatData[112 * 112 + i] = (data[i * 4 + 1] - 127.5) / 128.0; // G
+        floatData[2 * 112 * 112 + i] = (data[i * 4 + 2] - 127.5) / 128.0; // B
+      }
+
+      const inputName = this.ortSession.inputNames?.[0] || 'data';
+      const tensor = new ort.Tensor('float32', floatData, [1, 3, 112, 112]);
+      const feeds: Record<string, any> = {};
+      feeds[inputName] = tensor;
+
+      const outputMap = await this.ortSession.run(feeds);
+      const outputName = this.ortSession.outputNames?.[0] || 'fc1';
+      const outputData = outputMap[outputName]?.data;
+
+      if (!outputData) {
+        throw new Error(`ONNX model inference produced empty output tensor for ${outputName}`);
+      }
+
+      return this.normalizeEmbedding(new Float32Array(outputData));
     }
 
-    return this.normalizeEmbedding(rawVector);
-  }
-
-  /**
-   * Generates a stable deterministic synthetic embedding vector from an input string or seed.
-   */
-  private generateSyntheticFeatureVector(seed: string, dim: number = 512): Float32Array {
-    const vector = new Float32Array(dim);
-    let hash = 2166136261;
-    for (let i = 0; i < seed.length; i++) {
-      hash ^= seed.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-
-    for (let i = 0; i < dim; i++) {
-      hash = Math.imul(hash ^ (i * 31), 16777619);
-      vector[i] = ((hash >>> 0) % 2000 - 1000) / 1000;
-    }
-
-    return this.normalizeEmbedding(vector);
+    // 3. Model is not available: STRICTLY REFUSE fake or mathematical fallback
+    throw new Error(
+      `Face recognition neural network is uninitialized or unavailable (Status: ${this.modelStatus}). ` +
+      'Biometric identity verification requires authentic neural model weights.'
+    );
   }
 
   /**
    * Sets and permanently locks the registered candidate reference embedding.
+   * Write-once: once locked, it cannot be replaced or overwritten during the exam.
    */
   public setReferenceEmbedding(embedding: Float32Array): boolean {
     if (this.isReferenceLocked && this.referenceEmbedding) {
@@ -419,10 +450,40 @@ export class ArcFaceRecognizer {
   }
 
   /**
-   * Gets the registered reference embedding if available.
+   * Gets a defensive copy of the registered reference embedding if available.
    */
   public getReferenceEmbedding(): Float32Array | null {
     return this.referenceEmbedding ? new Float32Array(this.referenceEmbedding) : null;
+  }
+
+  /**
+   * Extracts a standardized square face crop with standard 15% margin around the YOLO bounding box,
+   * clamped to video frame boundaries, and drawn to standard 112x112 input resolution.
+   */
+  public extractFaceCrop(
+    source: HTMLVideoElement | HTMLCanvasElement,
+    box: YOLOBoundingBox,
+    marginRatio: number = 0.15
+  ): HTMLCanvasElement {
+    const sWidth = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+    const sHeight = typeof HTMLVideoElement !== 'undefined' && source instanceof HTMLVideoElement ? source.videoHeight : source.height;
+
+    const marginX = box.width * marginRatio;
+    const marginY = box.height * marginRatio;
+
+    const cropX = Math.max(0, box.x - marginX);
+    const cropY = Math.max(0, box.y - marginY);
+    const cropW = Math.min(sWidth - cropX, box.width + 2 * marginX);
+    const cropH = Math.min(sHeight - cropY, box.height + 2 * marginY);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 112;
+    canvas.height = 112;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, 112, 112);
+    }
+    return canvas;
   }
 
   /**
@@ -431,6 +492,13 @@ export class ArcFaceRecognizer {
   public reset(): void {
     this.referenceEmbedding = null;
     this.isReferenceLocked = false;
+  }
+
+  /**
+   * Checks whether the registered student reference embedding is locked.
+   */
+  public isLocked(): boolean {
+    return this.isReferenceLocked;
   }
 
   /**
@@ -443,27 +511,27 @@ export class ArcFaceRecognizer {
     if (!this.referenceEmbedding) {
       return {
         similarity: 0,
-        status: 'INCONCLUSIVE',
+        status: 'UNCERTAIN',
         quality: qualityResult?.qualityScore ?? 0.5,
         isQualitySufficient: false,
         message: 'No registered student reference embedding on file',
       };
     }
 
-    // If frame quality is poor, mark INCONCLUSIVE rather than declaring false mismatch
+    // If frame quality is poor, mark UNCERTAIN rather than declaring false mismatch
     if (qualityResult && !qualityResult.isSufficient) {
       return {
         similarity: 0.5,
-        status: 'INCONCLUSIVE',
+        status: 'UNCERTAIN',
         quality: qualityResult.qualityScore,
         isQualitySufficient: false,
-        message: `Inconclusive frame quality: ${qualityResult.reason || 'Poor lighting / angle'}`,
+        message: `Uncertain frame quality: ${qualityResult.reason || 'Poor lighting / angle'}`,
       };
     }
 
     const similarity = this.calculateCosineSimilarity(candidateEmbedding, this.referenceEmbedding);
 
-    let status: ArcFaceMatchStatus = 'INCONCLUSIVE';
+    let status: ArcFaceMatchStatus = 'UNCERTAIN';
     let message = '';
 
     if (similarity >= this.config.matchThreshold) {
@@ -473,7 +541,7 @@ export class ArcFaceRecognizer {
       status = 'MISMATCH';
       message = `Unauthorized person detected! Biometric mismatch (Cosine Similarity: ${Math.round(similarity * 100)}%)`;
     } else {
-      status = 'INCONCLUSIVE';
+      status = 'UNCERTAIN';
       message = `Ambiguous biometric match (${Math.round(similarity * 100)}%). Awaiting additional frames.`;
     }
 

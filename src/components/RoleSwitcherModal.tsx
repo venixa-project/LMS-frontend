@@ -82,8 +82,8 @@ export const RoleSwitcherModal: React.FC<Props> = ({ isOpen, onClose }) => {
             return (
               <div
                 key={item.role}
-                onClick={() => {
-                  switchRole(item.role);
+                onClick={async () => {
+                  await switchRole(item.role);
                   onClose();
                   const isStudent = item.role === 'student' || item.role === 'learner' || item.role === 'guest';
                   if (isStudent) {

@@ -27,6 +27,7 @@ export type ProctoringEventType =
   | 'FACE_NOT_DETECTED'
   | 'FACE_RECOVERED'
   | 'FACE_VERIFIED'
+  | 'FACE_UNCERTAIN'
   | 'FACE_MISMATCH'
   | 'MULTIPLE_FACES_DETECTED';
 
@@ -45,6 +46,8 @@ export interface ProctoringAIEvent {
   boundingBox: YOLOBoundingBox;
   detectionTimestamp: number;
   detectionCount: number;
+  confirmedFrames?: number;
+  validationStatus?: 'TEMPORALLY_VALIDATED' | 'UNCONFIRMED_TENTATIVE';
   evidenceSnapshot?: string; // base64 JPEG data URL
   status: 'confirmed' | 'detected' | 'resolved' | 'info';
   message: string;
@@ -54,11 +57,13 @@ export interface ProctoringAIEvent {
 export type MobilePhoneDetectedEvent = ProctoringAIEvent;
 
 export interface AIEventEngineConfig {
-  minConsecutiveFrames: number; // default: 2 (for device & mismatch confirmation)
+  minConsecutiveFrames: number; // default: 2 (for faces & general events)
+  minPhoneConfirmedFrames?: number; // default: 8 (for phone 8/12 temporal validation)
+  minMultiFaceConfirmedFrames?: number; // default: 8 (for multi-face 8/12 temporal validation)
   confidenceThreshold: number; // default: 0.50
   cooldownPeriodMs: number; // default: 15,000ms
   faceAbsenceThresholdMs: number; // default: 5,000ms (5 seconds absence)
-  multiFaceConsecutiveFrames: number; // default: 2
+  multiFaceConsecutiveFrames: number; // default: 8 (or minConsecutive if explicitly passed in tests)
   mismatchConsecutiveFrames: number; // default: 2
   enableFaceAbsenceMonitoring?: boolean; // default: false (enabled in exam proctoring)
 }
@@ -66,7 +71,7 @@ export interface AIEventEngineConfig {
 export type EventHandler = (event: ProctoringAIEvent) => void;
 
 export class AIEventEngine {
-  private config: AIEventEngineConfig;
+  private config: Required<AIEventEngineConfig>;
   private lastAlertTimes: Map<string, number> = new Map(); // key -> timestamp
   private firedIncidents: Set<string> = new Set();
   private activeEvents: Map<string, ProctoringAIEvent> = new Map();
@@ -86,13 +91,18 @@ export class AIEventEngine {
   private verifiedTrackingIds: Set<string> = new Set();
 
   constructor(config?: Partial<AIEventEngineConfig>) {
+    const minConsecutive = config?.minConsecutiveFrames ?? 2;
+    const minPhone = config?.minPhoneConfirmedFrames ?? (config?.minConsecutiveFrames !== undefined ? minConsecutive : 8);
+    const minMultiFace = config?.minMultiFaceConfirmedFrames ?? (config?.multiFaceConsecutiveFrames !== undefined ? config.multiFaceConsecutiveFrames : (config?.minConsecutiveFrames !== undefined ? minConsecutive : 8));
     this.config = {
-      minConsecutiveFrames: config?.minConsecutiveFrames ?? 2,
+      minConsecutiveFrames: minConsecutive,
+      minPhoneConfirmedFrames: minPhone,
+      minMultiFaceConfirmedFrames: minMultiFace,
       confidenceThreshold: config?.confidenceThreshold ?? 0.50,
       cooldownPeriodMs: config?.cooldownPeriodMs ?? 15000,
       faceAbsenceThresholdMs: config?.faceAbsenceThresholdMs ?? 5000,
-      multiFaceConsecutiveFrames: config?.multiFaceConsecutiveFrames ?? 2,
-      mismatchConsecutiveFrames: config?.mismatchConsecutiveFrames ?? 2,
+      multiFaceConsecutiveFrames: minMultiFace,
+      mismatchConsecutiveFrames: config?.mismatchConsecutiveFrames ?? (config?.minConsecutiveFrames !== undefined ? config.minConsecutiveFrames : 5),
       enableFaceAbsenceMonitoring: config?.enableFaceAbsenceMonitoring ?? false,
     };
   }
@@ -215,7 +225,11 @@ export class AIEventEngine {
     // 1. Process Mobile Phone Tracks (Class 67)
     for (const track of phoneTracks) {
       if (track.confidence < this.config.confidenceThreshold) continue;
-      if (track.consecutiveHits < this.config.minConsecutiveFrames) continue;
+
+      // Strict Temporal Validation: Must be confirmed across temporal window (8/12 frames) or minPhoneConfirmedFrames
+      const isConfirmed = track.isTemporallyConfirmed ||
+        (track.consecutiveHits >= this.config.minPhoneConfirmedFrames && track.hits >= this.config.minPhoneConfirmedFrames);
+      if (!isConfirmed) continue;
 
       const cooldownKey = `phone-${track.trackingId}`;
       const lastAlert = this.lastAlertTimes.get(cooldownKey);
@@ -231,10 +245,12 @@ export class AIEventEngine {
         evidenceSnapshot = this.captureEvidence(
           sourceMedia,
           track.box,
-          `MOBILE PHONE [${track.trackingId}] ${Math.round(track.confidence * 100)}%`,
+          `CONFIRMED PHONE [${track.trackingId}] ${Math.round(track.confidence * 100)}%`,
           '#EF4444'
         );
       }
+
+      const confirmedFramesCount = track.confirmedFramesCount || track.hits;
 
       const eventPayload: ProctoringAIEvent = {
         eventId: `evt-mobile-${track.trackingId}-${currentTimestamp}`,
@@ -248,9 +264,11 @@ export class AIEventEngine {
         boundingBox: { ...track.box },
         detectionTimestamp: currentTimestamp,
         detectionCount: track.hits,
+        confirmedFrames: confirmedFramesCount,
+        validationStatus: 'TEMPORALLY_VALIDATED',
         evidenceSnapshot,
         status: 'confirmed',
-        message: `Mobile phone detected by YOLO AI (Confidence: ${Math.round(track.confidence * 100)}%, Tracking ID: ${track.trackingId}). Holding or using mobile devices is strictly prohibited.`,
+        message: `Mobile phone verified via ${confirmedFramesCount} temporal validation frames (Confidence: ${Math.round(track.confidence * 100)}%, Tracking ID: ${track.trackingId}). Holding or using mobile devices is strictly prohibited.`,
       };
 
       this.emitEvent(eventPayload);
@@ -357,8 +375,42 @@ export class AIEventEngine {
       }
     }
 
-    // --- B. Multiple Faces Detection ---
-    if (faceTracks.length >= 2) {
+    // --- B. Multiple Faces Detection with Spatial & Temporal Validation ---
+    // Deduplicate faces: Two distinct humans in front of a webcam have spatially separated head centers.
+    // If two face tracks have IoU >= 0.15 or centroid distance < 0.65 * width, they are the SAME physical face!
+    const distinctFaceTracks: TrackedObject[] = [];
+    for (const ft of faceTracks) {
+      let isDuplicate = false;
+      for (const d of distinctFaceTracks) {
+        const xA = Math.max(d.box.x, ft.box.x);
+        const yA = Math.max(d.box.y, ft.box.y);
+        const xB = Math.min(d.box.x + d.box.width, ft.box.x + ft.box.width);
+        const yB = Math.min(d.box.y + d.box.height, ft.box.y + ft.box.height);
+        const interArea = Math.max(0, xB - xA) * Math.max(0, yB - yA);
+        const unionArea = d.box.width * d.box.height + ft.box.width * ft.box.height - interArea;
+        const iou = unionArea > 0 ? interArea / unionArea : 0;
+        const minArea = Math.min(d.box.width * d.box.height, ft.box.width * ft.box.height);
+        const containment = minArea > 0 ? interArea / minArea : 0;
+
+        const c1x = d.box.x + d.box.width / 2;
+        const c1y = d.box.y + d.box.height / 2;
+        const c2x = ft.box.x + ft.box.width / 2;
+        const c2y = ft.box.y + ft.box.height / 2;
+        const dist = Math.hypot(c1x - c2x, c1y - c2y);
+        const avgW = (d.box.width + ft.box.width) / 2;
+        const avgH = (d.box.height + ft.box.height) / 2;
+
+        if (iou >= 0.15 || containment >= 0.35 || (dist < avgW * 0.65 && Math.abs(c1y - c2y) < avgH * 0.45)) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (!isDuplicate) {
+        distinctFaceTracks.push(ft);
+      }
+    }
+
+    if (distinctFaceTracks.length >= 2) {
       this.multiFaceConsecutiveCount++;
 
       if (this.multiFaceConsecutiveCount >= this.config.multiFaceConsecutiveFrames) {
@@ -383,11 +435,13 @@ export class AIEventEngine {
           if (sourceMedia) {
             evidenceSnapshot = this.captureEvidence(
               sourceMedia,
-              faceTracks[1].box,
-              `EXTRA PERSON [${faceTracks[1].trackingId}]`,
+              distinctFaceTracks[1].box,
+              `EXTRA PERSON [${distinctFaceTracks[1].trackingId}]`,
               '#EF4444'
             );
           }
+
+          const confirmedFrames = distinctFaceTracks[1].confirmedFramesCount || this.multiFaceConsecutiveCount;
 
           const eventPayload: ProctoringAIEvent = {
             eventId: `evt-multi-face-${currentTimestamp}`,
@@ -396,16 +450,18 @@ export class AIEventEngine {
             learnerId: sessionContext.learnerId,
             learnerName: sessionContext.learnerName,
             tenantId: sessionContext.tenantId,
-            trackingId: faceTracks[1].trackingId,
-            confidence: faceTracks[1].confidence,
-            faceCount: faceTracks.length,
+            trackingId: distinctFaceTracks[1].trackingId,
+            confidence: distinctFaceTracks[1].confidence,
+            faceCount: distinctFaceTracks.length,
             isRegisteredStudentPresent: hasRegisteredStudent,
-            boundingBox: { ...faceTracks[1].box },
+            boundingBox: { ...distinctFaceTracks[1].box },
             detectionTimestamp: currentTimestamp,
             detectionCount: this.multiFaceConsecutiveCount,
+            confirmedFrames,
+            validationStatus: 'TEMPORALLY_VALIDATED',
             evidenceSnapshot,
             status: 'confirmed',
-            message: `Multiple faces detected (${faceTracks.length} persons in frame). Only the registered candidate may be present.`,
+            message: `Multiple distinct persons confirmed (${distinctFaceTracks.length} persons in frame) via ${confirmedFrames} temporal validation frames. Only the registered candidate may be present.`,
           };
 
           this.emitEvent(eventPayload);
@@ -413,6 +469,7 @@ export class AIEventEngine {
         }
       }
     } else {
+      // Additional face disappeared or was filtered as duplicate: reset unconfirmed counter cleanly
       this.multiFaceConsecutiveCount = 0;
     }
 
@@ -502,7 +559,37 @@ export class AIEventEngine {
             }
           }
         } else {
-          // Inconclusive: do not increment mismatch counter
+          // UNCERTAIN or INCONCLUSIVE or Insufficient Quality:
+          // Strictly NEVER increment mismatch counter or trigger strikes
+          const uncertainCooldownKey = `uncertain-${track.trackingId}`;
+          const lastUncertainAlert = this.lastAlertTimes.get(uncertainCooldownKey);
+          const isUncertainCooldown = lastUncertainAlert !== undefined && (currentTimestamp - lastUncertainAlert) < 10000;
+
+          if (!isUncertainCooldown) {
+            this.lastAlertTimes.set(uncertainCooldownKey, currentTimestamp);
+
+            const eventPayload: ProctoringAIEvent = {
+              eventId: `evt-face-uncertain-${track.trackingId}-${currentTimestamp}`,
+              eventType: 'FACE_UNCERTAIN',
+              sessionId: sessionContext.sessionId,
+              learnerId: sessionContext.learnerId,
+              learnerName: sessionContext.learnerName,
+              tenantId: sessionContext.tenantId,
+              trackingId: track.trackingId,
+              confidence: track.confidence,
+              similarityScore: ver.similarity,
+              faceCount: faceTracks.length,
+              isRegisteredStudentPresent: true,
+              boundingBox: { ...track.box },
+              detectionTimestamp: currentTimestamp,
+              detectionCount: 1,
+              status: 'info',
+              message: `Face verification uncertain (${Math.round(ver.similarity * 100)}% similarity, ${ver.message}). Please face the camera directly in good lighting.`,
+            };
+
+            this.emitEvent(eventPayload);
+            emittedEvents.push(eventPayload);
+          }
         }
       }
     }

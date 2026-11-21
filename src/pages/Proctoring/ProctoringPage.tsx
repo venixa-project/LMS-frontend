@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { generateJitsiRoomName } from '../../lib/jitsiProctoring';
 import { GoogleMeetIcon } from '../../components/GoogleMeet';
+import { proctoringSuites, PROCTORING_MODEL_SUITES, ProctoringSuiteType } from '../../lib/proctoringSuites';
 
 export const ProctoringPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -55,6 +56,26 @@ export const ProctoringPage: React.FC = () => {
     assessmentIdParam || 'all'
   );
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+  // AI Proctoring Model Suites (Recommended vs Alternative)
+  const [selectedSuite, setSelectedSuite] = useState<ProctoringSuiteType>(proctoringSuites.getActiveSuite());
+  const [suiteTestStatus, setSuiteTestStatus] = useState<string | null>(null);
+  const [isTestingSuite, setIsTestingSuite] = useState<boolean>(false);
+
+  const handleTestEndpoint = async (suite: ProctoringSuiteType) => {
+    setIsTestingSuite(true);
+    setSuiteTestStatus(`Testing /api/v1/proctoring/analyze/${suite}...`);
+    try {
+      const res = suite === 'recommended' 
+        ? await proctoringSuites.analyzeRecommended({ sessionId: 'health-check', timestamp: Date.now() })
+        : await proctoringSuites.analyzeAlternative({ sessionId: 'health-check', timestamp: Date.now() });
+      setSuiteTestStatus(`Success! Engine: ${res.runtime} (${res.pipeline}). Telemetry: ${res.telemetry?.faceCount ?? 0} faces, Violations: ${res.violations?.length ?? 0}`);
+    } catch (err: any) {
+      setSuiteTestStatus(`Endpoint test error: ${err.message || 'Failed'}`);
+    } finally {
+      setIsTestingSuite(false);
+    }
+  };
 
   React.useEffect(() => {
     if (tabParam && ['live_monitor', 'queue', 'policy', 'appeals'].includes(tabParam)) {
@@ -747,6 +768,182 @@ export const ProctoringPage: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* AI Proctoring Architecture & Dual Model Suite Console */}
+            <div className="card" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.25rem', margin: '0 0 4px 0', fontWeight: 800 }}>
+                    AI Proctoring Architecture: Dual Model Suites (Primary + Standby Failover)
+                  </h2>
+                  <p className="text-secondary text-sm" style={{ margin: 0 }}>
+                    Enterprise proctoring computer vision matrix. <strong>Recommended Suite</strong> is the primary active engine; <strong>Alternative Suite</strong> is maintained on standby for instantaneous auto-failover if needed.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${selectedSuite === 'recommended' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => {
+                      proctoringSuites.restorePrimarySuite();
+                      setSelectedSuite('recommended');
+                    }}
+                  >
+                    Recommended (Primary Active)
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${selectedSuite === 'alternative' ? 'btn-warning' : 'btn-secondary'}`}
+                    onClick={() => {
+                      proctoringSuites.triggerManualFailover('Faculty proctor manual failover switch');
+                      setSelectedSuite('alternative');
+                    }}
+                  >
+                    Alternative (Standby Failover)
+                  </button>
+                </div>
+              </div>
+
+              {/* Operational Strategy Indicator */}
+              <div
+                style={{
+                  background: selectedSuite === 'recommended' ? 'rgba(37, 99, 235, 0.08)' : 'rgba(217, 119, 6, 0.08)',
+                  border: `1px solid ${selectedSuite === 'recommended' ? 'rgba(37, 99, 235, 0.25)' : 'rgba(217, 119, 6, 0.25)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  padding: '10px 14px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.82rem',
+                }}
+              >
+                <div>
+                  <strong>Active State: </strong>
+                  {selectedSuite === 'recommended' ? (
+                    <span style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                      Primary Recommended Suite Active (YuNet + AdaFace + ByteTrack + YOLO + ONNX Runtime)
+                    </span>
+                  ) : (
+                    <span style={{ color: '#d97706', fontWeight: 700 }}>
+                      Standby Alternative Suite Engaged (SCRFD + ArcFace + SORT + RT-DETR + OpenVINO)
+                    </span>
+                  )}
+                  <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                    {selectedSuite === 'recommended'
+                      ? 'Alternative Model Suite is kept aside on standby and will auto-engage if Recommended fails.'
+                      : 'Proctoring is currently routed through the Alternative Suite.'}
+                  </div>
+                </div>
+                {selectedSuite === 'alternative' && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => {
+                      proctoringSuites.restorePrimarySuite();
+                      setSelectedSuite('recommended');
+                    }}
+                  >
+                    Restore Primary Suite
+                  </button>
+                )}
+              </div>
+
+              {/* Suite Component Comparison Grid */}
+              <div style={{ overflowX: 'auto', marginBottom: '20px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-subtle)', background: 'var(--bg-input)' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 14px' }}>Component</th>
+                      <th style={{ textAlign: 'left', padding: '10px 14px', color: selectedSuite === 'recommended' ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                        Recommended model {selectedSuite === 'recommended' ? '(Primary Active)' : '(Primary)'}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: '10px 14px', color: selectedSuite === 'alternative' ? '#d97706' : 'var(--text-secondary)' }}>
+                        Alternative {selectedSuite === 'alternative' ? '(Standby Engaged)' : '(Standby Aside)'}
+                      </th>
+                      <th style={{ textAlign: 'left', padding: '10px 14px' }}>API Endpoint</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Face detection</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>YuNet</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>SCRFD</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>POST /proctoring/analyze/:suite</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Face recognition</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>AdaFace</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>ArcFace</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>POST /proctoring/analyze/:suite</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Face alignment</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>5-point landmarks</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>RetinaFace landmarks</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>112x112 similarity transform</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Face tracking</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>ByteTrack</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>SORT</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Two-stage vs Kalman-Hungarian</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Face liveness</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>MiniFASNet</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>Other validated anti-spoof model</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Micro-texture & Fourier PAD</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Head pose</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>MediaPipe Face Landmarker</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>6DRepNet</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Yaw/Pitch/Roll 3D vs 6D Rotation</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Object detection</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>YOLO</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>RT-DETR</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mobile phones, books, tablets</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>Inference engine</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'recommended' ? 700 : 400 }}>ONNX Runtime</td>
+                      <td style={{ padding: '10px 14px', fontWeight: selectedSuite === 'alternative' ? 700 : 400 }}>OpenVINO</td>
+                      <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Execution provider abstraction</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Endpoint Live Test Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={isTestingSuite}
+                    onClick={() => handleTestEndpoint('recommended')}
+                  >
+                    Test Recommended API (YuNet+AdaFace+YOLO)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={isTestingSuite}
+                    onClick={() => handleTestEndpoint('alternative')}
+                  >
+                    Test Alternative API (SCRFD+ArcFace+RT-DETR)
+                  </button>
+                </div>
+                {suiteTestStatus && (
+                  <span style={{ fontSize: '0.8rem', color: suiteTestStatus.includes('error') || suiteTestStatus.includes('Failed') ? 'var(--danger)' : 'var(--success)' }}>
+                    {suiteTestStatus}
+                  </span>
+                )}
               </div>
             </div>
           </div>

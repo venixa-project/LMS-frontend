@@ -36,7 +36,7 @@ export interface ProctorParticipant {
   rollNo: string;
   avatar?: string;
   assessmentId: string;
-  status: 'connected' | 'reconnecting' | 'disconnected' | 'submitted';
+  status: 'connected' | 'reconnecting' | 'disconnected' | 'submitted' | 'completed' | 'terminated' | 'in_progress';
   cameraActive: boolean;
   micActive: boolean;
   audioLevel: number; // 0.0 to 1.0 (live RMS level)
@@ -52,6 +52,18 @@ export interface ProctorParticipant {
   latestScreenSnapshot?: string;
   googleMeetUrl?: string;
   sessionId?: string;
+  remoteStream?: MediaStream | null;
+  faceVerificationStatus?: 'MATCH' | 'MISMATCH' | 'UNCERTAIN' | 'INCONCLUSIVE' | 'SCANNING' | 'no_face' | 'multiple_faces' | 'single_face';
+  faceStatus?: string;
+  warningCount?: number;
+  latestEvent?: {
+    type: string;
+    reason: string;
+    source: 'automated' | 'manual';
+    timestamp: string;
+    severity?: string;
+  };
+  examDurationMinutes?: number;
 }
 
 export interface ProctorAuditRecord {
@@ -240,10 +252,30 @@ function loadFromStorage<T>(key: string, fallback: T): T {
     if (Array.isArray(parsed)) {
       if (key === STORAGE_KEY_PROCTORING_PARTICIPANTS) {
         const now = Date.now();
-        return parsed.map((p: any) => {
+        // Discard stale or ended candidate sessions entirely from live store
+        return parsed.filter((p: any) => {
+          if (p.status === 'submitted' || p.status === 'completed' || p.status === 'terminated' || p.status === 'disconnected') {
+            return false;
+          }
           const pingTime = new Date(p.lastPingAt || 0).getTime();
-          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 20000;
-          return isFresh ? p : { ...p, status: 'disconnected', cameraActive: false, micActive: false };
+          const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 35000;
+          return isFresh;
+        }) as unknown as T;
+      }
+      if (key === STORAGE_KEY_PROCTORING_SESSIONS) {
+        const now = Date.now();
+        return parsed.filter((s: any) => {
+          if (!s || s.id?.startsWith('psess-00')) return false;
+          if (s.status === 'submitted' || s.status === 'completed' || s.status === 'terminated' || s.status === 'disconnected') {
+            return false;
+          }
+          const latestEvTime = (s.events || []).reduce((max: number, ev: any) => {
+            const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
+            return t > max ? t : max;
+          }, 0);
+          const rawPing = latestEvTime > 0 ? latestEvTime : (s.lastPingAt ? new Date(s.lastPingAt).getTime() : (s.startedAt ? new Date(s.startedAt).getTime() : 0));
+          const isFresh = !isNaN(rawPing) && rawPing > 0 && (now - rawPing) < 35000;
+          return isFresh && s.status === 'in_progress';
         }) as unknown as T;
       }
       return parsed.filter((item: any) => !item.id?.startsWith('psess-00')) as unknown as T;
@@ -373,6 +405,12 @@ export interface ProctoringStoreState {
 
   updatePolicy: (level: ProctoringPolicyLevel, updates: Partial<ProctoringPolicy>) => void;
   clearAssessmentSessions: (assessmentId: string) => void;
+  setCandidateRemoteStream: (learnerId: string, stream: MediaStream | null) => void;
+  upsertLiveCandidate: (candidate: Partial<ProctorParticipant> & { id: string; name: string; assessmentId: string }) => void;
+  removeLiveCandidate: (studentId: string, assessmentId?: string) => void;
+  forceStopCandidateExam: (sessionId: string, studentId: string, assessmentId: string, reason: string) => Promise<void>;
+  sendManualCandidateWarning: (sessionId: string, studentId: string, assessmentId: string, reason: string) => Promise<void>;
+  fetchActiveCandidates: (assessmentId: string) => Promise<void>;
 }
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
@@ -478,80 +516,63 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
             };
           });
 
-          // Merge into state.sessions with freshness check
-          const mergedSessions = [...state.sessions];
+          // Keep other assessment sessions intact, and filter for only genuinely fresh sessions for this assessment
+          const otherSessions = state.sessions.filter((s) => s.assessmentId !== assessmentId);
+          const genuinelyActiveSessions: ProctoringSession[] = [];
+
           fetchedSessions.forEach((fs) => {
             const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
               const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
               return t > max ? t : max;
             }, 0);
-            const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
-            const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
-            const isFresh = fs.status === 'in_progress' || (pingMs > 0 && (now - pingMs) < 60000);
+            const startedMs = fs.startedAt ? new Date(fs.startedAt).getTime() : 0;
+            const rawPing = latestEvTime > 0 ? latestEvTime : startedMs;
+            const isFresh = fs.status === 'in_progress' && !fs.endedAt && rawPing > 0 && (now - rawPing) < 35000;
 
-            const adjustedFs: ProctoringSession = {
-              ...fs,
-              status: isFresh ? fs.status : (fs.status === 'submitted' ? 'submitted' : ('disconnected' as any)),
-              isOnline: isFresh,
-            };
-
-            const idx = mergedSessions.findIndex(
-              (s) => s.id === adjustedFs.id || (s.learnerId === adjustedFs.learnerId && s.assessmentId === adjustedFs.assessmentId)
-            );
-            if (idx >= 0) {
-              mergedSessions[idx] = { ...mergedSessions[idx], ...adjustedFs };
-            } else {
-              mergedSessions.unshift(adjustedFs);
+            if (isFresh) {
+              genuinelyActiveSessions.push({
+                ...fs,
+                status: 'in_progress',
+                isOnline: true,
+              });
             }
           });
 
-          // Also mirror into state.participants with strict freshness check
-          const mergedParticipants = [...state.participants];
-          fetchedSessions.forEach((fs) => {
+          const mergedSessions = [...otherSessions, ...genuinelyActiveSessions];
+
+          // Reconcile participants: remove stale participants for this assessment
+          const otherParticipants = state.participants.filter((p) => p.assessmentId !== assessmentId);
+          const activeParticipants: ProctorParticipant[] = [];
+
+          genuinelyActiveSessions.forEach((fs) => {
             const latestSnapshot = (fs.events || []).find(
               (e: any) => e.evidenceSnapshot && typeof e.evidenceSnapshot === 'string' && e.evidenceSnapshot.startsWith('data:image')
             )?.evidenceSnapshot;
-            const pIdx = mergedParticipants.findIndex(
-              (p) =>
-                p.id === fs.learnerId ||
-                (p.name && fs.learnerName && p.name.trim().toLowerCase() === fs.learnerName.trim().toLowerCase())
+            const existingP = state.participants.find(
+              (p) => p.assessmentId === assessmentId && (p.id === fs.learnerId || (p.name && fs.learnerName && p.name.trim().toLowerCase() === fs.learnerName.trim().toLowerCase()))
             );
-            const latestEvTime = (fs.events || []).reduce((max: number, ev: any) => {
-              const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
-              return t > max ? t : max;
-            }, 0);
-            const rawPing = latestEvTime > 0 ? new Date(latestEvTime).toISOString() : (fs.startedAt || '');
-            const pingMs = rawPing ? new Date(rawPing).getTime() : 0;
-            const isFresh = fs.status === 'in_progress' || (pingMs > 0 && (now - pingMs) < 60000);
 
-            const existingSnapshot = pIdx >= 0 ? mergedParticipants[pIdx].latestSnapshot : undefined;
-            const resolvedSnapshot = latestSnapshot || existingSnapshot;
-
-            const newOrUpdatedP: ProctorParticipant = {
+            activeParticipants.push({
               id: fs.learnerId,
               name: fs.learnerName,
               rollNo: (fs as any).rollNo || `STU-${fs.learnerId.slice(-4)}`,
               assessmentId: fs.assessmentId,
-              status: isFresh ? (fs.status === 'submitted' ? 'submitted' : 'connected') : 'disconnected',
-              cameraActive: isFresh ? (fs.activeWebcam ?? true) : false,
-              micActive: isFresh ? (fs.activeMic ?? true) : false,
-              audioLevel: isFresh ? 0.2 : 0,
-              screenShareActive: isFresh ? (fs.activeScreenShare ?? false) : false,
-              tabFocused: isFresh ? (fs.isFullscreen ?? true) : false,
-              faceDetected: isFresh ? (fs.activeWebcam ?? true) : false,
+              status: 'connected',
+              cameraActive: fs.activeWebcam ?? true,
+              micActive: fs.activeMic ?? true,
+              audioLevel: 0.2,
+              screenShareActive: fs.activeScreenShare ?? false,
+              tabFocused: fs.isFullscreen ?? true,
+              faceDetected: fs.activeWebcam ?? true,
               joinedAt: fs.startedAt,
-              lastPingAt: rawPing || (pIdx >= 0 ? mergedParticipants[pIdx].lastPingAt : new Date().toISOString()),
+              lastPingAt: existingP?.lastPingAt || new Date().toISOString(),
               activeWarningCount: 0,
-              latestSnapshot: isFresh ? resolvedSnapshot : existingSnapshot,
+              latestSnapshot: latestSnapshot || existingP?.latestSnapshot,
               sessionId: fs.id,
-            };
-
-            if (pIdx >= 0) {
-              mergedParticipants[pIdx] = { ...mergedParticipants[pIdx], ...newOrUpdatedP };
-            } else {
-              mergedParticipants.unshift(newOrUpdatedP);
-            }
+            });
           });
+
+          const mergedParticipants = [...otherParticipants, ...activeParticipants];
 
           saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, mergedSessions);
           saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, mergedParticipants);
@@ -870,6 +891,190 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       }
       return state;
     });
+  },
+
+  setCandidateRemoteStream: (learnerId: string, stream: MediaStream | null) => {
+    set((state) => ({
+      participants: state.participants.map((p) =>
+        p.id === learnerId ? { ...p, remoteStream: stream, cameraActive: Boolean(stream), status: stream ? 'connected' : p.status } : p
+      ),
+    }));
+  },
+
+  upsertLiveCandidate: (candidate) => {
+    set((state) => {
+      const idx = state.participants.findIndex((p) => p.id === candidate.id && p.assessmentId === candidate.assessmentId);
+      if (idx >= 0) {
+        const updated = [...state.participants];
+        updated[idx] = {
+          ...updated[idx],
+          ...candidate,
+          status: candidate.status || updated[idx].status,
+          remoteStream: candidate.remoteStream !== undefined ? candidate.remoteStream : updated[idx].remoteStream,
+          lastPingAt: candidate.lastPingAt || new Date().toISOString(),
+        };
+        return { participants: updated };
+      } else {
+        const fullCandidate: ProctorParticipant = {
+          id: candidate.id,
+          name: candidate.name,
+          rollNo: candidate.rollNo || `STU-${candidate.id.slice(-4)}`,
+          assessmentId: candidate.assessmentId,
+          status: candidate.status || 'connected',
+          cameraActive: candidate.cameraActive ?? true,
+          micActive: candidate.micActive ?? true,
+          audioLevel: candidate.audioLevel || 0.15,
+          screenShareActive: candidate.screenShareActive || false,
+          tabFocused: candidate.tabFocused ?? true,
+          faceDetected: candidate.faceDetected ?? true,
+          joinedAt: candidate.joinedAt || new Date().toISOString(),
+          lastPingAt: candidate.lastPingAt || new Date().toISOString(),
+          activeWarningCount: candidate.activeWarningCount || 0,
+          remoteStream: candidate.remoteStream || null,
+          faceVerificationStatus: candidate.faceVerificationStatus || 'SCANNING',
+          latestEvent: candidate.latestEvent,
+          latestSnapshot: candidate.latestSnapshot,
+          sessionId: candidate.sessionId,
+        };
+        return { participants: [fullCandidate, ...state.participants] };
+      }
+    });
+  },
+
+  forceStopCandidateExam: async (sessionId: string, studentId: string, assessmentId: string, reason: string) => {
+    try {
+      await apiClient.post(`/proctoring/sessions/${sessionId}/force-stop`, {
+        reason,
+        studentId,
+        examId: assessmentId,
+      });
+    } catch (e) {
+      console.warn('API force-stop notice:', e);
+    }
+    set((state) => ({
+      participants: state.participants.map((p) =>
+        p.id === studentId
+          ? {
+              ...p,
+              status: 'terminated' as const,
+              latestEvent: {
+                type: 'EXAM_TERMINATED',
+                reason,
+                source: 'manual',
+                timestamp: new Date().toISOString(),
+                severity: 'critical',
+              },
+            }
+          : p
+      ),
+    }));
+  },
+
+  sendManualCandidateWarning: async (sessionId: string, studentId: string, assessmentId: string, reason: string) => {
+    try {
+      await apiClient.post(`/proctoring/sessions/${sessionId}/manual-warning`, {
+        reason,
+        learnerId: studentId,
+        assessmentId,
+      });
+    } catch (e) {
+      console.warn('API manual warning notice:', e);
+    }
+    set((state) => ({
+      participants: state.participants.map((p) =>
+        p.id === studentId
+          ? {
+              ...p,
+              activeWarningCount: p.activeWarningCount + 1,
+              latestEvent: {
+                type: 'MANUAL_WARNING',
+                reason,
+                source: 'manual',
+                timestamp: new Date().toISOString(),
+                severity: 'warning',
+              },
+            }
+          : p
+      ),
+    }));
+  },
+
+  removeLiveCandidate: (studentId: string, assessmentId?: string) => {
+    set((state) => {
+      const target = (studentId || '').trim().toLowerCase();
+      const filteredP = state.participants.filter((p) => {
+        const matchesId = p.id?.trim().toLowerCase() === target;
+        const matchesName = p.name && p.name.trim().toLowerCase() === target;
+        if (matchesId || matchesName) {
+          if (!assessmentId || p.assessmentId === assessmentId) return false;
+        }
+        return true;
+      });
+      const filteredS = state.sessions.filter((s) => {
+        const matchesId = s.learnerId?.trim().toLowerCase() === target;
+        const matchesName = s.learnerName && s.learnerName.trim().toLowerCase() === target;
+        if (matchesId || matchesName) {
+          if (!assessmentId || s.assessmentId === assessmentId) return false;
+        }
+        return true;
+      });
+      saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, filteredP);
+      saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, filteredS);
+      broadcastParticipants(filteredP);
+      return { participants: filteredP, sessions: filteredS };
+    });
+  },
+
+  fetchActiveCandidates: async (assessmentId: string) => {
+    try {
+      const res = await apiClient.get<any[]>(`/proctoring/assessments/${assessmentId}/live-candidates`);
+      if (res?.data && Array.isArray(res.data)) {
+        const activeIds = new Set(res.data.map((c: any) => (c.studentId || c.id || '').toLowerCase()));
+        set((state) => {
+          // Immediately purge any participant for this assessment who is no longer active in the backend
+          const retainedParticipants = state.participants.filter(
+            (p) => p.assessmentId !== assessmentId || activeIds.has(p.id.toLowerCase())
+          );
+          // ALSO purge any sessions for this assessment whose candidate is no longer active in the backend
+          const retainedSessions = state.sessions.filter(
+            (s) => s.assessmentId !== assessmentId || activeIds.has(s.learnerId.toLowerCase())
+          );
+          saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, retainedParticipants);
+          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, retainedSessions);
+          return { participants: retainedParticipants, sessions: retainedSessions };
+        });
+
+        res.data.forEach((c: any) => {
+          get().upsertLiveCandidate({
+            id: c.studentId || c.id,
+            name: c.studentName || c.name,
+            rollNo: c.rollNo,
+            assessmentId: c.examId || assessmentId,
+            sessionId: c.sessionId,
+            status: c.status,
+            cameraActive: c.cameraActive,
+            micActive: c.micActive,
+            audioLevel: c.audioLevel,
+            faceVerificationStatus: c.faceStatus || c.faceVerificationStatus,
+            faceStatus: c.faceStatus || c.faceVerificationStatus,
+            activeWarningCount: c.warningCount || c.activeWarningCount,
+            warningCount: c.warningCount || c.activeWarningCount,
+            latestEvent: c.latestEvent,
+            latestSnapshot: c.latestSnapshot,
+            joinedAt: c.joinedAt,
+            lastPingAt: c.lastPingAt,
+          });
+        });
+      } else if (res?.data && Array.isArray(res.data) && res.data.length === 0) {
+        set((state) => {
+          const clearedP = state.participants.filter((p) => p.assessmentId !== assessmentId);
+          const clearedS = state.sessions.filter((s) => s.assessmentId !== assessmentId);
+          saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, clearedP);
+          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, clearedS);
+          return { participants: clearedP, sessions: clearedS };
+        });
+      }
+    } catch (e) {}
   },
 
   resetToDefaults: () => {

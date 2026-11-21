@@ -245,12 +245,14 @@ export const App: React.FC = () => {
             <Route path="courses/assign-students" element={<AssignStudentsPage />} />
             <Route path="course-builder" element={<CourseBuilderPage />} />
             <Route path="learning-paths" element={<LearningPathsPage />} />
-            <Route path="assessments" element={<AssessmentsPage />} />
             <Route path="question-banks" element={<QuestionBanksPage />} />
             <Route path="grading" element={<GradingPage />} />
             <Route path="proctoring" element={<ProctoringPage />} />
             <Route path="reports" element={<ReportsPage />} />
           </Route>
+
+          {/* Assessments & Evaluations (Universal Access for Admin, Faculty & Students) */}
+          <Route path="assessments" element={<AssessmentsPage />} />
 
           {/* Course Discovery, Learning Player & Link Enrollment */}
           <Route path="courses" element={<CoursesPage />} />

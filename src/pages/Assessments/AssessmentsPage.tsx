@@ -11,7 +11,7 @@ import { ConfirmationModal } from '../../components/ConfirmationModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
-  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video
+  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video, Copy, Share2, RefreshCw
 } from 'lucide-react';
 
 interface Props {
@@ -242,18 +242,30 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const [asgMarks, setAsgMarks] = useState(100);
   const [asgFormat, setAsgFormat] = useState<'file' | 'repo' | 'text'>('repo');
 
-  const handleAssessmentSaved = (newAss: Assessment, status: 'published' | 'draft') => {
+  const handleAssessmentSaved = async (newAss: Assessment, status: 'published' | 'draft'): Promise<{ success: boolean; error?: string }> => {
     if (status === 'published') {
-      addAssessment(newAss, newAss.questionsData);
-      setAssessmentStatusFilter('published');
-      setPublishedPopupAssessment(newAss);
+      const res = await addAssessment(newAss, newAss.questionsData);
+      if (res.success) {
+        setAssessmentStatusFilter('published');
+        setPublishedPopupAssessment({ ...newAss, id: res.id });
+        await fetchAssessments();
+        setIsCreateModalOpen(false);
+        setEditingDraft(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error };
     } else {
-      saveDraft(newAss, newAss.questionsData);
-      showNotice(`Draft "${newAss.title}" saved successfully!`);
-      setAssessmentStatusFilter('drafts');
+      const res = await saveDraft(newAss, newAss.questionsData);
+      if (res.success) {
+        showNotice(`Draft "${newAss.title}" saved successfully to database!`);
+        setAssessmentStatusFilter('drafts');
+        await fetchAssessments();
+        setIsCreateModalOpen(false);
+        setEditingDraft(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error };
     }
-    setIsCreateModalOpen(false);
-    setEditingDraft(null);
   };
 
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -329,7 +341,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           </p>
         </div>
 
-        {!isLearner && (
+        {!isLearner ? (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {activeTab === 'assignments' ? (
               <button className="btn btn-primary" onClick={() => setIsAssignmentModalOpen(true)}>
@@ -349,6 +361,21 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             <Link to="/grading" className="btn btn-secondary">
               <PenTool size={16} /> Grading Queue
             </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                fetchAssessments();
+                fetchMyAttempts();
+                showNotice('Assessments refreshed from server.');
+              }}
+              style={{ gap: '6px' }}
+            >
+              <RefreshCw size={14} /> Refresh List
+            </button>
           </div>
         )}
       </div>
@@ -863,6 +890,19 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                               <Video size={13} color="var(--primary)" /> Monitor Live
                             </Link>
                           )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ gap: '6px', justifyContent: 'center' }}
+                            onClick={() => {
+                              const examUrl = `${window.location.origin}/exam/${a.id}`;
+                              navigator.clipboard.writeText(examUrl);
+                              showNotice(`Direct exam link for "${a.title}" copied to clipboard!`);
+                            }}
+                            title="Copy Direct Exam Link to Share with Students on any Device"
+                          >
+                            <Copy size={13} color="var(--primary)" /> Copy Link
+                          </button>
                           <Link
                             to="/grading"
                             className="btn btn-primary btn-sm"
@@ -1581,6 +1621,54 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     ? 'AI + Google Meet'
                     : 'Unproctored'}
                 </strong>
+              </div>
+            </div>
+
+            {/* Direct Student Network Link */}
+            <div
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-accent)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '20px',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                  Student Direct Exam Link (Network / Wi-Fi)
+                </span>
+                <span className="text-muted text-xs">Share with students on any device</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/exam/${publishedPopupAssessment.id}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '0.82rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    fontFamily: 'monospace',
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  style={{ gap: '6px', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    const examUrl = `${window.location.origin}/exam/${publishedPopupAssessment.id}`;
+                    navigator.clipboard.writeText(examUrl);
+                    showNotice('Exam link copied! Share this link with students on other devices.');
+                  }}
+                >
+                  <Copy size={13} /> Copy Link
+                </button>
               </div>
             </div>
 

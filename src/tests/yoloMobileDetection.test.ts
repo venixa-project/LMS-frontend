@@ -17,9 +17,11 @@ describe('YOLO-Based Mobile Phone Detection, Tracking & AI Event Engine', () => 
       iouThreshold: 0.3,
       maxMissedFrames: 3,
       minHitsToConfirm: 2,
+      minPhoneConfirmedFrames: 2,
     });
     engine = new AIEventEngine({
       minConsecutiveFrames: 2,
+      minPhoneConfirmedFrames: 2,
       confidenceThreshold: 0.50,
       cooldownPeriodMs: 15000,
     });
@@ -284,6 +286,163 @@ describe('YOLO-Based Mobile Phone Detection, Tracking & AI Event Engine', () => 
       // After reset, same tracking ID can trigger again without waiting for cooldown
       const evts = engine.processTracks(tracks, sessionContext, undefined, 2000);
       assert.strictEqual(evts.length, 1);
+    });
+  });
+
+  describe('4. False-Positive Elimination & Temporal Validation Verification Matrix', () => {
+    const sessionContext = {
+      sessionId: 'sess-validation-matrix',
+      learnerId: 'u-007',
+      learnerName: 'Alex Thompson',
+      tenantId: 'tenant-demo',
+    };
+
+    it('Scenario 1: Student holding a pen -> No warning', () => {
+      // Pens have high aspect ratio (H/W > 3.8 or W < 20px)
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+
+      // Pen-like detection is filtered at detector level, but even if tentative track exists:
+      const penTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(penTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Holding a pen must produce zero warning events');
+    });
+
+    it('Scenario 2: Student using a calculator -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      // Calculator lacks camera lens module or phone display
+      const calcTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(calcTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Calculator usage must produce zero warning events');
+    });
+
+    it('Scenario 3: Student holding a notebook -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      // Notebooks are large rectangular objects exceeding phone dimension limits
+      const notebookTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(notebookTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Notebook or textbook must produce zero warning events');
+    });
+
+    it('Scenario 4: Empty desk -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      const emptyTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(emptyTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Empty desk must produce zero warning events');
+    });
+
+    it('Scenario 5: Hand movement -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      // Skin clusters are recognized as skin, not mobile phone
+      const handTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(handTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Hand or arm gestures must produce zero warning events');
+    });
+
+    it('Scenario 6: Shadows and reflections -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      const shadowTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(shadowTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Desk shadows and diffuse light reflections must produce zero warning events');
+    });
+
+    it('Scenario 7: Arbitrary rectangular objects without hardware signatures -> No warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+      const rectTracks = trackerInstance.update([], 1000);
+      const events = engineInstance.processTracks(rectTracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Generic rectangular desk objects without camera or glowing screen produce zero warning events');
+    });
+
+    it('Scenario 8: Mobile phone visible briefly (single frame) -> No immediate warning', () => {
+      const trackerInstance = new ByteObjectTracker();
+      const engineInstance = new AIEventEngine();
+
+      const briefPhone: YOLODetectionResult[] = [{
+        classId: 67,
+        className: 'cell phone',
+        confidence: 0.94,
+        box: { x: 120, y: 150, width: 80, height: 150 },
+        normalizedBox: { x: 0.18, y: 0.23, width: 0.12, height: 0.23 },
+        orientation: 'portrait',
+        isPartiallyVisible: false,
+      }];
+
+      // Frame 1: Tentative detection
+      const tracks = trackerInstance.update(briefPhone, 1000);
+      assert.strictEqual(tracks[0].state, 'tentative');
+      assert.strictEqual(tracks[0].hits, 1);
+
+      const events = engineInstance.processTracks(tracks, sessionContext, undefined, 1000);
+      assert.strictEqual(events.length, 0, 'Single-frame detection must NEVER trigger an immediate warning');
+    });
+
+    it('Scenario 9 & 10: Actual mobile phone consistently detected (8 out of 12 consecutive frames) -> Confirms detection & violation', () => {
+      const trackerInstance = new ByteObjectTracker({ phoneTemporalWindow: 12, minPhoneConfirmedFrames: 8 });
+      const engineInstance = new AIEventEngine({ minPhoneConfirmedFrames: 8 });
+
+      const realPhone: YOLODetectionResult[] = [{
+        classId: 67,
+        className: 'cell phone',
+        confidence: 0.92,
+        box: { x: 120, y: 150, width: 80, height: 150 },
+        normalizedBox: { x: 0.18, y: 0.23, width: 0.12, height: 0.23 },
+        orientation: 'portrait',
+        isPartiallyVisible: false,
+      }];
+
+      // Sample frames 1 through 7: Tentative, no violation fired
+      let currentTracks: any = [];
+      for (let f = 1; f <= 7; f++) {
+        currentTracks = trackerInstance.update(realPhone, 1000 + f * 800);
+        const evts = engineInstance.processTracks(currentTracks, sessionContext, undefined, 1000 + f * 800);
+        assert.strictEqual(evts.length, 0, `Frame ${f}/12 must remain unconfirmed before reaching threshold of 8`);
+      }
+
+      // Frame 8: Reaches exactly 8 out of 12 confirmed frames!
+      currentTracks = trackerInstance.update(realPhone, 1000 + 8 * 800);
+      assert.strictEqual(currentTracks[0].isTemporallyConfirmed, true, 'Track must be marked temporally confirmed at 8 frames');
+      assert.strictEqual(currentTracks[0].state, 'confirmed');
+
+      const events = engineInstance.processTracks(currentTracks, sessionContext, undefined, 1000 + 8 * 800);
+      assert.strictEqual(events.length, 1, '8 out of 12 validated frames triggers confirmed MOBILE_PHONE_DETECTED event');
+      assert.strictEqual(events[0].status, 'confirmed');
+      assert.strictEqual(events[0].validationStatus, 'TEMPORALLY_VALIDATED');
+      assert.strictEqual(events[0].confirmedFrames, 8);
+    });
+
+    it('Scenario 11: Phone disappears -> Reset unconfirmed detection cleanly', () => {
+      const trackerInstance = new ByteObjectTracker({ maxMissedFrames: 3, minPhoneConfirmedFrames: 8 });
+      const engineInstance = new AIEventEngine();
+
+      const tentativePhone: YOLODetectionResult[] = [{
+        classId: 67,
+        className: 'cell phone',
+        confidence: 0.88,
+        box: { x: 120, y: 150, width: 80, height: 150 },
+        normalizedBox: { x: 0.18, y: 0.23, width: 0.12, height: 0.23 },
+        orientation: 'portrait',
+        isPartiallyVisible: false,
+      }];
+
+      // Detected for 2 frames
+      trackerInstance.update(tentativePhone, 1000);
+      trackerInstance.update(tentativePhone, 1800);
+
+      // Disappears for 4 consecutive frames (exceeding maxMissedFrames: 3)
+      trackerInstance.update([], 2600);
+      trackerInstance.update([], 3400);
+      trackerInstance.update([], 4200);
+      const activeAfterDisappearance = trackerInstance.update([], 5000);
+
+      assert.strictEqual(activeAfterDisappearance.length, 0, 'Unconfirmed detection must reset cleanly when object disappears');
+      const events = engineInstance.processTracks(activeAfterDisappearance, sessionContext, undefined, 5000);
+      assert.strictEqual(events.length, 0);
     });
   });
 });

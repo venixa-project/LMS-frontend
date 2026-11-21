@@ -10,6 +10,9 @@ import {
   ChevronRight, Play, Lock, UserX, Maximize2, Minimize2, Grid, Layout, Users, MessageSquare, Radio, Search
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../../components/GoogleMeet';
+import { LiveProctoringWall } from './LiveProctoringWall';
+import { proctoringSocket } from '../../../lib/proctoringSocket';
+import { ExamLifecycleToast, ExamLifecycleToastData } from '../../../components/Proctoring/ExamLifecycleToast';
 
 // Direct Native HTML5 Video Player for 30 FPS Smooth Real Video Feeds (Hardware-accelerated)
 const CandidateDirectVideoPlayer: React.FC<{
@@ -130,9 +133,10 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
 
   // View Modes:
-  // 'bridge': The Live Conference Bridge (Full Google Meet Tiled Video Wall with real student camera feeds)
+  // 'webrtc_wall': Complete Real-Time WebRTC Live Video Wall (30 FPS Candidate Stream, Automated & Manual Proctoring)
+  // 'bridge': The Live Conference Bridge (Full Google Meet Tiled Video Wall)
   // 'split' : Split Wall with Candidate Telemetry Inspector
-  const [viewMode, setViewMode] = useState<'bridge' | 'split'>('bridge');
+  const [viewMode, setViewMode] = useState<'webrtc_wall' | 'bridge' | 'split'>('webrtc_wall');
   const [inspectorFeedMode, setInspectorFeedMode] = useState<'screen' | 'webcam' | 'dual'>('screen');
   const [rosterSearch, setRosterSearch] = useState<string>('');
   const [rosterFilter, setRosterFilter] = useState<'all' | 'joined' | 'streaming'>('all');
@@ -317,8 +321,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     if (isNaN(time) || time <= 0) return false;
     const now = Date.now();
     const diff = now - time;
-    // Active if ping occurred within the last 45 seconds (allows 45s grace period and clock skew)
-    return diff < 45000 && diff > -15000;
+    // Strictly active if ping occurred within the last 30 seconds
+    return diff < 30000 && diff > -10000;
   };
 
   // Exclude admin or trainer self-sessions from student examination roster
@@ -332,27 +336,118 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
     return false;
   };
 
+  // Bottom-Right Real-Time Exam Lifecycle Popup Notifications
+  const [dashboardToasts, setDashboardToasts] = useState<ExamLifecycleToastData[]>([]);
+
+  const addDashboardToast = (type: 'start' | 'end', data: Partial<ExamLifecycleToastData>) => {
+    const newToast: ExamLifecycleToastData = {
+      id: `dash-toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      type,
+      studentId: data.studentId || 'unknown',
+      studentName: data.studentName || 'Student',
+      rollNo: data.rollNo,
+      assessmentTitle: data.assessmentTitle || (selectedAssessment as any)?.title || 'Live Proctored Exam',
+      assessmentId: data.assessmentId || selectedAssessmentId,
+      timestamp: data.timestamp || new Date().toISOString(),
+      reason: data.reason,
+    };
+    setDashboardToasts((prev) => [...prev.slice(-4), newToast]);
+  };
+
+  const dismissDashboardToast = (id: string) => {
+    setDashboardToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Listen for socket events to trigger bottom-right popup toasts in dashboard view
+  useEffect(() => {
+    if (!selectedAssessmentId) return;
+
+    const unsubStart = proctoringSocket.on('STUDENT_EXAM_STARTED', (data: any) => {
+      if (data && data.studentId) {
+        addDashboardToast('start', {
+          studentId: data.studentId,
+          studentName: data.studentName || 'Student',
+          rollNo: data.rollNo,
+          assessmentTitle: (selectedAssessment as any)?.title,
+          assessmentId: selectedAssessmentId,
+          timestamp: data.startedAt || new Date().toISOString(),
+        });
+      }
+    });
+
+    const unsubSubmit = proctoringSocket.on('STUDENT_EXAM_SUBMITTED', (data: any) => {
+      if (data && data.studentId) {
+        addDashboardToast('end', {
+          studentId: data.studentId,
+          studentName: data.studentName || 'Student',
+          rollNo: data.rollNo,
+          assessmentTitle: (selectedAssessment as any)?.title,
+          assessmentId: selectedAssessmentId,
+          timestamp: data.submittedAt || new Date().toISOString(),
+          reason: data.reason || 'Candidate submitted examination',
+        });
+        useProctoringStore.getState().removeLiveCandidate(data.studentId, selectedAssessmentId);
+      }
+    });
+
+    const unsubTerm = proctoringSocket.on('EXAM_TERMINATED', (data: any) => {
+      if (data && data.studentId) {
+        addDashboardToast('end', {
+          studentId: data.studentId,
+          studentName: data.studentName || 'Student',
+          rollNo: data.rollNo,
+          assessmentTitle: (selectedAssessment as any)?.title,
+          assessmentId: selectedAssessmentId,
+          timestamp: data.terminatedAt || new Date().toISOString(),
+          reason: data.reason || 'Terminated by Administrator',
+        });
+        useProctoringStore.getState().removeLiveCandidate(data.studentId, selectedAssessmentId);
+      }
+    });
+
+    const unsubDisconnect = proctoringSocket.on('STUDENT_VIDEO_DISCONNECTED', (data: any) => {
+      if (data && data.studentId) {
+        useProctoringStore.getState().removeLiveCandidate(data.studentId, selectedAssessmentId);
+      }
+    });
+
+    return () => {
+      unsubStart();
+      unsubSubmit();
+      unsubTerm();
+      unsubDisconnect();
+    };
+  }, [selectedAssessmentId, selectedAssessment]);
+
   // 1. Real active candidates who actually started/joined this assessment
   const realActiveCandidates: ProctorParticipant[] = useMemo(() => {
     const list: ProctorParticipant[] = [];
 
-    // From real participants store (webcam/mic telemetry from exam player for THIS assessment)
+    // From real participants store (must be strictly in_progress or connected with recent ping)
     participants
-      .filter((p) => p.assessmentId === selectedAssessmentId && !isAdminSelf(p.name, p.id))
+      .filter((p) => {
+        if (p.assessmentId !== selectedAssessmentId || isAdminSelf(p.name, p.id)) return false;
+        if (
+          p.status === 'submitted' ||
+          p.status === 'completed' ||
+          p.status === 'terminated' ||
+          p.status === 'disconnected'
+        ) {
+          return false;
+        }
+        return isHeartbeatActive(p.lastPingAt);
+      })
       .forEach((p) => {
-        const isLive = p.status === 'connected' || isHeartbeatActive(p.lastPingAt);
-        if (isLive) {
-          const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, p.id, p.name));
-          if (existingIdx >= 0) {
-            list[existingIdx] = {
-              ...list[existingIdx],
-              ...p,
-              status: 'connected',
-              latestSnapshot: p.latestSnapshot || list[existingIdx].latestSnapshot,
-            };
-          } else {
-            list.push({ ...p, status: 'connected' });
-          }
+        const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, p.id, p.name));
+        if (existingIdx >= 0) {
+          list[existingIdx] = {
+            ...list[existingIdx],
+            ...p,
+            status: 'connected',
+            latestSnapshot: p.latestSnapshot || list[existingIdx].latestSnapshot,
+          };
+        } else {
+          list.push({ ...p, status: 'connected' });
         }
       });
 
@@ -362,19 +457,19 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         (s) =>
           s.assessmentId === selectedAssessmentId &&
           !isAdminSelf(s.learnerName, s.learnerId) &&
-          (s.status === 'in_progress' || (s.status as any) === 'connected')
+          s.status === 'in_progress'
       )
       .forEach((s) => {
         const latestEventTime = (s.events || []).reduce((max: number, ev: any) => {
           const t = (ev.createdAt || ev.timestamp) ? new Date(ev.createdAt || ev.timestamp).getTime() : (ev.clientTimestamp ? Number(ev.clientTimestamp) : 0);
           return t > max ? t : max;
         }, 0);
-        const lastPing = latestEventTime > 0 ? new Date(latestEventTime).toISOString() : (s.startedAt || new Date().toISOString());
+        const lastPing = latestEventTime > 0 ? new Date(latestEventTime).toISOString() : ((s as any).lastPingAt || s.startedAt || '');
         const matchingLocalP = participants.find((p) => matchesCandidate(p.id, p.name, s.learnerId, s.learnerName));
         const effectivePing = matchingLocalP?.lastPingAt || lastPing;
-        const isLive = s.status === 'in_progress' || isHeartbeatActive(effectivePing);
+        const isLive = s.status === 'in_progress' && isHeartbeatActive(effectivePing);
 
-        // Include candidate while exam is active
+        // Include candidate ONLY while exam is genuinely active
         if (isLive) {
           const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, s.learnerId, s.learnerName));
           const evSnapshot = (s.events || []).find(
@@ -910,6 +1005,26 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             <div style={{ display: 'flex', background: '#2a2b32', padding: '3px', borderRadius: '8px' }}>
               <button
                 type="button"
+                onClick={() => setViewMode('webrtc_wall')}
+                style={{
+                  background: viewMode === 'webrtc_wall' ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'transparent',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+                title="Live WebRTC Video Wall: Real-time 30 FPS candidate video feeds with automated and manual controls"
+              >
+                <Radio size={13} /> Live Video Wall (30 FPS)
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode('bridge')}
                 style={{
                   background: viewMode === 'bridge' ? '#10b981' : 'transparent',
@@ -1106,14 +1221,23 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         </div>
 
         {/* Video Wall Canvas Body: Multi-Student Conference Grid */}
-        <div
-          style={{
-            flex: 1,
-            display: 'grid',
-            gridTemplateColumns: viewMode === 'split' ? 'minmax(0, 1fr) 420px' : '1fr',
-            overflow: 'hidden',
-          }}
-        >
+        {viewMode === 'webrtc_wall' ? (
+          <div style={{ flex: 1, minHeight: '680px', overflowY: 'auto' }}>
+            <LiveProctoringWall
+              assessmentId={selectedAssessmentId}
+              assessmentTitle={selectedAssessment?.title}
+              onClose={onClose}
+            />
+          </div>
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: 'grid',
+              gridTemplateColumns: viewMode === 'split' ? 'minmax(0, 1fr) 420px' : '1fr',
+              overflow: 'hidden',
+            }}
+          >
           {/* Gallery Video Tiles Grid Container (Exact Match of Google Meet Conference Grid) */}
           <div
             style={{
@@ -2093,6 +2217,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Video Wall Footer Status Bar */}
         <div
@@ -2278,8 +2403,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                 filteredRoster.map((p, idx) => {
                 const isSelected = selectedParticipant?.id === p.id;
                 const isStreaming = Boolean(p.latestSnapshot);
-                const hasSession = sessions.some((s) => s.assessmentId === selectedAssessmentId && s.learnerId === p.id);
-                const isJoined = p.status === 'connected' || (p.status as any) === 'in_progress' || hasSession || isStreaming;
+                const isJoined = (p.status === 'connected' || (p.status as any) === 'in_progress') && isHeartbeatActive(p.lastPingAt);
                 const joinDate = p.joinedAt ? new Date(p.joinedAt) : null;
                 const joinFormatted = isJoined && joinDate && !isNaN(joinDate.getTime())
                   ? joinDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -2349,7 +2473,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                           textTransform: 'uppercase',
                         }}
                       >
-                        {isJoined ? (hasSession ? 'In Exam' : 'Connected') : 'Awaiting Entry'}
+                        {isJoined ? 'In Exam' : 'Awaiting Entry'}
                       </span>
                     </td>
 
@@ -2520,6 +2644,12 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Real-Time Bottom-Right Exam Start & End Popup Notifications */}
+      <ExamLifecycleToast
+        toasts={dashboardToasts}
+        onDismiss={dismissDashboardToast}
+      />
     </div>
   );
 };
