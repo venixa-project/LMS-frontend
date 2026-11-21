@@ -606,19 +606,51 @@ export const LoginPage: React.FC = () => {
           {/* Error Banner */}
           {error && (
             <div style={{
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#FCA5A5',
+              background: error.includes('backend server') || error.includes('http://localhost:5000')
+                ? 'rgba(234, 179, 8, 0.12)'
+                : 'rgba(239, 68, 68, 0.12)',
+              border: error.includes('backend server') || error.includes('http://localhost:5000')
+                ? '1px solid rgba(234, 179, 8, 0.35)'
+                : '1px solid rgba(239, 68, 68, 0.3)',
+              color: error.includes('backend server') || error.includes('http://localhost:5000')
+                ? '#FDE047'
+                : '#FCA5A5',
               padding: '12px 14px',
               borderRadius: '12px',
               fontSize: '0.84rem',
               display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
+              flexDirection: 'column',
+              gap: '8px',
               marginBottom: '20px'
             }}>
-              <AlertCircle size={18} style={{ flexShrink: 0 }} />
-              <div>{error}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <div style={{ fontWeight: 600 }}>{error}</div>
+              </div>
+              {error.includes('backend server') && (
+                <div style={{
+                  padding: '8px 10px',
+                  background: 'rgba(0,0,0,0.25)',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  color: '#CBD5E1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                }}>
+                  <span>Run terminal: <code>cd LMS-backend; npm run dev</code></span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleQuickLogin(email || 'k.ravivarma047@gmail.com')}
+                    style={{ fontSize: '0.72rem', padding: '4px 8px', whiteSpace: 'nowrap' }}
+                  >
+                    Continue in Dev Mode
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -812,6 +844,7 @@ export const LoginPage: React.FC = () => {
             {showDemoRoles && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                 {[
+                  { label: 'Ravi Varma (Admin)', email: 'k.ravivarma047@gmail.com', color: '#10b981' },
                   { label: 'Platform Admin', email: 'admin@lms.demo', color: '#ef4444' },
                   { label: 'Org Admin', email: 'orgadmin@lms.demo', color: '#3b82f6' },
                   { label: 'Trainer / Lead', email: 'trainer@lms.demo', color: '#06b6d4' },

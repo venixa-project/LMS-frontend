@@ -271,6 +271,19 @@ async function request<T = any>(
         code: 'REQUEST_TIMEOUT',
       });
     }
+    const isNetworkError =
+      fetchErr.name === 'TypeError' ||
+      fetchErr.message?.includes('Failed to fetch') ||
+      fetchErr.message?.includes('NetworkError');
+
+    if (isNetworkError) {
+      throw new ApiError({
+        success: false,
+        statusCode: 503,
+        message: 'Cannot connect to LMS backend server at http://localhost:5000. Please ensure the backend server is running.',
+        code: 'BACKEND_OFFLINE',
+      });
+    }
     throw fetchErr;
   } finally {
     clearTimeout(timeoutId);
@@ -299,11 +312,24 @@ async function request<T = any>(
     if (isJson && body && body.success === false) {
       throw new ApiError(body as ApiErrorResponse);
     }
+
+    const bodyStr = typeof body === 'string' ? body : '';
+    const isProxyError =
+      bodyStr.includes('ECONNREFUSED') ||
+      bodyStr.includes('ECONNRESET') ||
+      bodyStr.includes('AggregateError') ||
+      response.status === 502 ||
+      response.status === 504;
+
+    const friendlyMessage = isProxyError
+      ? 'Cannot connect to LMS backend server at http://localhost:5000. Please ensure the backend server is running.'
+      : (typeof body === 'string' && body.trim() && !body.includes('<!DOCTYPE') ? body.trim() : response.statusText || 'API request failed');
+
     throw new ApiError({
       success: false,
       statusCode: response.status,
-      message: typeof body === 'string' ? body : response.statusText,
-      code: `HTTP_${response.status}`,
+      message: friendlyMessage,
+      code: isProxyError ? 'BACKEND_OFFLINE' : `HTTP_${response.status}`,
     });
   }
 
