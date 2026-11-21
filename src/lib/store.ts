@@ -541,7 +541,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         window.dispatchEvent(new CustomEvent('venilearn_role_switched', { detail: { role: targetRole } }));
       } catch {}
     }
-    }
   },
 
   can: (action: PermissionAction, resource: PermissionResource) => {
