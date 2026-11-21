@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { Course, Enrollment, EntityStatus } from '../types';
 import { inferVideoInfo } from './videoService';
 import { apiClient } from './apiClient';
+import { useAuthStore } from './store';
 
 interface CourseState {
   courses: Course[];
@@ -30,16 +31,18 @@ interface CourseState {
     enrollmentApprovalRequired?: boolean;
   }) => void;
   updateCourseStatus: (courseId: string, status: EntityStatus) => Promise<boolean>;
-  enrollInCourse: (courseId: string, userId?: string) => {
+  enrollInCourse: (courseId: string, userId?: string) => Promise<{
     success: boolean;
     message: string;
     requiresApproval?: boolean;
-  };
-  enrollCourse: (courseId: string, userId?: string) => {
+    enrollment?: any;
+  }>;
+  enrollCourse: (courseId: string, userId?: string) => Promise<{
     success: boolean;
     message: string;
     requiresApproval?: boolean;
-  };
+    enrollment?: any;
+  }>;
   requestToJoinCourse: (courseId: string, userId?: string) => {
     success: boolean;
     message: string;
@@ -502,7 +505,7 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     return true;
   },
 
-  enrollInCourse: (courseId, userId = 'u-007') => {
+  enrollInCourse: async (courseId, userId) => {
     const { courses, enrolledCourseIds } = get();
     const course = courses.find((c) => c.id === courseId || (c as any).slug === courseId);
 
@@ -552,10 +555,11 @@ export const useCourseStore = create<CourseState>((set, get) => ({
       };
     }
 
+    const effectiveUserId = userId || useAuthStore.getState().user?.id || 'u-007';
     const nextEnrolled = [...enrolledCourseIds, course.id];
     const newEnrollment: Enrollment = {
       id: `enr-${Date.now()}`,
-      userId,
+      userId: effectiveUserId,
       courseId: course.id,
       status: 'active',
       progress: 0,
@@ -576,21 +580,38 @@ export const useCourseStore = create<CourseState>((set, get) => ({
     set((state) => ({
       enrolledCourseIds: nextEnrolled,
       courses: updatedCourses,
-      enrollments: [newEnrollment, ...state.enrollments],
+      enrollments: [newEnrollment, ...state.enrollments.filter((e) => e.courseId !== course.id)],
     }));
 
     try {
       localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(nextEnrolled));
       localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      apiClient.post(`/courses/${course.id}/enroll`, {}).catch((err) => {
-        console.warn('Backend enrollment sync note:', err);
-      });
+      localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify([newEnrollment, ...get().enrollments]));
+    } catch (e) { }
+
+    let backendEnrollment: any = null;
+    try {
+      const res = await apiClient.post<any>(`/courses/${course.id}/enroll`, {});
+      if (res && res.data) {
+        backendEnrollment = res.data;
+      }
+    } catch (err: any) {
+      console.warn('Backend enrollment note:', err);
+    }
+
+    // Refresh courses and admin enrollments in background to synchronize database state across roles
+    try {
+      await Promise.allSettled([
+        get().fetchCourses(true),
+        get().fetchAdminEnrollments(),
+      ]);
     } catch (e) { }
 
     return {
       success: true,
       requiresApproval: false,
       message: `Successfully enrolled in "${course.title}". Welcome to the course!`,
+      enrollment: backendEnrollment || newEnrollment,
     };
   },
 

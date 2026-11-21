@@ -45,27 +45,33 @@ export interface VideoProcessingParams {
 /**
  * Dynamically resolves the AI service URL.
  * 1. Respects VITE_AI_SERVICE_URL environment override if defined.
- * 2. If the frontend is accessed from localhost / 127.0.0.1, uses http://127.0.0.1:8000.
- * 3. If accessed through a LAN IP (e.g., http://192.168.0.13:5173), dynamically targets http://192.168.0.13:8000
- *    so cross-device requests and LAN browsers can connect without Private Network Access blocks.
+ * 2. Primary target: LMS-Backend integrated endpoint '/api/v1/ai/video' (via Vite proxy /api)
+ * 3. Fallback: Standalone FastAPI uvicorn daemon on port 8000
  */
-export function getAiServiceUrl(): string {
+export function getCandidateAiServiceUrls(): string[] {
   if (import.meta.env.VITE_AI_SERVICE_URL) {
-    return (import.meta.env.VITE_AI_SERVICE_URL as string).replace(/\/$/, '');
+    return [(import.meta.env.VITE_AI_SERVICE_URL as string).replace(/\/$/, '')];
   }
+
+  const urls: string[] = ['/api/v1/ai/video'];
 
   if (typeof window !== 'undefined' && window.location) {
-    const { protocol, hostname } = window.location;
-    // When served over HTTPS, use the relative reverse-proxy endpoint to prevent mixed-content blocks
-    if (protocol === 'https:') {
-      return '/ai-service';
-    }
+    const { hostname } = window.location;
     if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `http://${hostname}:8000`;
+      urls.push(`http://${hostname}:5000/api/v1/ai/video`);
+      urls.push(`http://${hostname}:8000`);
     }
   }
 
-  return 'http://127.0.0.1:8000';
+  urls.push('http://127.0.0.1:5000/api/v1/ai/video');
+  urls.push('http://127.0.0.1:8000');
+  urls.push('/ai-service');
+
+  return urls;
+}
+
+export function getAiServiceUrl(): string {
+  return getCandidateAiServiceUrls()[0];
 }
 
 export const AI_SERVICE_URL = getAiServiceUrl();
@@ -108,8 +114,8 @@ export function validateVideoFile(file: File): { valid: boolean; error?: string 
 }
 
 /**
- * Checks connectivity with the local Python AI processing service.
- * Uses 8,000ms timeout and reports detailed errors on timeout, connection refusal, or PNA blocks.
+ * Checks connectivity with the LMS-Backend AI processing service or local Python service.
+ * Probes candidates in order: LMS-Backend /api/v1/ai/video/health, then port 8000.
  */
 export async function checkAIServiceHealth(): Promise<{
   available: boolean;
@@ -118,56 +124,46 @@ export async function checkAIServiceHealth(): Promise<{
   ollama: boolean;
   message: string;
   errorDetail?: string;
+  activeUrl?: string;
 }> {
-  const targetUrl = getAiServiceUrl();
+  const candidates = getCandidateAiServiceUrls();
+  let lastError = '';
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+  for (const targetUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    const response = await fetch(`${targetUrl}/health`, {
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+      const healthPath = targetUrl.endsWith('/health') ? targetUrl : `${targetUrl}/health`;
+      const response = await fetch(healthPath, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        available: true,
-        ffmpeg: data.ffmpeg?.available ?? true,
-        whisper: true,
-        ollama: data.ollama?.available ?? false,
-        message: `Local AI Service is online (${data.whisper?.configured_model || 'tiny'} Whisper, ${data.ollama?.available ? 'Ollama active' : 'Local grounded engine active'})`
-      };
-    } else {
-      return {
-        available: false,
-        ffmpeg: false,
-        whisper: false,
-        ollama: false,
-        message: `AI service returned HTTP ${response.status} from ${targetUrl}`,
-        errorDetail: `Status: ${response.status} (${response.statusText})`
-      };
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return {
+          available: true,
+          ffmpeg: data.ffmpeg?.available ?? true,
+          whisper: true,
+          ollama: data.ollama?.available ?? false,
+          message: data.message || `Local AI Service is online (${data.whisper?.configured_model || 'tiny'} Whisper, ${data.ollama?.available ? 'Ollama active' : 'Local grounded engine active'})`,
+          activeUrl: targetUrl,
+        };
+      }
+    } catch (e: any) {
+      lastError = e.message || String(e);
     }
-  } catch (e: any) {
-    let errMsg = `Cannot connect to AI service at ${targetUrl}`;
-    if (e.name === 'AbortError') {
-      errMsg = `Health ping timed out after 8s at ${targetUrl}. Service may be slow or busy.`;
-    } else if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
-      errMsg = `Connection refused at ${targetUrl}. Ensure the AI service is running on host 0.0.0.0 port 8000.`;
-    } else if (e.message) {
-      errMsg = `Connection failed at ${targetUrl}: ${e.message}`;
-    }
-
-    return {
-      available: false,
-      ffmpeg: false,
-      whisper: false,
-      ollama: false,
-      message: errMsg,
-      errorDetail: e.message || String(e)
-    };
   }
+
+  return {
+    available: false,
+    ffmpeg: false,
+    whisper: false,
+    ollama: false,
+    message: 'Local AI Processing Service: Offline / Connecting. Please ensure LMS-Backend is running.',
+    errorDetail: lastError,
+  };
 }
 
 /**
@@ -189,8 +185,10 @@ export async function processVideoForAssessment(
   const formData = new FormData();
   formData.append('file', file);
   formData.append('question_count', questionCount.toString());
+  formData.append('count', questionCount.toString());
   formData.append('difficulty', difficulty);
   formData.append('question_types', questionTypes.join(','));
+  formData.append('types', questionTypes.join(','));
   formData.append('language', language);
 
   // Setup simulated progress updates while waiting for faster-whisper
@@ -211,70 +209,75 @@ export async function processVideoForAssessment(
     }
   }, 900);
 
-  try {
-    const controller = new AbortController();
-    // 3 minute timeout for long videos
-    const timeoutId = setTimeout(() => controller.abort(), 180000);
+  const candidates = getCandidateAiServiceUrls();
+  let lastError: Error | null = null;
 
-    const targetUrl = getAiServiceUrl();
-    const response = await fetch(`${targetUrl}/api/video/process`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal
-    });
+  for (const targetUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      // 3 minute timeout for long videos
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-    clearTimeout(timeoutId);
-    clearInterval(progressTimer);
+      // Support both /process (LMS-Backend) and /api/video/process (FastAPI daemon)
+      const processPath = targetUrl.includes('/ai/video')
+        ? `${targetUrl}/process`
+        : targetUrl.endsWith('/process')
+        ? targetUrl
+        : `${targetUrl}/api/video/process`;
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const detailMsg = errData.detail || `Server responded with status ${response.status}`;
-      throw new Error(`Video AI Processing failed: ${detailMsg}`);
+      const response = await fetch(processPath, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      clearInterval(progressTimer);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const detailMsg = errData.detail || errData.message || `Server responded with status ${response.status}`;
+        throw new Error(`Video AI Processing failed: ${detailMsg}`);
+      }
+
+      onProgress?.('Finalizing verified question sequence...', 100);
+      const data: VideoProcessResponse = await response.json();
+
+      // Ensure questions conform to GeneratedQuestionSchema
+      const validatedQuestions: GeneratedQuestionSchema[] = (data.questions || []).map((q, idx) => ({
+        id: q.id || `q-vid-${Date.now()}-${idx + 1}`,
+        type: q.type || 'single_choice',
+        prompt: q.prompt,
+        difficulty: q.difficulty || (difficulty === 'mixed' ? (idx % 3 === 0 ? 'easy' : idx % 3 === 1 ? 'medium' : 'hard') : difficulty),
+        points: q.points || (q.difficulty === 'hard' ? 10 : 5),
+        topic: q.topic || 'Video Lecture Concept',
+        explanation: q.explanation || 'Verified from lecture segment.',
+        sourceSegment: q.sourceSegment || (data.segments?.[0]?.timestampBadge || '[00:00 - 00:30]'),
+        options: q.options || (q.type === 'true_false' ? [
+          { id: `opt-${idx}-1`, text: 'True', isCorrect: true },
+          { id: `opt-${idx}-2`, text: 'False', isCorrect: false }
+        ] : undefined),
+        correctAnswer: q.correctAnswer,
+        correctAnswers: q.correctAnswers,
+        rubric: q.rubric
+      }));
+
+      return {
+        ...data,
+        questions: validatedQuestions
+      };
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        clearInterval(progressTimer);
+        throw new Error('Video processing timed out after 3 minutes. Try a shorter video segment or check hardware resources.');
+      }
+      lastError = err;
+      // Try next candidate URL
     }
-
-    onProgress?.('Finalizing verified question sequence...', 100);
-    const data: VideoProcessResponse = await response.json();
-
-    // Ensure questions conform to GeneratedQuestionSchema
-    const validatedQuestions: GeneratedQuestionSchema[] = (data.questions || []).map((q, idx) => ({
-      id: q.id || `q-vid-${Date.now()}-${idx + 1}`,
-      type: q.type || 'single_choice',
-      prompt: q.prompt,
-      difficulty: q.difficulty || (difficulty === 'mixed' ? (idx % 3 === 0 ? 'easy' : idx % 3 === 1 ? 'medium' : 'hard') : difficulty),
-      points: q.points || (q.difficulty === 'hard' ? 10 : 5),
-      topic: q.topic || 'Video Lecture Concept',
-      explanation: q.explanation || 'Verified from lecture segment.',
-      sourceSegment: q.sourceSegment || (data.segments?.[0]?.timestampBadge || '[00:00 - 00:30]'),
-      options: q.options || (q.type === 'true_false' ? [
-        { id: `opt-${idx}-1`, text: 'True', isCorrect: true },
-        { id: `opt-${idx}-2`, text: 'False', isCorrect: false }
-      ] : undefined),
-      correctAnswer: q.correctAnswer,
-      correctAnswers: q.correctAnswers,
-      rubric: q.rubric
-    }));
-
-    return {
-      ...data,
-      questions: validatedQuestions
-    };
-  } catch (err: any) {
-    clearInterval(progressTimer);
-
-    if (err.name === 'AbortError') {
-      throw new Error('Video processing timed out after 3 minutes. Try a shorter video segment or check hardware resources.');
-    }
-
-    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-      const targetUrl = getAiServiceUrl();
-      throw new Error(
-        `Unable to reach local AI processing service at ${targetUrl}. ` +
-        `Please ensure the backend is running on 0.0.0.0:8000 (run: python -m uvicorn main:app --host 0.0.0.0 --port 8000 in the ai-service folder).`
-      );
-    }
-
-    throw err;
   }
+
+  clearInterval(progressTimer);
+  throw lastError || new Error('Unable to connect to LMS-Backend Video AI service. Please ensure the backend server is running.');
 }
 
 /**

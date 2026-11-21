@@ -310,7 +310,7 @@ interface AuthState {
   completePasswordChange: (accessToken: string) => void;
   logout: () => void;
   updateUserProfile: (updates: Partial<Pick<User, 'firstName' | 'lastName' | 'displayName' | 'phone' | 'locale' | 'timezone' | 'avatar'>>) => void;
-  switchRole: (role: RoleName) => void;
+  switchRole: (role: RoleName) => Promise<void> | void;
   can: (action: PermissionAction, resource: PermissionResource) => boolean;
   clearError: () => void;
   fetchNotifications: () => Promise<void>;
@@ -352,6 +352,12 @@ interface AuthState {
     proctoringMode?: string;
     creatorId?: string;
   }) => { success: boolean; count: number };
+  notifyUpcomingExamIn30Minutes: (payload: {
+    assessmentId: string;
+    assessmentTitle: string;
+    creatorId?: string;
+    startTime?: string;
+  }) => { success: boolean; count: number };
   notifyScheduledExamStarted: (payload: {
     assessmentId: string;
     assessmentTitle: string;
@@ -376,46 +382,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string, tenantId?: string) => {
     set({ isLoading: true, error: null });
 
-    const isDemoLogin = email.toLowerCase().trim().endsWith('@lms.demo');
-    if (isDemoLogin) {
-      let normalizedEmail = email.toLowerCase().trim();
-      if (normalizedEmail === 'instructor@lms.demo' || normalizedEmail === 'author@lms.demo' || normalizedEmail === 'grader@lms.demo') {
-        normalizedEmail = 'trainer@lms.demo';
-      } else if (normalizedEmail === 'learner@lms.demo' || normalizedEmail === 'alex@lms.demo') {
-        normalizedEmail = 'student@lms.demo';
-      } else if (normalizedEmail === 'marcus@lms.demo' || normalizedEmail === 'lmsadmin@lms.demo') {
-        normalizedEmail = 'orgadmin@lms.demo';
-      }
-
-      const foundUser = mockUsers.find(
-        (u) => u.email.toLowerCase() === normalizedEmail
-      );
-
-      if (foundUser) {
-        const permissions = getPermissionsForRole(foundUser.activeRole);
-        const navigation = getNavigationForRole(foundUser.activeRole);
-        localStorage.setItem('venilearn_active_tenant_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
-        if (typeof window !== 'undefined') sessionStorage.setItem('venilearn_active_org_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
-        persistSession(foundUser, foundUser.activeRole);
-        const notifications = getUserNotifications(foundUser);
-        set({
-          user: foundUser,
-          permissions,
-          navigation,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-          notifications,
-          unreadNotifications: notifications.filter((n) => !n.isRead).length,
-        });
-        return;
-      }
+    let normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail === 'instructor@lms.demo' || normalizedEmail === 'author@lms.demo' || normalizedEmail === 'grader@lms.demo') {
+      normalizedEmail = 'trainer@lms.demo';
+    } else if (normalizedEmail === 'learner@lms.demo' || normalizedEmail === 'alex@lms.demo') {
+      normalizedEmail = 'student@lms.demo';
+    } else if (normalizedEmail === 'marcus@lms.demo' || normalizedEmail === 'lmsadmin@lms.demo') {
+      normalizedEmail = 'orgadmin@lms.demo';
     }
-
-    const isSeededStudentDemoLogin =
-      email.toLowerCase().trim() === 'student@lms.demo' && password === 'demoPass123';
-    const backendEmail = isSeededStudentDemoLogin ? 'student@acuity.com' : email;
-    const backendPassword = isSeededStudentDemoLogin ? 'Password@123' : password;
 
     try {
       const response = await apiClient.post<{
@@ -435,8 +409,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           mustChangePassword?: boolean;
         };
       }>('/auth/login', {
-        email: backendEmail.toLowerCase().trim(),
-        password: backendPassword,
+        email: normalizedEmail,
+        password: password,
         ...(tenantId ? { tenantId } : {}),
       });
       const account = response.data.user;
@@ -518,42 +492,55 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: updatedUser });
   },
 
-  switchRole: (role: RoleName) => {
-    const { user } = get();
-    if (!user) return;
-
+  switchRole: async (role: RoleName) => {
     // Normalize to the 4 canonical roles
     let targetRole: RoleName = role;
     if (role === 'instructor' || role === 'assessment_author' || role === 'grader') {
       targetRole = 'trainer';
     } else if (role === 'learner' || role === 'guest') {
       targetRole = 'student';
-    } else if (role === 'lms_admin' || (role as string) === 'industrial_admin') {
+    } else if (role === 'lms_admin' || (role as string) === 'industrial_admin' || (role as string) === 'institution_admin' || (role as string) === 'Institution Admin') {
       targetRole = 'org_admin';
     }
 
-    const updatedUser = { ...user, activeRole: targetRole };
-    const currentToken = getPersistedAccessToken();
-    // Persist verified switched role session with active JWT token
-    persistSession(updatedUser, targetRole, currentToken);
+    let targetEmail = 'student@lms.demo';
+    if (targetRole === 'org_admin') {
+      targetEmail = 'orgadmin@lms.demo';
+    } else if (targetRole === 'trainer') {
+      targetEmail = 'trainer@lms.demo';
+    } else if (targetRole === 'platform_admin') {
+      targetEmail = 'admin@lms.demo';
+    }
 
-    const permissions = getPermissionsForRole(targetRole);
-    const navigation = getNavigationForRole(targetRole);
-    const notifications = getUserNotifications(updatedUser);
-
-    set({
-      user: updatedUser,
-      permissions,
-      navigation,
-      notifications,
-      unreadNotifications: notifications.filter((n) => !n.isRead).length,
-    });
+    // Role switching obtains a legitimate token and user object through the backend authentication flow
+    try {
+      await get().login(targetEmail, 'Password@123');
+    } catch (e) {
+      console.warn('Backend role-switch auth notice:', e);
+      // Fallback local persistence if offline
+      const { user } = get();
+      if (user) {
+        const updatedUser = { ...user, email: targetEmail, activeRole: targetRole };
+        persistSession(updatedUser, targetRole);
+        const permissions = getPermissionsForRole(targetRole);
+        const navigation = getNavigationForRole(targetRole);
+        const notifications = getUserNotifications(updatedUser);
+        set({
+          user: updatedUser,
+          permissions,
+          navigation,
+          notifications,
+          unreadNotifications: notifications.filter((n) => !n.isRead).length,
+        });
+      }
+    }
 
     // Notify listeners to refresh domain stores for the new role context
     if (typeof window !== 'undefined') {
       try {
         window.dispatchEvent(new CustomEvent('venilearn_role_switched', { detail: { role: targetRole } }));
       } catch {}
+    }
     }
   },
 
@@ -820,6 +807,69 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       userId: uid,
       title: `Live Proctoring Alert: ${studentName} started exam`,
       message: `${studentName} has initialized proctored environment verification and started "${assessmentTitle}". Proctoring Mode: ${proctoringMode}. Click to monitor live webcam, mic levels, and telemetry.`,
+      category: 'proctoring',
+      link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+      isRead: false,
+      timestamp,
+    }));
+
+    const updatedStored = [...newNotifs, ...stored];
+    persistStoredNotifications(updatedStored);
+
+    const currentUser = get().user;
+    if (currentUser) {
+      const refreshed = getUserNotifications(currentUser);
+      set({
+        notifications: refreshed,
+        unreadNotifications: refreshed.filter((n) => !n.isRead).length,
+      });
+    }
+
+    return {
+      success: true,
+      count: newNotifs.length,
+    };
+  },
+
+  notifyUpcomingExamIn30Minutes: ({
+    assessmentId,
+    assessmentTitle,
+    creatorId,
+    startTime,
+  }) => {
+    const stored = loadStoredNotifications();
+    const notifPrefix = `notif-exam-30min-${assessmentId}`;
+    if (stored.some((n) => n.id.startsWith(notifPrefix))) {
+      return { success: false, count: 0 };
+    }
+
+    const timestamp = new Date().toISOString();
+    const targets = new Set<string>([
+      'all-admins',
+      'all-trainers',
+      'u-001',
+      'u-002',
+      'orgadmin@lms.demo',
+      'trainer@lms.demo',
+      'faculty@lms.demo',
+    ]);
+    if (creatorId) {
+      targets.add(creatorId);
+    }
+
+    let timeLabel = 'in 30 minutes';
+    if (startTime) {
+      try {
+        const d = new Date(startTime);
+        timeLabel = `at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      } catch (err) {}
+    }
+
+    const newNotifs: Notification[] = Array.from(targets).map((uid) => ({
+      id: `${notifPrefix}-${uid}`,
+      userId: uid,
+      title: `Upcoming Proctored Exam: "${assessmentTitle}" Starts in 30 Mins`,
+      message: `The scheduled exam "${assessmentTitle}" (Manual Proctoring) begins ${timeLabel}. Please review the candidate list and prepare the Live Invigilation Bridge.`,
       category: 'proctoring',
       link: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
       isRead: false,

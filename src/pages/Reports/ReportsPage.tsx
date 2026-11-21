@@ -4,7 +4,7 @@ import {
   BarChart3, Download, Calendar, Filter, Clock, CheckCircle2,
   TrendingUp, Users, BookOpen, Award, RefreshCw, FileSpreadsheet,
   Search, RotateCcw, FileText, AlertCircle, GraduationCap, Building2,
-  CheckCircle, ChevronDown
+  CheckCircle, ChevronDown, Trash2
 } from 'lucide-react';
 import {
   ReportType, DateRangePreset, ReportFilterState,
@@ -13,7 +13,13 @@ import {
   getCourseEnrollmentRecords, getPendingSubmissionsRecords,
   calculateReportMetrics, exportReportToCsv, exportReportToExcel,
   CourseCompletionRow, LearnerProgressRow, AssessmentPerformanceRow,
-  CourseEnrollmentRow, PendingSubmissionRow
+  CourseEnrollmentRow, PendingSubmissionRow, ReportMetricsSummary,
+  fetchFilterOptions, fetchReportKpis,
+  fetchCourseEnrollmentReport, fetchCourseCompletionReport,
+  fetchLearnerProgressReport, fetchAssessmentPerformanceReport,
+  fetchPendingSubmissionsReport, fetchReportSchedules,
+  createReportSchedule, deleteReportSchedule, downloadServerReport,
+  FilterOptionsResponse, ReportScheduleItem
 } from '../../lib/reportsService';
 
 export const ReportsPage: React.FC = () => {
@@ -116,17 +122,132 @@ export const ReportsPage: React.FC = () => {
     searchQuery,
   }), [dateRange, customStart, customEnd, selectedDept, selectedCourse, selectedTrainer, selectedCohort, selectedAssessment, searchQuery]);
 
-  // Compute records for all report types backed strictly by real LMS data scoped to active organization
-  const completionRows = useMemo(() => getCourseCompletionSummaryRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
-  const progressRows = useMemo(() => getLearnerProgressRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
-  const assessmentRows = useMemo(() => getAssessmentPerformanceRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
-  const enrollmentRows = useMemo(() => getCourseEnrollmentRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
-  const pendingRows = useMemo(() => getPendingSubmissionsRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  // Dynamic Filter Options loaded from Backend Database
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsResponse | null>(null);
 
-  // Summary KPI Metrics
-  const metrics = useMemo(() => {
-    return calculateReportMetrics(completionRows, assessmentRows, enrollmentRows, pendingRows);
-  }, [completionRows, assessmentRows, enrollmentRows, pendingRows]);
+  // Live PostgreSQL KPI Metrics
+  const [kpiMetrics, setKpiMetrics] = useState<ReportMetricsSummary | null>(null);
+
+  // Live Database Report Records
+  const [dbCompletionRows, setDbCompletionRows] = useState<CourseCompletionRow[] | null>(null);
+  const [dbProgressRows, setDbProgressRows] = useState<LearnerProgressRow[] | null>(null);
+  const [dbAssessmentRows, setDbAssessmentRows] = useState<AssessmentPerformanceRow[] | null>(null);
+  const [dbEnrollmentRows, setDbEnrollmentRows] = useState<CourseEnrollmentRow[] | null>(null);
+  const [dbPendingRows, setDbPendingRows] = useState<PendingSubmissionRow[] | null>(null);
+
+  // Automated Delivery Schedules List
+  const [schedulesList, setSchedulesList] = useState<ReportScheduleItem[]>([]);
+  const [newScheduleReportType, setNewScheduleReportType] = useState<string>('enrollment');
+  const [newScheduleCadence, setNewScheduleCadence] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [newScheduleFormat, setNewScheduleFormat] = useState<'xlsx' | 'csv' | 'both'>('xlsx');
+  const [newScheduleRecipients, setNewScheduleRecipients] = useState<string>(
+    isAdmin ? 'leadership@acmelearning.com, admin@lms.demo' : user?.email || 'trainer@lms.demo'
+  );
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+
+  // 1. Fetch dynamic filter options from backend
+  useEffect(() => {
+    fetchFilterOptions()
+      .then((opts) => setFilterOptions(opts))
+      .catch((err) => console.warn('Filter options fetch notice:', err));
+  }, [activeOrgId]);
+
+  // 2. Fetch live metrics and report rows from backend
+  useEffect(() => {
+    let active = true;
+    setIsLoadingReports(true);
+    setReportsError(null);
+
+    Promise.all([
+      fetchReportKpis(filterState),
+      fetchCourseEnrollmentReport(filterState),
+      fetchCourseCompletionReport(filterState),
+      fetchLearnerProgressReport(filterState),
+      fetchAssessmentPerformanceReport(filterState),
+      fetchPendingSubmissionsReport(filterState),
+    ])
+      .then(([kpis, enrollments, completions, progress, assessments, pending]) => {
+        if (!active) return;
+        setKpiMetrics(kpis);
+        setDbEnrollmentRows(enrollments);
+        setDbCompletionRows(completions);
+        setDbProgressRows(progress);
+        setDbAssessmentRows(assessments);
+        setDbPendingRows(pending);
+        setIsLoadingReports(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.warn('Backend reporting fetch notice, falling back to sync data:', err);
+        setReportsError(err?.message || 'Database reporting query failed');
+        setIsLoadingReports(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filterState, activeOrgId]);
+
+  // 3. Fetch scheduled reports when modal opens
+  useEffect(() => {
+    if (showScheduleModal) {
+      fetchReportSchedules()
+        .then((items) => setSchedulesList(items))
+        .catch((e) => console.warn('Fetch schedules notice:', e));
+    }
+  }, [showScheduleModal]);
+
+  // Compute fallback records from client cache if server data not yet resolved
+  const fallbackCompletionRows = useMemo(() => getCourseCompletionSummaryRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const fallbackProgressRows = useMemo(() => getLearnerProgressRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const fallbackAssessmentRows = useMemo(() => getAssessmentPerformanceRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const fallbackEnrollmentRows = useMemo(() => getCourseEnrollmentRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const fallbackPendingRows = useMemo(() => getPendingSubmissionsRecords(user, filterState, activeOrgId), [user, filterState, activeOrgId]);
+  const fallbackMetrics = useMemo(() => {
+    return calculateReportMetrics(fallbackCompletionRows, fallbackAssessmentRows, fallbackEnrollmentRows, fallbackPendingRows);
+  }, [fallbackCompletionRows, fallbackAssessmentRows, fallbackEnrollmentRows, fallbackPendingRows]);
+
+  // Effective rows prioritizing PostgreSQL database
+  const completionRows = dbCompletionRows !== null ? dbCompletionRows : fallbackCompletionRows;
+  const progressRows = dbProgressRows !== null ? dbProgressRows : fallbackProgressRows;
+  const assessmentRows = dbAssessmentRows !== null ? dbAssessmentRows : fallbackAssessmentRows;
+  const enrollmentRows = dbEnrollmentRows !== null ? dbEnrollmentRows : fallbackEnrollmentRows;
+  const pendingRows = dbPendingRows !== null ? dbPendingRows : fallbackPendingRows;
+
+  // Effective KPI Metrics prioritizing direct PostgreSQL calculation
+  const metrics = kpiMetrics || fallbackMetrics;
+
+  // Options lists prioritizing PostgreSQL live records
+  const departmentsList = useMemo(() => {
+    if (filterOptions?.departments && filterOptions.departments.length > 0) {
+      return filterOptions.departments;
+    }
+    return departments;
+  }, [filterOptions, departments]);
+
+  const coursesList = useMemo(() => {
+    if (filterOptions?.courses && filterOptions.courses.length > 0) {
+      return filterOptions.courses.map(c => ({ id: c.id, title: c.title }));
+    }
+    return availableCourses;
+  }, [filterOptions, availableCourses]);
+
+  const cohortsList = useMemo(() => {
+    if (filterOptions?.cohorts && filterOptions.cohorts.length > 0) {
+      return filterOptions.cohorts.map(ch => ({ id: ch.id, name: ch.name, code: '' }));
+    }
+    return availableCohorts;
+  }, [filterOptions, availableCohorts]);
+
+  const trainersList = useMemo(() => {
+    if (filterOptions?.trainers && filterOptions.trainers.length > 0) {
+      return filterOptions.trainers.map(tr => ({ id: tr.id, displayName: tr.name, firstName: tr.name }));
+    }
+    return availableTrainers;
+  }, [filterOptions, availableTrainers]);
 
   // Reset Filters to default scope
   const handleResetFilters = () => {
@@ -208,11 +329,15 @@ export const ReportsPage: React.FC = () => {
     };
   };
 
-  const handleExport = (format: 'csv' | 'xlsx', targetReport = activeReport) => {
+  const handleExport = async (format: 'csv' | 'xlsx', targetReport = activeReport) => {
     setIsExporting(true);
     setShowExportMenu(false);
 
-    setTimeout(() => {
+    try {
+      await downloadServerReport(targetReport, format, filterState);
+      setExportNotice(`Exported records directly from PostgreSQL database (${format.toUpperCase()}).`);
+    } catch (err: any) {
+      console.warn('Server export fallback to client-side:', err);
       let rows: unknown[] = [];
       switch (targetReport) {
         case 'completion': rows = completionRows; break;
@@ -221,9 +346,7 @@ export const ReportsPage: React.FC = () => {
         case 'enrollment': rows = enrollmentRows; break;
         case 'submissions': rows = pendingRows; break;
       }
-
       const meta = getExportMeta();
-
       if (format === 'csv') {
         exportReportToCsv(targetReport, rows, meta);
         setExportNotice(`Exported ${rows.length} records to CSV format with UTF-8 BOM.`);
@@ -231,10 +354,10 @@ export const ReportsPage: React.FC = () => {
         exportReportToExcel(targetReport, rows, meta);
         setExportNotice(`Generated Excel spreadsheet (.xlsx) with auto-filtered columns.`);
       }
-
+    } finally {
       setIsExporting(false);
       setTimeout(() => setExportNotice(null), 4000);
-    }, 400);
+    }
   };
 
   // Student Access Barrier (Data Security & Tenant Isolation)
@@ -474,7 +597,7 @@ export const ReportsPage: React.FC = () => {
                 onChange={(e) => setSelectedDept(e.target.value)}
               >
                 <option value="all">All Departments</option>
-                {departments.map((d) => (
+                {departmentsList.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
@@ -492,7 +615,7 @@ export const ReportsPage: React.FC = () => {
               onChange={(e) => setSelectedCourse(e.target.value)}
             >
               <option value="all">{isTrainer ? 'All My Assigned Courses' : 'All Courses'}</option>
-              {availableCourses.map((c) => (
+              {coursesList.map((c) => (
                 <option key={c.id} value={c.id}>{c.title}</option>
               ))}
             </select>
@@ -509,8 +632,8 @@ export const ReportsPage: React.FC = () => {
               onChange={(e) => setSelectedCohort(e.target.value)}
             >
               <option value="all">{isTrainer ? 'All My Assigned Cohorts' : 'All Cohorts'}</option>
-              {availableCohorts.map((ch) => (
-                <option key={ch.id} value={ch.id}>{ch.name} ({ch.code || ch.id})</option>
+              {cohortsList.map((ch) => (
+                <option key={ch.id} value={ch.id}>{ch.name} {ch.code ? `(${ch.code})` : ''}</option>
               ))}
             </select>
           </div>
@@ -527,7 +650,7 @@ export const ReportsPage: React.FC = () => {
                 onChange={(e) => setSelectedTrainer(e.target.value)}
               >
                 <option value="all">All Trainers & Faculty</option>
-                {availableTrainers.map((tr) => (
+                {trainersList.map((tr) => (
                   <option key={tr.id} value={tr.id}>{tr.displayName || tr.firstName}</option>
                 ))}
               </select>
@@ -1031,7 +1154,7 @@ export const ReportsPage: React.FC = () => {
       {/* Scheduled Reports Modal */}
       {showScheduleModal && (
         <div className="modal-overlay" onClick={() => setShowScheduleModal(false)}>
-          <div className="modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Configure Automated Report Delivery</h3>
               <button onClick={() => setShowScheduleModal(false)} style={{ color: 'var(--text-muted)' }}>
@@ -1042,48 +1165,126 @@ export const ReportsPage: React.FC = () => {
               <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
                 Receive automated summaries delivered directly to designated administrator inboxes on a recurring cron cadence.
               </p>
+
+              {/* Existing active schedules */}
+              {schedulesList.length > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                    Active Delivery Schedules ({schedulesList.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {schedulesList.map((sch) => (
+                      <div
+                        key={sch.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: '1px solid var(--border-subtle)',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{sch.reportType} ({sch.cadence})</div>
+                          <div className="text-muted text-xs">{sch.recipients?.join(', ')} • {sch.format.toUpperCase()}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            deleteReportSchedule(sch.id).then(() => {
+                              setSchedulesList((prev) => prev.filter((s) => s.id !== sch.id));
+                            }).catch(() => {});
+                          }}
+                          style={{ padding: '4px 8px', color: 'var(--danger)' }}
+                          title="Delete Schedule"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Report Type</label>
-                <select className="form-select">
-                  <option>Course Completion Summary</option>
-                  <option>Learner Progress Report</option>
-                  <option>Assessment Performance</option>
-                  <option>Course Enrollment Summary</option>
-                  <option>Pending Submissions Digest</option>
+                <select
+                  className="form-select"
+                  value={newScheduleReportType}
+                  onChange={(e) => setNewScheduleReportType(e.target.value)}
+                >
+                  <option value="enrollment">Course Enrollment Summary</option>
+                  <option value="completion">Course Completion Summary</option>
+                  <option value="progress">Learner Progress Report</option>
+                  <option value="assessment">Assessment Performance</option>
+                  <option value="submissions">Pending Submissions Digest</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Delivery Cadence</label>
-                <select className="form-select">
-                  <option>Every Monday at 08:00 AM (Weekly Digest)</option>
-                  <option>1st Day of Each Month (Monthly Governance Summary)</option>
-                  <option>Daily Incident & Proctoring Digest</option>
+                <select
+                  className="form-select"
+                  value={newScheduleCadence}
+                  onChange={(e) => setNewScheduleCadence(e.target.value as any)}
+                >
+                  <option value="weekly">Every Monday at 08:00 AM (Weekly Digest)</option>
+                  <option value="monthly">1st Day of Each Month (Monthly Governance Summary)</option>
+                  <option value="daily">Daily Incident & Proctoring Digest</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Export Format</label>
-                <select className="form-select">
-                  <option>Excel Workbook (.xlsx)</option>
-                  <option>Comma-Separated Values (.csv)</option>
+                <select
+                  className="form-select"
+                  value={newScheduleFormat}
+                  onChange={(e) => setNewScheduleFormat(e.target.value as any)}
+                >
+                  <option value="xlsx">Excel Workbook (.xlsx)</option>
+                  <option value="csv">Comma-Separated Values (.csv)</option>
+                  <option value="both">Both Formats (.xlsx & .csv)</option>
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Recipient Distribution Emails</label>
+                <label className="form-label">Recipient Distribution Emails (comma-separated)</label>
                 <input
                   type="text"
-                  defaultValue={isAdmin ? "leadership@acmelearning.com, admin@lms.demo" : user?.email || "trainer@lms.demo"}
+                  value={newScheduleRecipients}
+                  onChange={(e) => setNewScheduleRecipients(e.target.value)}
                   className="form-input"
                 />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowScheduleModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => {
-                setExportNotice("Automated scheduled delivery registered successfully.");
-                setShowScheduleModal(false);
-                setTimeout(() => setExportNotice(null), 3500);
-              }}>
-                Save Schedule
+              <button
+                className="btn btn-primary"
+                disabled={isSavingSchedule}
+                onClick={async () => {
+                  setIsSavingSchedule(true);
+                  try {
+                    const recipients = newScheduleRecipients.split(',').map((s) => s.trim()).filter(Boolean);
+                    const created = await createReportSchedule({
+                      reportType: newScheduleReportType,
+                      cadence: newScheduleCadence,
+                      format: newScheduleFormat,
+                      recipients: recipients.length > 0 ? recipients : [user?.email || 'admin@lms.demo'],
+                    });
+                    setSchedulesList((prev) => [created, ...prev]);
+                    setExportNotice('Automated scheduled delivery registered successfully in PostgreSQL database.');
+                    setShowScheduleModal(false);
+                    setTimeout(() => setExportNotice(null), 3500);
+                  } catch (err: any) {
+                    alert(err?.message || 'Failed to save delivery schedule');
+                  } finally {
+                    setIsSavingSchedule(false);
+                  }
+                }}
+              >
+                {isSavingSchedule ? 'Saving...' : 'Save Schedule'}
               </button>
             </div>
           </div>

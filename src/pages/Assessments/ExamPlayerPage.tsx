@@ -7,10 +7,11 @@ import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
 import { getAssessmentApi, startAttemptApi, saveAnswerApi, submitAttemptApi } from '../../api/assessment.api';
 import { apiClient } from '../../lib/apiClient';
+import { proctoringSocket } from '../../lib/proctoringSocket';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
-  ChevronLeft, ChevronRight, Save, Eye, ArrowLeft, Award, HelpCircle, X,
-  FileText, Video, Mic, Download, Lock, Send, ExternalLink
+  ChevronLeft, ChevronRight, Save, Eye, EyeOff, ArrowLeft, Award, HelpCircle, X,
+  FileText, Video, Mic, Download, Lock, Send, ExternalLink, Printer, Play
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../components/GoogleMeet';
 import { VeniGuardSetup } from './components/VeniGuardSetup';
@@ -21,6 +22,7 @@ import { buildJitsiUrls, launchJitsiConference } from '../../lib/jitsiProctoring
 import {
   requestScreenCapture,
   enterFullscreen,
+  exitFullscreen,
   isCurrentlyFullscreen,
   probeConnectionHealth,
   stopAllMediaTracks,
@@ -55,7 +57,7 @@ export const ExamPlayerPage: React.FC = () => {
   }, [storeAssessment, fetchAssessments]);
 
   useEffect(() => {
-    if (id && id.length === 36) {
+    if (id) {
       setIsLoadingApi(true);
       getAssessmentApi(id)
         .then((data) => {
@@ -154,8 +156,10 @@ export const ExamPlayerPage: React.FC = () => {
   const endDate = assessment?.availabilityEnd ? new Date(assessment.availabilityEnd) : null;
   const isBeforeStart = Boolean(startDate && now < startDate);
   const isAfterEnd = Boolean(endDate && now > endDate);
-  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner' || user?.roles?.some((r) => r.name === 'student' || r.name === 'learner');
   const isPrivileged = !isStudent;
+  const [adminSimulationMode, setAdminSimulationMode] = useState<boolean>(false);
+  const [showAdminAnswerKeys, setShowAdminAnswerKeys] = useState<boolean>(true);
 
   // Check if learner already earned an assessment certificate
   const existingAssessmentCert = (user && assessment?.id)
@@ -174,6 +178,8 @@ export const ExamPlayerPage: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'Saved' | 'Saving...'>('Saved');
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [forcedSubmissionReason, setForcedSubmissionReason] = useState<string | null>(null);
+  const [candidateBaselinePhoto, setCandidateBaselinePhoto] = useState<string | null>(null);
+  const [candidateBaselineEmbedding, setCandidateBaselineEmbedding] = useState<Float32Array | null>(null);
   const textSaveTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
@@ -187,6 +193,7 @@ export const ExamPlayerPage: React.FC = () => {
   // Live media streams
   const screenStreamRef = useRef<MediaStream | null>(null);
   const userMediaStreamRef = useRef<MediaStream | null>(null);
+  const [activeUserMediaStream, setActiveUserMediaStream] = useState<MediaStream | null>(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMicActive, setIsMicActive] = useState(false);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
@@ -658,7 +665,12 @@ export const ExamPlayerPage: React.FC = () => {
   };
 
   // Transition from Pre-Flight Setup to in_exam
-  const handleReadyToStart = (streams: { screenStream?: MediaStream; userMediaStream?: MediaStream }) => {
+  const handleReadyToStart = (streams: {
+    screenStream?: MediaStream;
+    userMediaStream?: MediaStream;
+    candidatePhoto?: string;
+    candidateEmbedding?: Float32Array;
+  }) => {
     // Save streams in ref
     if (streams.screenStream) {
       screenStreamRef.current = streams.screenStream;
@@ -667,8 +679,15 @@ export const ExamPlayerPage: React.FC = () => {
     }
     if (streams.userMediaStream) {
       userMediaStreamRef.current = streams.userMediaStream;
+      setActiveUserMediaStream(streams.userMediaStream);
       if (policy.requireMicrophone) setIsMicActive(true);
       if (policy.requireWebcam) setIsWebcamActive(true);
+    }
+    if (streams.candidatePhoto) {
+      setCandidateBaselinePhoto(streams.candidatePhoto);
+    }
+    if (streams.candidateEmbedding) {
+      setCandidateBaselineEmbedding(streams.candidateEmbedding);
     }
 
     // Initialize Session in Zustand store
@@ -681,6 +700,27 @@ export const ExamPlayerPage: React.FC = () => {
     });
     setCurrentSessionId(session.id);
     setSessionStatus(session.id, 'in_progress');
+
+    // Register candidate baseline photo and ArcFace embedding with backend proctoring service
+    if (streams.candidatePhoto) {
+      apiClient
+        .post(`/proctoring/sessions/${session.id}/baseline-photo`, {
+          photo: streams.candidatePhoto,
+          candidateName,
+          studentId: candidateId,
+          examId: assessment.id,
+          sessionId: session.id,
+        })
+        .catch(() => {});
+    }
+    if (streams.candidateEmbedding) {
+      apiClient
+        .post(`/proctoring/sessions/${session.id}/reference-embedding`, {
+          embedding: Array.from(streams.candidateEmbedding),
+          candidateName,
+        })
+        .catch(() => {});
+    }
 
     // Dispatch immediate proctoring notification to admin & assessment creator
     try {
@@ -783,6 +823,18 @@ export const ExamPlayerPage: React.FC = () => {
       title: 'Assessment Timer Started',
       description: `Exam session launched with ${questions.length} questions under policy: ${policy.name}.`,
     });
+
+    // Notify real-time proctoring wall that candidate has officially started the exam
+    try {
+      proctoringSocket.emit('STUDENT_EXAM_STARTED', {
+        studentId: candidateId,
+        studentName: candidateName,
+        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+        assessmentId: assessment.id,
+        sessionId: serverSessionId || currentSessionId || '',
+        startedAt: new Date().toISOString(),
+      });
+    } catch (e) {}
 
     setStage('in_exam');
   };
@@ -888,6 +940,7 @@ export const ExamPlayerPage: React.FC = () => {
     // Stop streams cleanly
     stopAllMediaTracks(screenStreamRef.current);
     stopAllMediaTracks(userMediaStreamRef.current);
+    setActiveUserMediaStream(null);
     setIsScreenSharing(false);
     setIsMicActive(false);
     setIsWebcamActive(false);
@@ -1004,8 +1057,68 @@ export const ExamPlayerPage: React.FC = () => {
       console.warn('Gamification quiz award error:', e);
     }
 
+    // Automatically release browser fullscreen upon completing examination
+    exitFullscreen().catch(() => {});
+    stopAllMediaTracks(screenStreamRef.current);
+    stopAllMediaTracks(userMediaStreamRef.current);
+
+    // Notify real-time proctoring wall that candidate has ended and submitted the exam
+    try {
+      proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
+        studentId: candidateId,
+        studentName: candidateName,
+        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+        assessmentId: assessment.id,
+        sessionId: serverSessionId || currentSessionId || '',
+        reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
+        submittedAt: new Date().toISOString(),
+      });
+      useProctoringStore.getState().removeLiveCandidate(candidateId, assessment.id);
+      proctoringSocket.disconnect();
+    } catch (e) {}
+
     setStage('results');
   };
+
+  // Ensure fullscreen and media tracks are automatically released when leaving exam or arriving at results
+  useEffect(() => {
+    if (stage === 'results') {
+      exitFullscreen().catch(() => {});
+      stopAllMediaTracks(screenStreamRef.current);
+      stopAllMediaTracks(userMediaStreamRef.current);
+      proctoringSocket.disconnect();
+    }
+  }, [stage]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        if (stage === 'in_exam') {
+          proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
+            studentId: candidateId,
+            studentName: candidateName,
+            rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+            assessmentId: assessment?.id,
+            sessionId: serverSessionId || currentSessionId || '',
+            reason: 'Candidate navigated away or closed exam tab',
+            submittedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {}
+      proctoringSocket.disconnect();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      handleBeforeUnload();
+      exitFullscreen().catch(() => {});
+      stopAllMediaTracks(screenStreamRef.current);
+      stopAllMediaTracks(userMediaStreamRef.current);
+      proctoringSocket.disconnect();
+    };
+  }, [stage, candidateId, candidateName, assessment?.id, serverSessionId, currentSessionId, user?.rollNo]);
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1186,6 +1299,241 @@ export const ExamPlayerPage: React.FC = () => {
   }
 
   // -------------------------------------------------------------
+  // ADMIN / TRAINER INSPECTION MODE (Admins/Trainers do not take exams)
+  // -------------------------------------------------------------
+  if (isPrivileged && !adminSimulationMode && stage === 'readiness') {
+    return (
+      <div style={{ maxWidth: '1000px', margin: '30px auto', padding: '0 20px' }}>
+        <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+          {/* Header Banner */}
+          <div
+            style={{
+              padding: '24px',
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%)',
+              borderBottom: '1px solid var(--border-subtle)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase', fontSize: '0.72rem', fontWeight: 700 }}>
+                  <FileText size={12} /> Paper Inspection Mode
+                </span>
+                <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>
+                  Admin / Trainer (No Student Attempt Recorded)
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate('/assessments')}
+                  style={{ gap: '6px' }}
+                >
+                  <ArrowLeft size={14} /> Back to Assessments
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => window.print()}
+                  style={{ gap: '6px' }}
+                >
+                  <Printer size={14} /> Print Paper
+                </button>
+              </div>
+            </div>
+
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-main)' }}>
+              {assessment.title}
+            </h1>
+            <p className="text-secondary text-xs" style={{ margin: 0 }}>
+              Course: <strong style={{ color: 'var(--text-main)' }}>{assessment.courseId || 'General Assessment'}</strong> &bull;{' '}
+              {assessment.durationMinutes || 45} Minutes &bull; {assessment.totalMarks || 100} Total Marks &bull; Passing Score:{' '}
+              {assessment.passingMarks || Math.round((assessment.totalMarks || 100) * 0.7)} Points
+            </p>
+          </div>
+
+          {/* Quick Stats & Controls Bar */}
+          <div
+            style={{
+              padding: '12px 24px',
+              background: 'var(--bg-input)',
+              borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.82rem' }}>
+              <span>Total Questions: <strong>{questions.length}</strong></span>
+              <span>Proctoring Mode: <strong>{assessment.proctoringMode === 'automated' ? 'AI Telemetry (Auto)' : assessment.proctoringMode === 'manual' ? 'Google Meet Live' : assessment.proctoringMode === 'combined' ? 'AI + Google Meet' : 'Standard'}</strong></span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowAdminAnswerKeys(!showAdminAnswerKeys)}
+                style={{
+                  gap: '6px',
+                  borderColor: showAdminAnswerKeys ? 'var(--primary)' : 'var(--border-subtle)',
+                  color: showAdminAnswerKeys ? 'var(--primary)' : 'var(--text-muted)'
+                }}
+              >
+                {showAdminAnswerKeys ? <Eye size={13} /> : <EyeOff size={13} />}
+                {showAdminAnswerKeys ? 'Answer Keys Visible' : 'Answer Keys Hidden'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setAdminSimulationMode(true)}
+                style={{ gap: '6px' }}
+                title="Simulate student test taking experience"
+              >
+                <Play size={13} /> Run Learner Simulation
+              </button>
+            </div>
+          </div>
+
+          {/* Paper Content */}
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {assessment.instructions && (
+              <div
+                style={{
+                  background: 'rgba(99, 102, 241, 0.05)',
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  borderRadius: '10px',
+                  padding: '14px 18px',
+                  fontSize: '0.85rem',
+                }}
+              >
+                <strong>Candidate Examination Instructions:</strong>
+                <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)' }}>{assessment.instructions}</p>
+              </div>
+            )}
+
+            {questions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                No questions configured in this assessment paper.
+              </div>
+            ) : (
+              questions.map((q: any, idx: number) => {
+                const qNum = idx + 1;
+                const opts = q.options || [];
+
+                return (
+                  <div
+                    key={q.id || `q-${idx}`}
+                    style={{
+                      padding: '18px 20px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Question {qNum}</span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <span className="badge badge-secondary text-xs" style={{ textTransform: 'capitalize' }}>
+                          {q.type?.replace('_', ' ')}
+                        </span>
+                        <span className="badge badge-primary text-xs font-semibold">
+                          {q.points || 1} {Number(q.points) === 1 ? 'Point' : 'Points'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{ margin: '0 0 14px 0', fontSize: '0.92rem', fontWeight: 600 }}>{q.prompt}</p>
+
+                    {opts.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {opts.map((opt: any, optIdx: number) => {
+                          const isCorrect = Boolean(opt.isCorrect);
+                          const isHighlight = showAdminAnswerKeys && isCorrect;
+
+                          return (
+                            <div
+                              key={opt.id || `opt-${optIdx}`}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '9px 12px',
+                                borderRadius: '8px',
+                                background: isHighlight ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)',
+                                border: isHighlight ? '1.5px solid #10B981' : '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span
+                                  style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '5px',
+                                    background: isHighlight ? '#10B981' : 'var(--bg-input)',
+                                    color: isHighlight ? '#FFFFFF' : 'var(--text-muted)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {String.fromCharCode(65 + optIdx)}
+                                </span>
+                                <span style={{ fontSize: '0.86rem', color: isHighlight ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                  {opt.text}
+                                </span>
+                              </div>
+
+                              {isHighlight && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    color: '#10B981',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                  }}
+                                >
+                                  <CheckCircle2 size={12} /> Correct Key
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {showAdminAnswerKeys && (q.explanation || q.rubric) && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          padding: '10px 12px',
+                          background: 'rgba(99, 102, 241, 0.05)',
+                          borderLeft: '3px solid var(--primary)',
+                          borderRadius: '4px',
+                          fontSize: '0.82rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        <strong style={{ color: 'var(--primary)' }}>Grading Key / Note: </strong>
+                        {q.explanation || q.rubric}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
   // STAGE 1: PRE-EXAM PROCTORING SETUP (FEATURE A)
   // -------------------------------------------------------------
   if (stage === 'readiness') {
@@ -1193,6 +1541,7 @@ export const ExamPlayerPage: React.FC = () => {
       <VeniGuardSetup
         assessment={assessment}
         policy={policy}
+        sessionId={serverSessionId || currentSessionId || undefined}
         onReadyToStart={handleReadyToStart}
         onCancel={() => navigate('/assessments')}
       />
@@ -1215,6 +1564,7 @@ export const ExamPlayerPage: React.FC = () => {
           isWebcamActive={isWebcamActive}
           isOnline={isOnline}
           recordingSeconds={recordingSeconds}
+          meetUrl={(assessment as any)?.googleMeetUrl || assessment?.jitsiRoomId}
         />
 
         {/* Availability Status Banners */}
@@ -1726,6 +2076,10 @@ export const ExamPlayerPage: React.FC = () => {
         {isProctored && (
           <StudentProctorWidget
             assessmentId={assessment.id}
+            sessionId={serverSessionId || currentSessionId || undefined}
+            mediaStream={activeUserMediaStream || userMediaStreamRef.current}
+            candidatePhoto={candidateBaselinePhoto}
+            candidateEmbedding={candidateBaselineEmbedding}
             learnerId={user?.id || 'u-007'}
             learnerName={user?.displayName || 'Alex Thompson'}
             isExamActive={stage === 'in_exam'}
@@ -1742,6 +2096,141 @@ export const ExamPlayerPage: React.FC = () => {
   // -------------------------------------------------------------
   // STAGE 3: RESULTS & PROCTORING REPORT ACCESS (FEATURE G)
   // -------------------------------------------------------------
+  // If exam was proctored, withhold immediate grades/corrections until released by trainer
+  if (isProctored) {
+    return (
+      <div style={{ maxWidth: '720px', margin: '40px auto', padding: '0 16px' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '40px', borderRadius: 'var(--radius-xl)' }}>
+          {forcedSubmissionReason && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                padding: '14px 18px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                color: 'var(--danger)',
+                textAlign: 'left',
+              }}
+            >
+              <AlertTriangle size={24} style={{ flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem' }}>Automated Proctor Session Concluded</div>
+                <div style={{ fontSize: '0.82rem', opacity: 0.9, marginTop: '2px' }}>
+                  {forcedSubmissionReason} All completed responses and proctoring telemetry have been securely archived.
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'rgba(16, 185, 129, 0.12)',
+              color: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto',
+              border: '2px solid rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 8px 24px rgba(16, 185, 129, 0.2)',
+            }}
+          >
+            <CheckCircle2 size={46} />
+          </div>
+
+          <div className="badge badge-success" style={{ fontSize: '0.82rem', padding: '4px 14px', marginBottom: '12px' }}>
+            Examination Submitted Successfully
+          </div>
+
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '8px', fontWeight: 800, color: 'var(--text-main)' }}>
+            {assessment.title}
+          </h1>
+          <p className="text-secondary text-xs" style={{ marginBottom: '28px' }}>
+            Attempt completed on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+          </p>
+
+          {/* Pending Trainer Review & Release Notice */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px 22px',
+              marginBottom: '28px',
+              textAlign: 'left',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: '#38bdf8', fontWeight: 800, fontSize: '0.94rem' }}>
+              <Lock size={18} /> Results Pending Instructor Evaluation & Release
+            </div>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              In accordance with academic integrity guidelines, examination scores, grades, and answer keys are not published immediately upon completion.
+              Your assigned trainer/admin will review your proctoring audit telemetry, candidate identity verification, and 7-day proof video before releasing the final evaluation.
+            </p>
+          </div>
+
+          {/* Candidate & Proctoring Summary Box */}
+          <div
+            style={{
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px',
+              marginBottom: '32px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {candidateBaselinePhoto && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                <img
+                  src={candidateBaselinePhoto}
+                  alt="Candidate Identity"
+                  style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #10b981' }}
+                />
+                <span className="text-muted text-xs font-semibold">Verified Candidate</span>
+              </div>
+            )}
+            <div>
+              <div className="text-muted text-xs font-semibold">Questions Attempted</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+                {answeredCount} of {questions.length}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted text-xs font-semibold">Proctoring Telemetry</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#10b981', marginTop: '6px' }}>
+                Attached & Encrypted
+              </div>
+            </div>
+            <div>
+              <div className="text-muted text-xs font-semibold">Result Status</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f59e0b', marginTop: '6px' }}>
+                Under Evaluation
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={() => navigate('/assessments')} style={{ fontWeight: 700, padding: '10px 22px' }}>
+              Return to Assessments
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate('/student-dashboard')} style={{ fontWeight: 600, padding: '10px 20px' }}>
+              Student Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: '740px', margin: '30px auto', padding: '0 16px' }}>
       <div className="card" style={{ textAlign: 'center', padding: '36px' }}>

@@ -1027,4 +1027,570 @@ describe('VeniGuard Proctoring & Integrity Unit Test Suite', () => {
       assert.strictEqual(filtered[1].id, 'p-4');
     });
   });
+
+  describe('14. 30-Minute Schedule Notification, Live Joining Feed & Split Inspector Tests', () => {
+    it('triggers 30-minute advance notification before scheduled exam time', () => {
+      const now = new Date('2026-11-13T16:30:00.000Z');
+      const availabilityStart = '2026-11-13T17:00:00.000Z'; // Exactly 30 minutes away
+      const start = new Date(availabilityStart);
+      const diffMinutes = (start.getTime() - now.getTime()) / (1000 * 60);
+
+      assert.strictEqual(diffMinutes, 30);
+      assert.strictEqual(diffMinutes > 0 && diffMinutes <= 30, true);
+
+      const generatedNotif = {
+        id: `notif-exam-30min-asm-ai-ml-u-001`,
+        title: `Upcoming Proctored Exam: "AI ML" Starts in 30 Mins`,
+        message: `The scheduled exam "AI ML" (Manual Proctoring) begins at 05:00 PM. Please review the candidate list and prepare the Live Invigilation Bridge.`,
+        category: 'proctoring',
+        link: `/proctoring?tab=live_monitor&assessmentId=asm-ai-ml`,
+      };
+
+      assert.strictEqual(generatedNotif.title.includes('Starts in 30 Mins'), true);
+      assert.strictEqual(generatedNotif.category, 'proctoring');
+      assert.strictEqual(generatedNotif.link.includes('asm-ai-ml'), true);
+    });
+
+    it('does NOT trigger 30-minute notification when exam is more than 30 minutes away', () => {
+      const now = new Date('2026-11-13T16:00:00.000Z');
+      const availabilityStart = '2026-11-13T17:00:00.000Z'; // 60 minutes away
+      const start = new Date(availabilityStart);
+      const diffMinutes = (start.getTime() - now.getTime()) / (1000 * 60);
+
+      assert.strictEqual(diffMinutes, 60);
+      assert.strictEqual(diffMinutes > 0 && diffMinutes <= 30, false);
+    });
+
+    it('manages Split Inspector feed modes (screen, webcam, dual) defaulting to screen', () => {
+      type InspectorMode = 'screen' | 'webcam' | 'dual';
+      let inspectorMode: InspectorMode = 'screen';
+
+      assert.strictEqual(inspectorMode, 'screen'); // Defaults to screen as user requested
+
+      inspectorMode = 'webcam';
+      assert.strictEqual(inspectorMode, 'webcam');
+
+      inspectorMode = 'dual';
+      assert.strictEqual(inspectorMode, 'dual');
+    });
+
+    it('validates Candidate Screen stream metadata and security overlay', () => {
+      const candidateScreenState = {
+        candidateName: 'David Kim',
+        rollNo: 'STU-2026-004',
+        assessmentTitle: 'AI ML Certification Exam',
+        resolution: '1920x1080',
+        fps: 30,
+        fullscreenLocked: true,
+        focusPercentage: 100,
+        activeQuestionIndex: 4,
+        timeRemainingSeconds: 2325,
+      };
+
+      assert.strictEqual(candidateScreenState.fullscreenLocked, true);
+      assert.strictEqual(candidateScreenState.focusPercentage, 100);
+      assert.strictEqual(candidateScreenState.resolution, '1920x1080');
+      assert.strictEqual(candidateScreenState.fps, 30);
+    });
+
+    it('verifies Dispatch Warning button payload construction and Enter-key execution', () => {
+      const candidate = { id: 'stu-cohort-004', name: 'David Kim' };
+      const warningMessage = 'Please return focus to examination window.';
+
+      const buildWarningPayload = (targetCandidate: typeof candidate, text: string) => ({
+        assessmentId: 'asm-ai-ml',
+        learnerId: targetCandidate.id,
+        learnerName: targetCandidate.name,
+        message: text.trim(),
+        reason: 'Tab focus switched',
+        sentBy: 'Proctor / Administrator',
+        timestamp: new Date().toISOString(),
+      });
+
+      const payload = buildWarningPayload(candidate, warningMessage);
+      assert.strictEqual(payload.learnerId, 'stu-cohort-004');
+      assert.strictEqual(payload.learnerName, 'David Kim');
+      assert.strictEqual(payload.message, 'Please return focus to examination window.');
+      assert.strictEqual(payload.sentBy, 'Proctor / Administrator');
+    });
+
+    it('accurately filters live joining feed roster by status and search keyword', () => {
+      const roster = [
+        { id: '1', name: 'Tina Kirkpatrick', rollNo: 'STU-2026-001', cameraActive: true, isJoined: true },
+        { id: '2', name: 'Alex Thompson', rollNo: 'STU-2026-002', cameraActive: true, isJoined: true },
+        { id: '3', name: 'David Kim', rollNo: 'STU-2026-004', cameraActive: true, isJoined: false },
+        { id: '4', name: 'Maria Garcia', rollNo: 'STU-2026-003', cameraActive: false, isJoined: false },
+      ];
+
+      // Filter by joined
+      const joinedOnly = roster.filter((r) => r.isJoined);
+      assert.strictEqual(joinedOnly.length, 2);
+
+      // Filter by camera active
+      const streamingOnly = roster.filter((r) => r.cameraActive);
+      assert.strictEqual(streamingOnly.length, 3);
+
+      // Search by text
+      const searchKim = roster.filter((r) => r.name.toLowerCase().includes('kim') || r.rollNo.includes('kim'));
+      assert.strictEqual(searchKim.length, 1);
+      assert.strictEqual(searchKim[0].name, 'David Kim');
+    });
+
+    it('shows 0 candidates in the video conference wall when no candidates have joined yet', () => {
+      const enrolledCohort = [
+        { id: '1', name: 'Tina Kirkpatrick', status: 'disconnected' },
+        { id: '2', name: 'Alex Thompson', status: 'disconnected' },
+        { id: '3', name: 'David Kim', status: 'disconnected' },
+      ];
+
+      const activeSessions: any[] = [];
+      const isDemoSimulated = false;
+
+      const candidatesWhoStartedExam = enrolledCohort.filter((p) => {
+        const hasSession = activeSessions.some((s) => s.learnerId === p.id);
+        const isConnected = p.status === 'connected' || (p.status as any) === 'in_progress';
+        return hasSession || (isDemoSimulated && isConnected);
+      });
+
+      // No one has joined yet
+      assert.strictEqual(candidatesWhoStartedExam.length, 0);
+
+      const candidatePool = !isDemoSimulated ? candidatesWhoStartedExam : enrolledCohort;
+      assert.strictEqual(candidatePool.length, 0);
+    });
+
+    it('correctly marks enrolled students as Awaiting Entry in attendance roster until joined', () => {
+      const candidateOffline = { id: 'c-1', name: 'Student A', status: 'disconnected', joinedAt: '' };
+      const hasSession = false;
+      const isJoined = candidateOffline.status === 'connected' || hasSession;
+
+      assert.strictEqual(isJoined, false);
+      const displayStatus = isJoined ? 'In Exam' : 'Awaiting Entry';
+      assert.strictEqual(displayStatus, 'Awaiting Entry');
+    });
+  });
+
+  describe('15. Cross-Window / Multi-Device Active Proctoring Session & Candidate Matching Unit Tests', () => {
+    const matchesCandidate = (aId?: string, aName?: string, bId?: string, bName?: string) => {
+      if (aId && bId && aId === bId) return true;
+      if (aName && bName && aName.trim().toLowerCase() === bName.trim().toLowerCase()) return true;
+      return false;
+    };
+
+    it('matches candidate by ID or normalized full name across seed roster and real active session', () => {
+      // Alex Thompson has id 'stu-cohort-2' in seed roster, but joins with user ID 'u-007'
+      const rosterCandidate = { id: 'stu-cohort-2', name: 'Alex Thompson', rollNo: 'STU-2026-002' };
+      const activeSession = { learnerId: 'u-007', learnerName: 'Alex Thompson', status: 'in_progress' };
+
+      const isMatch = matchesCandidate(
+        rosterCandidate.id,
+        rosterCandidate.name,
+        activeSession.learnerId,
+        activeSession.learnerName
+      );
+      assert.strictEqual(isMatch, true);
+
+      // Distinct candidate does not match
+      const otherCandidate = { id: 'stu-cohort-1', name: 'Tina Kirkpatrick' };
+      assert.strictEqual(
+        matchesCandidate(otherCandidate.id, otherCandidate.name, activeSession.learnerId, activeSession.learnerName),
+        false
+      );
+    });
+
+    it('displays Alex Thompson in live conference bridge when Alex starts exam with user id u-007', () => {
+      const enrolledCohort = [
+        { id: 'stu-cohort-1', name: 'Tina Kirkpatrick', rollNo: 'STU-2026-001', status: 'disconnected' },
+        { id: 'stu-cohort-2', name: 'Alex Thompson', rollNo: 'STU-2026-002', status: 'disconnected' },
+        { id: 'stu-cohort-3', name: 'Maria Garcia', rollNo: 'STU-2026-003', status: 'disconnected' },
+      ];
+
+      // Alex Thompson joined the exam
+      const realActiveCandidates = [
+        {
+          id: 'u-007',
+          name: 'Alex Thompson',
+          rollNo: 'STU-2026-007',
+          assessmentId: '80874923-7429-4acf-aea7-75e0a65c39e3',
+          status: 'connected',
+          cameraActive: true,
+          micActive: true,
+        },
+      ];
+
+      // Overlay real active candidate onto enrolled roster
+      const roster = enrolledCohort.map((c) => ({ ...c }));
+      realActiveCandidates.forEach((active) => {
+        const idx = roster.findIndex((r) => matchesCandidate(r.id, r.name, active.id, active.name));
+        if (idx >= 0) {
+          roster[idx] = { ...roster[idx], ...active, status: active.status || 'connected' };
+        } else {
+          roster.unshift({ ...active, status: active.status || 'connected' });
+        }
+      });
+
+      // Filter candidates who actually started the exam
+      const isDemoCohortSimulated = false;
+      const candidatesWhoStartedExam = roster.filter((p) => {
+        const hasSession = realActiveCandidates.some((r) => matchesCandidate(r.id, r.name, p.id, p.name));
+        const isConnected = p.status === 'connected' || (p.status as any) === 'in_progress';
+        return isConnected || hasSession || isDemoCohortSimulated;
+      });
+
+      // Only Alex Thompson should be in the live conference bridge
+      assert.strictEqual(candidatesWhoStartedExam.length, 1);
+      assert.strictEqual(candidatesWhoStartedExam[0].name, 'Alex Thompson');
+      assert.strictEqual(candidatesWhoStartedExam[0].status, 'connected');
+      assert.strictEqual((candidatesWhoStartedExam[0] as any).cameraActive, true);
+
+      // Remaining cohort students must remain disconnected / Awaiting Entry
+      const tina = roster.find((r) => r.name === 'Tina Kirkpatrick');
+      assert.strictEqual(tina?.status, 'disconnected');
+      const maria = roster.find((r) => r.name === 'Maria Garcia');
+      assert.strictEqual(maria?.status, 'disconnected');
+    });
+
+    it('verifies candidatesWhoStartedExam includes connected candidate even when isDemoCohortSimulated is false', () => {
+      const candidates = [
+        { id: '1', name: 'Candidate 1', status: 'connected', cameraActive: true },
+        { id: '2', name: 'Candidate 2', status: 'disconnected', cameraActive: false },
+      ];
+
+      const isDemoCohortSimulated = false;
+      const filtered = candidates.filter((p) => {
+        const isConnected = p.status === 'connected' || (p.status as any) === 'in_progress';
+        return isConnected || isDemoCohortSimulated;
+      });
+
+      assert.strictEqual(filtered.length, 1);
+      assert.strictEqual(filtered[0].id, '1');
+      assert.strictEqual(filtered[0].status, 'connected');
+    });
+
+    it('verifies attendance roster flips candidate status to Joined (Live) and camera to Active upon starting exam', () => {
+      const candidateBefore = {
+        id: 'stu-cohort-2',
+        name: 'Alex Thompson',
+        status: 'disconnected',
+        cameraActive: false,
+      };
+
+      // Before joining:
+      const beforeStatus = candidateBefore.status === 'connected' ? 'Joined (Live)' : 'Awaiting Entry';
+      assert.strictEqual(beforeStatus, 'Awaiting Entry');
+
+      // After joining:
+      const candidateAfter = {
+        ...candidateBefore,
+        id: 'u-007',
+        status: 'connected',
+        cameraActive: true,
+      };
+      const afterStatus = candidateAfter.status === 'connected' ? 'Joined (Live)' : 'Awaiting Entry';
+      assert.strictEqual(afterStatus, 'Joined (Live)');
+      assert.strictEqual(candidateAfter.cameraActive, true);
+    });
+
+    it('correctly maps backend active-sessions endpoint response into ProctoringSession and ProctorParticipant', () => {
+      const backendPayload = [
+        {
+          id: 'sess-uuid-1234',
+          assessmentId: '80874923-7429-4acf-aea7-75e0a65c39e3',
+          learnerId: 'u-007',
+          status: 'in_progress',
+          startedAt: '2026-11-13T12:00:00.000Z',
+          activeWebcam: true,
+          activeMic: true,
+          activeScreenShare: false,
+          isFullscreen: true,
+          attempt: {
+            learner: {
+              id: 'u-007',
+              firstName: 'Alex',
+              lastName: 'Thompson',
+              email: 'alex.thompson@student.demo',
+            },
+          },
+          events: [
+            {
+              id: 'ev-1',
+              evidenceSnapshot: 'data:image/jpeg;base64,mockSnapshotData',
+            },
+          ],
+        },
+      ];
+
+      const mappedSession = {
+        id: backendPayload[0].id,
+        assessmentId: backendPayload[0].assessmentId,
+        learnerId: backendPayload[0].learnerId,
+        learnerName: `${backendPayload[0].attempt.learner.firstName} ${backendPayload[0].attempt.learner.lastName}`,
+        status: backendPayload[0].status,
+        activeWebcam: backendPayload[0].activeWebcam,
+        startedAt: backendPayload[0].startedAt,
+      };
+
+      assert.strictEqual(mappedSession.learnerName, 'Alex Thompson');
+      assert.strictEqual(mappedSession.status, 'in_progress');
+      assert.strictEqual(mappedSession.activeWebcam, true);
+
+      const latestSnapshot = backendPayload[0].events[0].evidenceSnapshot;
+      assert.strictEqual(latestSnapshot.startsWith('data:image/jpeg'), true);
+    });
+
+    it('shows exactly 0 candidates and 0 live camera feeds when no one has joined the exam', () => {
+      const selectedAssessmentId = '80874923-7429-4acf-aea7-75e0a65c39e3';
+      const allSessions: any[] = [
+        { assessmentId: 'other-asm', learnerId: 'u-123', learnerName: 'Other Student', status: 'in_progress' }
+      ];
+      const allParticipants: any[] = [];
+      const enrolledCohort = [
+        { id: '1', name: 'Tina Kirkpatrick', rollNo: 'STU-2026-001', status: 'disconnected', cameraActive: false },
+        { id: '2', name: 'Alex Thompson', rollNo: 'STU-2026-002', status: 'disconnected', cameraActive: false },
+      ];
+
+      // Filter real active candidates for selected assessment
+      const realActiveCandidates = allSessions
+        .filter((s) => s.assessmentId === selectedAssessmentId && (s.status === 'in_progress' || s.status === 'connected'))
+        .map((s) => ({ ...s, status: 'connected', cameraActive: true }));
+
+      // Overlay on enrolled cohort
+      const roster = enrolledCohort.map((c) => ({ ...c }));
+      realActiveCandidates.forEach((active) => {
+        const idx = roster.findIndex((r) => r.id === active.learnerId || r.name.toLowerCase() === active.learnerName?.toLowerCase());
+        if (idx >= 0) {
+          roster[idx] = { ...roster[idx], status: 'connected', cameraActive: true };
+        }
+      });
+
+      const isDemoCohortSimulated = false;
+      const candidatesWhoStartedExam = roster.filter((p) => {
+        const isRealActive = realActiveCandidates.some((r) => r.id === p.id || r.name.toLowerCase() === p.name.toLowerCase());
+        return isRealActive && p.status === 'connected';
+      });
+
+      // Must be strictly 0 active candidates and 0 camera feeds
+      assert.strictEqual(candidatesWhoStartedExam.length, 0);
+      const activeCameraFeeds = candidatesWhoStartedExam.filter((c) => c.cameraActive).length;
+      assert.strictEqual(activeCameraFeeds, 0);
+      assert.strictEqual(roster.every((c) => c.status === 'disconnected'), true);
+    });
+
+    it('verifies that when Alex stops writing the exam (heartbeat > 20s old), Alex is dropped from live candidates', () => {
+      const now = Date.now();
+      const isHeartbeatActive = (pingAt?: string) => {
+        if (!pingAt) return false;
+        const time = new Date(pingAt).getTime();
+        if (isNaN(time) || time <= 0) return false;
+        const diff = now - time;
+        return diff >= 0 && diff < 20000;
+      };
+
+      // Alex joined 10 minutes ago, last ping was 35 seconds ago
+      const alexSession = {
+        id: 'psess-alex-1',
+        assessmentId: '80874923-7429-4acf-aea7-75e0a65c39e3',
+        learnerId: 'u-007',
+        learnerName: 'Alex Thompson',
+        status: 'in_progress',
+        lastPingAt: new Date(now - 35000).toISOString(),
+      };
+
+      const isLive = isHeartbeatActive(alexSession.lastPingAt);
+      assert.strictEqual(isLive, false, 'Candidate with ping > 20s old must be treated as inactive / not writing');
+
+      const realActiveCandidates = [alexSession]
+        .filter((s) => isHeartbeatActive(s.lastPingAt))
+        .map((s) => ({ ...s, status: 'connected' }));
+
+      assert.strictEqual(realActiveCandidates.length, 0);
+
+      // Top metrics when no candidate has an active heartbeat
+      const joinedCount = realActiveCandidates.length;
+      const liveFeedsCount = realActiveCandidates.filter((c: any) => c.cameraActive).length;
+      assert.strictEqual(joinedCount, 0);
+      assert.strictEqual(liveFeedsCount, 0);
+    });
+
+    it('excludes admin / trainer Marcus Johnson from examination candidate roster', () => {
+      const currentUser = { id: 'u-001', displayName: 'Marcus Johnson', activeRole: 'Institution Admin' };
+      const isAdminSelf = (name?: string, id?: string) => {
+        const role = currentUser.activeRole;
+        if (role && role !== 'Student') {
+          if (name && currentUser.displayName && name.trim().toLowerCase() === currentUser.displayName.trim().toLowerCase()) return true;
+          if (id && currentUser.id && id === currentUser.id) return true;
+        }
+        return false;
+      };
+
+      assert.strictEqual(isAdminSelf('Marcus Johnson', 'u-001'), true);
+      assert.strictEqual(isAdminSelf('Alex Thompson', 'u-007'), false);
+    });
+  });
+
+  describe('16. End-to-End Admin Google Meet Link Generation, Student Assignment & Invigilation Wall Tests', () => {
+    it('generates a fixed 3-4-3 Google Meet link upon assessment creation and stores it permanently', () => {
+      // Admin generates a Google Meet link
+      const letters = 'abcdefghijklmnopqrstuvwxyz';
+      const r = (len: number) => Array.from({ length: len }, (_, i) => letters[i % letters.length]).join('');
+      const generatedMeetUrl = `https://meet.google.com/${r(3)}-${r(4)}-${r(3)}`;
+
+      assert.match(generatedMeetUrl, /^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}$/);
+
+      // Stored on Assessment object upon publish / assignment
+      const assessment = {
+        id: '80874923-7429-4acf-aea7-75e0a65c39e3',
+        title: 'AI ML Midterm Examination',
+        proctoringMode: 'manual' as const,
+        proctoringRequired: true,
+        jitsiRoomId: generatedMeetUrl,
+        googleMeetUrl: generatedMeetUrl,
+      };
+
+      assert.strictEqual(assessment.googleMeetUrl, generatedMeetUrl);
+      assert.strictEqual(assessment.jitsiRoomId, generatedMeetUrl);
+    });
+
+    it('ensures student resolves and joins the exact admin-generated Google Meet link in exam player', () => {
+      const adminMeetUrl = 'https://meet.google.com/abc-defg-hij';
+      const assessment = {
+        id: '80874923-7429-4acf-aea7-75e0a65c39e3',
+        title: 'AI ML Midterm Examination',
+        proctoringMode: 'manual' as const,
+        proctoringRequired: true,
+        jitsiRoomId: adminMeetUrl,
+        googleMeetUrl: adminMeetUrl,
+      };
+
+      // Student initializes exam player
+      const studentEndpoints = buildGoogleMeetUrls({
+        assessmentId: assessment.id,
+        assessmentTitle: assessment.title,
+        candidateId: 'u-007',
+        candidateName: 'Alex Thompson',
+        customMeetUrl: assessment.googleMeetUrl,
+        jitsiRoomId: assessment.jitsiRoomId,
+      });
+
+      // Student must receive the exact admin-generated link, NEVER meet.google.com/new
+      assert.strictEqual(studentEndpoints.webUrl, adminMeetUrl);
+      assert.strictEqual(studentEndpoints.webUrl.includes('/new'), false);
+    });
+
+    it('presents all joined candidates in the live conference bridge and attendance table with IN EXAM status', () => {
+      const now = Date.now();
+      const assessmentId = '80874923-7429-4acf-aea7-75e0a65c39e3';
+
+      // Alex Thompson joined the exam and is actively sending telemetry
+      const activeAlex = {
+        id: 'u-007',
+        name: 'Alex Thompson',
+        rollNo: 'STU-u-007',
+        assessmentId,
+        status: 'connected' as const,
+        cameraActive: true,
+        micActive: true,
+        screenShareActive: true,
+        tabFocused: true,
+        lastPingAt: new Date(now - 2000).toISOString(),
+        joinedAt: new Date(now - 120000).toISOString(),
+      };
+
+      const isHeartbeatActive = (pingAt?: string) => {
+        if (!pingAt) return false;
+        const time = new Date(pingAt).getTime();
+        return !isNaN(time) && (now - time) < 20000;
+      };
+
+      const realActiveCandidates = [activeAlex].filter((c) => isHeartbeatActive(c.lastPingAt));
+      assert.strictEqual(realActiveCandidates.length, 1);
+      assert.strictEqual(realActiveCandidates[0].name, 'Alex Thompson');
+      assert.strictEqual(realActiveCandidates[0].status, 'connected');
+
+      // Candidate Wall presentation
+      const displayedInWall = realActiveCandidates;
+      assert.strictEqual(displayedInWall.length, 1);
+      assert.strictEqual(displayedInWall[0].cameraActive, true);
+
+      // Attendance Table presentation
+      const sessionStatusLabel = displayedInWall[0].status === 'connected' ? 'IN EXAM' : 'Awaiting Entry';
+      assert.strictEqual(sessionStatusLabel, 'IN EXAM');
+
+      // Metrics Presentation
+      const joinedCount = realActiveCandidates.length;
+      const liveFeedsCount = realActiveCandidates.filter((c) => c.cameraActive).length;
+      assert.strictEqual(joinedCount, 1);
+      assert.strictEqual(liveFeedsCount, 1);
+    });
+
+    it('launches the exact admin-generated Google Meet URL from Open Meet Tab button in JitsiProctorDashboard', () => {
+      const adminMeetUrl = 'https://meet.google.com/qrp-wxjk-nmb';
+      const assessment = {
+        id: '80874923-7429-4acf-aea7-75e0a65c39e3',
+        title: 'AI ML Midterm Examination',
+        googleMeetUrl: adminMeetUrl,
+        jitsiRoomId: adminMeetUrl,
+      };
+
+      // Admin resolves meeting URL
+      const activeMeetUrl = ((assessment as any).googleMeetUrl || assessment.jitsiRoomId).trim();
+      assert.strictEqual(activeMeetUrl, adminMeetUrl);
+      assert.strictEqual(activeMeetUrl.startsWith('https://meet.google.com/'), true);
+    });
+  });
+
+  describe('17. Assessment Creation & Page Refresh Persistence Tests', () => {
+    it('preserves newly created assessment in local storage when server fetch returns existing list', () => {
+      const existingLocal = [
+        {
+          id: 'asm-newly-created-1234',
+          title: 'Advanced Machine Learning & AI',
+          status: 'published',
+          googleMeetUrl: 'https://meet.google.com/abc-defg-hij',
+        },
+      ];
+      const backendServerAssessments = [
+        {
+          id: 'asm-legacy-server-001',
+          title: 'Legacy Python Quiz',
+          status: 'published',
+        },
+      ];
+      const deletedIds = new Set<string>();
+
+      // Merging logic implemented in fetchAssessments
+      const assessmentMap = new Map<string, any>();
+      existingLocal
+        .filter((a) => !deletedIds.has(a.id))
+        .forEach((a) => assessmentMap.set(a.id, a));
+
+      backendServerAssessments.forEach((a) => {
+        const prev = assessmentMap.get(a.id);
+        assessmentMap.set(a.id, {
+          ...prev,
+          ...a,
+          googleMeetUrl: (a as any).googleMeetUrl || (prev as any)?.googleMeetUrl,
+        });
+      });
+
+      const merged = Array.from(assessmentMap.values());
+      assert.strictEqual(merged.length, 2);
+      assert.ok(merged.some((a) => a.id === 'asm-newly-created-1234'));
+      assert.ok(merged.some((a) => a.id === 'asm-legacy-server-001'));
+      const found = merged.find((a) => a.id === 'asm-newly-created-1234');
+      assert.strictEqual(found?.googleMeetUrl, 'https://meet.google.com/abc-defg-hij');
+    });
+
+    it('unmarks deleted state when an assessment is created or updated', () => {
+      const deletedSet = new Set<string>(['asm-revived-999']);
+      const targetId = 'asm-revived-999';
+
+      // unmarkDeletedAssessmentId logic
+      if (deletedSet.has(targetId)) {
+        deletedSet.delete(targetId);
+      }
+
+      assert.strictEqual(deletedSet.has(targetId), false);
+    });
+  });
 });

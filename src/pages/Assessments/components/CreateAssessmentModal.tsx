@@ -65,11 +65,12 @@ import {
 } from '../../../lib/bulkImportService';
 import { useAuthStore } from '../../../lib/store';
 import { useSignatureStore } from '../../../lib/signatureStore';
+import { apiClient } from '../../../lib/apiClient';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onAssessmentSaved: (assessment: Assessment, status: 'published' | 'draft') => void;
+  onAssessmentSaved: (assessment: Assessment, status: 'published' | 'draft') => Promise<{ success: boolean; error?: string }> | void;
   initialDraft?: Assessment | null;
   defaultCourseId?: string;
 }
@@ -150,15 +151,16 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const [availabilityEnd, setAvailabilityEnd] = useState<string>(
     initialDraft?.availabilityEnd ? initialDraft.availabilityEnd.slice(0, 16) : ''
   );
-  const [completionPercentageRequired, setCompletionPercentageRequired] = useState<number>(
+  const [completionPercentageRequired, setCompletionPercentageRequired] = useState<number | string>(
     initialDraft?.completionPercentageRequired ?? (initialDraft?.certificateConfig?.requiredCompletionPercentage ?? 100)
   );
   const [certificateEnabled, setCertificateEnabled] = useState<boolean>(
     initialDraft?.certificateConfig?.enabled ?? true
   );
-  const [completionPoints, setCompletionPoints] = useState<number>(
+  const [completionPoints, setCompletionPoints] = useState<number | string>(
     initialDraft?.completionPoints ?? (initialDraft?.certificateConfig?.completionPoints ?? 50)
   );
+  const [publishedSuccessAssessment, setPublishedSuccessAssessment] = useState<Assessment | null>(null);
   const [certTemplateId, setCertTemplateId] = useState<'standard' | 'executive' | 'distinction' | 'technical'>(
     initialDraft?.certificateConfig?.templateId || 'distinction'
   );
@@ -182,8 +184,27 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     initialDraft?.proctoringRequired ?? (initialDraft?.proctoringMode ? initialDraft.proctoringMode !== 'none' : true)
   );
   const [jitsiRoomId, setJitsiRoomId] = useState<string>(
-    initialDraft?.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`
+    (initialDraft as any)?.googleMeetUrl || initialDraft?.jitsiRoomId || ''
   );
+  const [copyMeetNotice, setCopyMeetNotice] = useState<boolean>(false);
+
+  const handleGenerateMeetLink = () => {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    const r = (len: number) => Array.from({ length: len }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    const code = `${r(3)}-${r(4)}-${r(3)}`;
+    const url = `https://meet.google.com/${code}`;
+    setJitsiRoomId(url);
+    return url;
+  };
+
+  useEffect(() => {
+    if (
+      (proctoringMode === 'manual' || proctoringMode === 'combined') &&
+      (!jitsiRoomId || jitsiRoomId.startsWith('vl-exam-'))
+    ) {
+      handleGenerateMeetLink();
+    }
+  }, [proctoringMode]);
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings>(
     initialDraft?.proctoringSettings || {
       camera: true,
@@ -194,6 +215,28 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       tabSwitchDetection: true,
     }
   );
+  // Configurable Auto-Proctoring Warning Interval (default: 120s / 2 minutes)
+  const [warningIntervalSeconds, setWarningIntervalSeconds] = useState<number>(() => {
+    if (initialDraft?.warningIntervalSeconds !== undefined) {
+      return Number(initialDraft.warningIntervalSeconds);
+    }
+    if (initialDraft?.proctoringSettings?.warningIntervalSeconds !== undefined) {
+      return Number(initialDraft.proctoringSettings.warningIntervalSeconds);
+    }
+    return 120;
+  });
+  const [isCustomInterval, setIsCustomInterval] = useState<boolean>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return ![30, 60, 120, 180, 300, 600].includes(Number(current));
+  });
+  const [customIntervalValue, setCustomIntervalValue] = useState<number>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return Number(current) % 60 === 0 ? Number(current) / 60 : Number(current);
+  });
+  const [customIntervalUnit, setCustomIntervalUnit] = useState<'minutes' | 'seconds'>(() => {
+    const current = initialDraft?.warningIntervalSeconds ?? initialDraft?.proctoringSettings?.warningIntervalSeconds ?? 120;
+    return Number(current) % 60 === 0 ? 'minutes' : 'seconds';
+  });
   const [proctoringPolicyLevel, setProctoringPolicyLevel] = useState<ProctoringPolicyLevel>(
     initialDraft?.proctoringPolicyLevel || 'monitored'
   );
@@ -232,6 +275,9 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   } | null>(null);
   const [isPinging, setIsPinging] = useState<boolean>(false);
   const [transcriptSearch, setTranscriptSearch] = useState<string>('');
+  const [videoS3Url, setVideoS3Url] = useState<string | null>(null);
+  const [isPersisting, setIsPersisting] = useState<boolean>(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   // AI Configuration State
   const [aiDifficulty, setAiDifficulty] = useState<AssessmentDifficultySetting>('mixed');
@@ -308,7 +354,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setRawMaxAttempts(String(att));
       setProctoringRequired(initialDraft.proctoringRequired ?? true);
       setProctoringMode(initialDraft.proctoringMode || (initialDraft.proctoringRequired === false ? 'none' : 'combined'));
-      setJitsiRoomId(initialDraft.jitsiRoomId || `vl-exam-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`);
+      setJitsiRoomId((initialDraft as any).googleMeetUrl || initialDraft.jitsiRoomId || '');
       if (initialDraft.proctoringSettings) setProctoringSettings(initialDraft.proctoringSettings);
       setProctoringPolicyLevel(initialDraft.proctoringPolicyLevel || 'monitored');
       setAiGradingEnabled(initialDraft.aiGradingEnabled ?? true);
@@ -523,11 +569,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
     const newQuestionsList = [...questions, ...selectedQuestions];
     setQuestions(newQuestionsList);
 
-    // Auto-update total marks
+    // Auto-update total marks and preserve configured pass marks
     const newTotalMarks = newQuestionsList.reduce((sum, q) => sum + (q.points || 0), 0);
     if (newTotalMarks > 0) {
       setTotalMarks(newTotalMarks);
-      setPassingMarks(Math.round(newTotalMarks * 0.7));
+      setRawTotalMarks(String(newTotalMarks));
+      const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+      const validPass = (curPass >= 1 && curPass <= newTotalMarks)
+        ? curPass
+        : Math.min(newTotalMarks, Math.max(1, Math.round(newTotalMarks * 0.7)));
+      setPassingMarks(validPass);
+      setRawPassMarks(String(validPass));
     }
 
     setStep('review_edit');
@@ -647,6 +699,20 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         return;
       }
 
+      // Persist document binary directly to AWS S3 storage
+      try {
+        setUploadStageText('Persisting document to AWS S3 bucket...');
+        const formData = new FormData();
+        formData.append('file', file);
+        const uploadRes = await apiClient.upload<{ url: string; s3Key: string }>('/assessments/upload-media', formData);
+        if (uploadRes?.data?.url) {
+          result.docInfo.url = uploadRes.data.url;
+          (result.docInfo as any).s3Key = uploadRes.data.s3Key;
+        }
+      } catch (uploadErr) {
+        console.warn('Document AWS S3 upload warning (continuing with local text):', uploadErr);
+      }
+
       setUploadedDoc(result.docInfo);
       setIsUploading(false);
       setUploadProgress(100);
@@ -712,7 +778,13 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
       if (totalPoints > 0) {
         setTotalMarks(totalPoints);
-        setPassingMarks(Math.round(totalPoints * 0.7));
+        setRawTotalMarks(String(totalPoints));
+        const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+        const validPass = (curPass >= 1 && curPass <= totalPoints)
+          ? curPass
+          : Math.min(totalPoints, Math.max(1, Math.round(totalPoints * 0.7)));
+        setPassingMarks(validPass);
+        setRawPassMarks(String(validPass));
       }
 
       setIsGenerating(false);
@@ -870,6 +942,19 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       setVideoTranscript(res.transcript);
       setVideoSegments(res.segments || []);
 
+      // Persist video to secure AWS S3 storage
+      try {
+        setVideoStageText('Uploading video to secure AWS S3 bucket...');
+        const formData = new FormData();
+        formData.append('file', videoFile);
+        const uploadRes = await apiClient.upload<{ url: string; s3Key: string }>('/assessments/upload-media', formData);
+        if (uploadRes?.data?.url) {
+          setVideoS3Url(uploadRes.data.url);
+        }
+      } catch (s3Err) {
+        console.warn('Video AWS S3 upload warning:', s3Err);
+      }
+
       // Set verified questions matching exact requested count
       const merged = res.questions;
       setQuestions(merged);
@@ -877,7 +962,13 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       const totalPoints = merged.reduce((sum, q) => sum + (q.points || 0), 0);
       if (totalPoints > 0) {
         setTotalMarks(totalPoints);
-        setPassingMarks(Math.round(totalPoints * 0.7));
+        setRawTotalMarks(String(totalPoints));
+        const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+        const validPass = (curPass >= 1 && curPass <= totalPoints)
+          ? curPass
+          : Math.min(totalPoints, Math.max(1, Math.round(totalPoints * 0.7)));
+        setPassingMarks(validPass);
+        setRawPassMarks(String(validPass));
       }
 
       setIsVideoProcessing(false);
@@ -1022,14 +1113,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
   const handleSyncMarks = () => {
     setTotalMarks(sumOfQuestionMarks);
     setRawTotalMarks(String(sumOfQuestionMarks));
-    const newPass = Math.round(sumOfQuestionMarks * 0.7);
-    setPassingMarks(newPass);
-    setRawPassMarks(String(newPass));
+    const curPass = parseInt(rawPassMarks, 10) || passingMarks;
+    const validPass = (curPass >= 1 && curPass <= sumOfQuestionMarks)
+      ? curPass
+      : Math.min(sumOfQuestionMarks, Math.max(1, Math.round(sumOfQuestionMarks * 0.7)));
+    setPassingMarks(validPass);
+    setRawPassMarks(String(validPass));
     setNumericErrors((prev) => ({ ...prev, totalMarks: undefined, passMarks: undefined }));
   };
 
   // Final Publish or Save Draft Validation
-  const handleFinalizeAssessment = (publish: boolean) => {
+  const handleFinalizeAssessment = async (publish: boolean) => {
     if (!title.trim()) {
       alert('Assessment title is required.');
       return;
@@ -1085,12 +1179,15 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       }
     }
 
-    if (completionPercentageRequired < 1 || completionPercentageRequired > 100) {
-      alert('Required completion percentage must be between 1% and 100%.');
+    const effectiveCompletionRate = completionPercentageRequired === '' ? 0 : Number(completionPercentageRequired);
+    const effectivePoints = completionPoints === '' ? 0 : Math.max(0, Number(completionPoints));
+
+    if (effectiveCompletionRate < 0 || effectiveCompletionRate > 100) {
+      alert('Required completion percentage must be between 0% and 100%.');
       return;
     }
 
-    if (isNaN(completionPoints) || completionPoints < 0) {
+    if (isNaN(effectivePoints) || effectivePoints < 0) {
       alert('Reward points must be a non-negative whole number (e.g. 0 or 50).');
       return;
     }
@@ -1142,6 +1239,21 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       typeBreakdown[q.type] = (typeBreakdown[q.type] || 0) + 1;
     });
 
+    const resolvedMeetUrl = (proctoringMode === 'manual' || proctoringMode === 'combined')
+      ? (jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') ? jitsiRoomId : handleGenerateMeetLink())
+      : undefined;
+
+    const effectiveWarningInterval = isCustomInterval
+      ? Math.max(10, Math.min(3600, customIntervalUnit === 'minutes' ? (customIntervalValue || 2) * 60 : (customIntervalValue || 120)))
+      : (warningIntervalSeconds || 120);
+
+    const mergedProctoringSettings: ProctoringSettings = {
+      ...proctoringSettings,
+      warningIntervalSeconds: effectiveWarningInterval,
+      maxProctoringWarnings: 3,
+      thirdWarningAction: 'auto_submit',
+    };
+
     const newAssessment: Assessment = {
       id: assessmentId,
       title: title.trim(),
@@ -1156,8 +1268,12 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       maxAttempts: attVal,
       proctoringRequired: proctoringRequired || proctoringMode !== 'none',
       proctoringMode,
-      jitsiRoomId: proctoringMode === 'manual' || proctoringMode === 'combined' ? jitsiRoomId : undefined,
-      proctoringSettings,
+      jitsiRoomId: resolvedMeetUrl,
+      googleMeetUrl: resolvedMeetUrl,
+      warningIntervalSeconds: effectiveWarningInterval,
+      maxProctoringWarnings: 3,
+      thirdWarningAction: 'auto_submit',
+      proctoringSettings: mergedProctoringSettings,
       proctoringPolicyLevel: proctoringRequired ? proctoringPolicyLevel : 'basic',
       aiGradingEnabled,
       questionIds: convertedQuestions.map((q) => q.id),
@@ -1169,40 +1285,70 @@ export const CreateAssessmentModal: React.FC<Props> = ({
             name: uploadedDoc.name,
             size: uploadedDoc.size,
             type: uploadedDoc.type,
-            extractedWordCount: uploadedDoc.wordCount || 0
+            extractedWordCount: uploadedDoc.wordCount || 0,
+            url: uploadedDoc.url,
+            s3Key: (uploadedDoc as any).s3Key
           }
         : videoFile
         ? {
             name: videoFile.name,
             size: videoFile.size,
             type: 'video/mp4',
-            extractedWordCount: videoTranscript ? videoTranscript.split(/\s+/).length : 0
+            extractedWordCount: videoTranscript ? videoTranscript.split(/\s+/).length : 0,
+            url: videoS3Url || undefined
           }
         : undefined,
+      mediaUrl: videoS3Url || uploadedDoc?.url,
+      videoUrl: videoS3Url || undefined,
       difficultyDistribution: difficultyBreakdown,
       questionTypeDistribution: typeBreakdown,
       availabilityStart: availabilityStart ? new Date(availabilityStart).toISOString() : undefined,
       availabilityEnd: availabilityEnd ? new Date(availabilityEnd).toISOString() : undefined,
-      completionPercentageRequired,
-      completionPoints: Math.max(0, completionPoints),
+      completionPercentageRequired: effectiveCompletionRate,
+      completionPoints: effectivePoints,
       certificateConfig: {
         enabled: certificateEnabled,
         title: `${title.trim()} Certificate of Achievement`,
         templateId: certTemplateId,
         minimumScore: passVal,
-        requiredCompletionPercentage: completionPercentageRequired,
-        completionPoints: Math.max(0, completionPoints),
+        requiredCompletionPercentage: effectiveCompletionRate,
+        completionPoints: effectivePoints,
         authorizedSignerName: certSignerName.trim(),
         authorizedSignerTitle: certSignerTitle.trim(),
         authorizedSignatureImage: certSignerImage || undefined,
+        sourceDocument: uploadedDoc ? {
+          name: uploadedDoc.name,
+          size: uploadedDoc.size,
+          type: uploadedDoc.type,
+          url: uploadedDoc.url,
+          s3Key: (uploadedDoc as any).s3Key
+        } : undefined,
+        videoUrl: videoS3Url || undefined,
+        mediaUrl: videoS3Url || uploadedDoc?.url,
       },
       status: publish ? 'published' : 'draft',
       createdAt: initialDraft?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    onAssessmentSaved(newAssessment, publish ? 'published' : 'draft');
-    onClose();
+    setIsPersisting(true);
+    setPersistError(null);
+    try {
+      const res = await onAssessmentSaved(newAssessment, publish ? 'published' : 'draft');
+      setIsPersisting(false);
+      if (res && res.success === false) {
+        setPersistError(res.error || 'Failed to save assessment to server database.');
+        return;
+      }
+      if (publish) {
+        setPublishedSuccessAssessment(newAssessment);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setIsPersisting(false);
+      setPersistError(err?.message || 'Server error while persisting assessment to database.');
+    }
   };
 
   // Filter items in Bulk Import preview
@@ -1923,6 +2069,90 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
                 </div>
 
+                {/* Assessment Schedule & Availability Window (Optional) */}
+                <div style={{ marginTop: '16px', marginBottom: '16px', paddingTop: '16px', borderTop: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600 }}>
+                      <Calendar size={14} color="var(--primary)" />
+                      <span>Assessment Schedule Window</span>
+                      <span className="badge badge-secondary text-xs" style={{ fontWeight: 500, fontSize: '0.7rem', padding: '1px 6px' }}>
+                        Optional
+                      </span>
+                    </label>
+                    {(availabilityStart || availabilityEnd) && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs text-muted"
+                        onClick={() => {
+                          setAvailabilityStart('');
+                          setAvailabilityEnd('');
+                        }}
+                        style={{ fontSize: '0.72rem', padding: '2px 8px', height: 'auto' }}
+                      >
+                        Clear Dates
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid-2" style={{ gap: '16px' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Clock size={12} color="var(--primary)" />
+                        <span>Start Date & Time</span>
+                        <span className="text-muted" style={{ fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={availabilityStart}
+                        onChange={(e) => setAvailabilityStart(e.target.value)}
+                        style={{
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px', fontSize: '0.72rem' }}>
+                        Students cannot start before this time. Leave empty to allow starting anytime.
+                      </span>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label text-xs" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Clock size={12} color="var(--primary)" />
+                        <span>End Date & Time</span>
+                        <span className="text-muted" style={{ fontWeight: 400 }}>(Optional)</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        className="form-input"
+                        value={availabilityEnd}
+                        onChange={(e) => setAvailabilityEnd(e.target.value)}
+                        style={{
+                          fontSize: '0.85rem',
+                          height: '42px',
+                          colorScheme: 'dark',
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          width: '100%',
+                          padding: '0 12px'
+                        }}
+                      />
+                      <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px', fontSize: '0.72rem' }}>
+                        Submissions lock after this deadline. Leave empty for no expiration.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Learner Instructions</label>
                   <textarea
@@ -2115,6 +2345,99 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         <span>Screen sharing</span>
                       </label>
                     </div>
+
+                    {/* Auto-Proctoring Warning Interval & Three-Strike Configuration */}
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        paddingTop: '10px',
+                        borderTop: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <AlertTriangle size={14} color="#F59E0B" /> Warning Interval (Time Between Warnings)
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                            Max Warnings: 3
+                          </span>
+                          <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                            Action After 3rd Strike: Auto-Submit
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-muted text-xs" style={{ margin: '0 0 8px 0', lineHeight: 1.35 }}>
+                        Minimum cooldown enforced between consecutive proctoring warnings. Strikes increment only after this interval has elapsed.
+                      </p>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <select
+                          className="input input-sm"
+                          value={isCustomInterval ? 'custom' : String(warningIntervalSeconds)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'custom') {
+                              setIsCustomInterval(true);
+                            } else {
+                              setIsCustomInterval(false);
+                              setWarningIntervalSeconds(Number(val));
+                            }
+                          }}
+                          style={{
+                            maxWidth: '220px',
+                            fontWeight: 600,
+                            fontSize: '0.82rem',
+                            background: 'var(--bg-card)',
+                            borderColor: 'rgba(245, 158, 11, 0.4)',
+                          }}
+                        >
+                          <option value="30">30 Seconds</option>
+                          <option value="60">1 Minute</option>
+                          <option value="120">2 Minutes (Default)</option>
+                          <option value="180">3 Minutes</option>
+                          <option value="300">5 Minutes</option>
+                          <option value="600">10 Minutes</option>
+                          <option value="custom">Custom Interval</option>
+                        </select>
+
+                        {isCustomInterval && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <input
+                              type="number"
+                              min={customIntervalUnit === 'minutes' ? 1 : 10}
+                              max={customIntervalUnit === 'minutes' ? 60 : 3600}
+                              className="input input-sm"
+                              value={customIntervalValue}
+                              onChange={(e) => {
+                                const num = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                setCustomIntervalValue(num);
+                                const totalSec = customIntervalUnit === 'minutes' ? num * 60 : num;
+                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                              }}
+                              style={{ width: '85px', fontSize: '0.82rem' }}
+                            />
+                            <select
+                              className="input input-sm"
+                              value={customIntervalUnit}
+                              onChange={(e) => {
+                                const unit = e.target.value as 'minutes' | 'seconds';
+                                setCustomIntervalUnit(unit);
+                                const totalSec = unit === 'minutes' ? customIntervalValue * 60 : customIntervalValue;
+                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                              }}
+                              style={{ fontSize: '0.82rem' }}
+                            >
+                              <option value="minutes">Minutes</option>
+                              <option value="seconds">Seconds</option>
+                            </select>
+                            <span className="text-muted text-xs">
+                              (Min 10s, Max 60m)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2125,37 +2448,91 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       background: 'rgba(16, 185, 129, 0.06)',
                       border: '1px solid rgba(16, 185, 129, 0.3)',
                       borderRadius: 'var(--radius-sm)',
-                      padding: '12px 14px',
+                      padding: '14px 16px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '8px',
+                      gap: '10px',
                       marginBottom: '12px'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <GoogleMeetIcon size={15} /> Google Meet Invigilation Link or Code
+                      <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <GoogleMeetIcon size={16} /> Fixed Google Meet Invigilation Room
                       </div>
-                      <a
-                        href="https://meet.google.com/new"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-secondary btn-sm"
-                        style={{ fontSize: '0.72rem', padding: '3px 8px', gap: '4px', textDecoration: 'none' }}
-                      >
-                        <ExternalLink size={12} /> Create Instant Meet in Google
-                      </a>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateMeetLink()}
+                          className="btn btn-primary btn-xs"
+                          style={{
+                            fontSize: '0.74rem',
+                            padding: '4px 10px',
+                            gap: '4px',
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            color: '#fff',
+                            fontWeight: 700,
+                            border: 'none',
+                          }}
+                          title="Generate a fixed Google Meet room link for this assessment"
+                        >
+                          <span>⚡</span> Generate Meet Link
+                        </button>
+                        <a
+                          href="https://meet.google.com/new"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-xs"
+                          style={{ fontSize: '0.72rem', padding: '4px 8px', gap: '4px', textDecoration: 'none' }}
+                          title="Create an instant room in Google Meet in a new tab"
+                        >
+                          <ExternalLink size={12} /> Create on Google
+                        </a>
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="Paste meeting link or code (e.g. https://meet.google.com/abc-defg-hij or abc-defg-hij)"
-                      value={jitsiRoomId.startsWith('vl-exam-') ? '' : jitsiRoomId}
-                      onChange={(e) => setJitsiRoomId(e.target.value.trim())}
-                      style={{ fontSize: '0.82rem', width: '100%' }}
-                    />
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                      Enter your Google Meet link so students join your live invigilation room. If left empty, students will launch an instant meeting via <code style={{ color: 'var(--success)' }}>https://meet.google.com/new</code>.
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Paste or click 'Generate Meet Link' (e.g. https://meet.google.com/abc-defg-hij)"
+                        value={jitsiRoomId.startsWith('vl-exam-') ? '' : jitsiRoomId}
+                        onChange={(e) => setJitsiRoomId(e.target.value.trim())}
+                        style={{ fontSize: '0.82rem', flex: 1, fontFamily: 'monospace' }}
+                      />
+                      {jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(jitsiRoomId);
+                              setCopyMeetNotice(true);
+                              setTimeout(() => setCopyMeetNotice(false), 2000);
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0 10px', fontSize: '0.74rem' }}
+                            title="Copy Google Meet Link"
+                          >
+                            {copyMeetNotice ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
+                            <span>{copyMeetNotice ? 'Copied' : 'Copy'}</span>
+                          </button>
+                          <a
+                            href={jitsiRoomId.startsWith('http') ? jitsiRoomId : `https://meet.google.com/${jitsiRoomId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0 10px', fontSize: '0.74rem', textDecoration: 'none' }}
+                            title="Test open meeting in Google Meet"
+                          >
+                            <ExternalLink size={13} />
+                            <span>Test</span>
+                          </a>
+                        </>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1.4 }}>
+                      <span style={{ color: '#22c55e', fontWeight: 600 }}>🔒 Fixed & Stored:</span>
+                      This meeting link is permanently stored with the assessment. When assigned students start the exam, they will join this exact room to be invigilated.
                     </div>
                   </div>
                 )}
@@ -4940,11 +5317,28 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         max="100"
                         className="form-input"
                         value={completionPercentageRequired}
-                        onChange={(e) => setCompletionPercentageRequired(Math.min(100, Math.max(1, parseInt(e.target.value) || 100)))}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setCompletionPercentageRequired('');
+                            return;
+                          }
+                          const clean = raw.length > 1 ? raw.replace(/^0+(?=\d)/, '') : raw;
+                          const num = Number(clean);
+                          if (!isNaN(num)) {
+                            setCompletionPercentageRequired(Math.min(100, Math.max(0, num)));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (completionPercentageRequired === '' || isNaN(Number(completionPercentageRequired))) {
+                            setCompletionPercentageRequired(0);
+                          }
+                        }}
                         style={{ 
                           fontSize: '0.9rem', 
                           fontWeight: 600,
@@ -4972,23 +5366,45 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                   </div>
 
                   <div>
-                    <label className="form-label text-xs">Minimum Passing Score</label>
-                    <div style={{
-                      height: '42px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0 12px',
-                      background: 'var(--bg-input)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.88rem',
-                      fontWeight: 700,
-                      color: 'var(--success)'
-                    }}>
-                      {passingMarks} / {totalMarks} Marks ({Math.round((passingMarks / totalMarks) * 100)}%)
+                    <label className="form-label text-xs" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Minimum Passing Score</span>
+                      <span style={{ color: 'var(--success)', fontWeight: 700 }}>
+                        {passingMarks} pts ({Math.round((passingMarks / (totalMarks || 1)) * 100)}%)
+                      </span>
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max={totalMarks}
+                        className="form-input text-xs"
+                        style={{ height: '42px', fontWeight: 700 }}
+                        value={rawPassMarks}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRawPassMarks(val);
+                          const num = parseInt(val, 10);
+                          if (!isNaN(num) && num >= 1 && num <= totalMarks) {
+                            setPassingMarks(num);
+                          }
+                        }}
+                        onBlur={() => {
+                          const num = parseInt(rawPassMarks, 10);
+                          if (isNaN(num) || num < 1) {
+                            setRawPassMarks('1');
+                            setPassingMarks(1);
+                          } else if (num > totalMarks) {
+                            setRawPassMarks(String(totalMarks));
+                            setPassingMarks(totalMarks);
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        / {totalMarks} Marks
+                      </span>
                     </div>
                     <span className="text-muted text-xs" style={{ display: 'block', marginTop: '4px' }}>
-                      Configured in assessment parameters. Satisfies passing criteria.
+                      Candidate must score at least this mark to pass the assessment.
                     </span>
                   </div>
 
@@ -5000,7 +5416,24 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                         min="0"
                         className="form-input"
                         value={completionPoints}
-                        onChange={(e) => setCompletionPoints(Math.max(0, parseInt(e.target.value) || 0))}
+                        onWheel={(e) => (e.target as HTMLElement).blur()}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw === '') {
+                            setCompletionPoints('');
+                            return;
+                          }
+                          const clean = raw.length > 1 ? raw.replace(/^0+(?=\d)/, '') : raw;
+                          const num = Number(clean);
+                          if (!isNaN(num)) {
+                            setCompletionPoints(Math.max(0, num));
+                          }
+                        }}
+                        onBlur={() => {
+                          if (completionPoints === '' || isNaN(Number(completionPoints))) {
+                            setCompletionPoints(0);
+                          }
+                        }}
                         style={{ 
                           fontSize: '0.9rem', 
                           fontWeight: 600,
@@ -5241,25 +5674,56 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 <button
                   type="button"
                   className="btn btn-secondary"
+                  disabled={isPersisting}
                   onClick={() => setStep('review_edit')}
                 >
                   <ArrowLeft size={16} /> Back to Question Review
                 </button>
 
+                {persistError && (
+                  <div style={{
+                    width: '100%',
+                    background: 'var(--danger-bg, #fee2e2)',
+                    border: '1px solid var(--danger, #ef4444)',
+                    color: 'var(--danger, #dc2626)',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    marginTop: '12px',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    fontSize: '0.875rem'
+                  }}>
+                    <AlertTriangle size={18} />
+                    <span>{persistError}</span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
+                    disabled={isPersisting}
                     onClick={() => handleFinalizeAssessment(false)}
                   >
-                    Save as Draft
+                    {isPersisting ? 'Saving...' : 'Save as Draft'}
                   </button>
                   <button
                     type="button"
                     className="btn btn-primary"
+                    disabled={isPersisting}
                     onClick={() => handleFinalizeAssessment(true)}
                   >
-                    <CheckCircle2 size={16} /> Publish Assessment
+                    {isPersisting ? (
+                      <>
+                        <RefreshCw size={16} className="animate-spin" /> Persisting to Database...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} /> Publish Assessment
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -5533,6 +5997,127 @@ export const CreateAssessmentModal: React.FC<Props> = ({
         onCancel={() => setQuestionToDelete(null)}
         isDestructive={true}
       />
+
+      {/* Published Successfully Confirmation Popup Modal */}
+      {publishedSuccessAssessment && (
+        <div
+          className="modal-overlay"
+          style={{
+            zIndex: 1300,
+            background: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '520px',
+              width: '92vw',
+              background: '#181920',
+              border: '1px solid rgba(16, 185, 129, 0.45)',
+              borderRadius: '16px',
+              padding: '28px 24px',
+              textAlign: 'center',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75)',
+            }}
+          >
+            {/* Green Success Badge */}
+            <div
+              style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '50%',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#10B981',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+                border: '2px solid rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 0 25px rgba(16, 185, 129, 0.25)',
+              }}
+            >
+              <CheckCircle2 size={38} />
+            </div>
+
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
+              Assessment Published Successfully!
+            </h3>
+            <p style={{ fontSize: '0.86rem', color: '#94a3b8', marginBottom: '20px', lineHeight: 1.5 }}>
+              <strong style={{ color: '#f8fafc' }}>{publishedSuccessAssessment.title}</strong> is now live and published for enrolled learners.
+            </p>
+
+            {/* Assessment Parameters Overview */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '10px',
+                padding: '14px',
+                marginBottom: '22px',
+                textAlign: 'left',
+              }}
+            >
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Total Questions</span>
+                <strong style={{ color: '#fff', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.questionsData?.length || publishedSuccessAssessment.questionIds?.length || 0} Questions
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Scoring Marks</span>
+                <strong style={{ color: '#fff', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.totalMarks} Marks (Pass: {publishedSuccessAssessment.passingMarks})
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Required Completion</span>
+                <strong style={{ color: '#38bdf8', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.completionPercentageRequired ?? 0}% Rate
+                </strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block', fontSize: '0.72rem' }}>Reward Points</span>
+                <strong style={{ color: '#fbbf24', fontSize: '0.88rem' }}>
+                  {publishedSuccessAssessment.completionPoints ?? 0} pts
+                </strong>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setPublishedSuccessAssessment(null);
+                  onClose();
+                }}
+                style={{
+                  fontWeight: 700,
+                  padding: '10px 28px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                  cursor: 'pointer',
+                  fontSize: '0.88rem',
+                }}
+              >
+                Close & View Assessments
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
   );

@@ -4,10 +4,11 @@ import { useAuthStore } from '../../lib/store';
 import { useProctoringStore } from '../../lib/proctoringStore';
 import { useAssessmentStore } from '../../lib/assessmentStore';
 import { ProctoringEvent, ProctoringSeverity, ProctoringSession } from '../../types';
+import { buildFullUrl } from '../../lib/apiClient';
 import {
   Shield, Clock, Calendar, CheckCircle2, AlertTriangle, AlertCircle,
   Info, ArrowLeft, Send, FileText, Monitor, Check, ExternalLink,
-  MessageSquare, User, Eye, Sparkles
+  MessageSquare, User, Eye, Sparkles, Video
 } from 'lucide-react';
 
 export const MyProctoringReportPage: React.FC = () => {
@@ -383,6 +384,166 @@ export const MyProctoringReportPage: React.FC = () => {
         </div>
       )}
 
+      {/* 3-Warning Strikes & 10-Second Incident Video Evidence Section */}
+      {(() => {
+        const warningStrikeEvents = (displaySession.events || []).filter(
+          (e) => e.category === 'warning_strike_video' || (e.title && e.title.includes('Warning Strike'))
+        );
+
+        const getStrikeData = (strikeNum: number) => {
+          const matchingEvt = warningStrikeEvents.find(
+            (e) => e.title?.includes(`Strike ${strikeNum}`) || e.title?.includes(`Warning ${strikeNum}`) || e.description?.includes(`strike #${strikeNum}`)
+          );
+          if (matchingEvt) {
+            return {
+              strikeNum,
+              title: matchingEvt.title,
+              reason: matchingEvt.title.replace(/^Warning Strike \d+ of \d+:\s*/, '').replace(/\(10s Video Proof\)/, '').trim(),
+              description: matchingEvt.description,
+              timestamp: matchingEvt.timestamp,
+              videoUrl: matchingEvt.evidenceSnapshot
+                ? buildFullUrl(matchingEvt.evidenceSnapshot)
+                : `/storage/proctoring/${displaySession.id}/warning-videos/warning_strike_${strikeNum}.webm`,
+              occurred: true,
+            };
+          }
+          const matchingWarn = ((displaySession as any).warnings || []).find((w: any, idx: number) => idx + 1 === strikeNum);
+          if (matchingWarn) {
+            return {
+              strikeNum,
+              title: `Warning Strike ${strikeNum} of 3`,
+              reason: matchingWarn.reason || matchingWarn.message,
+              description: matchingWarn.message,
+              timestamp: matchingWarn.sentAt,
+              videoUrl: buildFullUrl(`/storage/proctoring/${displaySession.id}/warning-videos/warning_strike_${strikeNum}.webm`),
+              occurred: true,
+            };
+          }
+          return {
+            strikeNum,
+            title: `Strike ${strikeNum} of 3`,
+            reason: 'No Violation Recorded',
+            description: 'Candidate remained in full compliance during this strike slot.',
+            timestamp: null,
+            videoUrl: null,
+            occurred: false,
+          };
+        };
+
+        const strike1 = getStrikeData(1);
+        const strike2 = getStrikeData(2);
+        const strike3 = getStrikeData(3);
+
+        return (
+          <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Video size={20} color="#F59E0B" /> Proctoring Warning Strikes & 10-Second Incident Video Proof
+                </h3>
+                <p className="text-secondary text-xs" style={{ margin: '4px 0 0 0' }}>
+                  Every student is allowed up to 3 warnings. When a warning strike occurs, a 10-second rolling video clip captured right before and during the violation is recorded with the exact reason.
+                </p>
+              </div>
+              <span className="badge badge-secondary" style={{ fontWeight: 700 }}>
+                Strict 3-Warning Rule
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {[strike1, strike2, strike3].map((strike) => (
+                <div
+                  key={strike.strikeNum}
+                  style={{
+                    background: strike.occurred ? 'rgba(239, 68, 68, 0.05)' : 'rgba(16, 185, 129, 0.05)',
+                    border: strike.occurred ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span
+                      style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 800,
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        background: strike.occurred ? (strike.strikeNum >= 3 ? '#ef4444' : '#f59e0b') : '#10b981',
+                        color: '#fff',
+                      }}
+                    >
+                      {strike.occurred ? `Warning Strike ${strike.strikeNum} of 3` : `Strike ${strike.strikeNum} of 3 • Clean`}
+                    </span>
+                    {strike.timestamp && (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {new Date(strike.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <strong style={{ fontSize: '0.9rem', color: strike.occurred ? '#ef4444' : 'var(--success)' }}>
+                      {strike.reason}
+                    </strong>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      {strike.description}
+                    </p>
+                  </div>
+
+                  {/* 10-Second Video Player Proof */}
+                  {strike.occurred && strike.videoUrl ? (
+                    <div style={{ marginTop: 'auto' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                        <Video size={13} color="#ef4444" /> 10-Second Incident Video Evidence:
+                      </div>
+                      <video
+                        controls
+                        playsInline
+                        preload="metadata"
+                        style={{
+                          width: '100%',
+                          maxHeight: '190px',
+                          background: '#000',
+                          borderRadius: '8px',
+                          border: '1px solid #334155',
+                        }}
+                        src={strike.videoUrl}
+                      >
+                        Your browser does not support HTML5 video streaming.
+                      </video>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        marginTop: 'auto',
+                        padding: '24px 12px',
+                        textAlign: 'center',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderRadius: '8px',
+                        border: '1px dashed rgba(16, 185, 129, 0.2)',
+                        color: 'var(--success)',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <CheckCircle2 size={24} />
+                      No Violation Recorded
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Event Timeline */}
       <div className="card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1.15rem', marginBottom: '16px', fontWeight: 700 }}>
@@ -445,21 +606,34 @@ export const MyProctoringReportPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Evidence Snapshot if present */}
+                  {/* Evidence Media if present (Native Video or Audio Player - NO BLACK PHOTO) */}
                   {evt.evidenceSnapshot && (
-                    <div style={{ marginTop: '4px' }}>
-                      <div className="text-muted text-xs" style={{ marginBottom: '4px' }}>
-                        Associated Frame Evidence:
+                    <div style={{ marginTop: '8px' }}>
+                      <div className="text-muted text-xs" style={{ marginBottom: '4px', fontWeight: 600 }}>
+                        {evt.evidenceSnapshot.includes('.webm') || evt.evidenceSnapshot.includes('.mp4') ? '10-Second Recorded Video Evidence:' : 'Recorded Media Evidence:'}
                       </div>
-                      <img
-                        src={evt.evidenceSnapshot}
-                        alt="Evidence snapshot"
-                        style={{
-                          maxHeight: '140px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: '1px solid var(--border-subtle)',
-                        }}
-                      />
+                      {evt.evidenceSnapshot.includes('.webm') || evt.evidenceSnapshot.includes('.mp4') ? (
+                        <video
+                          controls
+                          playsInline
+                          preload="metadata"
+                          style={{
+                            maxWidth: '440px',
+                            width: '100%',
+                            maxHeight: '220px',
+                            background: '#000',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-subtle)',
+                          }}
+                          src={buildFullUrl(evt.evidenceSnapshot)}
+                        />
+                      ) : evt.evidenceSnapshot.includes('audio-incident') ? (
+                        <audio
+                          controls
+                          style={{ width: '100%', maxWidth: '400px' }}
+                          src={buildFullUrl(evt.evidenceSnapshot)}
+                        />
+                      ) : null}
                     </div>
                   )}
 

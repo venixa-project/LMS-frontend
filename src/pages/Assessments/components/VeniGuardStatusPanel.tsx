@@ -3,8 +3,9 @@ import { ProctoringPolicy } from '../../../types';
 import {
   Shield, Monitor, Mic, Camera, Wifi, WifiOff,
   Radio, HelpCircle, CheckCircle2, AlertCircle, X, LifeBuoy,
-  Video, User
+  Video, User, ExternalLink
 } from 'lucide-react';
+import { GoogleMeetIcon } from '../../../components/GoogleMeet';
 
 interface Props {
   policy: ProctoringPolicy;
@@ -16,6 +17,7 @@ interface Props {
   isOnline: boolean;
   recordingSeconds: number;
   jitsiRoomName?: string;
+  meetUrl?: string;
   onOpenJitsi?: () => void;
   onReportIncident?: () => void;
 }
@@ -30,6 +32,7 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
   isOnline,
   recordingSeconds,
   jitsiRoomName,
+  meetUrl,
   onOpenJitsi,
   onReportIncident,
 }) => {
@@ -201,6 +204,27 @@ export const VeniGuardStatusPanel: React.FC<Props> = ({
             />
             <span>REC {formatRecDuration(recordingSeconds)}</span>
           </div>
+
+          {meetUrl && (
+            <a
+              href={meetUrl.startsWith('http') ? meetUrl : `https://meet.google.com/${meetUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary btn-sm"
+              style={{
+                fontSize: '0.72rem',
+                padding: '4px 10px',
+                gap: '5px',
+                background: '#2563eb',
+                color: '#fff',
+                textDecoration: 'none',
+              }}
+              title="Open Google Meet Proctored Call"
+            >
+              <GoogleMeetIcon size={14} />
+              <span>Meet Call ↗</span>
+            </a>
+          )}
 
           <button
             className="btn btn-secondary btn-sm"

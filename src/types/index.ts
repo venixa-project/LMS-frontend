@@ -218,6 +218,10 @@ export interface AssessmentCertificateConfig {
   secondarySignerName?: string;
   secondarySignerTitle?: string;
   secondarySignatureImage?: string;
+  sourceDocument?: any;
+  videoUrl?: string;
+  mediaUrl?: string;
+  [key: string]: any;
 }
 
 // --- Assessment & Quiz Configuration Types for Course Builder ---
@@ -647,6 +651,10 @@ export interface Assessment {
   proctoringRequired: boolean;
   proctoringMode?: ProctoringMode;
   jitsiRoomId?: string;
+  googleMeetUrl?: string;
+  warningIntervalSeconds?: number;
+  maxProctoringWarnings?: number;
+  thirdWarningAction?: 'auto_submit' | 'terminate' | 'flag_review';
   proctoringSettings?: ProctoringSettings;
   proctoringPolicyLevel?: ProctoringPolicyLevel;
   proctoringPolicy?: ProctoringPolicy;
@@ -664,7 +672,11 @@ export interface Assessment {
     size: number;
     type: string;
     extractedWordCount: number;
+    url?: string;
+    s3Key?: string;
   };
+  mediaUrl?: string;
+  videoUrl?: string;
   difficultyDistribution?: {
     easy: number;
     medium: number;
@@ -856,6 +868,9 @@ export interface ProctoringSettings {
   faceDetection: boolean;
   noiseDetection: boolean;
   tabSwitchDetection: boolean;
+  warningIntervalSeconds?: number;
+  maxProctoringWarnings?: number;
+  thirdWarningAction?: 'auto_submit' | 'terminate' | 'flag_review';
   jitsiDomain?: string;
   jitsiRoomId?: string;
 }
@@ -926,7 +941,12 @@ export type ProctoringEventCategory =
   | 'webcam_interruption'
   | 'network_interruption'
   | 'jitsi_conference'
-  | 'timing_event';
+  | 'timing_event'
+  | 'warning_strike_video'
+  | 'audio_incident'
+  | 'candidate_baseline_photo'
+  | 'live_webcam_frame'
+  | (string & {});
 
 export type ProctoringSeverity = 'informational' | 'warning' | 'critical' | 'review_required';
 
@@ -984,6 +1004,7 @@ export interface ProctoringSession {
   jitsiRoomUrl?: string;
   jitsiStatus?: 'connected' | 'connecting' | 'disconnected';
   events: ProctoringEvent[];
+  warnings?: any[];
   recordingUrl?: string;
   recordingDuration?: number;
   isSimulatedRecording?: boolean;

@@ -6,11 +6,12 @@ import { useCohortStore } from '../../lib/cohortStore';
 import { Assessment } from '../../types';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CreateAssessmentModal } from './components/CreateAssessmentModal';
+import { ExamPaperPreviewModal } from './components/ExamPaperPreviewModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
-  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video
+  FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video, Copy, Share2, RefreshCw
 } from 'lucide-react';
 
 interface Props {
@@ -73,6 +74,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingDraft, setEditingDraft] = useState<Assessment | null>(null);
+  const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
+  const [publishedPopupAssessment, setPublishedPopupAssessment] = useState<Assessment | null>(null);
   const [assessmentStatusFilter, setAssessmentStatusFilter] = useState<'published' | 'drafts'>('published');
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('all');
@@ -239,18 +242,30 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   const [asgMarks, setAsgMarks] = useState(100);
   const [asgFormat, setAsgFormat] = useState<'file' | 'repo' | 'text'>('repo');
 
-  const handleAssessmentSaved = (newAss: Assessment, status: 'published' | 'draft') => {
+  const handleAssessmentSaved = async (newAss: Assessment, status: 'published' | 'draft'): Promise<{ success: boolean; error?: string }> => {
     if (status === 'published') {
-      addAssessment(newAss, newAss.questionsData);
-      showNotice(`Assessment "${newAss.title}" published to course syllabus!`);
-      setAssessmentStatusFilter('published');
+      const res = await addAssessment(newAss, newAss.questionsData);
+      if (res.success) {
+        setAssessmentStatusFilter('published');
+        setPublishedPopupAssessment({ ...newAss, id: res.id });
+        await fetchAssessments();
+        setIsCreateModalOpen(false);
+        setEditingDraft(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error };
     } else {
-      saveDraft(newAss, newAss.questionsData);
-      showNotice(`Draft "${newAss.title}" saved successfully!`);
-      setAssessmentStatusFilter('drafts');
+      const res = await saveDraft(newAss, newAss.questionsData);
+      if (res.success) {
+        showNotice(`Draft "${newAss.title}" saved successfully to database!`);
+        setAssessmentStatusFilter('drafts');
+        await fetchAssessments();
+        setIsCreateModalOpen(false);
+        setEditingDraft(null);
+        return { success: true };
+      }
+      return { success: false, error: res.error };
     }
-    setIsCreateModalOpen(false);
-    setEditingDraft(null);
   };
 
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -326,7 +341,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
           </p>
         </div>
 
-        {!isLearner && (
+        {!isLearner ? (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {activeTab === 'assignments' ? (
               <button className="btn btn-primary" onClick={() => setIsAssignmentModalOpen(true)}>
@@ -346,6 +361,21 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             <Link to="/grading" className="btn btn-secondary">
               <PenTool size={16} /> Grading Queue
             </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                fetchAssessments();
+                fetchMyAttempts();
+                showNotice('Assessments refreshed from server.');
+              }}
+              style={{ gap: '6px' }}
+            >
+              <RefreshCw size={14} /> Refresh List
+            </button>
           </div>
         )}
       </div>
@@ -687,8 +717,8 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                           style={{ gap: '6px', justifyContent: 'center' }}
                           onClick={() => {
                             publishAssessment(d.id);
-                            showNotice(`Draft "${d.title}" published to syllabus!`);
                             setAssessmentStatusFilter('published');
+                            setPublishedPopupAssessment({ ...d, status: 'published' });
                           }}
                         >
                           <CheckCircle2 size={13} color="var(--success)" /> Publish
@@ -841,23 +871,38 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                         )
                       ) : (
                         <>
-                          <Link
-                            to={`/exam/${a.id}`}
+                          <button
+                            type="button"
                             className="btn btn-secondary btn-sm"
                             style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                            onClick={() => setPreviewAssessment(a)}
+                            title="Inspect Question Paper, Answers & Rubrics"
                           >
-                            <Play size={13} /> Preview Exam
-                          </Link>
-                          {(a.proctoringRequired || (a.proctoringMode && a.proctoringMode !== 'none')) && (
+                            <Eye size={13} /> Check Exam Paper
+                          </button>
+                          {(a.proctoringMode === 'manual' || a.proctoringMode === 'combined') && (
                             <Link
                               to={`/proctoring?tab=live_monitor&assessmentId=${a.id}`}
                               className="btn btn-secondary btn-sm"
                               style={{ gap: '6px', justifyContent: 'center' }}
-                              title="Monitor Live Google Meet Exam Session"
+                              title="Monitor Live Google Meet / Jitsi Exam Session"
                             >
                               <Video size={13} color="var(--primary)" /> Monitor Live
                             </Link>
                           )}
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ gap: '6px', justifyContent: 'center' }}
+                            onClick={() => {
+                              const examUrl = `${window.location.origin}/exam/${a.id}`;
+                              navigator.clipboard.writeText(examUrl);
+                              showNotice(`Direct exam link for "${a.title}" copied to clipboard!`);
+                            }}
+                            title="Copy Direct Exam Link to Share with Students on any Device"
+                          >
+                            <Copy size={13} color="var(--primary)" /> Copy Link
+                          </button>
                           <Link
                             to="/grading"
                             className="btn btn-primary btn-sm"
@@ -1429,6 +1474,232 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setViewingAssignment(null)}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Question Paper Inspection Modal for Admin / Trainer */}
+      <ExamPaperPreviewModal
+        isOpen={Boolean(previewAssessment)}
+        onClose={() => setPreviewAssessment(null)}
+        assessment={previewAssessment}
+        onEditAssessment={(asm) => {
+          setEditingDraft(asm);
+          setIsCreateModalOpen(true);
+        }}
+      />
+
+      {/* Assessment / Quiz Published Success Popup Modal */}
+      {publishedPopupAssessment && (
+        <div
+          className="modal-overlay"
+          style={{
+            zIndex: 9999,
+            position: 'fixed',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            background: 'rgba(5, 8, 22, 0.8)',
+            backdropFilter: 'blur(8px)',
+            animation: 'fadeIn 0.15s ease-out',
+          }}
+          onClick={() => setPublishedPopupAssessment(null)}
+        >
+          <div
+            className="modal-card"
+            style={{
+              maxWidth: '540px',
+              width: '100%',
+              background: 'var(--bg-card)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.18)',
+              textAlign: 'center',
+              padding: '32px 28px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Animated Green Check Badge */}
+            <div
+              style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: 'rgba(16, 185, 129, 0.12)',
+                color: '#10B981',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+                border: '2px solid rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 0 30px rgba(16, 185, 129, 0.25)',
+              }}
+            >
+              <CheckCircle2 size={42} />
+            </div>
+
+            <div>
+              <span
+                className="badge badge-success"
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: '8px',
+                  display: 'inline-block',
+                }}
+              >
+                Live &bull; Published to Syllabus
+              </span>
+            </div>
+
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '8px 0 6px 0', color: 'var(--text-main)' }}>
+              Assessment Published Successfully!
+            </h3>
+
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '22px', lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--text-main)' }}>{publishedPopupAssessment.title}</strong> is now live. All enrolled learners can view and start this evaluation according to schedule.
+            </p>
+
+            {/* Assessment Key Parameters Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '12px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '24px',
+                textAlign: 'left',
+              }}
+            >
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
+                  Total Questions
+                </span>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                  {publishedPopupAssessment.questionsData?.length || publishedPopupAssessment.questionIds?.length || (Array.isArray(publishedPopupAssessment.questions) ? publishedPopupAssessment.questions.length : 0)} Items
+                </strong>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
+                  Total / Pass Marks
+                </span>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--success)' }}>
+                  {publishedPopupAssessment.totalMarks} pts (Pass: {publishedPopupAssessment.passingMarks || publishedPopupAssessment.passmark || 1} pts)
+                </strong>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
+                  Duration
+                </span>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                  {publishedPopupAssessment.durationMinutes || 45} Minutes
+                </strong>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block' }}>
+                  Proctoring Mode
+                </span>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--primary)' }}>
+                  {publishedPopupAssessment.proctoringMode === 'automated'
+                    ? 'AI Telemetry (Auto)'
+                    : publishedPopupAssessment.proctoringMode === 'manual'
+                    ? 'Google Meet Live'
+                    : publishedPopupAssessment.proctoringMode === 'combined'
+                    ? 'AI + Google Meet'
+                    : 'Unproctored'}
+                </strong>
+              </div>
+            </div>
+
+            {/* Direct Student Network Link */}
+            <div
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-accent)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '20px',
+                textAlign: 'left',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                  Student Direct Exam Link (Network / Wi-Fi)
+                </span>
+                <span className="text-muted text-xs">Share with students on any device</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/exam/${publishedPopupAssessment.id}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '0.82rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    fontFamily: 'monospace',
+                  }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  style={{ gap: '6px', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    const examUrl = `${window.location.origin}/exam/${publishedPopupAssessment.id}`;
+                    navigator.clipboard.writeText(examUrl);
+                    showNotice('Exam link copied! Share this link with students on other devices.');
+                  }}
+                >
+                  <Copy size={13} /> Copy Link
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  const targetAss = publishedPopupAssessment;
+                  setPublishedPopupAssessment(null);
+                  setPreviewAssessment(targetAss);
+                }}
+                style={{ gap: '6px' }}
+              >
+                <Eye size={15} /> Check Exam Paper
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setPublishedPopupAssessment(null)}
+                style={{
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  padding: '10px 24px',
+                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                Close &amp; View Assessments
               </button>
             </div>
           </div>

@@ -171,7 +171,7 @@ export const PublicCourseDetailsPage: React.FC = () => {
   const totalLessons = course.modules?.reduce((acc, m) => acc + (m.lessons?.length || 0), 0) || 0;
 
   // Handle Enrollment Action
-  const handleEnrollClick = () => {
+  const handleEnrollClick = async () => {
     if (!isAuthenticated) {
       // Preserve intended course destination through redirect query
       navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`);
@@ -184,7 +184,7 @@ export const PublicCourseDetailsPage: React.FC = () => {
       return;
     }
 
-    const res = enrollInCourse(course.id, user?.id);
+    const res = await enrollInCourse(course.id, user?.id);
     if (res.success) {
       setShowSuccessModal(true);
     } else {

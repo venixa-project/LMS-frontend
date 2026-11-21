@@ -647,6 +647,37 @@ export function isCurrentlyFullscreen(): boolean {
 }
 
 /**
+ * Exits browser fullscreen mode if currently active
+ */
+export async function exitFullscreen(): Promise<boolean> {
+  try {
+    if (typeof document === 'undefined') return false;
+    if (isCurrentlyFullscreen()) {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+        return true;
+      }
+      if ((document as any).webkitExitFullscreen) {
+        await (document as any).webkitExitFullscreen();
+        return true;
+      }
+      if ((document as any).mozCancelFullScreen) {
+        await (document as any).mozCancelFullScreen();
+        return true;
+      }
+      if ((document as any).msExitFullscreen) {
+        await (document as any).msExitFullscreen();
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.warn('Failed to exit fullscreen:', err);
+    return false;
+  }
+}
+
+/**
  * Performs quick network ping check to verify live internet roundtrip
  */
 export async function probeConnectionHealth(): Promise<{ online: boolean; latencyMs: number }> {
