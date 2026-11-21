@@ -477,7 +477,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         let lastName = 'Chen';
 
         if (normalizedEmail === 'k.ravivarma047@gmail.com' || normalizedEmail.includes('ravi')) {
-          activeRole = 'platform_admin';
+          activeRole = 'student';
           displayName = 'Ravi Varma';
           firstName = 'Ravi';
           lastName = 'Varma';
@@ -506,6 +506,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           displayName,
           activeRole,
           organizationId: '871abf8a-e563-4d0f-afc7-416d8da3df14',
+          rollNo: normalizedEmail === 'k.ravivarma047@gmail.com' ? '26' : undefined,
           roles: [],
           status: 'active',
           mustChangePassword: false,

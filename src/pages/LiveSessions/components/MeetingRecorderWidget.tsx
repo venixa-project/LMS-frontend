@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Radio, Square, Pause, Play, UploadCloud, AlertCircle, X,
-  Video, CheckCircle2, Loader2, Sparkles
+  Video, CheckCircle2, Loader2, Sparkles, Volume2, VolumeX
 } from 'lucide-react';
 import { RecorderState } from '../../../lib/useScreenRecorder';
 
@@ -46,7 +46,7 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
         animation: 'slideUp 0.3s ease-out',
         color: '#ffffff',
         backdropFilter: 'blur(12px)',
-        maxWidth: '520px',
+        maxWidth: '560px',
       }}
     >
       {/* Uploading State */}
@@ -55,10 +55,10 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
           <Loader2 size={24} className="animate-spin" color="var(--primary)" />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-main)' }}>
-              Saving & Archiving HD Class Recording...
+              Saving & Archiving 480p Class Recording...
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Compiling Google Meet video & uploading to cloud storage.
+              Compiling 480p SD stream & persisting to cloud storage.
             </div>
           </div>
         </div>
@@ -78,12 +78,43 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
               }}
             />
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '0.74rem', fontWeight: 800, color: state.isPaused ? '#f59e0b' : '#ef4444', letterSpacing: '0.05em' }}>
                   {state.isPaused ? 'RECORDING PAUSED' : 'RECORDING LIVE'}
                 </span>
                 <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.85rem', color: '#ffffff' }}>
                   {formatDuration(state.duration)}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    background: 'rgba(99, 102, 241, 0.25)',
+                    color: '#818cf8',
+                    border: '1px solid rgba(99, 102, 241, 0.5)',
+                  }}
+                >
+                  480p SD
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: state.hasAudio ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                    color: state.hasAudio ? '#4ade80' : '#f87171',
+                    border: `1px solid ${state.hasAudio ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                  }}
+                  title={state.hasAudio ? 'Audio stream actively recording' : 'No audio detected - enable tab audio'}
+                >
+                  {state.hasAudio ? <Volume2 size={11} /> : <VolumeX size={11} />}
+                  {state.hasAudio ? 'Audio ON' : 'No Sound'}
                 </span>
               </div>
               <div
@@ -94,6 +125,7 @@ export const MeetingRecorderWidget: React.FC<Props> = ({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  marginTop: '2px',
                 }}
               >
                 {state.activeSessionTitle || 'Google Meet Stream'}

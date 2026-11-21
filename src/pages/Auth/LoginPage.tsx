@@ -844,7 +844,6 @@ export const LoginPage: React.FC = () => {
             {showDemoRoles && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                 {[
-                  { label: 'Ravi Varma (Admin)', email: 'k.ravivarma047@gmail.com', color: '#10b981' },
                   { label: 'Platform Admin', email: 'admin@lms.demo', color: '#ef4444' },
                   { label: 'Org Admin', email: 'orgadmin@lms.demo', color: '#3b82f6' },
                   { label: 'Trainer / Lead', email: 'trainer@lms.demo', color: '#06b6d4' },

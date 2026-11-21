@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { LiveSession } from '../../../types';
+import { useAuthStore } from '../../../lib/store';
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, X, Download, FileText,
   Clock, CheckCircle2, Bookmark, Sparkles, MessageSquare,
@@ -17,15 +18,26 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
   isOpen,
   onClose,
 }) => {
+  const { user } = useAuthStore();
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [currentTime, setCurrentTime] = useState(270); // 04:30 into lecture
+  const [currentTime, setCurrentTime] = useState(0);
+  const [actualDuration, setActualDuration] = useState<number>(0);
   const [activeBottomTab, setActiveBottomTab] = useState<'chapters' | 'chat' | 'attendance' | 'takeaways'>('chapters');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const totalDuration = (session?.durationMinutes || 60) * 60;
+  const totalDuration = useMemo(() => {
+    if (actualDuration > 0) return Math.floor(actualDuration);
+    if (session?.durationSeconds && session.durationSeconds > 0) {
+      return session.durationSeconds;
+    }
+    if (session?.durationMinutes && session.durationMinutes > 0) {
+      return session.durationMinutes * 60;
+    }
+    return 60;
+  }, [actualDuration, session?.durationSeconds, session?.durationMinutes]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -61,7 +73,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     return url;
   }, [session?.recordingUrl]);
 
-  // Dynamic chapters based on session agenda or smart timestamps
+  // Dynamic chapters based on actual video duration and session agenda
   const chapters = useMemo(() => {
     if (!session) return [];
     if (session.agenda) {
@@ -75,6 +87,23 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         });
       }
     }
+
+    if (totalDuration <= 30) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Session Recording Start' },
+        { time: formatTime(Math.floor(totalDuration * 0.5)), seconds: Math.floor(totalDuration * 0.5), title: 'Live Demonstration & Class Topic' },
+        { time: formatTime(Math.max(1, totalDuration - 1)), seconds: Math.max(1, totalDuration - 1), title: 'Class Concluded' },
+      ];
+    }
+    if (totalDuration <= 180) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Lecture Introduction & Class Roll Call' },
+        { time: formatTime(Math.floor(totalDuration * 0.35)), seconds: Math.floor(totalDuration * 0.35), title: 'Core Concepts Walkthrough' },
+        { time: formatTime(Math.floor(totalDuration * 0.7)), seconds: Math.floor(totalDuration * 0.7), title: 'Live Screen Demonstration' },
+        { time: formatTime(Math.max(1, totalDuration - 2)), seconds: Math.max(1, totalDuration - 2), title: 'Summary & Next Steps' },
+      ];
+    }
+
     return [
       { time: '00:00', seconds: 0, title: 'Lecture Introduction & Class Roll Call' },
       { time: formatTime(Math.floor(totalDuration * 0.18)), seconds: Math.floor(totalDuration * 0.18), title: 'Core Architectural Concepts & Theoretical Foundations' },
@@ -100,8 +129,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     { id: '2', name: 'Maria Garcia', rollNo: 'CS-2024-012', status: 'Present (Checked In)', joinTime: '10:02' },
     { id: '3', name: 'David Kim', rollNo: 'CS-2024-019', status: 'Present (Checked In)', joinTime: '10:04' },
     { id: '4', name: 'Sophia Patel', rollNo: 'CS-2024-025', status: 'Present (Checked In)', joinTime: '10:05' },
-    { id: '5', name: 'Ravi Varma (You)', rollNo: 'CS-2024-001', status: 'Absent (Replaying Recording)', joinTime: 'Watched Replay' },
-  ], []);
+    { id: '5', name: `${user?.displayName || 'Ravi Varma'} (You)`, rollNo: user?.rollNo || '26', status: 'Absent (Replaying Recording)', joinTime: 'Watched Replay' },
+  ], [user?.displayName, user?.rollNo]);
 
   if (!isOpen || !session) return null;
 
@@ -154,8 +183,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               <span className="badge badge-secondary" style={{ color: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '0.72rem' }}>
                 Recorded Live Class Replay
               </span>
-              <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', fontSize: '0.7rem' }}>
-                Full HD 1080p Stream
+              <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)', fontSize: '0.7rem' }}>
+                Standard 480p Stream
               </span>
               <span className="text-muted text-xs font-mono">{session.date || 'Recorded Session'}</span>
               <span className="text-muted text-xs">• {session.instructorName || 'Faculty Trainer'}</span>
@@ -208,6 +237,15 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               controls
               autoPlay
               playsInline
+              onLoadedMetadata={(e) => {
+                const d = e.currentTarget.duration;
+                if (d && !isNaN(d) && isFinite(d) && d > 0) {
+                  setActualDuration(d);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                setCurrentTime(Math.floor(e.currentTarget.currentTime));
+              }}
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           ) : (
