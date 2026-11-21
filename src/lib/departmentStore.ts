@@ -5,6 +5,25 @@
 import { create } from 'zustand';
 import { organisationApi, DepartmentData } from './organisationApiService';
 
+const DEPARTMENTS_CACHE_KEY = 'venilearn_departments_cache';
+
+function loadCachedDepartments(): DepartmentData[] {
+  try {
+    const raw = localStorage.getItem(DEPARTMENTS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function persistDepartments(depts: DepartmentData[]) {
+  try {
+    localStorage.setItem(DEPARTMENTS_CACHE_KEY, JSON.stringify(depts));
+  } catch {}
+}
+
 interface DepartmentState {
   departments: DepartmentData[];
   isLoading: boolean;
@@ -14,7 +33,7 @@ interface DepartmentState {
 }
 
 export const useDepartmentStore = create<DepartmentState>((set, get) => ({
-  departments: [],
+  departments: loadCachedDepartments(),
   isLoading: false,
   error: null,
 
@@ -22,13 +41,19 @@ export const useDepartmentStore = create<DepartmentState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await organisationApi.getDepartments();
+      const list = Array.isArray(data) ? data : [];
+      if (list.length > 0) {
+        persistDepartments(list);
+      }
       set({
-        departments: Array.isArray(data) ? data : [],
+        departments: list,
         isLoading: false,
       });
     } catch (err: any) {
       console.error('Failed to fetch departments:', err);
+      const cached = loadCachedDepartments();
       set({
+        departments: cached,
         error: err?.message || 'Failed to fetch departments from server',
         isLoading: false,
       });
@@ -39,4 +64,3 @@ export const useDepartmentStore = create<DepartmentState>((set, get) => ({
     return get().departments.find((d) => d.id === id);
   },
 }));
-

@@ -22,6 +22,13 @@ function isMockSession(): boolean {
 }
 
 function loadDemoCohorts(): Cohort[] {
+  try {
+    const raw = localStorage.getItem(DEMO_COHORTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
   return [];
 }
 
@@ -49,9 +56,9 @@ interface CohortState {
 }
 
 export const useCohortStore = create<CohortState>((set, get) => ({
-  cohorts: [],
+  cohorts: loadDemoCohorts(),
   isLoading: false,
-  totalCohorts: 0,
+  totalCohorts: loadDemoCohorts().length,
 
   fetchCohorts: async (params?: ListCohortsParams) => {
     set({ isLoading: true });
@@ -67,6 +74,7 @@ export const useCohortStore = create<CohortState>((set, get) => ({
         instructorIds: Array.isArray(c.instructors) ? c.instructors : [],
       }));
 
+      persistDemoCohorts(cohortsMapped);
       set({
         cohorts: cohortsMapped,
         totalCohorts: res.meta?.total || cohortsMapped.length,
@@ -74,7 +82,8 @@ export const useCohortStore = create<CohortState>((set, get) => ({
       });
     } catch (err: any) {
       console.error('Failed to fetch cohorts from API:', err);
-      set({ cohorts: [], isLoading: false });
+      const cached = loadDemoCohorts();
+      set({ cohorts: cached, totalCohorts: cached.length, isLoading: false });
     }
   },
 
@@ -193,6 +202,7 @@ export const useCohortStore = create<CohortState>((set, get) => ({
       const updated = cohorts.map((c) =>
         c.id === updatedCohort.id ? { ...updatedCohort, updatedAt: new Date().toISOString() } : c
       );
+      persistDemoCohorts(updated);
       set({ cohorts: updated });
 
       return {
@@ -231,7 +241,9 @@ export const useCohortStore = create<CohortState>((set, get) => ({
 
     try {
       await cohortApi.update(cohortId, { instructors: [] });
-      set({ cohorts: cohorts.map((c) => (c.id === cohortId ? updatedCohort : c)) });
+      const updated = cohorts.map((c) => (c.id === cohortId ? updatedCohort : c));
+      persistDemoCohorts(updated);
+      set({ cohorts: updated });
       return {
         success: true,
         message: `Trainer removed from cohort ${target.code}.`,
@@ -382,8 +394,10 @@ export const useCohortStore = create<CohortState>((set, get) => ({
 
     try {
       await cohortApi.delete(cohortId);
+      const updated = cohorts.filter((c) => c.id !== cohortId);
+      persistDemoCohorts(updated);
       set({
-        cohorts: cohorts.filter((c) => c.id !== cohortId),
+        cohorts: updated,
         totalCohorts: Math.max(0, get().totalCohorts - 1),
       });
       return {
