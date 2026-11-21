@@ -172,6 +172,18 @@ export function isValidGoogleMeetUrl(url?: string | null): boolean {
 }
 
 /**
+ * Normalizes a Google Meet URL or room code into a canonical https://meet.google.com/abc-defg-hij URL.
+ */
+export function normalizeGoogleMeetUrl(url?: string | null): string {
+  if (!url) return '';
+  const validation = validateGoogleMeetUrl(url, false);
+  if (validation.isValid && validation.normalizedUrl) {
+    return validation.normalizedUrl;
+  }
+  return url.trim();
+}
+
+/**
  * Safe external link launcher for Google Meet.
  * Opens the verified Google Meet URL in a separate browser tab with security rel attributes.
  * NEVER falls back to meet.google.com/new, which creates isolated, separate meeting rooms.

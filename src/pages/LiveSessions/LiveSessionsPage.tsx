@@ -676,7 +676,8 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                   type="button"
                   className={defaultMeetUrl ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
                   onClick={() => {
-                    setDefaultMeetInput(defaultMeetUrl || '');
+                    const existing = defaultMeetUrl || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_default_meet_url') : '') || '';
+                    setDefaultMeetInput(existing);
                     setDefaultMeetError(null);
                     setIsDefaultMeetModalOpen(true);
                   }}
@@ -1900,7 +1901,7 @@ export const LiveSessionsPage: React.FC<Props> = ({ defaultTab = 'live_sessions'
                   setDefaultMeetError(null);
                   const res = await setDefaultMeetUrl(defaultMeetInput.trim());
                   if (res.success) {
-                    showNotice('Institutional Google Meet room successfully saved and active!');
+                    showNotice(res.message || 'Institutional Google Meet room successfully saved and active!');
                     setIsDefaultMeetModalOpen(false);
                   } else {
                     setDefaultMeetError(res.message || 'Failed to save default room.');
