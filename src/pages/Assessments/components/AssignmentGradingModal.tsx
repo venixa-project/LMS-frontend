@@ -18,6 +18,10 @@ import {
   AlertCircle,
   Copy
 } from 'lucide-react';
+import {
+  fetchAssignmentSubmissionsApi,
+  gradeAssignmentSubmissionApi,
+} from '../../../api/assignment.api';
 
 export interface StudentSubmissionRecord {
   id: string;
@@ -160,6 +164,22 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Proactively fetch live submissions from PostgreSQL database
+  React.useEffect(() => {
+    if (assignment.id) {
+      fetchAssignmentSubmissionsApi(assignment.id)
+        .then((liveSubs) => {
+          if (Array.isArray(liveSubs) && liveSubs.length > 0) {
+            setSubmissions(liveSubs);
+            if (!selectedSubId || !liveSubs.some((s) => s.id === selectedSubId)) {
+              setSelectedSubId(liveSubs[0].id);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [assignment.id]);
+
   // Active submission under review
   const activeSub = useMemo(() => {
     return submissions.find((s) => s.id === selectedSubId) || submissions[0];
@@ -241,6 +261,15 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
 
     setSubmissions(updatedSubmissions);
     onSaveGrade(assignment.id, activeSub.id, validatedScore, calculatedGrade, inputFeedback.trim());
+
+    // Publish to PostgreSQL API
+    gradeAssignmentSubmissionApi(assignment.id, activeSub.id, {
+      score: validatedScore,
+      letterGrade: calculatedGrade,
+      feedback: inputFeedback.trim(),
+    }).catch((err) => {
+      console.warn('Failed to publish grade to PostgreSQL API:', err);
+    });
 
     setNotice(`Grade (${validatedScore}/${assignment.totalMarks}) published for ${activeSub.studentName}!`);
     setTimeout(() => setNotice(null), 3500);

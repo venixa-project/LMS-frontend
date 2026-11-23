@@ -10,6 +10,12 @@ import { ExamPaperPreviewModal } from './components/ExamPaperPreviewModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { AssignmentGradingModal, CourseAssignment, StudentSubmissionRecord } from './components/AssignmentGradingModal';
 import {
+  fetchAssignmentsApi,
+  createAssignmentApi,
+  submitAssignmentDeliverableApi,
+  gradeAssignmentSubmissionApi,
+} from '../../api/assignment.api';
+import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
   FileText, Upload, Calendar, PenTool, Check, Filter, Trash2, Edit3, ArrowUpRight, Video, Copy, Share2, RefreshCw
@@ -185,6 +191,24 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     }
   }, [assignedCourses, buildCourseAssignments]);
 
+  const loadBackendAssignments = useCallback(async () => {
+    try {
+      const data = await fetchAssignmentsApi();
+      if (Array.isArray(data) && data.length > 0) {
+        setAssignments(data);
+        try {
+          localStorage.setItem('venilearn_assignments', JSON.stringify(data));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('Could not load assignments from backend API, using local cache:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBackendAssignments();
+  }, [loadBackendAssignments]);
+
   const handleSubmitDeliverable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!submittingAssignment || !submissionDeliverable.trim()) return;
@@ -231,6 +255,14 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     try {
       localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
     } catch {}
+
+    // Persist to PostgreSQL backend database asynchronously
+    submitAssignmentDeliverableApi(submittingAssignment.id, {
+      submissionUrl: submissionDeliverable.trim(),
+      submissionNotes: submissionNotes.trim() || undefined,
+    }).catch((err) => {
+      console.warn('Failed to persist deliverable to PostgreSQL API:', err);
+    });
 
     showNotice(`Deliverable for "${submittingAssignment.title}" submitted successfully!`);
     setSubmittingAssignment(null);
@@ -310,6 +342,15 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
     } catch {}
 
+    // Persist published grade to PostgreSQL backend database asynchronously
+    gradeAssignmentSubmissionApi(assignmentId, submissionId, {
+      score,
+      letterGrade,
+      feedback,
+    }).catch((err) => {
+      console.warn('Failed to publish grade to PostgreSQL API:', err);
+    });
+
     const updatedCurrent = nextAssignments.find((a) => a.id === assignmentId);
     if (updatedCurrent) {
       setGradingAssignment(updatedCurrent);
@@ -368,6 +409,20 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
       status: 'active'
     };
     setAssignments([newAsg, ...assignments]);
+    createAssignmentApi({
+      courseId: asgCourseId,
+      cohortId: asgCohortId || undefined,
+      title: asgTitle.trim(),
+      description: asgDesc.trim(),
+      dueDate: asgDueDate,
+      totalMarks: asgMarks,
+      submissionFormat: asgFormat,
+    })
+      .then(() => loadBackendAssignments())
+      .catch((err) => {
+        console.warn('Failed to persist created assignment to PostgreSQL API:', err);
+      });
+
     setIsAssignmentModalOpen(false);
     showNotice(`Assignment "${asgTitle}" created and broadcast to cohort students!`);
     setAsgTitle('');
