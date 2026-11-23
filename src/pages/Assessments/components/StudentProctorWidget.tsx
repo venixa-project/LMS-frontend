@@ -72,6 +72,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     autoSubmitted?: boolean;
   } | null>(null);
   const lastSeenEventIdRef = useRef<string | null>(null);
+  const onForceSubmitRef = useRef(onForceSubmit);
+  useEffect(() => {
+    onForceSubmitRef.current = onForceSubmit;
+  }, [onForceSubmit]);
 
   // Administrative exam termination state
   const [terminatedState, setTerminatedState] = useState<{
@@ -294,14 +298,14 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   // Audio Proof Recorder (Captures 3.5s incident clip when audio violation strikes)
   const rollingVideoBufferRef = useRef<Array<{ blob: Blob; timestamp: number }>>([]);
 
-  // Upload 10-second video evidence captured right before and during the warning strike
+  // Upload 15-second video evidence captured right before (15s pre-roll) and during the warning strike
   const captureWarningVideoProof = (strikeNum: number, reasonTitle: string, reasonDesc: string) => {
     if (!sessionId) return;
     try {
       const now = Date.now();
-      // Extract video chunks from the last 12 seconds
+      // Extract video chunks from the last 16.5 seconds (full 15-second pre-roll leading up to warning)
       const recentChunks = rollingVideoBufferRef.current
-        .filter((c) => now - c.timestamp <= 12000)
+        .filter((c) => now - c.timestamp <= 16500)
         .map((c) => c.blob);
 
       if (recentChunks.length === 0) return;
@@ -483,7 +487,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         // If 3rd strike reached: Execute automatic exam submission
         if (data.autoSubmitted || strikeNum >= totalAllowed) {
           setTimeout(() => {
-            onForceSubmit?.('PROCTORING_THIRD_WARNING');
+            onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
           }, 3500);
         }
       }
@@ -496,7 +500,6 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       }
     });
 
-    // Listen for automatic submission trigger
     const unsubAutoSubmit = proctoringSocket.on('EXAM_AUTO_SUBMITTED', (data: any) => {
       if (data && (data.studentId === currentLearnerId || !data.studentId)) {
         setTerminatedState({
@@ -505,7 +508,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           adminName: 'Automated Proctor Policy Engine',
         });
         setTimeout(() => {
-          onForceSubmit?.('PROCTORING_THIRD_WARNING');
+          onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
         }, 3000);
       }
     });
@@ -519,8 +522,15 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           adminName: data.adminName || 'Exam Proctor',
         });
         setTimeout(() => {
-          onForceSubmit?.(data.reason || 'Exam ended by administrator.');
-        }, 3500);
+          onForceSubmitRef.current?.(data.reason || 'Exam terminated by administrator.');
+        }, 1500);
+      }
+    });
+
+    // Listen for admin stream request
+    const unsubAdminRequest = proctoringSocket.on('ADMIN_REQUEST_STREAM', () => {
+      if (assessmentId && currentLearnerId) {
+        proctoringSocket.initiatePeerOfferToAdmin(assessmentId, currentLearnerId);
       }
     });
 
@@ -529,9 +539,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       unsubManual();
       unsubAutoSubmit();
       unsubTerminated();
-      proctoringSocket.disconnect();
+      unsubAdminRequest();
     };
-  }, [assessmentId, currentLearnerId, onForceSubmit]);
+  }, [assessmentId, currentLearnerId, isExamActive, sessionId]);
 
   // Initialize MediaStream (Camera & Mic) - reuse passed mediaStream if present
   useEffect(() => {
@@ -1053,9 +1063,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           const videoBlob = e.data;
           const blobUrl = URL.createObjectURL(videoBlob);
 
-          // Maintain rolling buffer of video chunks covering the last 14 seconds
+          // Maintain rolling buffer of video chunks covering the last 18 seconds (minimum 15s pre-roll before warning)
           rollingVideoBufferRef.current.push({ blob: videoBlob, timestamp: Date.now() });
-          const cutoff = Date.now() - 14000;
+          const cutoff = Date.now() - 18000;
           rollingVideoBufferRef.current = rollingVideoBufferRef.current.filter((c) => c.timestamp >= cutoff);
 
           // 1. Instant zero-latency local broadcast (< 10ms memory transfer)
@@ -1123,6 +1133,16 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
             // 1. Ultra-fast local broadcast (8-10 FPS, instantaneous memory transfer)
             broadcastLiveFrame(currentLearnerId, assessmentId, frame, audioLevel);
+
+            // 2. Real-time WebSocket live camera frame broadcast (continuous, sub-second latency)
+            proctoringSocket.emit('STUDENT_VIDEO_FRAME', {
+              studentId: currentLearnerId,
+              assessmentId,
+              sessionId,
+              frame,
+              audioLevel,
+              timestamp: new Date().toISOString(),
+            });
 
             // 2. High-speed network live frame transmission (approx 2.5 FPS for cross-machine)
             const now = Date.now();

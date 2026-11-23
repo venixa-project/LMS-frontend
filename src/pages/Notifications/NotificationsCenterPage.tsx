@@ -70,10 +70,28 @@ const StudentNotificationsInbox: React.FC = () => {
     let active = true;
     setIsLoading(true);
     setError(null);
-    apiClient.get<StudentNotification[]>('/notifications').then(({ data }) => {
-      if (active) setNotifications(data);
+    apiClient.get<StudentNotification[]>('/notifications').then((res) => {
+      if (active) {
+        const rawList = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setNotifications(rawList);
+      }
     }).catch((loadError: unknown) => {
-      if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load notifications.');
+      if (active) {
+        const storeNotifs = useAuthStore.getState().notifications;
+        if (storeNotifs && storeNotifs.length > 0) {
+          setNotifications(storeNotifs.map((n) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            category: n.category,
+            linkUrl: n.link || null,
+            isRead: n.isRead,
+            createdAt: n.timestamp,
+          })));
+        } else {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load notifications.');
+        }
+      }
     }).finally(() => {
       if (active) setIsLoading(false);
     });
@@ -85,30 +103,29 @@ const StudentNotificationsInbox: React.FC = () => {
 
   const markRead = async (notificationId: string) => {
     setError(null);
+    useAuthStore.getState().markNotificationRead(notificationId);
+    setNotifications((current) => current.map((notification) =>
+      notification.id === notificationId ? { ...notification, isRead: true } : notification
+    ));
     try {
       await apiClient.patch(`/notifications/${encodeURIComponent(notificationId)}/read`);
-      setNotifications((current) => current.map((notification) =>
-        notification.id === notificationId ? { ...notification, isRead: true } : notification
-      ));
-    } catch (markError) {
-      setError(markError instanceof Error ? markError.message : 'Unable to mark this notification as read.');
-    }
+    } catch {}
   };
 
   const markAllRead = async () => {
     setIsMarkingAllRead(true);
     setError(null);
+    useAuthStore.getState().markAllNotificationsRead();
+    setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
     try {
       await apiClient.post('/notifications/mark-all-read');
-      setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
-    } catch (markError) {
-      setError(markError instanceof Error ? markError.message : 'Unable to mark notifications as read.');
-    } finally {
+    } catch {}
+    finally {
       setIsMarkingAllRead(false);
     }
   };
 
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+  const unreadCount = (Array.isArray(notifications) ? notifications : []).filter((notification) => !notification.isRead).length;
 
   return (
     <section>
@@ -197,9 +214,10 @@ const StudentNotificationsInbox: React.FC = () => {
 };
 
 const NotificationsManagementPage: React.FC = () => {
-  const { user, notifications, markNotificationRead, markAllNotificationsRead } = useAuthStore();
+  const { user, notifications, markNotificationRead, markAllNotificationsRead, fetchNotifications } = useAuthStore();
   const {
     announcements,
+    fetchAnnouncements,
     createAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
@@ -210,6 +228,11 @@ const NotificationsManagementPage: React.FC = () => {
     markAllAnnouncementsRead,
     getAnnouncementsForUser,
   } = useAnnouncementStore();
+
+  useEffect(() => {
+    fetchAnnouncements();
+    fetchNotifications();
+  }, [fetchAnnouncements, fetchNotifications]);
 
   const { courses } = useCourseStore();
   const { cohorts } = useCohortStore();

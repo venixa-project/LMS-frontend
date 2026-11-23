@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 
-import { ProctoringIncident } from '../../types';
+import { ProctoringIncident, ProctoringEvent } from '../../types';
 import {
   useProctoringStore,
   ProctoringSession,
@@ -12,7 +12,7 @@ import { JitsiProctorDashboard } from './components/JitsiProctorDashboard';
 import {
   Shield, Eye, AlertTriangle, CheckCircle2, Clock, X,
   Filter, UserCheck, ShieldAlert, FileText, Camera, Video, Monitor, Lock,
-  Search, Check, ExternalLink, Pause, Play, AlertCircle
+  Search, Check, ExternalLink, Pause, Play, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { generateJitsiRoomName } from '../../lib/jitsiProctoring';
 import { GoogleMeetIcon } from '../../components/GoogleMeet';
@@ -30,6 +30,18 @@ export const ProctoringPage: React.FC = () => {
     policies,
     submitInstructorDecision,
     updatePolicy,
+    dashboardStats,
+    isLoadingStats,
+    isLoadingQueue,
+    queueTotal,
+    appeals,
+    isLoadingAppeals,
+    isSavingDecision,
+    fetchStatistics,
+    fetchQueueSessions,
+    fetchPolicies,
+    fetchAppeals,
+    reviewAppeal,
   } = useProctoringStore();
 
   const [activeTab, setActiveTab] = useState<'live_monitor' | 'queue' | 'policy' | 'appeals'>(
@@ -47,6 +59,9 @@ export const ProctoringPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [activeVideoTime, setActiveVideoTime] = useState<number>(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
+  const [activeVideoSource, setActiveVideoSource] = useState<string | null>(null);
+  const [activeVideoTitle, setActiveVideoTitle] = useState<string>('Exam Video Telemetry');
+  const videoPlayerRef = React.useRef<HTMLVideoElement | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +103,25 @@ export const ProctoringPage: React.FC = () => {
       setAssessmentFilter(assessmentIdParam);
     }
   }, [assessmentIdParam]);
+
+  React.useEffect(() => {
+    fetchStatistics(assessmentFilter !== 'all' ? assessmentFilter : undefined);
+    fetchPolicies();
+    fetchAppeals(assessmentFilter !== 'all' ? assessmentFilter : undefined);
+  }, [assessmentFilter]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchQueueSessions({
+        search: searchQuery.trim() || undefined,
+        assessmentId: assessmentFilter !== 'all' ? assessmentFilter : undefined,
+        severity: severityFilter !== 'all' ? severityFilter : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+      });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQuery, assessmentFilter, severityFilter, statusFilter, categoryFilter]);
 
   const isLearner =
     user?.activeRole === 'student' ||
@@ -188,7 +222,7 @@ export const ProctoringPage: React.FC = () => {
     });
   }, [sessions, searchQuery, assessmentFilter, severityFilter, categoryFilter, statusFilter]);
 
-  // Statistics
+  // Statistics from real PostgreSQL DB aggregation with reactive fallback
   const targetSessions = assessmentFilter !== 'all'
     ? sessions.filter((s) => s.assessmentId === assessmentFilter)
     : sessions;
@@ -196,12 +230,19 @@ export const ProctoringPage: React.FC = () => {
     ? participants.filter((p) => p.assessmentId === assessmentFilter)
     : participants;
 
-  const totalSessions = Math.max(targetSessions.length, assessmentParticipants.length);
-  const sessionsWithEvents = targetSessions.filter((s) => s.events.some((e) => e.category !== 'timing_event')).length;
-  const pendingReviews = targetSessions.filter((s) => s.status !== 'reviewed' && s.events.some((e) => e.category !== 'timing_event')).length;
-  const clearedSessions = targetSessions.filter((s) => s.reviewDecision?.outcome === 'no_violation').length;
-  const acceptedTechnical = targetSessions.filter((s) => s.reviewDecision?.outcome === 'technical_incident_accepted').length;
-  const pendingAppeals = targetSessions.filter((s) => s.studentAppeal && s.studentAppeal.status === 'pending').length;
+  const localTotalSessions = Math.max(targetSessions.length, assessmentParticipants.length);
+  const localSessionsWithEvents = targetSessions.filter((s) => s.events.some((e) => e.category !== 'timing_event')).length;
+  const localPendingReviews = targetSessions.filter((s) => s.status !== 'reviewed' && s.events.some((e) => e.category !== 'timing_event')).length;
+  const localClearedSessions = targetSessions.filter((s) => s.reviewDecision?.outcome === 'no_violation').length;
+  const localAcceptedTechnical = targetSessions.filter((s) => s.reviewDecision?.outcome === 'technical_incident_accepted').length;
+  const localPendingAppeals = targetSessions.filter((s) => s.studentAppeal && s.studentAppeal.status === 'pending').length;
+
+  const totalSessions = (dashboardStats && dashboardStats.totalSessions > 0) ? dashboardStats.totalSessions : localTotalSessions;
+  const sessionsWithEvents = (dashboardStats && dashboardStats.sessionsWithSignals > 0) ? dashboardStats.sessionsWithSignals : localSessionsWithEvents;
+  const pendingReviews = (dashboardStats && dashboardStats.pendingReviews > 0) ? dashboardStats.pendingReviews : localPendingReviews;
+  const clearedSessions = (dashboardStats && dashboardStats.clearedSessions > 0) ? dashboardStats.clearedSessions : localClearedSessions;
+  const acceptedTechnical = (dashboardStats && dashboardStats.acceptedTechnical > 0) ? dashboardStats.acceptedTechnical : localAcceptedTechnical;
+  const pendingAppeals = (dashboardStats && dashboardStats.pendingAppeals > 0) ? dashboardStats.pendingAppeals : (appeals.length > 0 ? appeals.filter((a: any) => a.appealStatus === 'pending').length : localPendingAppeals);
 
   const handleOpenInspection = (session: ProctoringSession) => {
     setSelectedSession(session);
@@ -210,9 +251,22 @@ export const ProctoringPage: React.FC = () => {
     setFormError(null);
     setActiveVideoTime(0);
     setIsVideoPlaying(false);
+
+    // Identify first available warning video (15s pre-warning incident proof) or recording
+    const warningVideoEvent = session.events.find(
+      (e) =>
+        e.evidenceSnapshot &&
+        (e.evidenceSnapshot.includes('.webm') ||
+          e.evidenceSnapshot.includes('.mp4') ||
+          e.evidenceSnapshot.includes('warning') ||
+          e.category === 'warning_strike_video')
+    );
+    const videoUrl = warningVideoEvent?.evidenceSnapshot || session.recordingUrl || null;
+    setActiveVideoSource(videoUrl);
+    setActiveVideoTitle(warningVideoEvent ? `15s Pre-Warning Proof: ${warningVideoEvent.title}` : 'Exam Telemetry Stream');
   };
 
-  const handleSaveDecision = (e: React.FormEvent) => {
+  const handleSaveDecision = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSession) return;
 
@@ -225,7 +279,7 @@ export const ProctoringPage: React.FC = () => {
       return;
     }
 
-    submitInstructorDecision(selectedSession.id, {
+    await submitInstructorDecision(selectedSession.id, {
       reviewerId: user?.id || 'u-004',
       reviewerName: user?.displayName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Dr. James Wilson (Instructor)'),
       outcome: selectedOutcome,
@@ -233,6 +287,14 @@ export const ProctoringPage: React.FC = () => {
     });
 
     setSelectedSession(null);
+    fetchStatistics(assessmentFilter !== 'all' ? assessmentFilter : undefined);
+    fetchQueueSessions({
+      search: searchQuery.trim() || undefined,
+      assessmentId: assessmentFilter !== 'all' ? assessmentFilter : undefined,
+      severity: severityFilter !== 'all' ? severityFilter : undefined,
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+      category: categoryFilter !== 'all' ? categoryFilter : undefined,
+    });
   };
 
   const getOutcomeBadge = (outcome?: string) => {
@@ -259,6 +321,186 @@ export const ProctoringPage: React.FC = () => {
       next.set('tab', tab);
       return next;
     });
+  };
+
+  const getCategoryMeta = (category: string) => {
+    const cat = category.toLowerCase();
+    if (cat.includes('phone') || cat.includes('mobile')) {
+      return { icon: '📱', label: 'Phone', priority: 1, severity: 'critical' as const };
+    }
+    if (cat.includes('mismatch')) {
+      return { icon: '👤', label: 'Mismatch', priority: 2, severity: 'critical' as const };
+    }
+    if (cat.includes('multiple_face') || cat.includes('multi_face')) {
+      return { icon: '👥', label: 'Multi-Face', priority: 3, severity: 'critical' as const };
+    }
+    if (cat.includes('not_detected') || cat.includes('absent') || cat.includes('absence')) {
+      return { icon: '👁️', label: 'Absence', priority: 4, severity: 'warning' as const };
+    }
+    if (cat.includes('warning') || cat.includes('strike')) {
+      return { icon: '🚨', label: 'Warning', priority: 5, severity: 'warning' as const };
+    }
+    if (cat.includes('tab') || cat.includes('screen') || cat.includes('fullscreen')) {
+      return { icon: '🔄', label: 'Tab Switch', priority: 6, severity: 'warning' as const };
+    }
+    if (cat.includes('audio') || cat.includes('speech') || cat.includes('mic')) {
+      return { icon: '🎙️', label: 'Audio', priority: 7, severity: 'warning' as const };
+    }
+    return {
+      icon: '⚠️',
+      label: category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      priority: 10,
+      severity: 'informational' as const,
+    };
+  };
+
+  const renderCompactSignalEvents = (events: ProctoringEvent[]) => {
+    const nonTiming = events.filter((e) => e.category !== 'timing_event');
+    if (nonTiming.length === 0) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '3px 9px',
+            borderRadius: '12px',
+            fontSize: '0.73rem',
+            fontWeight: 600,
+            background: 'rgba(34, 197, 94, 0.1)',
+            color: '#22c55e',
+            border: '1px solid rgba(34, 197, 94, 0.25)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <CheckCircle2 size={12} /> Clean (0 signals)
+        </span>
+      );
+    }
+
+    // Group events by category
+    const groups = new Map<string, { count: number; meta: ReturnType<typeof getCategoryMeta>; descriptions: string[]; maxSeverity: string }>();
+
+    nonTiming.forEach((evt) => {
+      const meta = getCategoryMeta(evt.category);
+      const existing = groups.get(meta.label);
+      const currentSeverity = evt.severity || meta.severity;
+      if (existing) {
+        existing.count += 1;
+        existing.descriptions.push(evt.description || evt.title);
+        if (currentSeverity === 'critical' || (currentSeverity === 'warning' && existing.maxSeverity !== 'critical')) {
+          existing.maxSeverity = currentSeverity;
+        }
+      } else {
+        groups.set(meta.label, {
+          count: 1,
+          meta,
+          descriptions: [evt.description || evt.title],
+          maxSeverity: currentSeverity,
+        });
+      }
+    });
+
+    const sorted = Array.from(groups.values()).sort((a, b) => a.meta.priority - b.meta.priority);
+    const displayLimit = 2;
+    const visible = sorted.slice(0, displayLimit);
+    const remainingCount = sorted.slice(displayLimit).reduce((sum, g) => sum + g.count, 0);
+
+    const fullSummary = nonTiming
+      .map((e) => `• ${e.title || e.category.replace(/_/g, ' ')} (${e.severity || 'warning'})`)
+      .join('\n');
+
+    return (
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px',
+          flexWrap: 'wrap',
+          maxWidth: '240px',
+        }}
+        title={fullSummary}
+      >
+        {visible.map((group, idx) => {
+          const isCritical = group.maxSeverity === 'critical';
+          const isWarning = group.maxSeverity === 'warning';
+
+          return (
+            <span
+              key={idx}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '0.71rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                background: isCritical
+                  ? 'rgba(239, 68, 68, 0.12)'
+                  : isWarning
+                    ? 'rgba(245, 158, 11, 0.12)'
+                    : 'rgba(99, 102, 241, 0.12)',
+                color: isCritical
+                  ? '#ef4444'
+                  : isWarning
+                    ? '#f59e0b'
+                    : '#818cf8',
+                border: `1px solid ${
+                  isCritical
+                    ? 'rgba(239, 68, 68, 0.3)'
+                    : isWarning
+                      ? 'rgba(245, 158, 11, 0.3)'
+                      : 'rgba(99, 102, 241, 0.25)'
+                }`,
+              }}
+            >
+              <span>{group.meta.icon}</span>
+              <span>{group.meta.label}</span>
+              {group.count > 1 && (
+                <span
+                  style={{
+                    background: isCritical
+                      ? 'rgba(239, 68, 68, 0.25)'
+                      : isWarning
+                        ? 'rgba(245, 158, 11, 0.25)'
+                        : 'rgba(99, 102, 241, 0.25)',
+                    padding: '1px 5px',
+                    borderRadius: '10px',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {group.count}
+                </span>
+              )}
+            </span>
+          );
+        })}
+
+        {remainingCount > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 6px',
+              borderRadius: '12px',
+              fontSize: '0.69rem',
+              fontWeight: 700,
+              background: 'var(--bg-input)',
+              color: 'var(--text-muted)',
+              border: '1px solid var(--border-subtle)',
+              cursor: 'help',
+              whiteSpace: 'nowrap',
+            }}
+            title={fullSummary}
+          >
+            +{remainingCount} more
+          </span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -360,13 +602,6 @@ export const ProctoringPage: React.FC = () => {
       {/* Tabs */}
       <div className="tabs-nav" style={{ marginBottom: '24px' }}>
         <button
-          className={`tab-btn ${activeTab === 'live_monitor' ? 'active' : ''}`}
-          onClick={() => handleTabChange('live_monitor')}
-        >
-          <Video size={16} />
-          Live Proctoring & Google Meet Monitor
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
           onClick={() => handleTabChange('queue')}
         >
@@ -389,11 +624,85 @@ export const ProctoringPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tab 0: Live Proctoring & Google Meet Monitor */}
+      {/* Live Proctoring & Google Meet Monitor (Launched via "Monitor Live" button in Assessments) */}
       {activeTab === 'live_monitor' && (
-        <JitsiProctorDashboard
-          initialAssessmentId={assessmentIdParam || (assessmentFilter !== 'all' ? assessmentFilter : undefined)}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--bg-surface)',
+              padding: '12px 18px',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-subtle)',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  color: '#6366f1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Video size={17} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 800 }}>
+                    Live Examination Proctoring Room
+                  </h4>
+                  <span
+                    style={{
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      color: '#22c55e',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
+                    LIVE STREAMING
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Dedicated multi-candidate live proctoring stream launched from Assessments Monitor Live.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleTabChange('queue')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <ShieldAlert size={14} /> Incident Review Queue
+              </button>
+              <Link to="/assessments" className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                Back to Assessments
+              </Link>
+            </div>
+          </div>
+
+          <JitsiProctorDashboard
+            initialAssessmentId={assessmentIdParam || (assessmentFilter !== 'all' ? assessmentFilter : undefined)}
+          />
+        </div>
       )}
 
       {/* Tab 1: Queue */}
@@ -529,7 +838,10 @@ export const ProctoringPage: React.FC = () => {
                   </button>
                 </div>
 
-                <span className="text-muted text-xs font-semibold">
+                <span className="text-muted text-xs font-semibold" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  {isLoadingQueue && (
+                    <RefreshCw size={12} className="animate-spin text-primary" />
+                  )}
                   Showing {filteredSessions.length} of {sessions.length} Sessions
                 </span>
               </div>
@@ -545,14 +857,23 @@ export const ProctoringPage: React.FC = () => {
                       <th>Learner</th>
                       <th>Assessment</th>
                       <th>Policy</th>
-                      <th>Signal Events</th>
+                      <th style={{ minWidth: '180px', maxWidth: '240px' }}>Signal Events</th>
                       <th>Student Context</th>
                       <th>Review Outcome</th>
                       <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSessions.length === 0 ? (
+                    {isLoadingQueue && filteredSessions.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+                            <div className="spinner-border spinner-border-sm" role="status" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} />
+                            <span>Loading live & recorded proctoring sessions from database...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredSessions.length === 0 ? (
                       <tr>
                         <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
                           No examination sessions match your filter criteria.
@@ -569,12 +890,14 @@ export const ProctoringPage: React.FC = () => {
                               {new Date(session.startedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                             </td>
                             <td>
-                              <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{session.learnerName}</div>
-                              <div className="text-muted text-xs">{session.learnerId}</div>
+                              <div style={{ fontWeight: 700, color: 'var(--text-main)' }} title={session.learnerId}>
+                                {session.learnerName}
+                              </div>
                             </td>
                             <td>
-                              <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{session.assessmentTitle}</div>
-                              <div className="text-muted text-xs">{session.id}</div>
+                              <div style={{ fontWeight: 600, fontSize: '0.88rem' }} title={`Session ID: ${session.id}`}>
+                                {session.assessmentTitle}
+                              </div>
                             </td>
                             <td>
                               <span
@@ -589,30 +912,8 @@ export const ProctoringPage: React.FC = () => {
                                 {session.policy.level}
                               </span>
                             </td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                {nonTimingEvents.length === 0 ? (
-                                  <span className="badge badge-active" style={{ fontSize: '0.72rem' }}>
-                                    0 Events (Clean)
-                                  </span>
-                                ) : (
-                                  nonTimingEvents.map((evt) => (
-                                    <span
-                                      key={evt.id}
-                                      className={`badge ${evt.severity === 'critical'
-                                        ? 'badge-failed'
-                                        : evt.severity === 'warning'
-                                          ? 'badge-warning'
-                                          : 'badge-secondary'
-                                        }`}
-                                      style={{ fontSize: '0.68rem' }}
-                                      title={evt.description}
-                                    >
-                                      {evt.category.replace(/_/g, ' ')}
-                                    </span>
-                                  ))
-                                )}
-                              </div>
+                            <td style={{ minWidth: '180px', maxWidth: '240px' }}>
+                              {renderCompactSignalEvents(session.events)}
                             </td>
                             <td>
                               {session.studentAppeal ? (
@@ -962,64 +1263,77 @@ export const ProctoringPage: React.FC = () => {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {sessions
-                .filter((s) => s.studentAppeal || s.events.some((e) => e.studentExplanation))
-                .map((sess) => {
-                  const appeal = sess.studentAppeal;
+              {isLoadingAppeals ? (
+                <div style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+                    <div className="spinner-border spinner-border-sm" role="status" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} />
+                    <span>Loading student appeals from database...</span>
+                  </div>
+                </div>
+              ) : sessions.filter((s) => s.studentAppeal || s.events.some((e) => e.studentExplanation)).length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  No learner appeals or explanations currently pending review.
+                </div>
+              ) : (
+                sessions
+                  .filter((s) => s.studentAppeal || s.events.some((e) => e.studentExplanation))
+                  .map((sess) => {
+                    const appeal = sess.studentAppeal;
 
-                  return (
-                    <div
-                      key={sess.id}
-                      style={{
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '18px 20px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '10px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                        <div>
-                          <strong style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>{sess.learnerName}</strong>
-                          <span className="text-muted text-xs" style={{ marginLeft: '8px' }}>
-                            Assessment: <strong>{sess.assessmentTitle}</strong> ({new Date(sess.startedAt).toLocaleDateString()})
-                          </span>
+                    return (
+                      <div
+                        key={sess.id}
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '18px 20px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                          <div>
+                            <strong style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>{sess.learnerName}</strong>
+                            <span className="text-muted text-xs" style={{ marginLeft: '8px' }}>
+                              Assessment: <strong>{sess.assessmentTitle}</strong> ({new Date(sess.startedAt).toLocaleDateString()})
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className={`badge ${appeal?.status === 'reviewed' ? 'badge-active' : 'badge-warning'}`}>
+                              {appeal?.status === 'reviewed' ? 'Reviewed by Grader' : 'Pending Review'}
+                            </span>
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={() => handleOpenInspection(sess)}
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              Review & Decide &rarr;
+                            </button>
+                          </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span className={`badge ${appeal?.status === 'reviewed' ? 'badge-active' : 'badge-warning'}`}>
-                            {appeal?.status === 'reviewed' ? 'Reviewed by Grader' : 'Pending Review'}
-                          </span>
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={() => handleOpenInspection(sess)}
-                            style={{ fontSize: '0.75rem' }}
+                        {appeal && (
+                          <div
+                            style={{
+                              background: 'rgba(37, 99, 235, 0.08)',
+                              border: '1px solid rgba(59, 130, 246, 0.25)',
+                              borderRadius: 'var(--radius-sm)',
+                              padding: '10px 14px',
+                              fontSize: '0.84rem',
+                              color: 'var(--text-main)',
+                            }}
                           >
-                            Review & Decide &rarr;
-                          </button>
-                        </div>
+                            <strong style={{ color: '#3B82F6' }}>Student Appeal Statement: </strong>
+                            "{appeal.explanation}"
+                          </div>
+                        )}
                       </div>
-
-                      {appeal && (
-                        <div
-                          style={{
-                            background: 'rgba(37, 99, 235, 0.08)',
-                            border: '1px solid rgba(59, 130, 246, 0.25)',
-                            borderRadius: 'var(--radius-sm)',
-                            padding: '10px 14px',
-                            fontSize: '0.84rem',
-                            color: 'var(--text-main)',
-                          }}
-                        >
-                          <strong style={{ color: '#3B82F6' }}>Student Appeal Statement: </strong>
-                          "{appeal.explanation}"
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })
+              )}
             </div>
           </div>
         )
@@ -1146,12 +1460,12 @@ export const ProctoringPage: React.FC = () => {
                   </a>
                 </div>
 
-                {/* Media Recording Player Simulation */}
+                {/* Media Recording & 15-Second Pre-Warning Video Player */}
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                     <div style={{ fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Video size={16} color="#EC4899" />
-                      Session Screen Recording Playback
+                      <span>{activeVideoTitle || 'Session Telemetry Video Playback'}</span>
                       {selectedSession.isSimulatedRecording && (
                         <span className="badge badge-secondary" style={{ fontSize: '0.65rem' }}>
                           Simulated Archive
@@ -1159,14 +1473,71 @@ export const ProctoringPage: React.FC = () => {
                       )}
                     </div>
 
-                    <span className="text-muted text-xs">
-                      Recorded Duration: {Math.round((selectedSession.recordingDuration || selectedSession.totalDurationSeconds || 2400) / 60)} Mins
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="text-muted text-xs">
+                        Recorded Duration: {Math.round((selectedSession.recordingDuration || selectedSession.totalDurationSeconds || 2400) / 60)} Mins
+                      </span>
+                    </div>
                   </div>
+
+                  {/* 15-Second Pre-Warning Incident Quick Selector Bar */}
+                  {selectedSession.events.some(
+                    (e) =>
+                      e.evidenceSnapshot &&
+                      (e.evidenceSnapshot.includes('.webm') ||
+                        e.evidenceSnapshot.includes('.mp4') ||
+                        e.evidenceSnapshot.includes('warning') ||
+                        e.category === 'warning_strike_video')
+                  ) && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                      {selectedSession.events
+                        .filter(
+                          (e) =>
+                            e.evidenceSnapshot &&
+                            (e.evidenceSnapshot.includes('.webm') ||
+                              e.evidenceSnapshot.includes('.mp4') ||
+                              e.evidenceSnapshot.includes('warning') ||
+                              e.category === 'warning_strike_video')
+                        )
+                        .map((vEvt, idx) => {
+                          const isActive = activeVideoSource === vEvt.evidenceSnapshot;
+                          return (
+                            <button
+                              key={vEvt.id || idx}
+                              type="button"
+                              className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                              style={{ fontSize: '0.72rem', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                              onClick={() => {
+                                setActiveVideoSource(vEvt.evidenceSnapshot!);
+                                setActiveVideoTitle(`15s Pre-Warning Proof: ${vEvt.title}`);
+                                setIsVideoPlaying(true);
+                              }}
+                            >
+                              <Video size={12} color={isActive ? '#fff' : '#EC4899'} />
+                              <span>{vEvt.title.replace(/of 3:/g, '')} (15s Pre-Roll)</span>
+                            </button>
+                          );
+                        })}
+                      {selectedSession.recordingUrl && (
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${activeVideoSource === selectedSession.recordingUrl ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                          onClick={() => {
+                            setActiveVideoSource(selectedSession.recordingUrl!);
+                            setActiveVideoTitle('Full Session Screen Recording');
+                            setIsVideoPlaying(true);
+                          }}
+                        >
+                          Full Exam Stream
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   <div
                     style={{
-                      height: '240px',
+                      height: '280px',
                       borderRadius: 'var(--radius-md)',
                       background: '#040711',
                       border: '1px solid var(--border-subtle)',
@@ -1178,37 +1549,34 @@ export const ProctoringPage: React.FC = () => {
                       overflow: 'hidden',
                     }}
                   >
-                    <Monitor size={48} color="#2563EB" style={{ opacity: 0.6, marginBottom: '12px' }} />
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>
-                      Secure Exam Screen Telemetry Stream
-                    </div>
-                    <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
-                      Timestamp Bookmark: {activeVideoTime}s into exam
-                    </div>
-
-                    {/* Play / Pause overlay button */}
-                    <button
-                      onClick={() => setIsVideoPlaying(!isVideoPlaying)}
-                      style={{
-                        position: 'absolute',
-                        bottom: '16px',
-                        left: '16px',
-                        background: 'rgba(37, 99, 235, 0.85)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '6px 14px',
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {isVideoPlaying ? <Pause size={14} /> : <Play size={14} />}
-                      {isVideoPlaying ? 'Pause Playback' : 'Play Capture Stream'}
-                    </button>
+                    {activeVideoSource ? (
+                      <video
+                        ref={videoPlayerRef}
+                        key={activeVideoSource}
+                        src={activeVideoSource}
+                        controls
+                        autoPlay={isVideoPlaying}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          background: '#000',
+                        }}
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', textAlign: 'center' }}>
+                        <Monitor size={48} color="#2563EB" style={{ opacity: 0.6, marginBottom: '12px' }} />
+                        <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#fff' }}>
+                          Candidate Proctored Video Telemetry
+                        </div>
+                        <p style={{ margin: '6px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+                          When a candidate incurs a proctoring violation warning, the 15 seconds of webcam video prior to the event are automatically recorded and playable here.
+                        </p>
+                        <div className="text-muted text-xs" style={{ marginTop: '8px' }}>
+                          Timestamp Bookmark: {activeVideoTime}s into exam
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1219,90 +1587,154 @@ export const ProctoringPage: React.FC = () => {
                   </h4>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {selectedSession.events.map((evt) => (
-                      <div
-                        key={evt.id}
-                        style={{
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '12px 16px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '6px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              style={{ fontSize: '0.7rem', padding: '2px 8px', fontFamily: 'monospace' }}
-                              onClick={() => setActiveVideoTime(evt.relativeSeconds)}
-                            >
-                              <Play size={10} /> +{evt.relativeSeconds}s
-                            </button>
-                            <strong style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>{evt.title}</strong>
-                            <span
-                              className={`badge ${evt.severity === 'critical'
-                                ? 'badge-failed'
-                                : evt.severity === 'warning'
-                                  ? 'badge-warning'
-                                  : 'badge-secondary'
-                                }`}
-                              style={{ fontSize: '0.65rem' }}
-                            >
-                              {evt.severity}
-                            </span>
-                          </div>
+                    {selectedSession.events.map((evt) => {
+                      const isVideoEvidence =
+                        evt.evidenceSnapshot &&
+                        (evt.evidenceSnapshot.includes('.webm') ||
+                          evt.evidenceSnapshot.includes('.mp4') ||
+                          evt.evidenceSnapshot.includes('warning-video') ||
+                          evt.evidenceSnapshot.startsWith('data:video/') ||
+                          evt.category === 'warning_strike_video');
 
-                          <div className="text-muted text-xs">
-                            {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </div>
-                        </div>
+                      const isAudioEvidence =
+                        evt.evidenceSnapshot &&
+                        (evt.evidenceSnapshot.includes('.mp3') ||
+                          evt.evidenceSnapshot.includes('.wav') ||
+                          evt.evidenceSnapshot.includes('audio-incident') ||
+                          evt.evidenceSnapshot.startsWith('data:audio/'));
 
-                        <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          {evt.description}
-                        </p>
-
-                        {evt.evidenceSnapshot && (
-                          <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                            <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                              <Camera size={13} color="#F59E0B" />
-                              Captured AI Video Frame & Evidence Snapshot:
+                      return (
+                        <div
+                          key={evt.id}
+                          style={{
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                style={{ fontSize: '0.7rem', padding: '2px 8px', fontFamily: 'monospace' }}
+                                onClick={() => setActiveVideoTime(evt.relativeSeconds)}
+                              >
+                                <Play size={10} /> +{evt.relativeSeconds}s
+                              </button>
+                              <strong style={{ fontSize: '0.88rem', color: 'var(--text-main)' }}>{evt.title}</strong>
+                              <span
+                                className={`badge ${evt.severity === 'critical'
+                                  ? 'badge-failed'
+                                  : evt.severity === 'warning'
+                                    ? 'badge-warning'
+                                    : 'badge-secondary'
+                                  }`}
+                                style={{ fontSize: '0.65rem' }}
+                              >
+                                {evt.severity}
+                              </span>
                             </div>
-                            <img
-                              src={evt.evidenceSnapshot}
-                              alt="Proctoring Incident Snapshot"
-                              style={{
-                                maxWidth: '340px',
-                                maxHeight: '200px',
-                                borderRadius: '4px',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                display: 'block',
-                                objectFit: 'contain',
-                                background: '#000',
-                              }}
-                            />
-                          </div>
-                        )}
 
-                        {evt.studentExplanation && (
-                          <div
-                            style={{
-                              background: 'rgba(84, 71, 255, 0.08)',
-                              border: '1px solid rgba(84, 71, 255, 0.25)',
-                              padding: '8px 12px',
-                              borderRadius: 'var(--radius-sm)',
-                              fontSize: '0.78rem',
-                              marginTop: '4px',
-                            }}
-                          >
-                            <strong style={{ color: '#818CF8' }}>Student Context Note: </strong>
-                            "{evt.studentExplanation}"
+                            <div className="text-muted text-xs">
+                              {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            {evt.description}
+                          </p>
+
+                          {/* 15-Second Pre-Warning Video Evidence Player */}
+                          {evt.evidenceSnapshot && isVideoEvidence && (
+                            <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(0, 0, 0, 0.45)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239, 68, 68, 0.35)' }}>
+                              <div style={{ fontSize: '0.78rem', color: '#F87171', marginBottom: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <Video size={14} color="#EF4444" />
+                                  15-Second Pre-Warning Incident Video Clip (15s pre-roll leading to violation)
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                                  onClick={() => {
+                                    setActiveVideoSource(evt.evidenceSnapshot!);
+                                    setActiveVideoTitle(`15s Pre-Warning Proof: ${evt.title}`);
+                                    setIsVideoPlaying(true);
+                                  }}
+                                >
+                                  <Play size={10} /> Play in Main Screen
+                                </button>
+                              </div>
+                              <video
+                                src={evt.evidenceSnapshot}
+                                controls
+                                preload="metadata"
+                                style={{
+                                  width: '100%',
+                                  maxHeight: '260px',
+                                  borderRadius: '6px',
+                                  background: '#000',
+                                  display: 'block',
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Audio Evidence Player */}
+                          {evt.evidenceSnapshot && isAudioEvidence && (
+                            <div style={{ marginTop: '8px', padding: '10px', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                              <div style={{ fontSize: '0.74rem', color: '#93C5FD', marginBottom: '6px', fontWeight: 600 }}>
+                                Sustained Audio Speech Incident Evidence:
+                              </div>
+                              <audio src={evt.evidenceSnapshot} controls style={{ width: '100%' }} />
+                            </div>
+                          )}
+
+                          {/* Static Snapshot Evidence */}
+                          {evt.evidenceSnapshot && !isVideoEvidence && !isAudioEvidence && (
+                            <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginBottom: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <Camera size={13} color="#F59E0B" />
+                                Captured AI Video Frame & Evidence Snapshot:
+                              </div>
+                              <img
+                                src={evt.evidenceSnapshot}
+                                alt="Proctoring Incident Snapshot"
+                                style={{
+                                  maxWidth: '340px',
+                                  maxHeight: '200px',
+                                  borderRadius: '4px',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                  display: 'block',
+                                  objectFit: 'contain',
+                                  background: '#000',
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {evt.studentExplanation && (
+                            <div
+                              style={{
+                                background: 'rgba(84, 71, 255, 0.08)',
+                                border: '1px solid rgba(84, 71, 255, 0.25)',
+                                padding: '8px 12px',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '0.78rem',
+                                marginTop: '4px',
+                              }}
+                            >
+                              <strong style={{ color: '#818CF8' }}>Student Context Note: </strong>
+                              "{evt.studentExplanation}"
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

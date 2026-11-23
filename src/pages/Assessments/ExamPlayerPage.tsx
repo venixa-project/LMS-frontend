@@ -2094,33 +2094,44 @@ export const ExamPlayerPage: React.FC = () => {
   }
 
   // -------------------------------------------------------------
-  // STAGE 3: RESULTS & PROCTORING REPORT ACCESS (FEATURE G)
+  // STAGE 3: RESULTS & EVALUATION WITHHOLDING
   // -------------------------------------------------------------
-  // If exam was proctored, withhold immediate grades/corrections until released by trainer
-  if (isProctored) {
+  // Scores, grades, and answer keys are withheld until verified and released by trainer/admin
+  const shouldWithholdResults = isStudent || isProctored || assessment?.aiGradingEnabled || (assessment as any)?.resultReleasePolicy !== 'immediate';
+  if (shouldWithholdResults) {
     return (
       <div style={{ maxWidth: '720px', margin: '40px auto', padding: '0 16px' }}>
         <div className="card" style={{ textAlign: 'center', padding: '40px', borderRadius: 'var(--radius-xl)' }}>
           {forcedSubmissionReason && (
             <div
               style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: forcedSubmissionReason.toLowerCase().includes('terminat') || forcedSubmissionReason.toLowerCase().includes('stopped')
+                  ? 'rgba(239, 68, 68, 0.15)'
+                  : 'rgba(245, 158, 11, 0.12)',
+                border: forcedSubmissionReason.toLowerCase().includes('terminat') || forcedSubmissionReason.toLowerCase().includes('stopped')
+                  ? '2px solid rgba(239, 68, 68, 0.4)'
+                  : '1px solid rgba(245, 158, 11, 0.3)',
                 borderRadius: 'var(--radius-md)',
-                padding: '14px 18px',
+                padding: '16px 20px',
                 marginBottom: '24px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
-                color: 'var(--danger)',
+                gap: '14px',
+                color: forcedSubmissionReason.toLowerCase().includes('terminat') || forcedSubmissionReason.toLowerCase().includes('stopped')
+                  ? 'var(--danger)'
+                  : '#f59e0b',
                 textAlign: 'left',
               }}
             >
-              <AlertTriangle size={24} style={{ flexShrink: 0 }} />
+              <AlertTriangle size={28} style={{ flexShrink: 0 }} />
               <div>
-                <div style={{ fontWeight: 800, fontSize: '0.92rem' }}>Automated Proctor Session Concluded</div>
-                <div style={{ fontSize: '0.82rem', opacity: 0.9, marginTop: '2px' }}>
-                  {forcedSubmissionReason} All completed responses and proctoring telemetry have been securely archived.
+                <div style={{ fontWeight: 800, fontSize: '0.98rem' }}>
+                  {forcedSubmissionReason.toLowerCase().includes('terminat') || forcedSubmissionReason.toLowerCase().includes('stopped')
+                    ? 'Examination Terminated by Administrator'
+                    : 'Automated Proctor Session Concluded'}
+                </div>
+                <div style={{ fontSize: '0.84rem', opacity: 0.95, marginTop: '3px' }}>
+                  {forcedSubmissionReason} All completed responses up to the termination timestamp have been securely preserved in the database.
                 </div>
               </div>
             </div>
@@ -2131,21 +2142,42 @@ export const ExamPlayerPage: React.FC = () => {
               width: '80px',
               height: '80px',
               borderRadius: '50%',
-              background: 'rgba(16, 185, 129, 0.12)',
-              color: '#10b981',
+              background: forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+                ? 'rgba(239, 68, 68, 0.12)'
+                : 'rgba(16, 185, 129, 0.12)',
+              color: forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+                ? '#ef4444'
+                : '#10b981',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 16px auto',
-              border: '2px solid rgba(16, 185, 129, 0.3)',
-              boxShadow: '0 8px 24px rgba(16, 185, 129, 0.2)',
+              border: forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+                ? '2px solid rgba(239, 68, 68, 0.3)'
+                : '2px solid rgba(16, 185, 129, 0.3)',
+              boxShadow: forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+                ? '0 8px 24px rgba(239, 68, 68, 0.2)'
+                : '0 8px 24px rgba(16, 185, 129, 0.2)',
             }}
           >
-            <CheckCircle2 size={46} />
+            {forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped') ? (
+              <Lock size={42} />
+            ) : (
+              <CheckCircle2 size={46} />
+            )}
           </div>
 
-          <div className="badge badge-success" style={{ fontSize: '0.82rem', padding: '4px 14px', marginBottom: '12px' }}>
-            Examination Submitted Successfully
+          <div
+            className={`badge ${
+              forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+                ? 'badge-danger'
+                : 'badge-success'
+            }`}
+            style={{ fontSize: '0.82rem', padding: '4px 14px', marginBottom: '12px', fontWeight: 800 }}
+          >
+            {forcedSubmissionReason?.toLowerCase().includes('terminat') || forcedSubmissionReason?.toLowerCase().includes('stopped')
+              ? 'Examination Session Terminated'
+              : 'Examination Submitted Successfully'}
           </div>
 
           <h1 style={{ fontSize: '1.8rem', marginBottom: '8px', fontWeight: 800, color: 'var(--text-main)' }}>
@@ -2170,8 +2202,9 @@ export const ExamPlayerPage: React.FC = () => {
               <Lock size={18} /> Results Pending Instructor Evaluation & Release
             </div>
             <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              In accordance with academic integrity guidelines, examination scores, grades, and answer keys are not published immediately upon completion.
-              Your assigned trainer/admin will review your proctoring audit telemetry, candidate identity verification, and 7-day proof video before releasing the final evaluation.
+              In accordance with academic evaluation regulations, examination scores, grades, and answer keys are not published immediately upon completion.
+              Your assigned instructor or administrator will review your assessment responses, AI evaluation suggestions, and verify your results before publishing.
+              You will receive an in-app notification as soon as your score is officially released.
             </p>
           </div>
 

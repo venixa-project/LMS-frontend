@@ -80,6 +80,7 @@ export interface ProctorAuditRecord {
 const STORAGE_KEY_PROCTORING_SESSIONS = 'venilearn_proctoring_sessions_v3';
 const STORAGE_KEY_PROCTORING_POLICIES = 'venilearn_proctoring_policies_v3';
 const STORAGE_KEY_PROCTORING_PARTICIPANTS = 'venilearn_proctoring_participants_v3';
+const STORAGE_KEY_PROCTORING_QUEUE_CACHE = 'venilearn_proctoring_queue_cache_v2';
 const PROCTORING_BROADCAST_CHANNEL = 'venilearn_proctoring_sync_v2';
 
 let proctoringBroadcastChannel: BroadcastChannel | null = null;
@@ -262,6 +263,9 @@ function loadFromStorage<T>(key: string, fallback: T): T {
           return isFresh;
         }) as unknown as T;
       }
+      if (key === STORAGE_KEY_PROCTORING_QUEUE_CACHE) {
+        return (Array.isArray(parsed) ? parsed : fallback) as unknown as T;
+      }
       if (key === STORAGE_KEY_PROCTORING_SESSIONS) {
         const now = Date.now();
         return parsed.filter((s: any) => {
@@ -401,9 +405,9 @@ export interface ProctoringStoreState {
         | 'technical_incident_accepted';
       explanation: string;
     }
-  ) => void;
+  ) => Promise<void>;
 
-  updatePolicy: (level: ProctoringPolicyLevel, updates: Partial<ProctoringPolicy>) => void;
+  updatePolicy: (level: ProctoringPolicyLevel, updates: Partial<ProctoringPolicy>) => Promise<void>;
   clearAssessmentSessions: (assessmentId: string) => void;
   setCandidateRemoteStream: (learnerId: string, stream: MediaStream | null) => void;
   upsertLiveCandidate: (candidate: Partial<ProctorParticipant> & { id: string; name: string; assessmentId: string }) => void;
@@ -411,9 +415,270 @@ export interface ProctoringStoreState {
   forceStopCandidateExam: (sessionId: string, studentId: string, assessmentId: string, reason: string) => Promise<void>;
   sendManualCandidateWarning: (sessionId: string, studentId: string, assessmentId: string, reason: string) => Promise<void>;
   fetchActiveCandidates: (assessmentId: string) => Promise<void>;
+
+  // Real Database-Driven Proctoring Dashboard State
+  dashboardStats: {
+    totalSessions: number;
+    sessionsWithSignals: number;
+    pendingReviews: number;
+    clearedSessions: number;
+    acceptedTechnical: number;
+    pendingAppeals: number;
+  };
+  isLoadingStats: boolean;
+  isLoadingQueue: boolean;
+  queueTotal: number;
+  queuePage: number;
+  appeals: any[];
+  isLoadingAppeals: boolean;
+  isSavingDecision: boolean;
+
+  fetchStatistics: (assessmentId?: string) => Promise<void>;
+  fetchQueueSessions: (params?: {
+    search?: string;
+    assessmentId?: string;
+    severity?: string;
+    status?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) => Promise<void>;
+  fetchPolicies: () => Promise<void>;
+  fetchAppeals: (assessmentId?: string) => Promise<void>;
+  reviewAppeal: (sessionId: string, decision: 'accepted' | 'rejected', notes?: string) => Promise<void>;
 }
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
+  dashboardStats: {
+    totalSessions: 0,
+    sessionsWithSignals: 0,
+    pendingReviews: 0,
+    clearedSessions: 0,
+    acceptedTechnical: 0,
+    pendingAppeals: 0,
+  },
+  isLoadingStats: false,
+  isLoadingQueue: false,
+  queueTotal: 0,
+  queuePage: 1,
+  appeals: [],
+  isLoadingAppeals: false,
+  isSavingDecision: false,
+
+  fetchStatistics: async (assessmentId?: string) => {
+    set({ isLoadingStats: true });
+    try {
+      const url = assessmentId && assessmentId !== 'all'
+        ? `/proctoring/statistics?assessmentId=${encodeURIComponent(assessmentId)}`
+        : '/proctoring/statistics';
+      const res = await apiClient.get<any>(url);
+      if (res && res.data) {
+        set({
+          dashboardStats: {
+            totalSessions: Number(res.data.totalSessions || 0),
+            sessionsWithSignals: Number(res.data.sessionsWithSignals || 0),
+            pendingReviews: Number(res.data.pendingReviews || 0),
+            clearedSessions: Number(res.data.clearedSessions || 0),
+            acceptedTechnical: Number(res.data.acceptedTechnical || 0),
+            pendingAppeals: Number(res.data.pendingAppeals || 0),
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch proctoring statistics:', e);
+    } finally {
+      set({ isLoadingStats: false });
+    }
+  },
+
+  fetchQueueSessions: async (params?: {
+    search?: string;
+    assessmentId?: string;
+    severity?: string;
+    status?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    set({ isLoadingQueue: true });
+    try {
+      const queryParts: string[] = [];
+      if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+      if (params?.assessmentId && params.assessmentId !== 'all') queryParts.push(`assessmentId=${encodeURIComponent(params.assessmentId)}`);
+      if (params?.severity && params.severity !== 'all') queryParts.push(`severity=${encodeURIComponent(params.severity)}`);
+      if (params?.status && params.status !== 'all') queryParts.push(`status=${encodeURIComponent(params.status)}`);
+      if (params?.category && params.category !== 'all') queryParts.push(`category=${encodeURIComponent(params.category)}`);
+      if (params?.page) queryParts.push(`page=${params.page}`);
+      if (params?.limit) queryParts.push(`limit=${params.limit}`);
+
+      const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+      const res = await apiClient.get<any>(`/proctoring/queue${queryString}`);
+
+      if (res && res.data) {
+        const rawList = Array.isArray(res.data) ? res.data : (res.data.sessions || []);
+        const total = typeof res.data.total === 'number' ? res.data.total : rawList.length;
+        const page = typeof res.data.page === 'number' ? res.data.page : (params?.page || 1);
+
+        const mapped: ProctoringSession[] = rawList.map((raw: any) => {
+          const learner = raw.attempt?.learner;
+          const learnerName = learner
+            ? `${learner.firstName || ''} ${learner.lastName || ''}`.trim() || learner.email
+            : raw.learnerId;
+          const assessmentTitle = raw.attempt?.assessment?.title || (raw.assessmentId ? `Assessment (${raw.assessmentId.slice(0, 8)})` : 'Proctored Assessment');
+
+          return {
+            id: raw.id,
+            attemptId: raw.attemptId || raw.id,
+            assessmentId: raw.assessmentId,
+            assessmentTitle,
+            learnerId: raw.learnerId,
+            learnerName: learnerName || 'Candidate',
+            policy: raw.policy || DEFAULT_PROCTORING_POLICIES.monitored,
+            status: raw.status || 'in_progress',
+            startedAt: raw.startedAt ? new Date(raw.startedAt).toISOString() : new Date().toISOString(),
+            endedAt: raw.endedAt ? new Date(raw.endedAt).toISOString() : undefined,
+            totalDurationSeconds: raw.totalDurationSec || 0,
+            activeScreenShare: raw.activeScreenShare ?? true,
+            activeMic: raw.activeMic ?? true,
+            activeWebcam: raw.activeWebcam ?? true,
+            isFullscreen: raw.isFullscreen ?? true,
+            isOnline: true,
+            jitsiRoomName: raw.jitsiRoomName,
+            recordingUrl: raw.recordingUrl,
+            reviewOutcome: raw.reviewOutcome,
+            appealExplanation: raw.appealExplanation,
+            appealStatus: raw.appealStatus,
+            reviewDecision: raw.reviewOutcome ? {
+              reviewerId: 'faculty',
+              reviewerName: 'Instructor',
+              outcome: raw.reviewOutcome,
+              explanation: raw.appealExplanation || 'Decision recorded',
+              timestamp: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : new Date().toISOString(),
+            } : undefined,
+            studentAppeal: raw.appealExplanation ? {
+              appealId: `app-${raw.id}`,
+              explanation: raw.appealExplanation,
+              submittedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : new Date().toISOString(),
+              status: (raw.appealStatus as any) || 'pending',
+            } : undefined,
+            events: (raw.events || []).map((e: any) => ({
+              id: e.id,
+              sessionId: e.sessionId || raw.id,
+              assessmentId: raw.assessmentId,
+              learnerId: raw.learnerId,
+              category: e.category,
+              severity: e.severity || 'warning',
+              title: e.title,
+              description: e.description,
+              timestamp: e.createdAt ? new Date(e.createdAt).toISOString() : new Date().toISOString(),
+              clientTimestamp: Number(e.clientTimestamp || 0),
+              relativeSeconds: e.relativeSeconds || 0,
+              evidenceSnapshot: e.evidenceSnapshot,
+              studentExplanation: e.studentExplanation,
+            })),
+            warnings: (raw.warnings || []).map((w: any) => ({
+              id: w.id,
+              sessionId: w.sessionId || raw.id,
+              warningNumber: 1,
+              reason: w.message,
+              severity: 'warning' as const,
+              timestamp: w.createdAt ? new Date(w.createdAt).toISOString() : new Date().toISOString(),
+              acknowledged: Boolean(w.acknowledged),
+            })),
+            incidents: (raw.incidents || []).map((inc: any) => ({
+              id: inc.id,
+              sessionId: inc.sessionId || raw.id,
+              attemptId: inc.attemptId || raw.attemptId || raw.id,
+              assessmentId: raw.assessmentId,
+              learnerId: inc.learnerId || raw.learnerId,
+              eventType: inc.eventType,
+              severity: inc.severity,
+              description: inc.description,
+              status: inc.status,
+              reviewerId: inc.reviewerId,
+              reviewerNotes: inc.reviewerNotes,
+              decision: inc.decision,
+              studentExplanation: inc.studentExplanation,
+              createdAt: inc.createdAt ? new Date(inc.createdAt).toISOString() : new Date().toISOString(),
+            })),
+          };
+        });
+
+        set({
+          sessions: mapped,
+          queueTotal: total,
+          queuePage: page,
+        });
+        saveToStorage(STORAGE_KEY_PROCTORING_QUEUE_CACHE, mapped);
+        saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, mapped);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch proctoring queue sessions:', e);
+    } finally {
+      set({ isLoadingQueue: false });
+    }
+  },
+
+  fetchPolicies: async () => {
+    try {
+      const res = await apiClient.get<any[]>('/proctoring/policies');
+      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
+        const policyMap = { ...DEFAULT_PROCTORING_POLICIES };
+        res.data.forEach((p: any) => {
+          const lvl = p.level as ProctoringPolicyLevel;
+          if (lvl && policyMap[lvl]) {
+            policyMap[lvl] = {
+              ...policyMap[lvl],
+              id: p.id,
+              name: p.name,
+              level: lvl,
+              description: p.description || policyMap[lvl].description,
+              requireScreenShare: p.requireScreenShare ?? true,
+              requireMicrophone: p.requireMicrophone ?? true,
+              requireWebcam: p.requireWebcam ?? true,
+              requireFullscreen: p.requireFullscreen ?? true,
+              pauseOnScreenShareLoss: p.pauseOnScreenShareLoss ?? true,
+              pauseOnTabSwitch: p.pauseOnTabSwitch ?? true,
+              pauseOnNetworkLoss: p.pauseOnNetworkLoss ?? true,
+              retentionDays: p.retentionDays || 30,
+            };
+          }
+        });
+        set({ policies: policyMap });
+        saveToStorage(STORAGE_KEY_PROCTORING_POLICIES, policyMap);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch proctoring policies:', e);
+    }
+  },
+
+  fetchAppeals: async (assessmentId?: string) => {
+    set({ isLoadingAppeals: true });
+    try {
+      const url = assessmentId && assessmentId !== 'all'
+        ? `/proctoring/appeals?assessmentId=${encodeURIComponent(assessmentId)}`
+        : '/proctoring/appeals';
+      const res = await apiClient.get<any[]>(url);
+      if (res && res.data && Array.isArray(res.data)) {
+        set({ appeals: res.data });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch proctoring appeals:', e);
+    } finally {
+      set({ isLoadingAppeals: false });
+    }
+  },
+
+  reviewAppeal: async (sessionId: string, decision: 'accepted' | 'rejected', notes?: string) => {
+    try {
+      await apiClient.post(`/proctoring/appeals/${sessionId}/decision`, { decision, notes });
+      await get().fetchAppeals();
+      await get().fetchStatistics();
+      await get().fetchQueueSessions();
+    } catch (e) {
+      console.warn('Failed to review appeal:', e);
+    }
+  },
   isLoadingSessions: false,
   fetchMySessions: async () => {
     set({ isLoadingSessions: true });
@@ -957,6 +1222,8 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           ? {
               ...p,
               status: 'terminated' as const,
+              cameraActive: false,
+              micActive: false,
               latestEvent: {
                 type: 'EXAM_TERMINATED',
                 reason,
@@ -1006,6 +1273,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
         const matchesId = p.id?.trim().toLowerCase() === target;
         const matchesName = p.name && p.name.trim().toLowerCase() === target;
         if (matchesId || matchesName) {
+          if (p.status === 'terminated') return true;
           if (!assessmentId || p.assessmentId === assessmentId) return false;
         }
         return true;
@@ -1090,7 +1358,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   // VeniGuard Sessions & Policies Initial State
-  sessions: loadFromStorage<ProctoringSession[]>(STORAGE_KEY_PROCTORING_SESSIONS, SEED_SESSIONS),
+  sessions: loadFromStorage<ProctoringSession[]>(STORAGE_KEY_PROCTORING_QUEUE_CACHE, loadFromStorage<ProctoringSession[]>(STORAGE_KEY_PROCTORING_SESSIONS, SEED_SESSIONS)),
   policies: loadFromStorage<Record<ProctoringPolicyLevel, ProctoringPolicy>>(
     STORAGE_KEY_PROCTORING_POLICIES,
     DEFAULT_PROCTORING_POLICIES
@@ -1336,7 +1604,21 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
     });
   },
 
-  submitInstructorDecision: (sessionId, decision) => {
+  submitInstructorDecision: async (sessionId, decision) => {
+    set({ isSavingDecision: true });
+    try {
+      if (sessionId && sessionId.length === 36) {
+        await apiClient.post(`/proctoring/sessions/${sessionId}/decision`, {
+          outcome: decision.outcome,
+          notes: decision.explanation,
+        });
+      }
+    } catch (apiErr) {
+      console.warn('Backend decision registration notice:', apiErr);
+    } finally {
+      set({ isSavingDecision: false });
+    }
+
     set((state) => {
       const nextSessions: ProctoringSession[] = state.sessions.map((s) => {
         if (s.id !== sessionId) return s;
@@ -1356,9 +1638,20 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, nextSessions);
       return { sessions: nextSessions };
     });
+
+    // Refresh real database metrics
+    get().fetchStatistics().catch(() => {});
   },
 
-  updatePolicy: (level, updates) => {
+  updatePolicy: async (level, updates) => {
+    try {
+      const targetPolicy = get().policies[level];
+      const targetId = targetPolicy?.id || level;
+      await apiClient.patch(`/proctoring/policies/${targetId}`, updates);
+    } catch (policyErr) {
+      console.warn('Backend policy update notice:', policyErr);
+    }
+
     set((state) => {
       const currentPolicy = state.policies[level];
       const updatedPolicy = { ...currentPolicy, ...updates };

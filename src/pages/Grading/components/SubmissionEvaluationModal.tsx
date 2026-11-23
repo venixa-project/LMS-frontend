@@ -1,11 +1,10 @@
-import { mockQuestions } from '../../../data/mockData';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AssessmentAttempt, Rubric } from '../../../types';
-
 import { useGradingStore } from '../../../lib/gradingStore';
 import {
   X, Check, Sparkles, CheckCircle2, Clock, AlertTriangle,
-  Award, ShieldAlert, ArrowRight, BookOpen, Layers
+  Award, ShieldAlert, ArrowRight, BookOpen, Layers, History,
+  RotateCcw, ThumbsDown
 } from 'lucide-react';
 
 interface SubmissionEvaluationModalProps {
@@ -19,51 +18,81 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
   onClose,
   isFaculty = true,
 }) => {
-  const { acceptAiScore, overrideScore, saveDraftGrade } = useGradingStore();
+  const {
+    tasks,
+    activeModalTask,
+    taskAuditHistory,
+    acceptAiScore,
+    rejectAiScore,
+    overrideScore,
+    saveDraftGrade,
+    triggerEvaluation,
+    fetchTaskDetails,
+    fetchTaskHistory,
+  } = useGradingStore();
 
-  const rubric: Rubric = {
-    id: 'default',
-    name: 'Standard Rubric',
-    title: 'Standard Rubric',
-    criteria: [],
-    totalPoints: 100,
-    version: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  const [score, setScore] = useState<number>(attempt.score || attempt.aiSuggestion?.score || 80);
+  const [activeModalTab, setActiveModalTab] = useState<'evaluation' | 'rubric' | 'history'>('evaluation');
+  const [score, setScore] = useState<number>(attempt.score !== undefined ? attempt.score : (attempt.aiSuggestion?.score || 0));
   const [feedback, setFeedback] = useState<string>(
     attempt.feedback ||
     attempt.aiSuggestion?.feedback ||
-    'Solid structural breakdown with accurate technical implementation. Demonstrated clear understanding of required architectural patterns.'
+    'Assessment evaluated. Answers demonstrate solid understanding of core concepts.'
   );
   const [privateNotes, setPrivateNotes] = useState<string>(
-    attempt.privateNotes || 'Checked against course rubric guidelines. Verified code syntax and pattern consistency.'
+    attempt.privateNotes || 'Graded in AI Evaluation Queue.'
   );
   const [notice, setNotice] = useState<string | null>(null);
+  const [showRejectPrompt, setShowRejectPrompt] = useState<boolean>(false);
+  const [rejectionReason, setRejectionReason] = useState<string>('AI score does not accurately reflect descriptive depth.');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Identify matching task
+  const matchingTask = useMemo(() => {
+    return tasks.find((t) => t.attemptId === attempt.id || t.id === attempt.id);
+  }, [tasks, attempt.id]);
+
+  const taskId = matchingTask?.id || attempt.id;
 
   // Rubric score state
   const [rubricScores, setRubricScores] = useState<Record<string, number>>(
-    attempt.rubricScores ||
-    attempt.aiSuggestion?.rubricScores || {
-      'rc-1': 28,
-      'rc-2': 23,
-      'rc-3': 22,
-      'rc-4': 15,
-    }
+    attempt.rubricScores || attempt.aiSuggestion?.rubricScores || {}
   );
+
+  // Proactively fetch full task questions, answers, and audit log from PostgreSQL
+  useEffect(() => {
+    if (taskId) {
+      fetchTaskDetails(taskId);
+      fetchTaskHistory(taskId);
+    }
+  }, [taskId]);
 
   useEffect(() => {
     if (attempt.score !== undefined) {
       setScore(attempt.score);
-    } else if (attempt.aiSuggestion?.score) {
+    } else if (attempt.aiSuggestion?.score !== undefined) {
       setScore(attempt.aiSuggestion.score);
     }
   }, [attempt]);
 
+  // Extract real questions from the backend task
+  const assessmentQuestions = useMemo(() => {
+    if (activeModalTask?.assessment?.questions && activeModalTask.assessment.questions.length > 0) {
+      return activeModalTask.assessment.questions;
+    }
+    return [];
+  }, [activeModalTask]);
+
+  // Extract real rubric criteria from backend task
+  const rubricCriteria = useMemo(() => {
+    if (activeModalTask?.assessment?.rubric?.criteria && activeModalTask.assessment.rubric.criteria.length > 0) {
+      return activeModalTask.assessment.rubric.criteria;
+    }
+    return [];
+  }, [activeModalTask]);
+
   const showNotification = (msg: string) => {
     setNotice(msg);
-    setTimeout(() => setNotice(null), 3000);
+    setTimeout(() => setNotice(null), 3500);
   };
 
   const handleLevelSelect = (critId: string, pts: number) => {
@@ -73,36 +102,92 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
     setScore(sum);
   };
 
-  const handleAcceptAI = () => {
-    acceptAiScore(attempt.id, feedback);
-    showNotification('AI score recommendation verified and accepted! Grade released.');
-    setTimeout(() => {
-      onClose();
-    }, 1200);
+  const handleAcceptAI = async () => {
+    setIsSubmitting(true);
+    try {
+      await acceptAiScore(taskId, feedback);
+      showNotification('AI score recommendation approved and saved to PostgreSQL!');
+      setTimeout(() => {
+        onClose();
+      }, 1200);
+    } catch (err: any) {
+      showNotification(`Failed to approve AI score: ${err?.message || 'Server error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSaveDraft = () => {
-    saveDraftGrade(attempt.id, {
-      score,
-      feedback,
-      rubricScores,
-      privateNotes,
-    });
-    showNotification('Grading progress saved as draft.');
+  const handleRejectAI = async () => {
+    if (!rejectionReason.trim()) {
+      showNotification('Please enter a specific rejection reason.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await rejectAiScore(taskId, rejectionReason.trim());
+      showNotification('AI score recommendation rejected and routed for human grading.');
+      setShowRejectPrompt(false);
+      setTimeout(() => {
+        onClose();
+      }, 1200);
+    } catch (err: any) {
+      showNotification(`Failed to reject score: ${err?.message || 'Server error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleFinalSubmit = () => {
-    overrideScore(attempt.id, {
-      score,
-      feedback,
-      rubricScores,
-      privateNotes,
-      requestModeration: false,
-    });
-    showNotification('Final grade confirmed, approved, and released to student portal!');
-    setTimeout(() => {
-      onClose();
-    }, 1200);
+  const handleSaveDraft = async () => {
+    setIsSubmitting(true);
+    try {
+      await saveDraftGrade(taskId, {
+        score,
+        feedback,
+        rubricScores,
+        privateNotes,
+      });
+      showNotification('Grading progress saved as draft in PostgreSQL.');
+    } catch (err: any) {
+      showNotification(`Save draft error: ${err?.message || 'Server error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFinalSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      await overrideScore(taskId, {
+        score,
+        feedback,
+        rubricScores,
+        privateNotes,
+      });
+      showNotification('Final grade confirmed, approved, and released in PostgreSQL!');
+      setTimeout(() => {
+        onClose();
+      }, 1200);
+    } catch (err: any) {
+      showNotification(`Submission error: ${err?.message || 'Server error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReEvaluate = async () => {
+    setIsSubmitting(true);
+    try {
+      await triggerEvaluation(taskId);
+      showNotification('AI evaluation re-executed successfully!');
+      if (taskId) {
+        fetchTaskDetails(taskId);
+        fetchTaskHistory(taskId);
+      }
+    } catch (err: any) {
+      showNotification(`Evaluation error: ${err?.message || 'AI service error'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isPublished = attempt.evaluationStatus === 'published' || attempt.status === 'results_released';
@@ -111,7 +196,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
       <div
         className="modal-card"
-        style={{ maxWidth: '960px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        style={{ maxWidth: '980px', width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -131,7 +216,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                 fontSize: '1rem',
               }}
             >
-              {attempt.learnerName.charAt(0)}
+              {attempt.learnerName ? attempt.learnerName.charAt(0) : 'S'}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -152,8 +237,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
               </div>
               <p className="text-secondary text-xs" style={{ margin: '4px 0 0 0' }}>
                 <strong>{attempt.assessmentTitle}</strong> &bull; {attempt.courseTitle || 'Enrolled Course'} &bull; Submitted on{' '}
-                {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'Recent'} &bull; Duration:{' '}
-                {attempt.timeSpent ? `${attempt.timeSpent} mins` : '—'}
+                {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'Recent'}
               </p>
             </div>
           </div>
@@ -184,6 +268,35 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
           </div>
         )}
 
+        {/* Modal Navigation Tabs (Evaluation, Rubrics, Audit History) */}
+        <div style={{ display: 'flex', gap: '12px', padding: '12px 24px 0 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <button
+            className={`btn btn-sm ${activeModalTab === 'evaluation' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveModalTab('evaluation')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <BookOpen size={14} /> Questions & Answers
+          </button>
+
+          {rubricCriteria.length > 0 && (
+            <button
+              className={`btn btn-sm ${activeModalTab === 'rubric' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveModalTab('rubric')}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Layers size={14} /> Rubric Matrix ({rubricCriteria.length})
+            </button>
+          )}
+
+          <button
+            className={`btn btn-sm ${activeModalTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveModalTab('history')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <History size={14} /> Audit Trail ({taskAuditHistory.length})
+          </button>
+        </div>
+
         {/* Modal Scrollable Body */}
         <div className="modal-body" style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Quick Score Overview Banner */}
@@ -206,7 +319,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                 <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary)' }}>
                   {score} / {attempt.totalMarks}{' '}
                   <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                    ({Math.round((score / attempt.totalMarks) * 100)}%)
+                    ({attempt.totalMarks > 0 ? Math.round((score / attempt.totalMarks) * 100) : 0}%)
                   </span>
                 </div>
               </div>
@@ -225,29 +338,42 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
               </div>
             </div>
 
-            {attempt.aiSuggestion && (
-              <div
-                style={{
-                  background: 'rgba(99, 102, 241, 0.08)',
-                  border: '1px solid rgba(99, 102, 241, 0.25)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '8px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <Sparkles size={16} color="var(--primary)" />
-                <div style={{ fontSize: '0.8rem' }}>
-                  <strong>AI Confidence: {Math.round(attempt.aiSuggestion.confidence * 100)}%</strong>
-                  <span className="text-muted"> ({attempt.aiSuggestion.model})</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {attempt.aiSuggestion && (
+                <div
+                  style={{
+                    background: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '8px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Sparkles size={16} color="var(--primary)" />
+                  <div style={{ fontSize: '0.8rem' }}>
+                    <strong>AI Confidence: {Math.round(attempt.aiSuggestion.confidence * 100)}%</strong>
+                    <span className="text-muted"> ({attempt.aiSuggestion.model || 'Local Model'})</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleReEvaluate}
+                disabled={isSubmitting}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Re-run AI evaluation on candidate submission"
+              >
+                <RotateCcw size={14} className={isSubmitting ? 'animate-spin' : ''} />
+                Re-evaluate
+              </button>
+            </div>
           </div>
 
           {/* AI Score Suggestion Card if available */}
-          {attempt.aiSuggestion ? (
+          {attempt.aiSuggestion && (
             <div
               style={{
                 background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05))',
@@ -256,7 +382,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                 padding: '16px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Sparkles size={18} color="var(--primary)" />
                   <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
@@ -287,144 +413,193 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                 <div className="text-muted text-xs">
-                  Preliminary score generated from configured rubrics. Final grade approval remains with the human trainer.
+                  Preliminary score generated from marking scheme. Final publication requires human approval.
                 </div>
                 {!isPublished && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleAcceptAI}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Check size={14} /> Accept AI Score ({attempt.aiSuggestion.score} pts)
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowRejectPrompt(!showRejectPrompt)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}
+                    >
+                      <ThumbsDown size={14} /> Reject AI Score
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleAcceptAI}
+                      disabled={isSubmitting}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Check size={14} /> Accept AI Score ({attempt.aiSuggestion.score} pts)
+                    </button>
+                  </div>
                 )}
               </div>
+
+              {/* Rejection Prompt Box */}
+              {showRejectPrompt && (
+                <div style={{ marginTop: '14px', padding: '12px', background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '6px' }}>
+                  <label className="form-label text-xs" style={{ fontWeight: 700, color: '#ef4444' }}>
+                    Rejection Reason (Required for Audit Trail):
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Provide specific justification for rejecting the AI score suggestion..."
+                    style={{ marginBottom: '8px', fontSize: '0.85rem' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setShowRejectPrompt(false)}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary btn-sm" style={{ background: '#ef4444' }} onClick={handleRejectAI} disabled={isSubmitting}>
+                      Confirm Rejection
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            <div
-              style={{
-                background: 'rgba(234, 179, 8, 0.08)',
-                border: '1px solid rgba(234, 179, 8, 0.35)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <AlertTriangle size={22} color="var(--warning)" style={{ flexShrink: 0 }} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  AI Review Required &bull; Unsupported Response Type
-                </div>
-                <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
-                  This assessment format cannot be evaluated by automated AI scoring. Please review student answers manually and confirm the final grade.
-                </div>
+          )}
+
+          {/* TAB 1: Real Questions & Student Submission Analysis */}
+          {activeModalTab === 'evaluation' && (
+            <div>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen size={18} /> Student Submission & Answer Analysis
+              </h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {assessmentQuestions.length > 0 ? (
+                  assessmentQuestions.map((q: any, idx: number) => {
+                    const ans = (attempt.answers || []).find((a) => a.questionId === q.id);
+                    const isObjective = ['single_choice', 'multiple_choice', 'true_false'].includes(q.type);
+
+                    return (
+                      <div
+                        key={q.id || idx}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '16px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="badge badge-neutral text-xs">Q{idx + 1}</span>
+                            <span className="badge badge-info text-xs" style={{ textTransform: 'capitalize' }}>
+                              {(q.type || 'question').replace('_', ' ')}
+                            </span>
+                            {ans && ans.isCorrect !== undefined && (
+                              <span className={`badge ${ans.isCorrect ? 'badge-completed' : 'badge-failed'} text-xs`}>
+                                {ans.isCorrect ? 'Correct' : 'Partial / Incorrect'}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                            {ans?.points !== undefined ? ans.points : '—'} / {q.points || 1} pts
+                          </div>
+                        </div>
+
+                        {/* Question Prompt */}
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>
+                          {q.prompt || 'Question Prompt'}
+                        </div>
+
+                        {/* Student Response */}
+                        <div
+                          style={{
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '12px',
+                            marginBottom: '10px',
+                          }}
+                        >
+                          <div style={{ fontSize: '0.725rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                            Student Submitted Answer:
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            {ans?.answer ? ans.answer : '— No answer response submitted —'}
+                          </div>
+                        </div>
+
+                        {/* Instructor Correct Answer Key */}
+                        {isObjective && q.options && (
+                          <div
+                            style={{
+                              background: 'rgba(34, 197, 94, 0.05)',
+                              border: '1px solid rgba(34, 197, 94, 0.2)',
+                              borderRadius: 'var(--radius-sm)',
+                              padding: '10px 12px',
+                              fontSize: '0.8rem',
+                              marginBottom: '8px',
+                            }}
+                          >
+                            <span style={{ fontWeight: 600, color: 'var(--success)' }}>Correct Answer Key: </span>
+                            {q.options.filter((o: any) => o.isCorrect).map((o: any) => o.text).join('; ') || q.correctAnswerText || 'Marked by criteria'}
+                          </div>
+                        )}
+
+                        {/* Feedback / AI Notes */}
+                        {(ans?.feedback || ans?.aiNotes) && (
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontWeight: 600 }}>Evaluation Notes:</span> {ans.feedback || ans.aiNotes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  (attempt.answers || []).map((ans, idx) => (
+                    <div
+                      key={ans.questionId || idx}
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '16px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span className="badge badge-neutral text-xs">Question #{idx + 1}</span>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                          {ans.points !== undefined ? ans.points : '—'} / {ans.maxPoints || 10} pts
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', padding: '10px', background: 'var(--bg-input)', borderRadius: '4px' }}>
+                        <strong>Student Response: </strong> {ans.answer || '— No answer provided —'}
+                      </div>
+                      {ans.feedback && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                          <strong>Notes: </strong> {ans.feedback}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
-          {/* Question Breakdown Section */}
-          <div>
-            <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BookOpen size={18} /> Student Submission & Answer Analysis
-            </h4>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {attempt.answers.map((ans, idx) => {
-                const questionData = mockQuestions.find((q) => q.id === ans.questionId);
-                const isObjective = questionData?.type !== 'essay';
-
-                return (
-                  <div
-                    key={ans.questionId || idx}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="badge badge-neutral text-xs">Q{idx + 1}</span>
-                        <span className="badge badge-info text-xs" style={{ textTransform: 'capitalize' }}>
-                          {questionData?.type.replace('_', ' ') || 'Question'}
-                        </span>
-                        {ans.isCorrect !== undefined && (
-                          <span className={`badge ${ans.isCorrect ? 'badge-completed' : 'badge-failed'} text-xs`}>
-                            {ans.isCorrect ? 'Correct' : 'Partial / Incorrect'}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                        {ans.points !== undefined ? ans.points : '—'} / {ans.maxPoints || questionData?.points || 10} pts
-                      </div>
-                    </div>
-
-                    {/* Question Prompt */}
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>
-                      {questionData?.prompt || 'Assessment Question Prompt'}
-                    </div>
-
-                    {/* Student Response */}
-                    <div
-                      style={{
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '12px',
-                        marginBottom: '10px',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.725rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                        Student Submitted Answer:
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                        {ans.answer || '— No response provided —'}
-                      </div>
-                    </div>
-
-                    {/* Instructor View: Correct Answer Key (when permitted) */}
-                    {isObjective && (questionData?.options || questionData?.correctAnswer) && (
-                      <div
-                        style={{
-                          background: 'rgba(34, 197, 94, 0.05)',
-                          border: '1px solid rgba(34, 197, 94, 0.2)',
-                          borderRadius: 'var(--radius-sm)',
-                          padding: '10px 12px',
-                          fontSize: '0.8rem',
-                          marginBottom: '8px',
-                        }}
-                      >
-                        <span style={{ fontWeight: 600, color: 'var(--success)' }}>Correct Answer Key: </span>
-                        {questionData.correctAnswer ||
-                          questionData.options?.filter((o) => o.isCorrect).map((o) => o.text).join('; ')}
-                      </div>
-                    )}
-
-                    {/* Feedback / AI Notes */}
-                    {(ans.feedback || ans.aiNotes) && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 600 }}>Evaluation Notes:</span> {ans.feedback || ans.aiNotes}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Rubric Matrix Scoring for Subjective Submissions */}
-          {rubric && (
+          {/* TAB 2: Rubric Matrix Scoring */}
+          {activeModalTab === 'rubric' && rubricCriteria.length > 0 && (
             <div>
               <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Layers size={18} /> Rubric-Based Scoring ({rubric.name})
+                <Layers size={18} /> Rubric-Based Scoring Matrix
               </h4>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {rubric.criteria.map((c) => {
+                {rubricCriteria.map((c: any) => {
                   const currentCriterionScore = rubricScores[c.id] || 0;
+                  const levels = c.levels || [
+                    { points: Math.round(c.maxPoints * 0.25), label: 'Developing' },
+                    { points: Math.round(c.maxPoints * 0.5), label: 'Proficient' },
+                    { points: Math.round(c.maxPoints * 0.75), label: 'Advanced' },
+                    { points: c.maxPoints, label: 'Exemplary' },
+                  ];
 
                   return (
                     <div
@@ -440,7 +615,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                         <div>
                           <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.name || c.title}</span>
                           <span className="text-muted text-xs" style={{ marginLeft: '8px' }}>
-                            ({c.weight}% Weight &bull; Max {c.maxPoints || 25} pts)
+                            (Max {c.maxPoints || 25} pts)
                           </span>
                         </div>
                         <span className="badge badge-primary">
@@ -450,7 +625,7 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                       <p className="text-muted text-xs" style={{ margin: '0 0 10px 0' }}>{c.description}</p>
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-                        {c.levels.map((lvl) => {
+                        {levels.map((lvl: any) => {
                           const isSelected = currentCriterionScore === lvl.points;
 
                           return (
@@ -469,9 +644,6 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                               <div style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--primary)' : 'var(--text-main)' }}>
                                 {lvl.name || lvl.label} ({lvl.points} pts)
                               </div>
-                              <div className="text-muted text-xs" style={{ marginTop: '2px', lineHeight: 1.3 }}>
-                                {lvl.descriptor || lvl.description}
-                              </div>
                             </div>
                           );
                         })}
@@ -480,6 +652,54 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* TAB 3: Audit Trail & Grading History */}
+          {activeModalTab === 'history' && (
+            <div>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <History size={18} /> Grading & Evaluation Audit History
+              </h4>
+
+              {taskAuditHistory.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)' }}>
+                  <Clock size={24} style={{ color: 'var(--text-muted)', margin: '0 auto 8px' }} />
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>No Modification Records Logged Yet</div>
+                  <div className="text-muted text-xs" style={{ marginTop: '4px' }}>
+                    Any human grade approval, score override, or rejection will record an immutable audit entry in PostgreSQL.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {taskAuditHistory.map((log) => (
+                    <div
+                      key={log.id}
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '12px 16px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span className="badge badge-primary text-xs" style={{ textTransform: 'uppercase' }}>
+                          {log.action.replace('_', ' ')}
+                        </span>
+                        <span className="text-muted text-xs">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '4px' }}>
+                        {log.changeSummary}
+                      </div>
+                      <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                        Evaluator / Actor: <strong>{log.actorName}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -558,12 +778,13 @@ export const SubmissionEvaluationModal: React.FC<SubmissionEvaluationModalProps>
             <button className="btn btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button className="btn btn-secondary" onClick={handleSaveDraft}>
+            <button className="btn btn-secondary" onClick={handleSaveDraft} disabled={isSubmitting}>
               Save Draft
             </button>
             <button
               className="btn btn-primary"
               onClick={handleFinalSubmit}
+              disabled={isSubmitting}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCircle2 size={16} /> Confirm & Approve Final Grade

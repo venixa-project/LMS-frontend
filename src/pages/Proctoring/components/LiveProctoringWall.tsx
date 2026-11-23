@@ -27,29 +27,102 @@ const CandidateLiveVideoTile: React.FC<{
   snapshotFallback?: string;
   videoUrl?: string;
   name: string;
-}> = ({ stream, snapshotFallback, videoUrl, name }) => {
+  status?: string;
+  cameraActive?: boolean;
+}> = ({ stream, snapshotFallback, videoUrl, name, status, cameraActive = true }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlayingWebRtc, setIsPlayingWebRtc] = useState(false);
+
+  const hasLiveVideoTrack = useMemo(() => {
+    if (!stream) return false;
+    const tracks = stream.getVideoTracks();
+    return tracks.length > 0 && tracks[0].readyState === 'live';
+  }, [stream]);
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
 
-    if (stream) {
+    if (stream && hasLiveVideoTrack) {
       if (v.srcObject !== stream) {
         v.src = '';
         v.srcObject = stream;
-        v.play().catch(() => {});
+        v.play()
+          .then(() => setIsPlayingWebRtc(true))
+          .catch(() => setIsPlayingWebRtc(false));
       }
     } else if (videoUrl) {
       if (v.src !== videoUrl) {
         v.srcObject = null;
         v.src = videoUrl;
-        v.play().catch(() => {});
+        v.play()
+          .then(() => setIsPlayingWebRtc(true))
+          .catch(() => setIsPlayingWebRtc(false));
       }
+    } else {
+      setIsPlayingWebRtc(false);
+      v.srcObject = null;
+      v.src = '';
     }
-  }, [stream, videoUrl]);
+  }, [stream, hasLiveVideoTrack, videoUrl]);
 
-  if (!stream && !videoUrl && snapshotFallback) {
+  const isTerminated = status === 'terminated';
+
+  // 1. Terminated state
+  if (isTerminated) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(135deg, #1f1215 0%, #0a0d14 100%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          color: '#ef4444',
+          padding: '16px',
+          textAlign: 'center',
+        }}
+      >
+        <Lock size={32} />
+        <span style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Exam Terminated
+        </span>
+        <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+          Candidate disconnected by administrator
+        </span>
+      </div>
+    );
+  }
+
+  // 2. Camera Disabled / Disconnected state
+  if (!cameraActive && status !== 'in_progress' && status !== 'connected') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: '#0a0d14',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          color: '#f59e0b',
+        }}
+      >
+        <AlertCircle size={28} />
+        <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+          {status === 'reconnecting' ? 'Reconnecting Camera...' : 'Camera Disabled'}
+        </span>
+      </div>
+    );
+  }
+
+  // 3. Fallback to real-time snapshot frame if WebRTC is not yet playing
+  if (!isPlayingWebRtc && snapshotFallback) {
     return (
       <img
         src={snapshotFallback}
@@ -66,6 +139,34 @@ const CandidateLiveVideoTile: React.FC<{
     );
   }
 
+  // 4. Connecting placeholder if neither WebRTC nor snapshot is ready yet
+  if (!isPlayingWebRtc && !snapshotFallback) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          background: 'radial-gradient(circle at center, #151b28 0%, #090c15 100%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+          color: '#94a3b8',
+        }}
+      >
+        <RefreshCw size={26} className="animate-spin" color="#38bdf8" />
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
+          Connecting Live Stream...
+        </span>
+        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+          Waiting for candidate camera feed
+        </span>
+      </div>
+    );
+  }
+
+  // 5. Active WebRTC live video
   return (
     <video
       ref={videoRef}
@@ -167,6 +268,9 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     // Connect as Admin to receive all candidates for this assessment
     proctoringSocket.connect(token || '', assessmentId, 'admin');
 
+    // Prompt active students to establish WebRTC connection and send frames
+    proctoringSocket.requestCandidateStreams(assessmentId);
+
     // Fetch initial active candidates from backend
     fetchActiveCandidates(assessmentId);
 
@@ -175,7 +279,25 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       setCandidateRemoteStream(studentId, remoteStream);
     });
 
-    // Listen for newly joined candidates
+    // Listen for high-speed live camera frame stream (Fast real-time visual fallback)
+    const unsubVideoFrame = proctoringSocket.on('STUDENT_VIDEO_FRAME', (data: any) => {
+      if (data && data.studentId && data.frame) {
+        upsertLiveCandidate({
+          id: data.studentId,
+          name: data.studentName || 'Student',
+          rollNo: data.rollNo,
+          assessmentId: data.assessmentId || assessmentId,
+          sessionId: data.sessionId,
+          status: 'connected',
+          cameraActive: true,
+          latestSnapshot: data.frame,
+          audioLevel: data.audioLevel ?? 0.15,
+          lastPingAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Listen for newly joined candidates in lobby / room (Attendance Feed)
     const unsubJoined = proctoringSocket.on('STUDENT_EXAM_JOINED', (data) => {
       if (data && data.studentId) {
         upsertLiveCandidate({
@@ -184,9 +306,9 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
           rollNo: data.rollNo,
           assessmentId: data.examId || assessmentId,
           sessionId: data.sessionId,
-          status: 'in_progress',
-          cameraActive: true,
-          micActive: true,
+          status: 'connected', // In lobby/room, not yet writing exam
+          cameraActive: false,
+          micActive: false,
           joinedAt: data.joinedAt || new Date().toISOString(),
           lastPingAt: new Date().toISOString(),
         });
@@ -268,10 +390,17 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       }
     });
 
-    // Listen for candidate video disconnected (Immediately remove from active wall)
+    // Listen for candidate video disconnected
     const unsubDisconnect = proctoringSocket.on('STUDENT_VIDEO_DISCONNECTED', (data) => {
       if (data && data.studentId) {
-        useProctoringStore.getState().removeLiveCandidate(data.studentId, assessmentId);
+        upsertLiveCandidate({
+          id: data.studentId,
+          assessmentId: data.assessmentId || assessmentId,
+          name: data.studentName || 'Student',
+          cameraActive: false,
+          status: 'reconnecting',
+          lastPingAt: new Date().toISOString(),
+        });
       }
     });
 
@@ -340,7 +469,21 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
           timestamp: data.terminatedAt || new Date().toISOString(),
           reason: data.reason || 'Examination terminated by Administrator',
         });
-        useProctoringStore.getState().removeLiveCandidate(data.studentId, assessmentId);
+        upsertLiveCandidate({
+          id: data.studentId,
+          assessmentId: data.assessmentId || assessmentId,
+          name: data.studentName || 'Student',
+          status: 'terminated',
+          cameraActive: false,
+          micActive: false,
+          latestEvent: {
+            type: 'EXAM_TERMINATED',
+            reason: data.reason || 'Terminated by Administrator',
+            source: 'manual',
+            timestamp: data.terminatedAt || new Date().toISOString(),
+            severity: 'critical',
+          },
+        });
       }
     });
 
@@ -385,6 +528,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
 
     return () => {
       unsubStream();
+      unsubVideoFrame();
       unsubJoined();
       unsubStarted();
       unsubSubmitted();
@@ -417,11 +561,11 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
         if (
           p.status === 'submitted' ||
           p.status === 'completed' ||
-          p.status === 'terminated' ||
           p.status === 'disconnected'
         ) {
           return false;
         }
+        if (p.status === 'terminated') return true;
         const pingTime = new Date(p.lastPingAt || 0).getTime();
         const isFresh = !isNaN(pingTime) && pingTime > 0 && (now - pingTime) < 35000;
         return isFresh && (p.status === 'in_progress' || p.status === 'connected');
@@ -972,6 +1116,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                     snapshotFallback={candidate.latestSnapshot}
                     videoUrl={candidate.latestVideoUrl}
                     name={candidate.name}
+                    status={candidate.status}
+                    cameraActive={candidate.cameraActive}
                   />
 
                   {/* TOP OVERLAYS: Connection status & Enlarge button */}
@@ -1000,6 +1146,10 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                         fontWeight: 700,
                         color: isTerminated
                           ? '#ef4444'
+                          : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
+                          ? '#10b981'
+                          : candidate.latestSnapshot
+                          ? '#38bdf8'
                           : isLive
                           ? '#10b981'
                           : '#f59e0b',
@@ -1013,13 +1163,25 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                           borderRadius: '50%',
                           background: isTerminated
                             ? '#ef4444'
+                            : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
+                            ? '#10b981'
+                            : candidate.latestSnapshot
+                            ? '#38bdf8'
                             : isLive
                             ? '#10b981'
                             : '#f59e0b',
-                          boxShadow: isLive ? '0 0 6px #10b981' : 'none',
+                          boxShadow: isTerminated ? 'none' : '0 0 6px currentColor',
                         }}
                       />
-                      {isTerminated ? 'Terminated' : isLive ? 'Live WebRTC' : 'Reconnecting'}
+                      {isTerminated
+                        ? 'Terminated'
+                        : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
+                        ? 'Live WebRTC'
+                        : candidate.latestSnapshot
+                        ? 'Live Frame'
+                        : isLive
+                        ? 'Live Stream'
+                        : 'Reconnecting'}
                     </span>
 
                     {/* Enlarge button */}
@@ -1360,6 +1522,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                   snapshotFallback={enlargedCandidate.latestSnapshot}
                   videoUrl={enlargedCandidate.latestVideoUrl}
                   name={enlargedCandidate.name}
+                  status={enlargedCandidate.status}
+                  cameraActive={enlargedCandidate.cameraActive}
                 />
 
                 <div

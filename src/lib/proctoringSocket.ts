@@ -42,16 +42,20 @@ export class ProctoringSocketClient {
   private localStream: MediaStream | null = null;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private remoteStreams: Map<string, MediaStream> = new Map();
+  private iceCandidateQueues: Map<string, RTCIceCandidateInit[]> = new Map();
   private onRemoteStreamCallbacks: Set<(studentId: string, stream: MediaStream) => void> = new Set();
   private studentDetails: { studentId: string; studentName: string; rollNo?: string; sessionId?: string } | null = null;
   private isManuallyClosed: boolean = false;
 
   constructor() {
-    // Standard STUN servers for WebRTC NAT traversal
+    // Robust STUN servers for WebRTC NAT traversal across LAN and WAN
     this.iceServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
     ];
   }
 
@@ -193,7 +197,7 @@ export class ProctoringSocketClient {
       this.handleIncomingWebRTCSignal(payload);
     }
 
-    if (eventName === 'renegotiate_candidate_stream') {
+    if (eventName === 'ADMIN_REQUEST_STREAM' || eventName === 'renegotiate_candidate_stream') {
       if (this.localStream && this.studentDetails && this.activeAssessmentId) {
         this.initiatePeerOfferToAdmin(this.activeAssessmentId, this.studentDetails.studentId);
       }
@@ -201,6 +205,10 @@ export class ProctoringSocketClient {
 
     // 2. Dispatch to registered listeners
     this.trigger(eventName, payload);
+  }
+
+  public requestCandidateStreams(assessmentId: string): void {
+    this.emit('ADMIN_REQUEST_STREAM', { assessmentId });
   }
 
   public emit(eventName: string, payload: any): void {
@@ -267,18 +275,26 @@ export class ProctoringSocketClient {
   /**
    * Candidate creates WebRTC Offer and sends it to the admin room
    */
-  private async initiatePeerOfferToAdmin(assessmentId: string, studentId: string): Promise<void> {
+  public async initiatePeerOfferToAdmin(assessmentId: string, studentId: string): Promise<void> {
     if (!this.localStream) return;
 
     try {
-      const pc = new RTCPeerConnection({ iceServers: this.iceServers });
-      this.peerConnections.set(`admin-wall-${assessmentId}`, pc);
+      const pcKey = `admin-wall-${assessmentId}`;
+      let pc = this.peerConnections.get(pcKey);
+      if (pc && pc.connectionState !== 'closed' && pc.connectionState !== 'failed') {
+        pc.close();
+      }
+
+      pc = new RTCPeerConnection({ iceServers: this.iceServers });
+      this.peerConnections.set(pcKey, pc);
+      this.peerConnections.set(studentId, pc);
+      this.iceCandidateQueues.set('candidate-side', []);
 
       this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
+        pc!.addTrack(track, this.localStream!);
       });
 
-      // Adaptive video quality & framerate stabilization
+      // Adaptive video quality & framerate stabilization (maintain 30 FPS at optimal bitrate)
       try {
         pc.getSenders().forEach((sender) => {
           if (sender.track?.kind === 'video') {
@@ -286,8 +302,8 @@ export class ProctoringSocketClient {
             if (!params.encodings || params.encodings.length === 0) {
               params.encodings = [{}];
             }
-            params.encodings[0].maxBitrate = 800000;
-            (params.encodings[0] as any).minBitrate = 150000;
+            params.encodings[0].maxBitrate = 900000;
+            (params.encodings[0] as any).minBitrate = 200000;
             (params as any).degradationPreference = 'maintain-framerate';
             sender.setParameters(params).catch(() => {});
           }
@@ -302,6 +318,20 @@ export class ProctoringSocketClient {
             signal: { candidate: event.candidate },
             type: 'candidate',
           });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc?.connectionState === 'failed' || pc?.connectionState === 'disconnected') {
+          console.warn('[WebRTC] Candidate connection state:', pc.connectionState, '- auto renegotiating');
+          if (typeof (pc as any).restartIce === 'function') {
+            (pc as any).restartIce();
+          }
+          setTimeout(() => {
+            if (this.localStream && this.studentDetails && this.activeAssessmentId) {
+              this.initiatePeerOfferToAdmin(this.activeAssessmentId, this.studentDetails.studentId);
+            }
+          }, 2000);
         }
       };
 
@@ -343,6 +373,8 @@ export class ProctoringSocketClient {
         if (!pc || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
           pc = new RTCPeerConnection({ iceServers: this.iceServers });
           this.peerConnections.set(targetKey, pc);
+          if (from) this.peerConnections.set(from, pc);
+          this.iceCandidateQueues.set(targetKey, []);
 
           pc.ontrack = (event) => {
             if (event.streams && event.streams[0]) {
@@ -362,9 +394,27 @@ export class ProctoringSocketClient {
               });
             }
           };
+
+          pc.onconnectionstatechange = () => {
+            if (pc?.connectionState === 'failed' || pc?.connectionState === 'disconnected') {
+              console.warn(`[WebRTC Admin] Candidate ${targetKey} connection state:`, pc.connectionState);
+            }
+          };
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+        // Drain queued candidates for this targetKey
+        const queued = this.iceCandidateQueues.get(targetKey) || [];
+        while (queued.length > 0) {
+          const cand = queued.shift();
+          if (cand) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (err) {}
+          }
+        }
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
@@ -387,6 +437,17 @@ export class ProctoringSocketClient {
       if (pc && pc.signalingState !== 'stable') {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+          // Drain queued candidates on candidate side
+          const queued = this.iceCandidateQueues.get('candidate-side') || [];
+          while (queued.length > 0) {
+            const cand = queued.shift();
+            if (cand) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand));
+              } catch (err) {}
+            }
+          }
         } catch (e) {
           console.warn('[ProctoringSocket] Error setting remote answer on candidate:', e);
         }
@@ -396,11 +457,20 @@ export class ProctoringSocketClient {
 
     // 3. ICE Candidate exchange:
     if (signal?.candidate) {
-      const pc = this.peerConnections.get(targetKey) || Array.from(this.peerConnections.values())[0];
-      if (pc && pc.remoteDescription) {
+      const pc = this.peerConnections.get(targetKey) ||
+        this.peerConnections.get(`admin-wall-${assessmentId || this.activeAssessmentId}`) ||
+        Array.from(this.peerConnections.values())[0];
+
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-        } catch (e) { }
+        } catch (e) {}
+      } else {
+        const queueKey = this.activeRole === 'admin' ? targetKey : 'candidate-side';
+        if (!this.iceCandidateQueues.has(queueKey)) {
+          this.iceCandidateQueues.set(queueKey, []);
+        }
+        this.iceCandidateQueues.get(queueKey)!.push(signal.candidate);
       }
     }
   }

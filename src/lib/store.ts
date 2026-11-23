@@ -215,6 +215,33 @@ function loadStoredNotifications(): Notification[] {
   return [];
 }
 
+function loadReadNotificationIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem('venilearn_read_notification_ids');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch {}
+  return new Set();
+}
+
+function persistReadNotificationId(id: string) {
+  try {
+    const ids = loadReadNotificationIds();
+    ids.add(id);
+    localStorage.setItem('venilearn_read_notification_ids', JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
+function persistAllReadNotificationIds(idsToAdd: string[]) {
+  try {
+    const ids = loadReadNotificationIds();
+    idsToAdd.forEach((id) => ids.add(id));
+    localStorage.setItem('venilearn_read_notification_ids', JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
 function persistStoredNotifications(notifs: Notification[]) {
   try {
     localStorage.setItem(STORAGE_KEY_NOTIFICATIONS, JSON.stringify(notifs));
@@ -226,6 +253,7 @@ function persistStoredNotifications(notifs: Notification[]) {
 
 function getUserNotifications(user: User): Notification[] {
   const stored = loadStoredNotifications();
+  const readIds = loadReadNotificationIds();
   const isStudentUser =
     user.activeRole === 'student' ||
     user.activeRole === 'learner' ||
@@ -265,14 +293,38 @@ function getUserNotifications(user: User): Notification[] {
       isRead: false,
       timestamp: new Date().toISOString(),
     },
-    ...(user.activeRole === 'student' || user.activeRole === 'learner'
+    ...(isAdminOrTrainer
+      ? [
+          {
+            id: `sys-proc-admin-${user.id}`,
+            userId: user.id,
+            title: 'Proctoring Incident Center',
+            message: 'Flagged candidate telemetry events and pre-roll clips are ready for faculty review.',
+            category: 'system' as const,
+            link: '/proctoring',
+            isRead: false,
+            timestamp: new Date(Date.now() - 1800000).toISOString(),
+          },
+          {
+            id: `sys-grade-admin-${user.id}`,
+            userId: user.id,
+            title: 'AI Evaluation & Grading Queue',
+            message: 'Recent assessment submissions have been AI-evaluated and await final score approval.',
+            category: 'assessment' as const,
+            link: '/grading',
+            isRead: false,
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+          },
+        ]
+      : []),
+    ...(isStudentUser
       ? [
           {
             id: `sys-2-${user.id}`,
             userId: user.id,
             title: 'Assessment Due Soon',
             message: 'React Fundamentals Quiz is due in 2 days.',
-            category: 'assessment',
+            category: 'assessment' as const,
             link: '/my-assessments',
             isRead: false,
             timestamp: new Date(Date.now() - 3600000).toISOString(),
@@ -282,7 +334,7 @@ function getUserNotifications(user: User): Notification[] {
             userId: user.id,
             title: 'Live Class Tomorrow',
             message: 'Advanced TypeScript Patterns session scheduled for tomorrow at 10:00 AM.',
-            category: 'live_class',
+            category: 'live_class' as const,
             link: '/my-sessions',
             isRead: false,
             timestamp: new Date(Date.now() - 7200000).toISOString(),
@@ -291,7 +343,16 @@ function getUserNotifications(user: User): Notification[] {
       : []),
   ];
 
-  const combined = [...userStored, ...defaults.filter((d) => !userStored.some((u) => u.id === d.id))];
+  const adjustedDefaults = defaults.map((d) => ({
+    ...d,
+    isRead: d.isRead || readIds.has(d.id),
+  }));
+
+  const combined = [
+    ...userStored.map((s) => ({ ...s, isRead: s.isRead || readIds.has(s.id) })),
+    ...adjustedDefaults.filter((d) => !userStored.some((u) => u.id === d.id)),
+  ];
+
   return combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
@@ -554,6 +615,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
 
+    const readIds = loadReadNotificationIds();
+
     if (hasBackendAccessToken()) {
       try {
         const response = await apiClient.get<Array<{
@@ -567,15 +630,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           createdAt: string;
         }>>('/notifications');
 
-        if (response.data && Array.isArray(response.data)) {
-          const mapped: Notification[] = response.data.map((n) => ({
+        const rawList = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response)
+          ? response
+          : [];
+
+        if (rawList.length > 0) {
+          const mapped: Notification[] = rawList.map((n) => ({
             id: n.id,
             userId: n.userId,
             title: n.title,
             message: n.message,
             category: n.category as any,
             link: n.linkUrl || undefined,
-            isRead: n.isRead,
+            isRead: n.isRead || readIds.has(n.id),
             timestamp: n.createdAt,
           }));
 
@@ -602,6 +671,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   markNotificationRead: (id: string) => {
+    persistReadNotificationId(id);
     const { notifications } = get();
     const updated = notifications.map((n) =>
       n.id === id ? { ...n, isRead: true } : n
@@ -616,12 +686,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     persistStoredNotifications(updatedStored);
 
     if (hasBackendAccessToken()) {
-      apiClient.patch(`/notifications/${id}/read`).catch(() => {});
+      apiClient.patch(`/notifications/${encodeURIComponent(id)}/read`).catch(() => {});
     }
   },
 
   markAllNotificationsRead: () => {
     const { notifications } = get();
+    persistAllReadNotificationIds(notifications.map((n) => n.id));
     const updated = notifications.map((n) => ({ ...n, isRead: true }));
     set({ notifications: updated, unreadNotifications: 0 });
 

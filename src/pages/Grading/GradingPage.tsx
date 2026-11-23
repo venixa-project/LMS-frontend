@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { useGradingStore } from '../../lib/gradingStore';
 import { GradingTask } from '../../types';
 import { AiScoreSuggestionsDashboard } from './components/AiScoreSuggestionsDashboard';
 import { StudentAssessmentDrawer } from './components/StudentAssessmentDrawer';
 import { SubmissionEvaluationModal } from './components/SubmissionEvaluationModal';
-import { PenTool, Sparkles, CheckCircle2, Check } from 'lucide-react';
+import { ReleaseResultsDashboard } from './components/ReleaseResultsDashboard';
+import { PenTool, Sparkles, CheckCircle2, Check, RefreshCw, AlertCircle, RotateCcw, Send } from 'lucide-react';
 
 export const GradingPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -15,16 +16,26 @@ export const GradingPage: React.FC = () => {
   const {
     tasks,
     attempts,
+    releaseQueue,
+    isLoading,
+    error,
     selectedStudentId,
     setSelectedStudentId,
     activeSubmissionModalAttempt,
     openSubmissionModal,
     closeSubmissionModal,
     acceptAiScore,
+    triggerEvaluation,
+    fetchQueue,
+    fetchSuggestions,
+    fetchStatistics,
+    fetchReleaseQueue,
   } = useGradingStore();
 
-  const [activeTab, setActiveTab] = useState<'queue' | 'ai_review'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'ai_review' | 'release'>('queue');
   const [notice, setNotice] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [reEvaluatingTaskId, setReEvaluatingTaskId] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
     setNotice(msg);
@@ -42,28 +53,59 @@ export const GradingPage: React.FC = () => {
     return undefined;
   }, [isFaculty, user]);
 
+  // Initial load from real PostgreSQL database
+  useEffect(() => {
+    const loadData = async () => {
+      await Promise.all([
+        fetchQueue(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchSuggestions(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchStatistics(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchReleaseQueue(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+      ]);
+    };
+    loadData();
+  }, [authorizedCourseIds]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchQueue(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchSuggestions(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchStatistics(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+        fetchReleaseQueue(authorizedCourseIds ? { eligibleCourseIds: authorizedCourseIds } : {}),
+      ]);
+      showNotice('Grading queue & release records refreshed from PostgreSQL.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Count unreleased submissions awaiting admin / creator release
+  const unreleasedCount = useMemo(() => {
+    return releaseQueue.filter((i) => i.status !== 'results_released' && i.evaluationStatus !== 'published').length;
+  }, [releaseQueue]);
+
   // Scoped tasks for faculty
   const scopedTasks = useMemo(() => {
-    if (isFaculty && authorizedCourseIds) {
+    if (isFaculty && authorizedCourseIds && authorizedCourseIds.length > 0) {
       return tasks.filter((t) => (t.courseId ? authorizedCourseIds.includes(t.courseId) : true));
     }
     return tasks;
   }, [tasks, isFaculty, authorizedCourseIds]);
 
   const handleOpenAttemptModalFromTask = (task: GradingTask) => {
-    // Find matching attempt or synthesize one
     const matchingAttempt = attempts.find((a) => a.id === task.attemptId);
     if (matchingAttempt) {
       openSubmissionModal(matchingAttempt);
     } else {
-      // Fallback synthesis
       openSubmissionModal({
         id: task.attemptId || `att-${task.id}`,
         assessmentId: task.assessmentId,
         assessmentTitle: task.assessmentTitle,
         courseId: task.courseId,
         courseTitle: task.courseTitle,
-        assessmentType: task.assessmentType || 'capstone',
+        assessmentType: task.assessmentType || 'exam',
         attemptNumber: task.attemptNumber || 1,
         learnerId: task.learnerId,
         learnerName: task.learnerName,
@@ -71,7 +113,7 @@ export const GradingPage: React.FC = () => {
         learnerEmail: task.learnerEmail || '',
         status: task.status === 'completed' ? 'results_released' : 'submitted',
         evaluationStatus: task.evaluationStatus || 'ai_review_required',
-        score: task.score || task.aiPreliminaryScore,
+        score: task.score !== undefined ? task.score : task.aiPreliminaryScore,
         totalMarks: task.totalMarks || 100,
         percentage: Math.round(((task.score || task.aiPreliminaryScore || 0) / (task.totalMarks || 100)) * 100),
         feedback: task.feedback,
@@ -82,10 +124,24 @@ export const GradingPage: React.FC = () => {
     }
   };
 
-  const handleQuickAcceptAi = (task: GradingTask) => {
-    if (task.attemptId) {
-      acceptAiScore(task.attemptId, 'Verified and approved AI suggested score');
-      showNotice(`AI suggested score for ${task.learnerName} accepted and released!`);
+  const handleQuickAcceptAi = async (task: GradingTask) => {
+    try {
+      await acceptAiScore(task.id, 'Verified and approved AI suggested score');
+      showNotice(`AI suggested score for ${task.learnerName} approved and published to PostgreSQL!`);
+    } catch (err: any) {
+      showNotice(`Failed to approve score: ${err?.message || 'Server error'}`);
+    }
+  };
+
+  const handleReEvaluate = async (task: GradingTask) => {
+    setReEvaluatingTaskId(task.id);
+    try {
+      await triggerEvaluation(task.id);
+      showNotice(`AI evaluation completed for ${task.learnerName}!`);
+    } catch (err: any) {
+      showNotice(`Evaluation failed: ${err?.message || 'AI service error'}`);
+    } finally {
+      setReEvaluatingTaskId(null);
     }
   };
 
@@ -118,6 +174,16 @@ export const GradingPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Refresh grading queue from PostgreSQL"
+          >
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
           <span className="badge badge-primary">AI Evaluation Active</span>
           <span className="badge badge-secondary">Human Approval Required</span>
         </div>
@@ -141,7 +207,30 @@ export const GradingPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs Navigation (AI Evaluation Queue and AI Score Suggestions) */}
+      {error && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.25)',
+          color: '#ef4444',
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.85rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+          <button onClick={handleRefresh} className="btn btn-secondary btn-sm" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Tabs Navigation (AI Evaluation Queue, AI Score Suggestions, and Release Results) */}
       <div className="tabs-nav" style={{ marginBottom: '20px' }}>
         <button
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
@@ -157,6 +246,14 @@ export const GradingPage: React.FC = () => {
         >
           <Sparkles size={16} />
           AI Score Suggestions ({scopedTasks.filter((t) => t.evaluationStatus === 'ai_review_required' || t.aiPreliminaryScore !== undefined).length})
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'release' ? 'active' : ''}`}
+          onClick={() => setActiveTab('release')}
+        >
+          <Send size={16} />
+          Release Results & Scores ({unreleasedCount})
         </button>
       </div>
 
@@ -176,7 +273,14 @@ export const GradingPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {scopedTasks.length === 0 ? (
+                {isLoading && scopedTasks.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '36px' }}>
+                      <RefreshCw size={24} className="animate-spin text-primary" style={{ margin: '0 auto 8px' }} />
+                      <div className="text-muted text-xs">Loading grading queue from PostgreSQL...</div>
+                    </td>
+                  </tr>
+                ) : scopedTasks.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '48px 24px' }}>
                       <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
@@ -191,62 +295,74 @@ export const GradingPage: React.FC = () => {
                 ) : (
                   scopedTasks.map((t) => (
                     <tr key={t.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{t.learnerName}</div>
-                      <div className="text-muted text-xs">ID: {t.learnerRollNo || t.submissionId || 'STU-ID'}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{t.assessmentTitle}</div>
-                      <div className="text-muted text-xs">{t.courseTitle || 'Enrolled Course'}</div>
-                    </td>
-                    <td>{t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Recent'}</td>
-                    <td>
-                      {t.aiPreliminaryScore !== undefined || t.aiSuggestion ? (
-                        <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <Sparkles size={12} /> {t.aiPreliminaryScore || t.aiSuggestion?.score} / {t.maxScore || t.totalMarks}{' '}
-                          <span className="text-muted text-xs">
-                            ({Math.round((t.aiSuggestion?.confidence || 0.92) * 100)}% Conf.)
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{t.learnerName}</div>
+                        <div className="text-muted text-xs">ID: {t.learnerRollNo || t.submissionId || 'STU-ID'}</div>
+                        {t.learnerEmail && <div className="text-muted text-xs">{t.learnerEmail}</div>}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{t.assessmentTitle}</div>
+                        <div className="text-muted text-xs">{t.courseTitle || 'Enrolled Course'}</div>
+                      </td>
+                      <td>{t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Recent'}</td>
+                      <td>
+                        {t.aiPreliminaryScore !== undefined || t.aiSuggestion ? (
+                          <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Sparkles size={12} /> {t.aiPreliminaryScore !== undefined ? t.aiPreliminaryScore : t.aiSuggestion?.score} / {t.totalMarks}{' '}
+                            <span className="text-muted text-xs">
+                              ({Math.round((t.aiSuggestion?.confidence || 0.92) * 100)}% Conf.)
+                            </span>
                           </span>
+                        ) : (t.evaluationStatus as string) === 'unsupported_type' || (t.assessmentType as string) === 'unsupported_type' ? (
+                          <span className="badge badge-secondary text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            Manual evaluation required
+                          </span>
+                        ) : (
+                          <span className="badge badge-warning text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            AI review required
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${t.status === 'completed' ? 'badge-completed' : 'badge-draft'} text-xs`}>
+                          {t.status.replace('_', ' ')}
                         </span>
-                      ) : (t.evaluationStatus as string) === 'unsupported_type' || (t.assessmentType as string) === 'unsupported_type' ? (
-                        <span className="badge badge-secondary text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          Unsupported response type
-                        </span>
-                      ) : (
-                        <span className="badge badge-warning text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          AI review required
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${t.status === 'completed' ? 'badge-completed' : 'badge-draft'} text-xs`}>
-                        {t.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '8px' }}>
-                        {t.aiPreliminaryScore && t.status !== 'completed' && (
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: '8px' }}>
                           <button
                             className="btn btn-secondary btn-sm"
                             style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px' }}
-                            onClick={() => handleQuickAcceptAi(t)}
-                            title="Quickly approve AI score recommendation"
+                            onClick={() => handleReEvaluate(t)}
+                            disabled={reEvaluatingTaskId === t.id}
+                            title="Re-run AI evaluation on student submission"
                           >
-                            <Check size={12} /> Approve AI Score
+                            <RotateCcw size={12} className={reEvaluatingTaskId === t.id ? 'animate-spin' : ''} />
+                            {reEvaluatingTaskId === t.id ? 'Evaluating...' : 'Re-evaluate'}
                           </button>
-                        )}
-                        <button
-                          className="btn btn-primary btn-sm"
-                          style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px' }}
-                          onClick={() => handleOpenAttemptModalFromTask(t)}
-                        >
-                          <Sparkles size={12} />
-                          {t.status === 'completed' ? 'Review & Edit Grade' : 'Review AI Evaluation'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )))}
+                          {t.aiPreliminaryScore !== undefined && t.status !== 'completed' && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px' }}
+                              onClick={() => handleQuickAcceptAi(t)}
+                              title="Quickly approve AI score recommendation"
+                            >
+                              <Check size={12} /> Approve AI Score
+                            </button>
+                          )}
+                          <button
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px' }}
+                            onClick={() => handleOpenAttemptModalFromTask(t)}
+                          >
+                            <Sparkles size={12} />
+                            {t.status === 'completed' ? 'Review & Edit Grade' : 'Review AI Evaluation'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -261,6 +377,45 @@ export const GradingPage: React.FC = () => {
             const att = attempts.find((a) => a.id === attemptId);
             if (att) openSubmissionModal(att);
           }}
+        />
+      )}
+
+      {/* Tab 3: Score Release Center & Student Notification Gate */}
+      {activeTab === 'release' && (
+        <ReleaseResultsDashboard
+          onOpenSubmissionModal={(attemptId) => {
+            const att = attempts.find((a) => a.id === attemptId);
+            if (att) {
+              openSubmissionModal(att);
+            } else {
+              const rItem = releaseQueue.find((r) => r.id === attemptId);
+              if (rItem) {
+                openSubmissionModal({
+                  id: rItem.id,
+                  assessmentId: rItem.assessment.id,
+                  assessmentTitle: rItem.assessment.title,
+                  courseId: rItem.assessment.courseId,
+                  courseTitle: rItem.assessment.course?.title || 'Enrolled Course',
+                  assessmentType: 'exam',
+                  attemptNumber: 1,
+                  learnerId: rItem.learner.id,
+                  learnerName: rItem.learner.displayName,
+                  learnerRollNo: rItem.learner.rollNo || 'STU-ID',
+                  learnerEmail: rItem.learner.email,
+                  status: rItem.status as any,
+                  evaluationStatus: rItem.evaluationStatus as any,
+                  score: rItem.score ?? undefined,
+                  totalMarks: rItem.totalMarks,
+                  percentage: rItem.percentage ?? undefined,
+                  feedback: rItem.feedback || undefined,
+                  submittedAt: rItem.submittedAt,
+                  answers: [],
+                });
+              }
+            }
+          }}
+          authorizedCourseIds={authorizedCourseIds}
+          isFaculty={isFaculty}
         />
       )}
 

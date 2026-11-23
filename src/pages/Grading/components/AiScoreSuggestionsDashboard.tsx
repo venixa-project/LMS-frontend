@@ -50,11 +50,23 @@ export const AiScoreSuggestionsDashboard: React.FC<AiScoreSuggestionsDashboardPr
 
   // Filter courses available in dropdown
   const availableCourses = useMemo(() => {
-    if (isFaculty && authorizedCourseIds) {
-      return useCourseStore.getState().courses.filter((c) => authorizedCourseIds.includes(c.id));
+    const storeCourses = useCourseStore.getState().courses || [];
+    const attemptCourses = attempts
+      .filter((a) => a.courseId && a.courseTitle)
+      .map((a) => ({ id: a.courseId!, title: a.courseTitle! }));
+
+    const mergedMap = new Map<string, { id: string; title: string }>();
+    storeCourses.forEach((c) => mergedMap.set(c.id, { id: c.id, title: c.title }));
+    attemptCourses.forEach((c) => {
+      if (!mergedMap.has(c.id)) mergedMap.set(c.id, c);
+    });
+
+    const list = Array.from(mergedMap.values());
+    if (isFaculty && authorizedCourseIds && authorizedCourseIds.length > 0) {
+      return list.filter((c) => authorizedCourseIds.includes(c.id));
     }
-    return useCourseStore.getState().courses;
-  }, [isFaculty, authorizedCourseIds]);
+    return list;
+  }, [isFaculty, authorizedCourseIds, attempts]);
 
   // 1. First scope attempts by RBAC (Faculty vs Admin) and Admin faculty filter
   const scopedAttempts = useMemo(() => {

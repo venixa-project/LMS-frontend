@@ -435,7 +435,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         ) {
           return false;
         }
-        return isHeartbeatActive(p.lastPingAt);
+        return p.status === 'in_progress' && isHeartbeatActive(p.lastPingAt);
       })
       .forEach((p) => {
         const existingIdx = list.findIndex((item) => matchesCandidate(item.id, item.name, p.id, p.name));
