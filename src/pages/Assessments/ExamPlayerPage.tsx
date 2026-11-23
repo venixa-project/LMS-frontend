@@ -2185,6 +2185,10 @@ export const ExamPlayerPage: React.FC = () => {
             learnerId={user?.id || 'u-007'}
             learnerName={user?.displayName || 'Alex Thompson'}
             isExamActive={stage === 'in_exam'}
+            onStreamChange={(s) => {
+              userMediaStreamRef.current = s;
+              setActiveUserMediaStream(s);
+            }}
             onForceSubmit={(reason) => {
               setForcedSubmissionReason(reason);
               handleSubmitExam();

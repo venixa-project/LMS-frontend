@@ -451,6 +451,17 @@ export class YOLOMobileDetector {
     const gGrid = new Uint8Array(totalCells);
     const bGrid = new Uint8Array(totalCells);
 
+    // Preliminary pass: Calculate overall ambient frame luminance
+    let totalFrameLuma = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      totalFrameLuma += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    const sampleCount = Math.floor(data.length / 16);
+    const avgFrameLuma = sampleCount > 0 ? totalFrameLuma / sampleCount : 100;
+    const isLowLight = avgFrameLuma < 50;
+    const lumaGain = isLowLight ? Math.min(2.5, 50 / Math.max(12, avgFrameLuma)) : 1.0;
+    const minSkinLuma = isLowLight ? 14 : 30;
+
     // Pass 1: Grid feature extraction & skin/luma mapping
     for (let gy = 0; gy < gridRows; gy++) {
       for (let gx = 0; gx < gridCols; gx++) {
@@ -458,9 +469,14 @@ export class YOLOMobileDetector {
         const py = gy * cellSize + Math.floor(cellSize / 2);
         const idx = (py * w + px) * 4;
 
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
+        // Apply adaptive gain in low-light environments to illuminate underexposed facial contours
+        const rRaw = data[idx];
+        const gRaw = data[idx + 1];
+        const bRaw = data[idx + 2];
+
+        const r = Math.min(255, Math.round(rRaw * (isLowLight ? lumaGain : 1.0)));
+        const g = Math.min(255, Math.round(gRaw * (isLowLight ? lumaGain : 1.0)));
+        const b = Math.min(255, Math.round(bRaw * (isLowLight ? lumaGain : 1.0)));
         const luma = 0.299 * r + 0.587 * g + 0.114 * b;
 
         const cellIdx = gy * gridCols + gx;
@@ -469,16 +485,16 @@ export class YOLOMobileDetector {
         gGrid[cellIdx] = g;
         bGrid[cellIdx] = b;
 
-        // Strict YCbCr skin chrominance
+        // Adaptive YCbCr skin chrominance with low-light tolerance
         const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
         const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
 
         const isSkin = (
-          luma >= 35 && luma <= 220 &&
-          cb >= 77 && cb <= 127 &&
-          cr >= 133 && cr <= 175 &&
-          (cr - cb) >= 12 &&
-          r > g && r > b && (r - b) >= 14
+          luma >= minSkinLuma && luma <= 240 &&
+          cb >= 70 && cb <= 135 &&
+          cr >= 125 && cr <= 180 &&
+          (cr - cb) >= (isLowLight ? 6 : 10) &&
+          r >= g && (r - b) >= (isLowLight ? 6 : 12)
         );
 
         // Dark facial features (eyes, eyebrows, nostrils, mouth, beard, dark glasses rims)
