@@ -559,12 +559,16 @@ const CoursesManagementPage: React.FC = () => {
     setDeleteModalCourse(c);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteModalCourse) return;
     const title = deleteModalCourse.title;
-    deleteCourse(deleteModalCourse.id);
-    showNotice(`Course "${title}" has been permanently deleted.`);
-    setDeleteModalCourse(null);
+    const ok = await deleteCourse(deleteModalCourse.id);
+    if (ok) {
+      showNotice(`Course "${title}" has been permanently deleted.`);
+      setDeleteModalCourse(null);
+    } else {
+      showNotice(`Failed to delete course "${title}". Please verify admin permissions.`);
+    }
   };
 
   const [archiveModalCourse, setArchiveModalCourse] = useState<{ id: string; title: string } | null>(null);

@@ -942,26 +942,27 @@ export const useCourseStore = create<CourseState>((set, get) => ({
   deleteCourse: async (courseId: string) => {
     try {
       await apiClient.delete(`/courses/${courseId}`);
+      const updatedCourses = get().courses.filter((c) => c.id !== courseId);
+      const updatedEnrolled = get().enrolledCourseIds.filter((id) => id !== courseId);
+      const updatedEnrollments = get().enrollments.filter((e) => e.courseId !== courseId);
+      set({
+        courses: updatedCourses,
+        enrolledCourseIds: updatedEnrolled,
+        enrollments: updatedEnrollments,
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
+        localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
+        localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
+        localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
+      } catch (e) {
+        console.error('Failed to save courses to storage', e);
+      }
+      return true;
     } catch (err) {
-      console.warn('Backend course delete note:', err);
+      console.error('Backend course delete error:', err);
+      return false;
     }
-    const updatedCourses = get().courses.filter((c) => c.id !== courseId);
-    const updatedEnrolled = get().enrolledCourseIds.filter((id) => id !== courseId);
-    const updatedEnrollments = get().enrollments.filter((e) => e.courseId !== courseId);
-    set({
-      courses: updatedCourses,
-      enrolledCourseIds: updatedEnrolled,
-      enrollments: updatedEnrollments,
-    });
-    try {
-      localStorage.setItem(STORAGE_KEY_COURSES, JSON.stringify(updatedCourses));
-      localStorage.setItem(STORAGE_KEY_ENROLLED, JSON.stringify(updatedEnrolled));
-      localStorage.setItem(STORAGE_KEY_ENROLLMENTS, JSON.stringify(updatedEnrollments));
-      localStorage.setItem(STORAGE_KEY_INITIALIZED, 'true');
-    } catch (e) {
-      console.error('Failed to save courses to storage', e);
-    }
-    return true;
   },
 
   updateCourseProgress: (courseId: string, progress: number) => {

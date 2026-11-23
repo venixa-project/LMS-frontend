@@ -6,7 +6,7 @@ import { apiClient } from '../../../lib/apiClient';
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, X, Download, FileText,
   Clock, CheckCircle2, Bookmark, Sparkles, MessageSquare,
-  Users, Radio, Video, Terminal, Layers
+  Users, Radio, Video, Terminal, Layers, RotateCcw, RotateCw
 } from 'lucide-react';
 
 interface Props {
@@ -86,6 +86,41 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         videoRef.current.play().catch(() => {});
         setIsPlaying(true);
       }
+    }
+  };
+
+  const handleJump = (delta: number) => {
+    handleSeek(currentTime + delta);
+  };
+
+  const handleTogglePlay = () => {
+    if (!videoRef.current) {
+      setIsPlaying(!isPlaying);
+      return;
+    }
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  };
+
+  const handleToggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+    }
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!videoRef.current) return;
+    if (!document.fullscreenElement) {
+      videoRef.current.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
     }
   };
 
@@ -312,7 +347,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         <div
           style={{
             background: '#020617',
-            height: '420px',
+            height: '380px',
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
@@ -324,7 +359,6 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
             <video
               ref={videoRef}
               src={resolvedVideoSrc}
-              controls
               autoPlay
               playsInline
               onLoadedMetadata={(e) => {
@@ -358,7 +392,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               }}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onClick={handleTogglePlay}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer' }}
             />
           ) : (
             /* Virtual Live Classroom Replay Screen */
@@ -457,72 +492,126 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Player Controls Bar */}
-              <div
-                style={{
-                  background: 'linear-gradient(transparent, rgba(2, 6, 23, 0.95))',
-                  padding: '10px 20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  zIndex: 10,
-                }}
-              >
-                {/* Scrubbing Bar */}
-                <input
-                  type="range"
-                  min={0}
-                  max={totalDuration}
-                  value={currentTime}
-                  onChange={(e) => handleSeek(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer', height: '4px' }}
-                />
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
-                    >
-                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                    </button>
-                    <span className="font-mono text-xs">
-                      {formatTime(currentTime)} / {formatTime(totalDuration)}
-                    </span>
-                    <button
-                      onClick={() => setIsMuted(!isMuted)}
-                      style={{ background: 'transparent', border: 'none', color: isMuted ? 'var(--danger)' : '#94a3b8', cursor: 'pointer', padding: 0 }}
-                    >
-                      {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Speed:</span>
-                    {[1, 1.25, 1.5, 2].map((spd) => (
-                      <button
-                        key={spd}
-                        onClick={() => handleSpeedChange(spd)}
-                        style={{
-                          background: playbackSpeed === spd ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          color: '#ffffff',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {spd}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </div>
           )}
+        </div>
+
+        {/* Unified High-Precision Player Controls Bar (Works for Direct Video & Virtual Replay) */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            borderTop: '1px solid var(--border-subtle)',
+            borderBottom: '1px solid var(--border-subtle)',
+            padding: '10px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          {/* Timeline Scrubbing Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="font-mono text-xs" style={{ minWidth: '45px', color: 'var(--primary)', fontWeight: 700 }}>
+              {formatTime(currentTime)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={totalDuration}
+              step={1}
+              value={currentTime}
+              onChange={(e) => handleSeek(Number(e.target.value))}
+              style={{
+                flex: 1,
+                accentColor: 'var(--primary)',
+                cursor: 'pointer',
+                height: '6px',
+                borderRadius: '3px',
+              }}
+              title="Drag or click to seek to any position in the recording"
+            />
+            <span className="font-mono text-xs" style={{ minWidth: '45px', color: 'var(--text-muted)', textAlign: 'right' }}>
+              {formatTime(totalDuration)}
+            </span>
+          </div>
+
+          {/* Action Buttons Row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleTogglePlay}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '6px 12px', gap: '6px', fontWeight: 700 }}
+                title={isPlaying ? 'Pause playback' : 'Play video'}
+              >
+                {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+                <span>{isPlaying ? 'Pause' : 'Play'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleJump(-10)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '6px 10px', gap: '4px', fontSize: '0.75rem' }}
+                title="Rewind 10 seconds"
+              >
+                <RotateCcw size={13} /> -10s
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleJump(10)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '6px 10px', gap: '4px', fontSize: '0.75rem' }}
+                title="Fast forward 10 seconds"
+              >
+                <RotateCw size={13} /> +10s
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '6px 8px', color: isMuted ? 'var(--danger)' : 'var(--text-muted)' }}
+                title={isMuted ? 'Unmute audio' : 'Mute audio'}
+              >
+                {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Speed:</span>
+              {[0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                <button
+                  type="button"
+                  key={spd}
+                  onClick={() => handleSpeedChange(spd)}
+                  style={{
+                    background: playbackSpeed === spd ? 'var(--primary)' : 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    color: playbackSpeed === spd ? '#ffffff' : 'var(--text-muted)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {spd}x
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '6px 8px', color: 'var(--text-muted)' }}
+                title="Toggle Fullscreen"
+              >
+                <Maximize2 size={16} />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Tabbed Navigation: Chapters, Chat Log, Attendance, Takeaways */}
@@ -625,30 +714,66 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
           {/* TAB 1: CHAPTERS */}
           {activeBottomTab === 'chapters' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {chapters.map((ch, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card)',
-                    fontSize: '0.82rem',
-                    cursor: 'pointer',
-                    border: '1px solid var(--border-subtle)',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onClick={() => handleSeek(ch.seconds)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Play size={12} color="var(--primary)" />
-                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{ch.title}</span>
+              {chapters.map((ch, idx) => {
+                const isCurrent =
+                  currentTime >= ch.seconds &&
+                  (idx === chapters.length - 1 || currentTime < chapters[idx + 1].seconds);
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: isCurrent ? 'rgba(99, 102, 241, 0.16)' : 'var(--bg-card)',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      border: isCurrent ? '1.5px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onClick={() => handleSeek(ch.seconds)}
+                    title={`Jump to ${ch.title} at ${ch.time}`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: isCurrent ? 'var(--primary)' : 'rgba(255, 255, 255, 0.08)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Play size={11} color={isCurrent ? '#ffffff' : 'var(--primary)'} />
+                      </div>
+                      <span style={{ fontWeight: isCurrent ? 700 : 600, color: isCurrent ? 'var(--primary)' : 'var(--text-main)' }}>
+                        {ch.title}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isCurrent && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: 'rgba(34, 197, 94, 0.2)',
+                            color: '#22c55e',
+                            border: '1px solid rgba(34, 197, 94, 0.4)',
+                            fontSize: '0.65rem',
+                            padding: '2px 6px',
+                          }}
+                        >
+                          Playing
+                        </span>
+                      )}
+                      <span className="font-mono text-primary text-xs font-semibold">{ch.time}</span>
+                    </div>
                   </div>
-                  <span className="font-mono text-primary text-xs font-semibold">{ch.time}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
