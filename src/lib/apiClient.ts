@@ -6,16 +6,21 @@ import { AUTH_SESSION_KEY } from './authConstants';
 
 export function getApiBaseUrl(): string {
   const env = (import.meta as any)?.env;
+
+  // In browser, use relative '/api/v1' so Vite dev proxy forwards requests cleanly
+  // without CORS or Private Network Access (PNA) issues when accessed via LAN IP (e.g. 192.168.0.9)
+  if (typeof window !== 'undefined') {
+    if (env?.VITE_API_BASE_URL && !env.VITE_API_BASE_URL.includes('localhost') && !env.VITE_API_BASE_URL.includes('127.0.0.1')) {
+      return env.VITE_API_BASE_URL as string;
+    }
+    return '/api/v1';
+  }
+
   if (env?.VITE_API_BASE_URL) {
     return env.VITE_API_BASE_URL as string;
   }
   if (env?.VITE_API_URL) {
     return env.VITE_API_URL as string;
-  }
-  if (typeof window !== 'undefined') {
-    // In browser, use relative '/api/v1' so Vite dev proxy forwards requests cleanly
-    // without CORS or Private Network Access issues when accessed via LAN IP (e.g. 192.168.0.15)
-    return '/api/v1';
   }
   return 'http://localhost:5000/api/v1';
 }
@@ -76,7 +81,24 @@ export class ApiError extends Error {
   details?: unknown;
 
   constructor(error: ApiErrorResponse) {
-    super(error.message || 'API request failed');
+    let displayMessage = error.message;
+
+    // Unpack structured validation details if available
+    if (Array.isArray(error.details) && error.details.length > 0) {
+      const fieldErrors = (error.details as any[])
+        .map((d: any) => (d.message ? `${d.field ? d.field + ': ' : ''}${d.message}` : null))
+        .filter(Boolean)
+        .join(', ');
+      if (fieldErrors) {
+        displayMessage = displayMessage ? `${displayMessage} (${fieldErrors})` : fieldErrors;
+      }
+    }
+
+    if (!displayMessage || displayMessage.trim() === '' || displayMessage === 'API request failed') {
+      displayMessage = error.code ? `API Error [${error.code}]` : 'Unable to complete request to backend server.';
+    }
+
+    super(displayMessage);
     this.name = 'ApiError';
     this.statusCode = error.statusCode;
     this.code = error.code;
@@ -321,9 +343,21 @@ async function request<T = any>(
       response.status === 502 ||
       response.status === 504;
 
-    const friendlyMessage = isProxyError
-      ? 'Cannot connect to LMS backend server at http://localhost:5000. Please ensure the backend server is running.'
-      : (typeof body === 'string' && body.trim() && !body.includes('<!DOCTYPE') ? body.trim() : response.statusText || 'API request failed');
+    let friendlyMessage: string;
+    if (isProxyError) {
+      friendlyMessage = 'Cannot connect to LMS backend server on port 5000. Please ensure the backend server is running.';
+    } else if (typeof body === 'string' && body.trim() && !body.includes('<!DOCTYPE')) {
+      friendlyMessage = body.trim();
+    } else if (body && typeof body === 'object') {
+      const b = body as any;
+      friendlyMessage = b.message || b.error || (b.details ? JSON.stringify(b.details) : '');
+    } else {
+      friendlyMessage = `Server returned HTTP ${response.status} ${response.statusText || 'Error'}`.trim();
+    }
+
+    if (!friendlyMessage || friendlyMessage === 'API request failed') {
+      friendlyMessage = `Server request failed (HTTP ${response.status}). Please check backend console.`;
+    }
 
     throw new ApiError({
       success: false,
