@@ -85,7 +85,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   });
 
   // Face & Room Integrity analysis tracking
-  const [faceStatus, setFaceStatus] = useState<'single_face' | 'no_face' | 'multiple_faces' | 'device_detected' | 'scanning'>('scanning');
+  const [faceStatus, setFaceStatus] = useState<'single_face' | 'no_face' | 'multiple_faces' | 'device_detected' | 'scanning' | 'camera_covered'>('scanning');
   const lastViolationTimeRef = useRef<number>(0);
   const consecutiveAbsentSecondsRef = useRef<number>(0);
   const consecutiveMultiFaceSecondsRef = useRef<number>(0);
@@ -109,6 +109,33 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     const nextSuite: ProctoringSuiteType = activeSuiteType === 'recommended' ? 'alternative' : 'recommended';
     proctoringSuites.setActiveSuite(nextSuite);
     setActiveSuiteType(nextSuite);
+  };
+
+  const handleResyncCamera = async () => {
+    try {
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getVideoTracks().forEach((t) => t.stop());
+      }
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, frameRate: { ideal: 30, max: 30 }, facingMode: 'user' },
+          audio: true,
+        });
+        s.getTracks().forEach((t) => { t.enabled = true; });
+        activeStreamRef.current = s;
+        setStream(s);
+        setCameraActive(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play().catch(() => {});
+          };
+          videoRef.current.play().catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.warn('Re-sync camera notice:', e);
+    }
   };
 
   // Lock reference biometric identity
@@ -543,6 +570,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       }
       activeStreamRef.current = s;
       setStream(s);
+      s.getTracks().forEach((t) => { t.enabled = true; });
       const hasLiveVideo = s.getVideoTracks().some((t) => t.readyState === 'live');
       const hasLiveAudio = s.getAudioTracks().some((t) => t.readyState === 'live');
       setCameraActive(hasLiveVideo);
@@ -550,6 +578,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = s;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(() => {});
+        };
         videoRef.current.play().catch(() => {});
       }
 
@@ -784,7 +815,14 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   // Ensure video element srcObject is bound whenever stream or camera status changes
   useEffect(() => {
     if (videoRef.current && (mediaStream || stream)) {
-      videoRef.current.srcObject = mediaStream || stream;
+      const active = mediaStream || stream;
+      active?.getVideoTracks().forEach((t) => { t.enabled = true; });
+      if (videoRef.current.srcObject !== active) {
+        videoRef.current.srcObject = active;
+      }
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current?.play().catch(() => {});
+      };
       videoRef.current.play().catch(() => {});
     }
   }, [mediaStream, stream, cameraActive]);
@@ -894,7 +932,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
     const faceCheckTimer = setInterval(async () => {
       const v = videoRef.current;
-      if (!v || v.videoWidth === 0 || v.videoHeight === 0 || v.paused) return;
+      if (!v) return;
+      if (v.paused && (mediaStream || stream || activeStreamRef.current)) {
+        v.play().catch(() => {});
+      }
+      if (v.videoWidth === 0 || v.videoHeight === 0) return;
 
       try {
         // Step 1: YOLO Multi-Class Object Detection (Faces & Phones) & ByteTrack
@@ -962,11 +1004,41 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         const confirmedPhone = phoneTracks.find((t) => t.state === 'confirmed' && (t.isTemporallyConfirmed || t.hits >= 8));
         const isDeviceVisible = Boolean(confirmedPhone);
 
+        // Check for pitch-black frames (covered lens, closed hardware shutter, or completely dark room)
+        let isPitchBlack = false;
+        try {
+          const offscreen = offscreenCanvasRef.current;
+          if (offscreen && v.videoWidth > 0 && v.videoHeight > 0) {
+            const ctx = offscreen.getContext('2d');
+            if (ctx) {
+              offscreen.width = 16;
+              offscreen.height = 16;
+              ctx.drawImage(v, 0, 0, 16, 16);
+              const px = ctx.getImageData(0, 0, 16, 16).data;
+              let sum = 0;
+              for (let i = 0; i < px.length; i += 4) {
+                sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+              }
+              const avg = sum / 64;
+              if (avg < 8) {
+                isPitchBlack = true;
+              }
+            }
+          }
+        } catch (e) {}
+
         // --- STEP 4: Prioritized Alert State Machine ---
 
+        // Priority 0: Camera Lens Blocked / Pitch Black (Physical shutter closed or zero light)
+        if (isPitchBlack) {
+          consecutiveDeviceSecondsRef.current = 0;
+          consecutiveMultiFaceSecondsRef.current = 0;
+          consecutiveAbsentSecondsRef.current = 0; // Do NOT issue false absence strike
+          setFaceStatus('camera_covered');
+        }
         // Priority 1: Candidate Absence (Student is away from camera / empty chair > 5 seconds)
         // If effectiveFaceCount === 0 (candidate absent), NEVER trigger mobile phone warning!
-        if (effectiveFaceCount === 0) {
+        else if (effectiveFaceCount === 0) {
           consecutiveDeviceSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           consecutiveAbsentSecondsRef.current += 0.8;
@@ -1318,7 +1390,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               gap: '4px',
               background: faceStatus === 'multiple_faces' || faceStatus === 'device_detected'
                 ? 'rgba(239, 68, 68, 0.92)'
-                : faceStatus === 'no_face'
+                : faceStatus === 'no_face' || faceStatus === 'camera_covered'
                 ? 'rgba(245, 158, 11, 0.92)'
                 : 'rgba(0, 0, 0, 0.7)',
               padding: '2px 6px',
@@ -1337,7 +1409,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
                   ? '#ef4444'
                   : faceStatus === 'multiple_faces' || faceStatus === 'device_detected'
                   ? '#ffffff'
-                  : faceStatus === 'no_face'
+                  : faceStatus === 'no_face' || faceStatus === 'camera_covered'
                   ? '#fef08a'
                   : '#22c55e',
               }}
@@ -1345,6 +1417,8 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             <span>
               {!cameraActive
                 ? 'CAMERA OFF'
+                : faceStatus === 'camera_covered'
+                ? '⚠️ SHUTTER / DARK'
                 : faceStatus === 'multiple_faces'
                 ? '⚠️ 2 PERSONS'
                 : faceStatus === 'device_detected'
@@ -1580,6 +1654,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             <span style={{ color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
               <AlertTriangle size={11} color="#ef4444" /> Mobile Phone ({trackedPhones[0]?.trackingId || 'Detected'})
             </span>
+          ) : faceStatus === 'camera_covered' ? (
+            <span style={{ color: '#f59e0b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <AlertTriangle size={11} color="#f59e0b" /> Camera Covered / Low Light
+            </span>
           ) : faceStatus === 'no_face' ? (
             <span style={{ color: '#f59e0b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
               <AlertTriangle size={11} color="#f59e0b" /> Face Absent
@@ -1609,13 +1687,23 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               ? 'YuNet • AdaFace • ByteTrack • YOLO (ONNX)'
               : 'SCRFD • ArcFace • SORT • RT-DETR (OpenVINO)'}
           </span>
-          <button
-            type="button"
-            onClick={() => setShowSuiteModal(true)}
-            style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.60rem', padding: 0, textDecoration: 'underline' }}
-          >
-            Config
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={handleResyncCamera}
+              title="Restart webcam pipeline or re-acquire hardware feed"
+              style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontSize: '0.60rem', padding: 0, textDecoration: 'underline' }}
+            >
+              Re-sync Cam
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSuiteModal(true)}
+              style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '0.60rem', padding: 0, textDecoration: 'underline' }}
+            >
+              Config
+            </button>
+          </div>
         </div>
       </div>
 
