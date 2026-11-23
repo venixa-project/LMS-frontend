@@ -610,24 +610,68 @@ export async function requestUserMedia(
 }
 
 /**
- * Requests browser fullscreen mode
+ * Locks system keyboard shortcuts (Alt+Tab, Escape, Meta/Windows, Tab, Ctrl+Tab, Ctrl+W, etc.)
+ * via W3C Keyboard Lock API when in fullscreen.
+ */
+export async function lockKeyboard(): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && 'keyboard' in navigator && (navigator as any).keyboard?.lock) {
+      await (navigator as any).keyboard.lock([
+        'Tab',
+        'Escape',
+        'AltLeft',
+        'AltRight',
+        'MetaLeft',
+        'MetaRight',
+        'ContextMenu',
+        'KeyW',
+        'KeyN',
+        'KeyT',
+      ]);
+      return true;
+    }
+  } catch (err) {
+    console.warn('Keyboard Lock API notice:', err);
+  }
+  return false;
+}
+
+/**
+ * Unlocks system keyboard shortcuts
+ */
+export function unlockKeyboard(): void {
+  try {
+    if (typeof navigator !== 'undefined' && 'keyboard' in navigator && (navigator as any).keyboard?.unlock) {
+      (navigator as any).keyboard.unlock();
+    }
+  } catch (err) {
+    console.warn('Keyboard unlock notice:', err);
+  }
+}
+
+/**
+ * Requests browser fullscreen mode and engages system keyboard lock
  */
 export async function enterFullscreen(): Promise<boolean> {
   try {
     const elem = document.documentElement;
+    let ok = false;
     if (elem.requestFullscreen) {
       await elem.requestFullscreen();
-      return true;
-    }
-    if ((elem as any).webkitRequestFullscreen) {
+      ok = true;
+    } else if ((elem as any).webkitRequestFullscreen) {
       await (elem as any).webkitRequestFullscreen();
-      return true;
-    }
-    if ((elem as any).mozRequestFullScreen) {
+      ok = true;
+    } else if ((elem as any).mozRequestFullScreen) {
       await (elem as any).mozRequestFullScreen();
-      return true;
+      ok = true;
     }
-    return false;
+
+    if (ok) {
+      // Automatically lock system keyboard shortcuts (Alt+Tab, Esc, Tab, Meta) in fullscreen
+      await lockKeyboard();
+    }
+    return ok;
   } catch (err) {
     console.warn('Failed to enter fullscreen:', err);
     return false;
@@ -651,6 +695,7 @@ export function isCurrentlyFullscreen(): boolean {
  */
 export async function exitFullscreen(): Promise<boolean> {
   try {
+    unlockKeyboard();
     if (typeof document === 'undefined') return false;
     if (isCurrentlyFullscreen()) {
       if (document.exitFullscreen) {

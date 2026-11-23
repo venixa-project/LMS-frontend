@@ -26,6 +26,8 @@ import {
   isCurrentlyFullscreen,
   probeConnectionHealth,
   stopAllMediaTracks,
+  lockKeyboard,
+  unlockKeyboard,
 } from '../../lib/proctoringMedia';
 import { ProctoringPolicy, ProctoringSessionStatus } from '../../types';
 import { useCertificateStore } from '../../lib/certificateStore';
@@ -327,21 +329,25 @@ export const ExamPlayerPage: React.FC = () => {
       }
     };
 
-    // 2. Window Blur (Lost OS Focus / Clicked on external window or dual screen)
+    // 2. Window Blur (Lost OS Focus / Clicked on external window or dual screen / Alt+Tab)
     const handleWindowBlur = () => {
-      if (!document.hidden && stage === 'in_exam') {
+      if (stage === 'in_exam') {
         setIsExamPaused(true);
         setPauseReason({
-          title: 'Assessment Locked: Window Focus Lost',
+          title: 'Assessment Locked: Window Focus Lost / Alt+Tab Detected',
           message:
-            'The browser window lost active OS focus. An external window, desktop notification, or split-screen application became active. Please refocus the exam window.',
+            'The examination window lost active focus (Alt+Tab, application switch, or external click detected). Operating or viewing external applications or browser tabs is strictly prohibited. Your session is paused to protect exam integrity.',
         });
+
+        try {
+          window.focus();
+        } catch (e) {}
 
         if (currentSessionId) {
           logEvent(currentSessionId, {
             category: 'window_focus',
             severity: 'critical',
-            title: 'Assessment Window Lost Focus (Blur)',
+            title: 'Assessment Window Focus Lost (Alt+Tab / Blur)',
             description: 'The browser window lost primary OS focus. An external application or monitor was clicked.',
             technicalMetadata: { event: 'window_blur' },
           });
@@ -349,17 +355,20 @@ export const ExamPlayerPage: React.FC = () => {
         recordTelemetryEvent(
           'window_focus',
           'critical',
-          'Assessment Window Lost Focus (Blur)',
+          'Assessment Window Focus Lost (Alt+Tab / Blur)',
           'The browser window lost primary OS focus. An external application or monitor was clicked.'
         );
 
         showAlert({
-          title: 'Window Focus Lost',
+          title: 'Window Focus Lost / Tab Switch Prohibited',
           message:
-            'Operating another application or window during the examination is prohibited. The assessment has been paused.',
+            'Operating another application or window during the examination is prohibited. The assessment has been paused and locked.',
           severity: 'critical',
           timestamp: new Date().toLocaleTimeString(),
-          actionLabel: 'Refocus Window',
+          actionLabel: 'Return to Fullscreen',
+          onAction: () => {
+            enterFullscreen().then((ok) => setIsFullscreen(ok));
+          },
           recordedForReview: true,
         });
       }
@@ -373,7 +382,10 @@ export const ExamPlayerPage: React.FC = () => {
         updateChecklistState(currentSessionId, { isFullscreen: nowFullscreen });
       }
 
-      if (!nowFullscreen) {
+      if (nowFullscreen) {
+        lockKeyboard().catch(() => {});
+      } else {
+        unlockKeyboard();
         // Immediately pause exam and lock questions behind overlay
         setIsExamPaused(true);
         setPauseReason({
@@ -413,27 +425,84 @@ export const ExamPlayerPage: React.FC = () => {
       }
     };
 
-    // 4. Keyboard Trap (Block Alt+Tab, Meta, F11, F12, DevTools, Copy-Paste)
+    // 4. Keyboard Trap (Block Alt+Tab, Windows/Meta, Ctrl+Tab, Ctrl+W, DevTools, Copy-Paste)
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent browser F11 fullscreen toggle and F12 developer tools
-      if (e.key === 'F11' || e.key === 'F12') {
+      const key = e.key;
+      const code = e.code;
+      const alt = e.altKey;
+      const ctrl = e.ctrlKey;
+      const meta = e.metaKey;
+
+      // Detect Alt+Tab, Alt+Esc, Alt+Space, Alt+F4, Alt+Arrow keys
+      const isAltTab = alt && (key === 'Tab' || code === 'Tab' || e.keyCode === 9);
+      const isAltEsc = alt && (key === 'Escape' || code === 'Escape');
+      const isAltF4 = alt && (key === 'F4' || code === 'F4');
+      const isAltNav = alt && (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'Home');
+      const isAltSpace = alt && (key === ' ' || code === 'Space');
+      const isWindowsKey = key === 'Meta' || code === 'MetaLeft' || code === 'MetaRight' || meta;
+
+      // Detect in-browser tab switching: Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+PageUp, Ctrl+PageDown, Ctrl+1..9
+      const isCtrlTab = ctrl && (key === 'Tab' || code === 'Tab' || e.keyCode === 9);
+      const isCtrlPageNav = ctrl && (code === 'PageUp' || code === 'PageDown');
+      const isCtrlDigitTab = ctrl && code.startsWith('Digit') && code !== 'Digit0';
+
+      // Detect tab creation / closing: Ctrl+T, Ctrl+N, Ctrl+W, Ctrl+Q
+      const isTabAction = ctrl && ['t', 'n', 'w', 'q'].includes(key.toLowerCase());
+
+      // Prevent Alt alone focusing browser menu bar
+      const isAltAlone = key === 'Alt' || code === 'AltLeft' || code === 'AltRight';
+
+      // Prevent browser F11 fullscreen toggle, F12 developer tools, and F5 refresh
+      const isFunctionTrap = key === 'F11' || key === 'F12' || key === 'F5' || (ctrl && key.toLowerCase() === 'r');
+
+      if (isAltTab || isAltEsc || isAltF4 || isAltNav || isAltSpace || isWindowsKey || isCtrlTab || isCtrlPageNav || isCtrlDigitTab || isTabAction || isAltAlone || isFunctionTrap) {
         e.preventDefault();
         e.stopPropagation();
-        return;
-      }
-      // Prevent Windows/Meta key and Alt+Tab / Alt+Esc
-      if (e.key === 'Meta' || (e.altKey && (e.key === 'Tab' || e.key === 'Escape'))) {
-        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        // Lock exam overlay and pause timer
         setIsExamPaused(true);
         setPauseReason({
-          title: 'System Key Navigation Intercepted',
-          message: 'System navigation shortcuts are locked to prevent switching between applications during the exam.',
+          title: isAltTab ? 'Alt+Tab Switched / Blocked' : 'Tab Switching Shortcut Blocked',
+          message:
+            'Alt+Tab and tab switching shortcuts are strictly prohibited during the examination. Navigating away from the active examination window is a proctoring violation.',
         });
-        return;
+
+        if (currentSessionId) {
+          logEvent(currentSessionId, {
+            category: 'tab_visibility',
+            severity: 'critical',
+            title: isAltTab ? 'Alt+Tab Attempted' : 'Tab Switch Shortcut Attempted',
+            description: `Student attempted shortcut: ${alt ? 'Alt+' : ''}${ctrl ? 'Ctrl+' : ''}${key}. Blocked.`,
+            technicalMetadata: { event: 'shortcut_blocked', key, code, alt, ctrl, meta },
+          });
+        }
+        recordTelemetryEvent(
+          'tab_visibility',
+          'critical',
+          isAltTab ? 'Alt+Tab Attempted' : 'Tab Switch Shortcut Attempted',
+          `Student attempted shortcut: ${alt ? 'Alt+' : ''}${ctrl ? 'Ctrl+' : ''}${key}. Navigation outside the assessment is strictly blocked.`
+        );
+
+        showAlert({
+          title: isAltTab ? 'Alt+Tab Prohibited' : 'Tab Switching Prohibited',
+          message: 'Alt+Tab and tab switching are strictly blocked. Navigating outside this examination is a proctoring violation.',
+          severity: 'critical',
+          timestamp: new Date().toLocaleTimeString(),
+          actionLabel: 'Return to Exam',
+          onAction: () => {
+            enterFullscreen().then((ok) => setIsFullscreen(ok));
+          },
+          recordedForReview: true,
+        });
+        return false;
       }
+
       // Prevent Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+P, Ctrl+S, Ctrl+U
-      if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a', 'p', 's', 'u'].includes(e.key.toLowerCase())) {
+      if ((ctrl || meta) && ['c', 'v', 'x', 'a', 'p', 's', 'u'].includes(key.toLowerCase())) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         showAlert({
           title: 'Action Disabled',
           message: 'Copying, pasting, printing, or viewing page source is prohibited during the assessment.',
@@ -441,17 +510,30 @@ export const ExamPlayerPage: React.FC = () => {
           timestamp: new Date().toLocaleTimeString(),
           recordedForReview: true,
         });
-        return;
+        return false;
       }
+
       // Prevent DevTools shortcuts (Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) {
+      if ((ctrl || meta) && e.shiftKey && ['i', 'j', 'c'].includes(key.toLowerCase())) {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         setIsExamPaused(true);
         setPauseReason({
           title: 'Developer Tools Blocked',
           message: 'Opening browser developer tools is strictly prohibited during the examination.',
         });
-        return;
+        return false;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const isAltTab = e.altKey && (e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9);
+      const isAltOrTab = e.key === 'Alt' || e.key === 'Tab' || e.key === 'Meta';
+      if (isAltTab || isAltOrTab) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
       }
     };
 
@@ -535,28 +617,42 @@ export const ExamPlayerPage: React.FC = () => {
       });
     };
 
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Examination in progress. Navigating away or closing this tab will forfeit your exam session.';
+      return e.returnValue;
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    window.addEventListener('keyup', handleKeyUp, { capture: true, passive: false });
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    document.addEventListener('keyup', handleKeyUp, { capture: true, passive: false });
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('copy', handleClipboard);
     document.addEventListener('cut', handleClipboard);
     document.addEventListener('paste', handleClipboard);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
+      window.removeEventListener('keyup', handleKeyUp, { capture: true } as any);
+      document.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
+      document.removeEventListener('keyup', handleKeyUp, { capture: true } as any);
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleClipboard);
       document.removeEventListener('cut', handleClipboard);
       document.removeEventListener('paste', handleClipboard);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [stage, currentSessionId, serverSessionId, policy]);
 
@@ -652,6 +748,10 @@ export const ExamPlayerPage: React.FC = () => {
         return;
       }
     }
+    await lockKeyboard().catch(() => {});
+    try {
+      window.focus();
+    } catch (e) {}
     setIsExamPaused(false);
     if (currentSessionId) {
       setSessionStatus(currentSessionId, 'in_progress');
@@ -2078,6 +2178,8 @@ export const ExamPlayerPage: React.FC = () => {
             assessmentId={assessment.id}
             sessionId={serverSessionId || currentSessionId || undefined}
             mediaStream={activeUserMediaStream || userMediaStreamRef.current}
+            screenStream={screenStreamRef.current}
+            isScreenSharing={isScreenSharing}
             candidatePhoto={candidateBaselinePhoto}
             candidateEmbedding={candidateBaselineEmbedding}
             learnerId={user?.id || 'u-007'}

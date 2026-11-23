@@ -266,6 +266,23 @@ export async function generateCertificatePdf(cert: Certificate): Promise<void> {
 
   // 15. Security & Verification Bottom Bar
   const metaY = 175;
+
+  if (cert.status === 'revoked') {
+    // Large prominent diagonal REVOKED watermark
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(48);
+    doc.setTextColor(239, 68, 68);
+    doc.text('REVOKED - VOID', centerX, pageHeight / 2, { align: 'center', angle: -20 });
+
+    // Revocation banner at top
+    doc.setFillColor(239, 68, 68);
+    doc.rect(14, 14, pageWidth - 28, 10, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`REVOKED CREDENTIAL: Revoked on ${cert.revokedAt ? new Date(cert.revokedAt).toLocaleDateString() : 'record'}. Reason: ${cert.revocationReason || 'Administrative revocation'}`, centerX, 20.5, { align: 'center' });
+  }
+
   doc.setFillColor(241, 245, 249); // #f1f5f9
   doc.rect(18, metaY, pageWidth - 36, 18, 'F');
   doc.setDrawColor(203, 213, 225); // #cbd5e1

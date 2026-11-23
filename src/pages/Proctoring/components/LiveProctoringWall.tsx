@@ -215,6 +215,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     'all' | 'live' | 'warnings' | 'critical' | 'manual' | 'automated' | 'pending' | 'terminated'
   >('all');
   const [enlargedCandidateId, setEnlargedCandidateId] = useState<string | null>(null);
+  const [enlargedViewTab, setEnlargedViewTab] = useState<'camera' | 'screen'>('camera');
+  const [cardViewModes, setCardViewModes] = useState<Record<string, 'camera' | 'screen'>>({});
   const [gridDensity, setGridDensity] = useState<'compact' | 'standard' | 'large'>('standard');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -292,6 +294,34 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
           cameraActive: true,
           latestSnapshot: data.frame,
           audioLevel: data.audioLevel ?? 0.15,
+          lastPingAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Listen for real-time live screen sharing frame stream
+    const unsubScreenFrame = proctoringSocket.on('STUDENT_SCREEN_FRAME', (data: any) => {
+      if (data && data.studentId && data.screenFrame) {
+        upsertLiveCandidate({
+          id: data.studentId,
+          name: data.studentName || 'Student',
+          assessmentId: data.assessmentId || assessmentId,
+          sessionId: data.sessionId,
+          screenShareActive: true,
+          latestScreenSnapshot: data.screenFrame,
+          lastPingAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Listen for screen sharing status changes (connected / ended)
+    const unsubScreenStatus = proctoringSocket.on('STUDENT_SCREEN_STATUS', (data: any) => {
+      if (data && data.studentId) {
+        upsertLiveCandidate({
+          id: data.studentId,
+          name: data.studentName || 'Student',
+          assessmentId: data.assessmentId || assessmentId,
+          screenShareActive: Boolean(data.active),
           lastPingAt: new Date().toISOString(),
         });
       }
@@ -529,6 +559,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     return () => {
       unsubStream();
       unsubVideoFrame();
+      unsubScreenFrame();
+      unsubScreenStatus();
       unsubJoined();
       unsubStarted();
       unsubSubmitted();
@@ -1111,16 +1143,54 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                   }}
                   onClick={() => setEnlargedCandidateId(candidate.id)}
                 >
-                  <CandidateLiveVideoTile
-                    stream={candidate.remoteStream}
-                    snapshotFallback={candidate.latestSnapshot}
-                    videoUrl={candidate.latestVideoUrl}
-                    name={candidate.name}
-                    status={candidate.status}
-                    cameraActive={candidate.cameraActive}
-                  />
+                  {cardViewModes[candidate.id] === 'screen' ? (
+                    candidate.latestScreenSnapshot ? (
+                      <img
+                        src={candidate.latestScreenSnapshot}
+                        alt={`Screen Share: ${candidate.name}`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          display: 'block',
+                          backgroundColor: '#0a0d14',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          color: '#94a3b8',
+                          background: '#0a0d14',
+                        }}
+                      >
+                        <Monitor size={28} color="#38bdf8" />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
+                          {candidate.screenShareActive ? 'Syncing Live Screen...' : 'Screen Share Offline'}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                          Continuous screen capture active
+                        </span>
+                      </div>
+                    )
+                  ) : (
+                    <CandidateLiveVideoTile
+                      stream={candidate.remoteStream}
+                      snapshotFallback={candidate.latestSnapshot}
+                      videoUrl={candidate.latestVideoUrl}
+                      name={candidate.name}
+                      status={candidate.status}
+                      cameraActive={candidate.cameraActive}
+                    />
+                  )}
 
-                  {/* TOP OVERLAYS: Connection status & Enlarge button */}
+                  {/* TOP OVERLAYS: Connection status, Screen toggle & Enlarge button */}
                   <div
                     style={{
                       position: 'absolute',
@@ -1146,6 +1216,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                         fontWeight: 700,
                         color: isTerminated
                           ? '#ef4444'
+                          : cardViewModes[candidate.id] === 'screen'
+                          ? candidate.screenShareActive ? '#10b981' : '#f59e0b'
                           : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
                           ? '#10b981'
                           : candidate.latestSnapshot
@@ -1163,6 +1235,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                           borderRadius: '50%',
                           background: isTerminated
                             ? '#ef4444'
+                            : cardViewModes[candidate.id] === 'screen'
+                            ? candidate.screenShareActive ? '#10b981' : '#f59e0b'
                             : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
                             ? '#10b981'
                             : candidate.latestSnapshot
@@ -1175,6 +1249,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                       />
                       {isTerminated
                         ? 'Terminated'
+                        : cardViewModes[candidate.id] === 'screen'
+                        ? candidate.screenShareActive ? 'Live Screen' : 'Screen Paused'
                         : candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
                         ? 'Live WebRTC'
                         : candidate.latestSnapshot
@@ -1184,31 +1260,85 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                         : 'Reconnecting'}
                     </span>
 
-                    {/* Enlarge button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEnlargedCandidateId(candidate.id);
-                      }}
-                      style={{
-                        pointerEvents: 'auto',
-                        background: 'rgba(0, 0, 0, 0.65)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        color: '#fff',
-                        borderRadius: '4px',
-                        padding: '3px 6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '0.68rem',
-                        cursor: 'pointer',
-                        backdropFilter: 'blur(4px)',
-                      }}
-                    >
-                      <Maximize2 size={11} />
-                      Enlarge
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', pointerEvents: 'auto' }}>
+                      {/* View mode switcher: Webcam vs Screen Share */}
+                      {(candidate.latestScreenSnapshot || candidate.screenShareActive) && (
+                        <div style={{ display: 'flex', gap: '2px', background: 'rgba(0,0,0,0.7)', padding: '2px', borderRadius: '4px', backdropFilter: 'blur(4px)' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCardViewModes((prev) => ({ ...prev, [candidate.id]: 'camera' }));
+                            }}
+                            style={{
+                              background: (!cardViewModes[candidate.id] || cardViewModes[candidate.id] === 'camera') ? '#2563eb' : 'transparent',
+                              border: 'none',
+                              borderRadius: '3px',
+                              color: '#fff',
+                              padding: '2px 5px',
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              cursor: 'pointer',
+                            }}
+                            title="Switch to Camera view"
+                          >
+                            <Camera size={10} /> Cam
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCardViewModes((prev) => ({ ...prev, [candidate.id]: 'screen' }));
+                            }}
+                            style={{
+                              background: cardViewModes[candidate.id] === 'screen' ? '#10b981' : 'transparent',
+                              border: 'none',
+                              borderRadius: '3px',
+                              color: '#fff',
+                              padding: '2px 5px',
+                              fontSize: '0.62rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              cursor: 'pointer',
+                            }}
+                            title="Switch to Screen Share view"
+                          >
+                            <Monitor size={10} /> Screen
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Enlarge button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEnlargedCandidateId(candidate.id);
+                        }}
+                        style={{
+                          pointerEvents: 'auto',
+                          background: 'rgba(0, 0, 0, 0.65)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          color: '#fff',
+                          borderRadius: '4px',
+                          padding: '3px 6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.68rem',
+                          cursor: 'pointer',
+                          backdropFilter: 'blur(4px)',
+                        }}
+                      >
+                        <Maximize2 size={11} />
+                        Enlarge
+                      </button>
+                    </div>
                   </div>
 
                   {/* BOTTOM OVERLAYS: Mic & Duration */}
@@ -1506,7 +1636,36 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* High-res Video Stream */}
+              {/* Stream Selector: Camera vs Screen Share */}
+              <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${enlargedViewTab === 'camera' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setEnlargedViewTab('camera')}
+                  style={{ gap: '6px' }}
+                >
+                  <Camera size={14} /> Live Camera Feed
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${enlargedViewTab === 'screen' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setEnlargedViewTab('screen')}
+                  style={{ gap: '6px' }}
+                >
+                  <Monitor size={14} /> Live Screen Share
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: enlargedCandidate.screenShareActive ? '#10b981' : '#f59e0b',
+                      boxShadow: enlargedCandidate.screenShareActive ? '0 0 6px #10b981' : 'none',
+                    }}
+                  />
+                </button>
+              </div>
+
+              {/* High-res Video Stream / Screen Stream */}
               <div
                 style={{
                   position: 'relative',
@@ -1517,14 +1676,53 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                   border: '1px solid var(--border-subtle)',
                 }}
               >
-                <CandidateLiveVideoTile
-                  stream={enlargedCandidate.remoteStream}
-                  snapshotFallback={enlargedCandidate.latestSnapshot}
-                  videoUrl={enlargedCandidate.latestVideoUrl}
-                  name={enlargedCandidate.name}
-                  status={enlargedCandidate.status}
-                  cameraActive={enlargedCandidate.cameraActive}
-                />
+                {enlargedViewTab === 'screen' ? (
+                  enlargedCandidate.latestScreenSnapshot ? (
+                    <img
+                      src={enlargedCandidate.latestScreenSnapshot}
+                      alt={`Live Screen: ${enlargedCandidate.name}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        display: 'block',
+                        backgroundColor: '#040711',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '12px',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <Monitor size={44} color="#38bdf8" />
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#e2e8f0' }}>
+                        {enlargedCandidate.screenShareActive ? 'Establishing Live Screen Capture Stream...' : 'Screen Sharing Is Currently Inactive'}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', maxWidth: '380px', textAlign: 'center' }}>
+                        {enlargedCandidate.screenShareActive
+                          ? 'Waiting for display media frames from candidate device.'
+                          : 'Student has not enabled screen sharing or screen sharing was stopped.'}
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <CandidateLiveVideoTile
+                    stream={enlargedCandidate.remoteStream}
+                    snapshotFallback={enlargedCandidate.latestSnapshot}
+                    videoUrl={enlargedCandidate.latestVideoUrl}
+                    name={enlargedCandidate.name}
+                    status={enlargedCandidate.status}
+                    cameraActive={enlargedCandidate.cameraActive}
+                  />
+                )}
 
                 <div
                   style={{
@@ -1538,12 +1736,16 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                     color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '12px',
                   }}
                 >
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>● 30 FPS Live Feed</span>
+                  <span style={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                    {enlargedViewTab === 'screen' ? 'Live Screen Stream' : 'Live Camera Stream'}
+                  </span>
                   <span>Face Status: <strong>{enlargedCandidate.faceVerificationStatus || 'SCANNING'}</strong></span>
                   <span>Audio Level: <strong>{Math.round((enlargedCandidate.audioLevel || 0.1) * 100)}%</strong></span>
+                  <span>Screen Sharing: <strong style={{ color: enlargedCandidate.screenShareActive ? '#10b981' : '#f59e0b' }}>{enlargedCandidate.screenShareActive ? 'Active' : 'Offline'}</strong></span>
                 </div>
               </div>
 

@@ -646,7 +646,7 @@ export const useLearningPathStore = create<LearningPathState>((set, get) => ({
     set({ paths: local, isLoading: false });
   },
   paths: loadInitialPaths(),
-  selectedPathId: 'lp-001',
+  selectedPathId: loadInitialPaths()[0]?.id || null,
 
   getPathById: (id: string) => {
     return get().paths.find((p) => p.id === id);

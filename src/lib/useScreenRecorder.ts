@@ -10,6 +10,7 @@ export interface RecorderState {
   isUploading: boolean;
   uploadProgress: number;
   error: string | null;
+  hasAudio: boolean;
 }
 
 export function useScreenRecorder() {
@@ -22,6 +23,7 @@ export function useScreenRecorder() {
     isUploading: false,
     uploadProgress: 0,
     error: null,
+    hasAudio: false,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -29,6 +31,7 @@ export function useScreenRecorder() {
   const combinedStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerIntervalRef = useRef<any>(null);
+  const durationRef = useRef<number>(0);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -61,48 +64,59 @@ export function useScreenRecorder() {
 
   /**
    * Start recording the Google Meet tab / screen and optional microphone audio
+   * Configured for 480p Standard Definition (854x480 @ 30fps) with synchronized audio mixing
    */
   const startRecording = useCallback(
     async (session: { id: string; title: string; withMic?: boolean }) => {
       try {
         setState((prev) => ({ ...prev, error: null }));
+        durationRef.current = 0;
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
           throw new Error('Screen recording is not supported in this browser. Please use Chrome, Edge, or Firefox.');
         }
 
-        // 1. Capture Google Meet tab / screen stream
+        // 1. Capture Google Meet tab / screen stream constrained to 480p SD resolution (854x480)
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             displaySurface: 'browser',
-            frameRate: { ideal: 30, max: 60 },
+            width: { ideal: 854, max: 854 },
+            height: { ideal: 480, max: 480 },
+            frameRate: { ideal: 30, max: 30 },
           } as any,
           audio: true, // Captures tab audio (Google Meet voices)
         });
 
         // 2. Optionally capture microphone to mix instructor voice
         let micStream: MediaStream | null = null;
-        try {
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          });
-        } catch (micErr) {
-          console.warn('[ScreenRecorder] Mic access skipped or rejected:', micErr);
+        if (session.withMic !== false) {
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+              },
+            });
+          } catch (micErr) {
+            console.warn('[ScreenRecorder] Mic access skipped or rejected:', micErr);
+          }
         }
 
-        // 3. Audio Mixing using Web Audio API
+        // 3. Audio Mixing using Web Audio API with explicit AudioContext resume
         const audioTracks: MediaStreamTrack[] = [];
         const hasScreenAudio = screenStream.getAudioTracks().length > 0;
-        const hasMicAudio = micStream && micStream.getAudioTracks().length > 0;
+        const hasMicAudio = Boolean(micStream && micStream.getAudioTracks().length > 0);
+        let audioActive = false;
 
         if (hasScreenAudio || hasMicAudio) {
           try {
             const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
             const audioCtx = new AudioCtx();
+            // Resume suspended context (modern Chromium autoplay policy requirement)
+            if (audioCtx.state === 'suspended') {
+              await audioCtx.resume();
+            }
             audioContextRef.current = audioCtx;
             const destination = audioCtx.createMediaStreamDestination();
 
@@ -116,22 +130,34 @@ export function useScreenRecorder() {
             }
 
             const mixedTrack = destination.stream.getAudioTracks()[0];
-            if (mixedTrack) audioTracks.push(mixedTrack);
+            if (mixedTrack) {
+              audioTracks.push(mixedTrack);
+              audioActive = true;
+            }
           } catch (mixErr) {
             console.warn('[ScreenRecorder] AudioContext mixing fallback to direct tracks:', mixErr);
-            if (hasScreenAudio) audioTracks.push(screenStream.getAudioTracks()[0]);
-            else if (hasMicAudio && micStream) audioTracks.push(micStream.getAudioTracks()[0]);
+            if (hasScreenAudio) {
+              audioTracks.push(screenStream.getAudioTracks()[0]);
+              audioActive = true;
+            } else if (hasMicAudio && micStream) {
+              audioTracks.push(micStream.getAudioTracks()[0]);
+              audioActive = true;
+            }
           }
         }
 
-        // 4. Combine Video + Mixed Audio
+        // 4. Combine 480p Video + Mixed Audio
         const videoTrack = screenStream.getVideoTracks()[0];
         const combinedStream = new MediaStream([videoTrack, ...audioTracks]);
         combinedStreamRef.current = combinedStream;
 
-        // 5. Setup MediaRecorder
+        // 5. Setup MediaRecorder with 480p target bitrate (1.0 Mbps video + 128 kbps audio)
         const mimeType = getSupportedMimeType();
-        const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+        const options: MediaRecorderOptions = {
+          ...(mimeType ? { mimeType } : {}),
+          videoBitsPerSecond: 1000000, // 1.0 Mbps standard 480p stream
+          audioBitsPerSecond: 128000,  // 128 kbps stereo audio
+        };
         const mediaRecorder = new MediaRecorder(combinedStream, options);
         mediaRecorderRef.current = mediaRecorder;
         recordedChunksRef.current = [];
@@ -154,6 +180,7 @@ export function useScreenRecorder() {
         // Start timer
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = setInterval(() => {
+          durationRef.current += 1;
           setState((prev) => ({ ...prev, duration: prev.duration + 1 }));
         }, 1000);
 
@@ -166,9 +193,10 @@ export function useScreenRecorder() {
           isUploading: false,
           uploadProgress: 0,
           error: null,
+          hasAudio: audioActive,
         });
 
-        return { success: true };
+        return { success: true, hasAudio: audioActive };
       } catch (err: any) {
         if (err.name === 'NotAllowedError') {
           console.log('[ScreenRecorder] User cancelled screen selection dialog.');
@@ -264,16 +292,21 @@ export function useScreenRecorder() {
           }
 
           if (!currentSessionId) {
-            setState((prev) => ({ ...prev, isRecording: false, isUploading: false }));
+            setState((prev) => ({ ...prev, isRecording: false, isUploading: false, hasAudio: false }));
             resolve({ success: false, error: 'No session linked to recording' });
             return;
           }
 
           setState((prev) => ({ ...prev, uploadProgress: 45 }));
 
-          // Upload to LMS backend
+          const durationSec = durationRef.current || state.duration || 0;
+          const durationMin = Math.max(1, Math.round(durationSec / 60));
+
+          // Upload to LMS backend with authentic duration metadata
           const formData = new FormData();
           formData.append('video', file);
+          formData.append('durationSeconds', String(durationSec));
+          formData.append('durationMinutes', String(durationMin));
 
           const res = await apiClient.upload<any>(
             `/live-sessions/${currentSessionId}/recording-upload`,
@@ -288,6 +321,7 @@ export function useScreenRecorder() {
             uploadProgress: 100,
             activeSessionId: null,
             activeSessionTitle: null,
+            hasAudio: false,
           }));
 
           const recordingUrl = res?.data?.recordingUrl || res?.data?.session?.recordingUrl;
@@ -323,6 +357,7 @@ export function useScreenRecorder() {
     }
     mediaRecorderRef.current = null;
     recordedChunksRef.current = [];
+    durationRef.current = 0;
     setState({
       isRecording: false,
       isPaused: false,
@@ -332,6 +367,7 @@ export function useScreenRecorder() {
       isUploading: false,
       uploadProgress: 0,
       error: null,
+      hasAudio: false,
     });
   }, []);
 

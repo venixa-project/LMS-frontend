@@ -5669,6 +5669,26 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 )}
               </div>
 
+              {/* Persist Error Alert Banner */}
+              {persistError && (
+                <div style={{
+                  width: '100%',
+                  background: 'var(--danger-bg, #fee2e2)',
+                  border: '1px solid var(--danger, #ef4444)',
+                  color: 'var(--danger, #dc2626)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  fontSize: '0.875rem'
+                }}>
+                  <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, wordBreak: 'break-word' }}>{persistError}</span>
+                </div>
+              )}
+
               {/* Publish Action Buttons */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button
@@ -5679,26 +5699,6 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                 >
                   <ArrowLeft size={16} /> Back to Question Review
                 </button>
-
-                {persistError && (
-                  <div style={{
-                    width: '100%',
-                    background: 'var(--danger-bg, #fee2e2)',
-                    border: '1px solid var(--danger, #ef4444)',
-                    color: 'var(--danger, #dc2626)',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    marginTop: '12px',
-                    marginBottom: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    fontSize: '0.875rem'
-                  }}>
-                    <AlertTriangle size={18} />
-                    <span>{persistError}</span>
-                  </div>
-                )}
 
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button

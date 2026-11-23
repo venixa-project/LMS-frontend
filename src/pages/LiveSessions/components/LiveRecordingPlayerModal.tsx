@@ -1,9 +1,12 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { LiveSession } from '../../../types';
+import { useAuthStore } from '../../../lib/store';
+import { usePeopleStore } from '../../../lib/peopleStore';
+import { apiClient } from '../../../lib/apiClient';
 import {
   Play, Pause, Volume2, VolumeX, Maximize2, X, Download, FileText,
   Clock, CheckCircle2, Bookmark, Sparkles, MessageSquare,
-  Users, Radio, Video, Terminal, Layers
+  Users, Radio, Video, Terminal, Layers, RotateCcw, RotateCw
 } from 'lucide-react';
 
 interface Props {
@@ -17,20 +20,108 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
   isOpen,
   onClose,
 }) => {
+  const { user } = useAuthStore();
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [currentTime, setCurrentTime] = useState(270); // 04:30 into lecture
+  const [currentTime, setCurrentTime] = useState(0);
+  const [actualDuration, setActualDuration] = useState<number>(0);
   const [activeBottomTab, setActiveBottomTab] = useState<'chapters' | 'chat' | 'attendance' | 'takeaways'>('chapters');
+  const [realAttendance, setRealAttendance] = useState<any[]>([]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const totalDuration = (session?.durationMinutes || 60) * 60;
+  useEffect(() => {
+    if (!isOpen || !session?.id) return;
+    apiClient
+      .get(`/live-sessions/${session.id}/attendance`)
+      .then((res) => {
+        if (res && res.data) {
+          const list = Array.isArray(res.data) ? res.data : (res.data as any).roster || [];
+          if (list.length > 0) {
+            setRealAttendance(list);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isOpen, session?.id]);
+
+  const metaDurationSeconds = useMemo(() => {
+    if (session?.durationSeconds && session.durationSeconds > 0) return session.durationSeconds;
+    if (Array.isArray(session?.materials)) {
+      const recMeta = (session.materials as any[]).find((m: any) => m && m.type === 'recording_meta');
+      if (recMeta && typeof recMeta.durationSeconds === 'number' && recMeta.durationSeconds > 0) {
+        return recMeta.durationSeconds;
+      }
+    }
+    return null;
+  }, [session?.durationSeconds, session?.materials]);
+
+  const totalDuration = useMemo(() => {
+    if (actualDuration > 0) return Math.floor(actualDuration);
+    if (metaDurationSeconds && metaDurationSeconds > 0) return metaDurationSeconds;
+    if (session?.durationMinutes && session.durationMinutes > 0) {
+      return session.durationMinutes * 60;
+    }
+    return 60;
+  }, [actualDuration, metaDurationSeconds, session?.durationMinutes]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleSeek = (timeSecs: number) => {
+    const maxDur = actualDuration > 0 ? actualDuration : totalDuration;
+    const clamped = Math.max(0, Math.min(timeSecs, maxDur));
+    setCurrentTime(clamped);
+    if (videoRef.current) {
+      try {
+        videoRef.current.currentTime = clamped;
+      } catch (err) {
+        console.warn('Seek error:', err);
+      }
+      if (!isPlaying) {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const handleJump = (delta: number) => {
+    handleSeek(currentTime + delta);
+  };
+
+  const handleTogglePlay = () => {
+    if (!videoRef.current) {
+      setIsPlaying(!isPlaying);
+      return;
+    }
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  };
+
+  const handleToggleMute = () => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+    }
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!videoRef.current) return;
+    if (!document.fullscreenElement) {
+      videoRef.current.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
   };
 
   const handleSpeedChange = (speed: number) => {
@@ -61,7 +152,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     return url;
   }, [session?.recordingUrl]);
 
-  // Dynamic chapters based on session agenda or smart timestamps
+  // Dynamic chapters based on actual video duration and session agenda
   const chapters = useMemo(() => {
     if (!session) return [];
     if (session.agenda) {
@@ -75,6 +166,29 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         });
       }
     }
+
+    if (totalDuration <= 10) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Session Recording Start' },
+        { time: formatTime(Math.max(1, totalDuration - 1)), seconds: Math.max(1, totalDuration - 1), title: 'Class Concluded' },
+      ];
+    }
+    if (totalDuration <= 45) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Session Recording Start' },
+        { time: formatTime(Math.floor(totalDuration * 0.5)), seconds: Math.floor(totalDuration * 0.5), title: 'Live Demonstration & Class Topic' },
+        { time: formatTime(Math.max(1, totalDuration - 1)), seconds: Math.max(1, totalDuration - 1), title: 'Class Concluded' },
+      ];
+    }
+    if (totalDuration <= 180) {
+      return [
+        { time: '00:00', seconds: 0, title: 'Lecture Introduction & Class Roll Call' },
+        { time: formatTime(Math.floor(totalDuration * 0.35)), seconds: Math.floor(totalDuration * 0.35), title: 'Core Concepts Walkthrough' },
+        { time: formatTime(Math.floor(totalDuration * 0.7)), seconds: Math.floor(totalDuration * 0.7), title: 'Live Screen Demonstration' },
+        { time: formatTime(Math.max(1, totalDuration - 2)), seconds: Math.max(1, totalDuration - 2), title: 'Summary & Next Steps' },
+      ];
+    }
+
     return [
       { time: '00:00', seconds: 0, title: 'Lecture Introduction & Class Roll Call' },
       { time: formatTime(Math.floor(totalDuration * 0.18)), seconds: Math.floor(totalDuration * 0.18), title: 'Core Architectural Concepts & Theoretical Foundations' },
@@ -94,14 +208,54 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
     { id: '6', sender: 'Sophia Patel', role: 'Student', text: 'Could you please re-highlight the difference between compilation and runtime execution?', time: '10:38' },
   ], [session]);
 
-  // Class Attendance Roster
-  const attendanceRoster = useMemo(() => [
-    { id: '1', name: 'Alex Thompson', rollNo: 'CS-2024-007', status: 'Present (Checked In)', joinTime: '10:01' },
-    { id: '2', name: 'Maria Garcia', rollNo: 'CS-2024-012', status: 'Present (Checked In)', joinTime: '10:02' },
-    { id: '3', name: 'David Kim', rollNo: 'CS-2024-019', status: 'Present (Checked In)', joinTime: '10:04' },
-    { id: '4', name: 'Sophia Patel', rollNo: 'CS-2024-025', status: 'Present (Checked In)', joinTime: '10:05' },
-    { id: '5', name: 'Ravi Varma (You)', rollNo: 'CS-2024-001', status: 'Absent (Replaying Recording)', joinTime: 'Watched Replay' },
-  ], []);
+  // Class Attendance Roster dynamically resolved from database
+  const attendanceRoster = useMemo(() => {
+    if (realAttendance.length > 0) {
+      return realAttendance.map((att: any, idx: number) => {
+        const isSelf = att.userId === user?.id;
+        return {
+          id: att.userId || String(idx),
+          name: isSelf ? `${user?.displayName || att.name} (You)` : (att.name || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || att.rollNo || '26') : (att.rollNo || 'STU-001'),
+          status: att.status === 'present' ? 'Present (Checked In)' : att.status === 'late' ? 'Joined Late' : (isSelf ? 'Watched Replay' : 'Absent (Did Not Join)'),
+          joinTime: att.joinedAt ? new Date(att.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (att.status === 'present' ? 'Attended' : (isSelf ? 'Watched Replay' : 'Not Joined')),
+        };
+      });
+    }
+
+    if (session?.attendance && session.attendance.length > 0) {
+      return session.attendance.map((att: any, idx: number) => {
+        const isSelf = att.userId === user?.id;
+        return {
+          id: att.userId || String(idx),
+          name: isSelf ? `${user?.displayName || att.user?.displayName} (You)` : (att.user?.displayName || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || att.user?.rollNo || '26') : (att.user?.rollNo || 'STU-001'),
+          status: att.status === 'present' ? 'Present (Checked In)' : att.status === 'late' ? 'Joined Late' : (isSelf ? 'Watched Replay' : 'Absent'),
+          joinTime: att.joinedAt ? new Date(att.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Attended',
+        };
+      });
+    }
+
+    const registeredScholars = usePeopleStore.getState().users.filter(
+      (u) => u.activeRole === 'student' || u.activeRole === 'learner'
+    );
+    if (registeredScholars.length > 0) {
+      return registeredScholars.map((u, idx) => {
+        const isSelf = u.id === user?.id;
+        return {
+          id: u.id || String(idx),
+          name: isSelf ? `${user?.displayName || u.displayName} (You)` : (u.displayName || 'Scholar'),
+          rollNo: isSelf ? (user?.rollNo || u.rollNo || '26') : (u.rollNo || 'STU-001'),
+          status: isSelf ? 'Watched Replay' : 'Absent',
+          joinTime: isSelf ? 'Watched Replay' : 'Not Joined',
+        };
+      });
+    }
+
+    return [
+      { id: '1', name: `${user?.displayName || 'Ravi Varma'} (You)`, rollNo: user?.rollNo || '26', status: 'Watched Replay', joinTime: 'Watched Replay' },
+    ];
+  }, [realAttendance, session?.attendance, user]);
 
   if (!isOpen || !session) return null;
 
@@ -154,8 +308,8 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
               <span className="badge badge-secondary" style={{ color: 'var(--primary)', borderColor: 'var(--primary)', fontSize: '0.72rem' }}>
                 Recorded Live Class Replay
               </span>
-              <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', fontSize: '0.7rem' }}>
-                Full HD 1080p Stream
+              <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)', fontSize: '0.7rem' }}>
+                Standard 480p Stream
               </span>
               <span className="text-muted text-xs font-mono">{session.date || 'Recorded Session'}</span>
               <span className="text-muted text-xs">• {session.instructorName || 'Faculty Trainer'}</span>
@@ -193,7 +347,7 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
         <div
           style={{
             background: '#020617',
-            height: '420px',
+            height: '380px',
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
@@ -205,10 +359,41 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
             <video
               ref={videoRef}
               src={resolvedVideoSrc}
-              controls
               autoPlay
               playsInline
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onLoadedMetadata={(e) => {
+                const vid = e.currentTarget;
+                const d = vid.duration;
+                if (d && !isNaN(d) && isFinite(d) && d > 0) {
+                  setActualDuration(d);
+                } else if (metaDurationSeconds && metaDurationSeconds > 0) {
+                  setActualDuration(metaDurationSeconds);
+                } else {
+                  // Chromium WebM Infinity duration workaround: seek to end to read true duration
+                  const onTimeUpdateTemp = () => {
+                    vid.removeEventListener('timeupdate', onTimeUpdateTemp);
+                    vid.currentTime = 0;
+                    if (isFinite(vid.duration) && vid.duration > 0) {
+                      setActualDuration(vid.duration);
+                    }
+                  };
+                  vid.addEventListener('timeupdate', onTimeUpdateTemp);
+                  vid.currentTime = 1e101;
+                }
+              }}
+              onDurationChange={(e) => {
+                const d = e.currentTarget.duration;
+                if (d && !isNaN(d) && isFinite(d) && d > 0) {
+                  setActualDuration(d);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                setCurrentTime(Math.floor(e.currentTarget.currentTime));
+              }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onClick={handleTogglePlay}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', cursor: 'pointer' }}
             />
           ) : (
             /* Virtual Live Classroom Replay Screen */
@@ -307,72 +492,126 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Player Controls Bar */}
-              <div
-                style={{
-                  background: 'linear-gradient(transparent, rgba(2, 6, 23, 0.95))',
-                  padding: '10px 20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  zIndex: 10,
-                }}
-              >
-                {/* Scrubbing Bar */}
-                <input
-                  type="range"
-                  min={0}
-                  max={totalDuration}
-                  value={currentTime}
-                  onChange={(e) => setCurrentTime(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer', height: '4px' }}
-                />
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
-                    >
-                      {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                    </button>
-                    <span className="font-mono text-xs">
-                      {formatTime(currentTime)} / {formatTime(totalDuration)}
-                    </span>
-                    <button
-                      onClick={() => setIsMuted(!isMuted)}
-                      style={{ background: 'transparent', border: 'none', color: isMuted ? 'var(--danger)' : '#94a3b8', cursor: 'pointer', padding: 0 }}
-                    >
-                      {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Speed:</span>
-                    {[1, 1.25, 1.5, 2].map((spd) => (
-                      <button
-                        key={spd}
-                        onClick={() => handleSpeedChange(spd)}
-                        style={{
-                          background: playbackSpeed === spd ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          color: '#ffffff',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {spd}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </div>
           )}
+        </div>
+
+        {/* Unified High-Precision Player Controls Bar (Works for Direct Video & Virtual Replay) */}
+        <div
+          style={{
+            background: 'var(--bg-card)',
+            borderTop: '1px solid var(--border-subtle)',
+            borderBottom: '1px solid var(--border-subtle)',
+            padding: '10px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          {/* Timeline Scrubbing Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="font-mono text-xs" style={{ minWidth: '45px', color: 'var(--primary)', fontWeight: 700 }}>
+              {formatTime(currentTime)}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={totalDuration}
+              step={1}
+              value={currentTime}
+              onChange={(e) => handleSeek(Number(e.target.value))}
+              style={{
+                flex: 1,
+                accentColor: 'var(--primary)',
+                cursor: 'pointer',
+                height: '6px',
+                borderRadius: '3px',
+              }}
+              title="Drag or click to seek to any position in the recording"
+            />
+            <span className="font-mono text-xs" style={{ minWidth: '45px', color: 'var(--text-muted)', textAlign: 'right' }}>
+              {formatTime(totalDuration)}
+            </span>
+          </div>
+
+          {/* Action Buttons Row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff', fontSize: '0.8rem', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleTogglePlay}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '6px 12px', gap: '6px', fontWeight: 700 }}
+                title={isPlaying ? 'Pause playback' : 'Play video'}
+              >
+                {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+                <span>{isPlaying ? 'Pause' : 'Play'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleJump(-10)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '6px 10px', gap: '4px', fontSize: '0.75rem' }}
+                title="Rewind 10 seconds"
+              >
+                <RotateCcw size={13} /> -10s
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleJump(10)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '6px 10px', gap: '4px', fontSize: '0.75rem' }}
+                title="Fast forward 10 seconds"
+              >
+                <RotateCw size={13} /> +10s
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '6px 8px', color: isMuted ? 'var(--danger)' : 'var(--text-muted)' }}
+                title={isMuted ? 'Unmute audio' : 'Mute audio'}
+              >
+                {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Speed:</span>
+              {[0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                <button
+                  type="button"
+                  key={spd}
+                  onClick={() => handleSpeedChange(spd)}
+                  style={{
+                    background: playbackSpeed === spd ? 'var(--primary)' : 'var(--bg-surface)',
+                    border: '1px solid var(--border-subtle)',
+                    color: playbackSpeed === spd ? '#ffffff' : 'var(--text-muted)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {spd}x
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '6px 8px', color: 'var(--text-muted)' }}
+                title="Toggle Fullscreen"
+              >
+                <Maximize2 size={16} />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Tabbed Navigation: Chapters, Chat Log, Attendance, Takeaways */}
@@ -475,33 +714,66 @@ export const LiveRecordingPlayerModal: React.FC<Props> = ({
           {/* TAB 1: CHAPTERS */}
           {activeBottomTab === 'chapters' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {chapters.map((ch, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card)',
-                    fontSize: '0.82rem',
-                    cursor: 'pointer',
-                    border: '1px solid var(--border-subtle)',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onClick={() => {
-                    setCurrentTime(ch.seconds);
-                    setIsPlaying(true);
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Play size={12} color="var(--primary)" />
-                    <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{ch.title}</span>
+              {chapters.map((ch, idx) => {
+                const isCurrent =
+                  currentTime >= ch.seconds &&
+                  (idx === chapters.length - 1 || currentTime < chapters[idx + 1].seconds);
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: isCurrent ? 'rgba(99, 102, 241, 0.16)' : 'var(--bg-card)',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      border: isCurrent ? '1.5px solid var(--primary)' : '1px solid var(--border-subtle)',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onClick={() => handleSeek(ch.seconds)}
+                    title={`Jump to ${ch.title} at ${ch.time}`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: isCurrent ? 'var(--primary)' : 'rgba(255, 255, 255, 0.08)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Play size={11} color={isCurrent ? '#ffffff' : 'var(--primary)'} />
+                      </div>
+                      <span style={{ fontWeight: isCurrent ? 700 : 600, color: isCurrent ? 'var(--primary)' : 'var(--text-main)' }}>
+                        {ch.title}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isCurrent && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: 'rgba(34, 197, 94, 0.2)',
+                            color: '#22c55e',
+                            border: '1px solid rgba(34, 197, 94, 0.4)',
+                            fontSize: '0.65rem',
+                            padding: '2px 6px',
+                          }}
+                        >
+                          Playing
+                        </span>
+                      )}
+                      <span className="font-mono text-primary text-xs font-semibold">{ch.time}</span>
+                    </div>
                   </div>
-                  <span className="font-mono text-primary text-xs font-semibold">{ch.time}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

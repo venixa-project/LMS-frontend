@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { LiveSession } from '../../../types';
 import { apiClient } from '../../../lib/apiClient';
 import { usePeopleStore } from '../../../lib/peopleStore';
+import { useLiveSessionStore } from '../../../lib/liveSessionStore';
+import { useAuthStore } from '../../../lib/store';
 import {
-  Users, X, Search, CheckCircle2, Clock
+  Users, X, Search, CheckCircle2, Clock, Check
 } from 'lucide-react';
 
 interface Props {
@@ -22,12 +24,20 @@ interface RosterScholar {
 }
 
 export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }) => {
+  const { user } = useAuthStore();
+  const { fetchSessions } = useLiveSessionStore();
   const [search, setSearch] = useState('');
   const [roster, setRoster] = useState<RosterScholar[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen || !session?.id) return;
+  const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
+  const isAdmin = user?.activeRole === 'org_admin' || user?.activeRole === 'platform_admin' || user?.activeRole === 'lms_admin';
+  const canManage = isTrainer || isAdmin;
+
+  const loadRoster = () => {
+    if (!session?.id) return;
     setLoading(true);
     apiClient
       .get(`/live-sessions/${session.id}/attendance`)
@@ -39,6 +49,11 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!isOpen || !session?.id) return;
+    loadRoster();
   }, [isOpen, session?.id]);
 
   if (!isOpen || !session) return null;
@@ -56,6 +71,51 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
           status: session.attendance?.find((a) => a.userId === u.id)?.status || 'absent',
           joinedAt: session.attendance?.find((a) => a.userId === u.id)?.joinedAt || null,
         }));
+
+  const handleUpdateStatus = async (userId: string, newStatus: string) => {
+    if (!session?.id) return;
+    setSavingId(userId);
+    try {
+      // Optimistic update
+      setRoster((prev) => {
+        const idx = prev.findIndex((r) => r.userId === userId);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], status: newStatus, joinedAt: newStatus === 'present' || newStatus === 'late' ? (updated[idx].joinedAt || new Date().toISOString()) : null };
+          return updated;
+        }
+        return [...scholars.map(s => s.userId === userId ? { ...s, status: newStatus, joinedAt: newStatus === 'present' || newStatus === 'late' ? new Date().toISOString() : null } : s)];
+      });
+
+      await apiClient.put(`/live-sessions/${session.id}/attendance`, {
+        records: [{ userId, status: newStatus }],
+      });
+      await fetchSessions();
+      setSuccessNotice('Attendance updated.');
+      setTimeout(() => setSuccessNotice(null), 2500);
+    } catch (err) {
+      console.error('Failed to update attendance:', err);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleMarkAllPresent = async () => {
+    if (!session?.id || scholars.length === 0) return;
+    setLoading(true);
+    try {
+      const records = scholars.map((s) => ({ userId: s.userId, status: 'present' }));
+      setRoster(scholars.map((s) => ({ ...s, status: 'present', joinedAt: s.joinedAt || new Date().toISOString() })));
+      await apiClient.put(`/live-sessions/${session.id}/attendance`, { records });
+      await fetchSessions();
+      setSuccessNotice(`All ${records.length} scholars marked Present.`);
+      setTimeout(() => setSuccessNotice(null), 3000);
+    } catch (err) {
+      console.error('Failed to mark all present:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filtered = scholars.filter(
     (s) =>
@@ -85,7 +145,7 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '680px',
+          maxWidth: '720px',
           maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
@@ -150,6 +210,8 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
             alignItems: 'center',
             justifyContent: 'space-between',
             fontSize: '0.85rem',
+            flexWrap: 'wrap',
+            gap: '8px',
           }}
         >
           <div>
@@ -158,13 +220,30 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
               {session.cohortName || 'Target Cohort'}
             </strong>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {canManage && (
+              <button
+                type="button"
+                onClick={handleMarkAllPresent}
+                disabled={loading || scholars.length === 0}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px', fontWeight: 700 }}
+              >
+                <CheckCircle2 size={12} /> Mark All Present
+              </button>
+            )}
             <span className="badge badge-primary">{scholars.length} Registered</span>
             <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
               <CheckCircle2 size={12} /> {presentCount} Attended
             </span>
           </div>
         </div>
+
+        {successNotice && (
+          <div style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '6px 24px', fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Check size={13} /> {successNotice}
+          </div>
+        )}
 
         {/* Search */}
         <div style={{ padding: '12px 24px 0' }}>
@@ -234,18 +313,57 @@ export const SessionRosterModal: React.FC<Props> = ({ session, isOpen, onClose }
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span className="font-mono text-muted text-xs">{st.rollNo}</span>
-                      {isAttended ? (
-                        <span
-                          className="badge badge-success"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <CheckCircle2 size={11} /> {st.status === 'late' ? 'Late' : 'Attended'}
-                        </span>
-                      ) : (
-                        <span className="badge badge-danger">Absent</span>
-                      )}
+                      
+                      {/* Attendance Status Badge & Action Controls */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isAttended ? (
+                          <span
+                            className="badge badge-success"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <CheckCircle2 size={11} /> {st.status === 'late' ? 'Late' : 'Attended'}
+                          </span>
+                        ) : (
+                          <span className="badge badge-danger">Absent</span>
+                        )}
+
+                        {canManage && (
+                          <div style={{ display: 'inline-flex', gap: '3px', background: 'var(--bg-card)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(st.userId, 'present')}
+                              disabled={savingId === st.userId}
+                              className={`btn btn-xs ${st.status === 'present' ? 'btn-primary' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Present"
+                            >
+                              Present
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(st.userId, 'late')}
+                              disabled={savingId === st.userId}
+                              className={`btn btn-xs ${st.status === 'late' ? 'btn-primary' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Late"
+                            >
+                              Late
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(st.userId, 'absent')}
+                              disabled={savingId === st.userId}
+                              className={`btn btn-xs ${st.status === 'absent' ? 'btn-danger' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Absent"
+                            >
+                              Absent
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

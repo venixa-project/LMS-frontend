@@ -76,7 +76,8 @@ export interface ReleaseQueueItem {
   percentage: number | null;
   passed: boolean | null;
   status: string; // submitted, under_review, results_released
-  evaluationStatus: string; // auto_graded, ai_review_required, awaiting_human_approval, awaiting_release, graded, published
+  evaluationStatus: string; // auto_graded, ai_review_required, awaiting_human_approval, awaiting_release, graded, published, withheld
+  submissionReason?: string | null;
   feedback?: string | null;
   submittedAt: string;
   evaluatedBy?: string | null;
@@ -147,7 +148,15 @@ interface GradingStoreState {
   ) => Promise<void>;
   triggerEvaluation: (taskId: string) => Promise<void>;
   releaseSingleResult: (attemptIdOrTaskId: string) => Promise<{ success: boolean; message: string }>;
-  releaseAssessmentResults: (assessmentId: string) => Promise<{ success: boolean; message: string; releasedCount: number }>;
+  releaseAssessmentResults: (
+    assessmentId: string,
+    excludedAttemptIds?: string[]
+  ) => Promise<{ success: boolean; message: string; releasedCount: number; withheldCount?: number }>;
+  toggleScoreHold: (
+    attemptId: string,
+    hold: boolean,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string; held: boolean }>;
   resetToDefaults: () => void;
 }
 
@@ -523,21 +532,54 @@ export const useGradingStore = create<GradingStoreState>()((set, get) => ({
     return res.data;
   },
 
-  releaseAssessmentResults: async (assessmentId: string) => {
-    const res = await apiClient.post<{ success: boolean; message: string; releasedCount: number }>(`/grading/assessments/${assessmentId}/release-results`);
+  releaseAssessmentResults: async (assessmentId: string, excludedAttemptIds?: string[]) => {
+    const res = await apiClient.post<{ success: boolean; message: string; releasedCount: number; withheldCount?: number }>(
+      `/grading/assessments/${assessmentId}/release-results`,
+      { excludedAttemptIds }
+    );
+    set((state) => ({
+      releaseQueue: state.releaseQueue.map((item) => {
+        if (item.assessment.id !== assessmentId) return item;
+        const isWithheld = item.evaluationStatus === 'withheld' || item.submissionReason === 'SCORE_WITHHELD';
+        const isExcluded = excludedAttemptIds && excludedAttemptIds.includes(item.id);
+        if (isWithheld || isExcluded) return item;
+        return { ...item, status: 'results_released', evaluationStatus: 'published' };
+      }),
+      tasks: state.tasks.map((task) => {
+        if (task.assessmentId !== assessmentId) return task;
+        const attempt = state.releaseQueue.find((i) => i.id === task.attemptId || i.gradingTasks?.[0]?.id === task.id);
+        if (attempt && (attempt.evaluationStatus === 'withheld' || attempt.submissionReason === 'SCORE_WITHHELD')) {
+          return task;
+        }
+        return { ...task, evaluationStatus: 'published' };
+      }),
+    }));
+    await Promise.all([get().fetchQueue(), get().fetchStatistics()]);
+    return res.data;
+  },
+
+  toggleScoreHold: async (attemptId: string, hold: boolean, reason?: string) => {
+    const res = await apiClient.post<{ success: boolean; message: string; held: boolean }>(
+      `/grading/attempts/${attemptId}/toggle-hold`,
+      { hold, reason }
+    );
+    // Update local state
     set((state) => ({
       releaseQueue: state.releaseQueue.map((item) =>
-        item.assessment.id === assessmentId
-          ? { ...item, status: 'results_released', evaluationStatus: 'published' }
+        item.id === attemptId
+          ? {
+              ...item,
+              evaluationStatus: hold ? 'withheld' : 'awaiting_release',
+              submissionReason: hold ? (reason || 'SCORE_WITHHELD') : null,
+            }
           : item
       ),
       tasks: state.tasks.map((task) =>
-        task.assessmentId === assessmentId
-          ? { ...task, evaluationStatus: 'published' }
+        task.attemptId === attemptId || task.id === attemptId
+          ? { ...task, evaluationStatus: hold ? ('withheld' as any) : ('awaiting_release' as any) }
           : task
       ),
     }));
-    await Promise.all([get().fetchQueue(), get().fetchStatistics()]);
     return res.data;
   },
 

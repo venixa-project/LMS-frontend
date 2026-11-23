@@ -117,7 +117,7 @@ interface CertificateState {
     certId: string,
     revokedBy: string,
     reason: string
-  ) => { success: boolean; message: string };
+  ) => Promise<{ success: boolean; message: string }> | { success: boolean; message: string };
 
   deleteCertificate: (certId: string) => void;
   resetToDefault: () => void;
@@ -719,13 +719,16 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
     };
   },
 
-  revokeCertificate: (certId, revokedBy, reason) => {
-    const { certificates } = get();
-    const target = certificates.find((c) => c.id.toLowerCase() === certId.toLowerCase());
-    if (!target) {
-      return { success: false, message: 'Certificate record not found.' };
+  revokeCertificate: async (certId, revokedBy, reason) => {
+    // 1. Send revocation to backend API and PostgreSQL database
+    try {
+      await apiClient.post(`/certificates/${certId}/revoke`, { reason: reason.trim() });
+    } catch (apiErr) {
+      console.warn('Backend certificate revocation API notice:', apiErr);
     }
 
+    // 2. Update local Zustand state and localStorage
+    const { certificates } = get();
     const updated = certificates.map((c) => {
       if (c.id.toLowerCase() === certId.toLowerCase()) {
         return {
@@ -742,6 +745,11 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
     set({ certificates: updated });
     try {
       localStorage.setItem(STORAGE_KEY_CERTIFICATES, JSON.stringify(updated));
+    } catch {}
+
+    // 3. Resync fresh certificate records from backend
+    try {
+      await get().fetchCertificates();
     } catch {}
 
     return {

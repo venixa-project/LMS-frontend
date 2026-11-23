@@ -15,6 +15,10 @@ import { LoginRewardToast, LoginRewardToastData } from './Gamification/LoginRewa
 import { usePeopleStore } from '../lib/peopleStore';
 import { useCourseStore } from '../lib/courseStore';
 import { useAssessmentStore } from '../lib/assessmentStore';
+import { useCohortStore } from '../lib/cohortStore';
+import { useDepartmentStore } from '../lib/departmentStore';
+import { useLearningPathStore } from '../lib/learningPathStore';
+import { useAnnouncementStore } from '../lib/announcementStore';
 
 export const AppShell: React.FC = () => {
   // 1. Auth & Router Hooks (always called at top level)
@@ -28,6 +32,11 @@ export const AppShell: React.FC = () => {
       fetchNotifications();
       usePeopleStore.getState().fetchPeople().catch(() => {});
       useCourseStore.getState().fetchCourses().catch(() => {});
+      useAssessmentStore.getState().fetchAssessments().catch(() => {});
+      useCohortStore.getState().fetchCohorts().catch(() => {});
+      useDepartmentStore.getState().fetchDepartments().catch(() => {});
+      useLearningPathStore.getState().fetchPaths().catch(() => {});
+      useAnnouncementStore.getState().fetchAnnouncements().catch(() => {});
 
       // Cross-tab and multi-window sync: refresh notifications on storage changes and BroadcastChannel
       const handleStorage = (e: StorageEvent) => {
@@ -43,6 +52,10 @@ export const AppShell: React.FC = () => {
         usePeopleStore.getState().fetchPeople().catch(() => {});
         useCourseStore.getState().fetchCourses().catch(() => {});
         useAssessmentStore.getState().fetchAssessments().catch(() => {});
+        useCohortStore.getState().fetchCohorts().catch(() => {});
+        useDepartmentStore.getState().fetchDepartments().catch(() => {});
+        useLearningPathStore.getState().fetchPaths().catch(() => {});
+        useAnnouncementStore.getState().fetchAnnouncements().catch(() => {});
       };
       window.addEventListener('venilearn_role_switched', handleRoleSwitch);
 

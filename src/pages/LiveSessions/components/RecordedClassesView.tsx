@@ -11,6 +11,26 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../../lib/apiClient';
 
+function formatDisplayDuration(s: LiveSession): string {
+  if (s.durationSeconds && s.durationSeconds > 0) {
+    if (s.durationSeconds < 60) return `${s.durationSeconds}s`;
+    const mins = Math.floor(s.durationSeconds / 60);
+    const secs = s.durationSeconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  }
+  if (Array.isArray(s.materials)) {
+    const meta = s.materials.find((m: any) => m && m.type === 'recording_meta');
+    if (meta && typeof meta.durationSeconds === 'number' && meta.durationSeconds > 0) {
+      if (meta.durationSeconds < 60) return `${meta.durationSeconds}s`;
+      const mins = Math.floor(meta.durationSeconds / 60);
+      const secs = meta.durationSeconds % 60;
+      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    }
+  }
+  const mins = s.durationMinutes || s.duration || 60;
+  return `${mins}m`;
+}
+
 interface Props {
   sessions: LiveSession[];
   onPlayRecording: (session: LiveSession) => void;
@@ -61,13 +81,35 @@ export const RecordedClassesView: React.FC<Props> = ({
     }
   };
 
+  const getVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      try {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(video.src);
+          resolve(Math.round(video.duration));
+        };
+        video.onerror = () => resolve(0);
+        video.src = URL.createObjectURL(file);
+      } catch {
+        resolve(0);
+      }
+    });
+  };
+
   const handleUploadRecordingFile = async () => {
     if (!attachModalSession || !selectedFile) return;
     setIsSaving(true);
     setUploadProgress(10);
     try {
+      const durSec = await getVideoDuration(selectedFile);
       const formData = new FormData();
       formData.append('video', selectedFile);
+      if (durSec > 0) {
+        formData.append('durationSeconds', String(durSec));
+        formData.append('durationMinutes', String(Math.max(1, Math.round(durSec / 60))));
+      }
 
       setUploadProgress(40);
       const res = await apiClient.upload<any>(
@@ -387,7 +429,6 @@ export const RecordedClassesView: React.FC<Props> = ({
               { id: 'all', label: 'All Recordings' },
               { id: 'completed', label: 'Watched' },
               { id: 'in_progress', label: 'In Progress' },
-              { id: 'unwatched', label: 'Unwatched' },
               { id: 'bookmarked', label: '★ Bookmarked' },
             ].map((tab) => (
               <button
@@ -545,7 +586,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                     }}
                   >
                     <Clock size={12} />
-                    <span>{s.durationMinutes || s.duration || 60}m</span>
+                    <span>{formatDisplayDuration(s)}</span>
                   </div>
 
                   {/* Quality / Status Pill */}
@@ -750,11 +791,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                         <span style={{ color: 'var(--primary)' }}>
                           {progress}% Watched
                         </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          Not started
-                        </span>
-                      )}
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -880,7 +917,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                         {s.instructorName || 'Faculty Trainer'}
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
-                        {s.durationMinutes || s.duration || 60}m
+                        {formatDisplayDuration(s)}
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                         {s.date || 'Recent'}
@@ -890,9 +927,7 @@ export const RecordedClassesView: React.FC<Props> = ({
                           <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>Watched</span>
                         ) : progress > 0 ? (
                           <span className="badge badge-secondary" style={{ fontSize: '0.72rem' }}>{progress}%</span>
-                        ) : (
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Unwatched</span>
-                        )}
+                        ) : null}
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>

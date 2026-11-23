@@ -17,6 +17,8 @@ interface StudentProctorWidgetProps {
   assessmentId: string;
   sessionId?: string;
   mediaStream?: MediaStream | null;
+  screenStream?: MediaStream | null;
+  isScreenSharing?: boolean;
   candidatePhoto?: string | null;
   candidateEmbedding?: Float32Array | null;
   learnerId?: string;
@@ -29,6 +31,8 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   assessmentId,
   sessionId,
   mediaStream,
+  screenStream,
+  isScreenSharing = false,
   candidatePhoto,
   candidateEmbedding,
   learnerId = 'u-007',
@@ -49,6 +53,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   } = useProctoringStore();
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const screenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const latestScreenSnapshotRef = useRef<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [micActive, setMicActive] = useState<boolean>(false);
@@ -799,6 +806,44 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     }
   }, [mediaStream, stream, cameraActive]);
 
+  // Screen stream initialization and lifecycle listener
+  useEffect(() => {
+    if (!screenStream) return;
+    if (!screenVideoRef.current && typeof document !== 'undefined') {
+      const v = document.createElement('video');
+      v.autoplay = true;
+      v.playsInline = true;
+      v.muted = true;
+      screenVideoRef.current = v;
+    }
+    const sv = screenVideoRef.current;
+    if (sv) {
+      sv.srcObject = screenStream;
+      sv.play().catch(() => {});
+    }
+
+    screenStream.getVideoTracks().forEach((track) => {
+      track.onended = () => {
+        proctoringSocket.emit('STUDENT_SCREEN_STATUS', {
+          studentId: currentLearnerId,
+          assessmentId,
+          sessionId,
+          active: false,
+          reason: 'Screen track ended',
+          timestamp: new Date().toISOString(),
+        });
+      };
+    });
+
+    proctoringSocket.emit('STUDENT_SCREEN_STATUS', {
+      studentId: currentLearnerId,
+      assessmentId,
+      sessionId,
+      active: true,
+      timestamp: new Date().toISOString(),
+    });
+  }, [screenStream, currentLearnerId, assessmentId, sessionId]);
+
   // Tab switch / Window focus monitoring with Automated 3-Warning Rule
   useEffect(() => {
     if (!isExamActive) return;
@@ -821,6 +866,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     const handleWindowBlur = () => {
       setTabFocused(false);
       updateParticipantTelemetry(currentLearnerId, { tabFocused: false });
+      triggerAutomatedStrike(
+        'tab_switch',
+        'Window Focus Lost (Alt+Tab / App Switch)',
+        'You navigated away from the exam window or switched browser tabs using Alt+Tab. Navigating outside the examination is strictly prohibited.'
+      );
     };
 
     const handleWindowFocus = () => {
@@ -828,14 +878,36 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       updateParticipantTelemetry(currentLearnerId, { tabFocused: true });
     };
 
+    const handleWidgetKeyDown = (e: KeyboardEvent) => {
+      const isAltTab = e.altKey && (e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9);
+      const isCtrlTab = e.ctrlKey && (e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9);
+      const isWinKey = e.key === 'Meta' || e.metaKey || e.code === 'MetaLeft' || e.code === 'MetaRight';
+      const isAltEsc = e.altKey && (e.key === 'Escape' || e.code === 'Escape');
+
+      if (isAltTab || isCtrlTab || isWinKey || isAltEsc) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        setTabFocused(false);
+        updateParticipantTelemetry(currentLearnerId, { tabFocused: false });
+        triggerAutomatedStrike(
+          'tab_switch',
+          'Alt+Tab / Tab Switch Intercepted',
+          'Alt+Tab and tab switching are strictly disabled during this examination.'
+        );
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('keydown', handleWidgetKeyDown, { capture: true, passive: false });
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('keydown', handleWidgetKeyDown, { capture: true } as any);
     };
   }, [isExamActive, currentLearnerId, assessmentId, automatedStrikes]);
 
@@ -1144,6 +1216,33 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               timestamp: new Date().toISOString(),
             });
 
+            // 3. Real-time screen sharing frame capture & broadcast
+            const sv = screenVideoRef.current;
+            if (sv && sv.videoWidth > 0 && sv.videoHeight > 0) {
+              if (!screenCanvasRef.current && typeof document !== 'undefined') {
+                const sc = document.createElement('canvas');
+                sc.width = 640;
+                sc.height = 360;
+                screenCanvasRef.current = sc;
+              }
+              const sCanvas = screenCanvasRef.current;
+              if (sCanvas) {
+                const sCtx = sCanvas.getContext('2d', { alpha: false });
+                if (sCtx) {
+                  sCtx.drawImage(sv, 0, 0, sCanvas.width, sCanvas.height);
+                  const screenFrame = sCanvas.toDataURL('image/jpeg', 0.5);
+                  latestScreenSnapshotRef.current = screenFrame;
+                  proctoringSocket.emit('STUDENT_SCREEN_FRAME', {
+                    studentId: currentLearnerId,
+                    assessmentId,
+                    sessionId,
+                    screenFrame,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+            }
+
             // 2. High-speed network live frame transmission (approx 2.5 FPS for cross-machine)
             const now = Date.now();
             if (sessionId && now - lastNetworkPost > 350) {
@@ -1195,6 +1294,8 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
       const effectiveSnapshot = dataUrl || lastValidSnapshotRef.current;
 
+      const hasLiveScreen = Boolean(isScreenSharing && (screenStream?.getVideoTracks()?.some((t) => t.readyState === 'live') ?? false));
+
       updateParticipantTelemetry(currentLearnerId, {
         assessmentId,
         name: currentLearnerName,
@@ -1203,7 +1304,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         micActive: micActive || Boolean((mediaStream || stream)?.getAudioTracks()?.some((t) => t.enabled)),
         audioLevel,
         tabFocused,
+        screenShareActive: hasLiveScreen,
         status: 'connected',
+        ...(latestScreenSnapshotRef.current ? { latestScreenSnapshot: latestScreenSnapshotRef.current } : {}),
         ...(effectiveSnapshot ? { latestSnapshot: effectiveSnapshot } : {}),
       });
 

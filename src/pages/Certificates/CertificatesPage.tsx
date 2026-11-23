@@ -225,18 +225,19 @@ export const CertificatesPage: React.FC = () => {
   };
 
   // Handle Revoke
-  const handleConfirmRevoke = () => {
+  const handleConfirmRevoke = async () => {
     if (!certToRevoke) return;
     if (!revocationReason.trim()) {
       setRevokeError('An audited revocation reason is required.');
       return;
     }
     const adminName = user?.displayName || 'Institution Administrator';
-    const result = revokeCertificate(certToRevoke.id, adminName, revocationReason.trim());
+    const result = await revokeCertificate(certToRevoke.id, adminName, revocationReason.trim());
     if (result.success) {
       setCertToRevoke(null);
       setRevocationReason('');
       setRevokeError(null);
+      fetchCertificates().catch(() => {});
     } else {
       setRevokeError(result.message);
     }
@@ -939,91 +940,184 @@ export const CertificatesPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid-3">
-                {studentCertificates.map((cert) => (
-                  <div
-                    key={cert.id}
-                    className="card"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      boxShadow: 'var(--shadow-md)'
-                    }}
-                  >
-                    <div>
-                      {/* Certificate badge visual */}
-                      <div style={{
-                        height: '140px',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2))',
-                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                {studentCertificates.map((cert) => {
+                  const isRevoked = cert.status === 'revoked';
+
+                  return (
+                    <div
+                      key={cert.id}
+                      className="card"
+                      style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: '16px',
-                        position: 'relative'
-                      }}>
-                        <Award size={44} color="var(--success)" style={{ marginBottom: '6px' }} />
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--success)', textTransform: 'uppercase' }}>
-                          Verified Credential
-                        </span>
-                        <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
-                          <span className={`badge badge-${cert.status}`}>{cert.status}</span>
-                        </div>
-                      </div>
-
-                      <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle || cert.courseName}</h3>
-                      <p className="text-muted text-xs" style={{ marginBottom: '14px' }}>
-                        Issuing Organization: <strong>{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</strong>
-                      </p>
-
-                      <div style={{
-                        background: 'var(--bg-input)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '10px 14px',
-                        display: 'flex',
                         justifyContent: 'space-between',
-                        fontSize: '0.8rem',
-                        marginBottom: '16px'
-                      }}>
-                        <div>
-                          <span className="text-muted text-xs">Issued Date:</span>
-                          <div style={{ fontWeight: 600 }}>{new Date(cert.issuedAt || cert.issueDate || Date.now()).toLocaleDateString()}</div>
+                        border: isRevoked ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid rgba(16, 185, 129, 0.3)',
+                        boxShadow: isRevoked ? '0 4px 16px rgba(239, 68, 68, 0.12)' : 'var(--shadow-md)',
+                      }}
+                    >
+                      <div>
+                        {/* Certificate badge visual */}
+                        <div
+                          style={{
+                            height: '140px',
+                            borderRadius: 'var(--radius-md)',
+                            background: isRevoked
+                              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(244, 63, 94, 0.12))'
+                              : 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2))',
+                            border: isRevoked
+                              ? '1px solid rgba(239, 68, 68, 0.3)'
+                              : '1px solid rgba(16, 185, 129, 0.3)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: '16px',
+                            position: 'relative',
+                          }}
+                        >
+                          {isRevoked ? (
+                            <>
+                              <ShieldAlert size={44} color="#ef4444" style={{ marginBottom: '6px' }} />
+                              <span
+                                style={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.05em',
+                                  color: '#ef4444',
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                Revoked Credential
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Award size={44} color="var(--success)" style={{ marginBottom: '6px' }} />
+                              <span
+                                style={{
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.05em',
+                                  color: 'var(--success)',
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                Verified Credential
+                              </span>
+                            </>
+                          )}
+                          <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
+                            <span
+                              className={`badge ${isRevoked ? 'badge-failed' : `badge-${cert.status}`}`}
+                              style={isRevoked ? { background: '#ef4444', color: '#fff', fontWeight: 700 } : {}}
+                            >
+                              {isRevoked ? 'REVOKED' : cert.status}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-muted text-xs">Credential ID:</span>
-                          <div style={{ fontWeight: 700 }}><code>{cert.id}</code></div>
+
+                        <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle || cert.courseName}</h3>
+                        <p className="text-muted text-xs" style={{ marginBottom: '14px' }}>
+                          Issuing Organization: <strong>{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</strong>
+                        </p>
+
+                        {/* Revocation Warning Box for Student */}
+                        {isRevoked && (
+                          <div
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.08)',
+                              border: '1px solid rgba(239, 68, 68, 0.25)',
+                              borderRadius: 'var(--radius-md)',
+                              padding: '10px 14px',
+                              marginBottom: '14px',
+                              fontSize: '0.78rem',
+                              color: '#ef4444',
+                              textAlign: 'left',
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <AlertTriangle size={13} /> Certificate Revoked by Administration
+                            </div>
+                            <div style={{ marginTop: '4px', fontSize: '0.76rem', color: 'var(--text-main)' }}>
+                              <strong>Reason:</strong> {cert.revocationReason || 'Administrative revocation'}
+                            </div>
+                            {cert.revokedAt && (
+                              <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                                Revoked on: {new Date(cert.revokedAt).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            background: 'var(--bg-input)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '10px 14px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '0.8rem',
+                            marginBottom: '16px',
+                          }}
+                        >
+                          <div>
+                            <span className="text-muted text-xs">Issued Date:</span>
+                            <div style={{ fontWeight: 600 }}>
+                              {new Date(cert.issuedAt || cert.issueDate || Date.now()).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-muted text-xs">Credential ID:</span>
+                            <div style={{ fontWeight: 700 }}>
+                              <code>{cert.id}</code>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                        onClick={() => setSelectedCert(cert)}
-                      >
-                        <Eye size={14} /> View Diploma
-                      </button>
-                      <button
-                        className="btn btn-primary btn-sm"
-                        style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
-                        onClick={() => handleDownloadPdf(cert)}
-                      >
-                        <Download size={14} /> Download PDF
-                      </button>
-                      <Link
-                        to={`/verify-certificate/${cert.id}`}
-                        className="btn btn-secondary btn-sm"
-                        style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
-                      >
-                        <ShieldCheck size={14} /> Verify Credential Online
-                      </Link>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ flex: 1, gap: '6px', justifyContent: 'center' }}
+                          onClick={() => setSelectedCert(cert)}
+                        >
+                          <Eye size={14} /> View Details
+                        </button>
+
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{
+                            flex: 1,
+                            gap: '6px',
+                            justifyContent: 'center',
+                            opacity: isRevoked ? 0.5 : 1,
+                            cursor: isRevoked ? 'not-allowed' : 'pointer',
+                          }}
+                          disabled={isRevoked}
+                          onClick={() => !isRevoked && handleDownloadPdf(cert)}
+                          title={isRevoked ? 'Revoked credentials cannot be downloaded as authentic diplomas' : 'Download official PDF diploma'}
+                        >
+                          <Download size={14} /> {isRevoked ? 'Invalid / Revoked' : 'Download PDF'}
+                        </button>
+
+                        <Link
+                          to={`/verify-certificate/${cert.id}`}
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            width: '100%',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            color: isRevoked ? '#ef4444' : undefined,
+                            borderColor: isRevoked ? 'rgba(239, 68, 68, 0.3)' : undefined,
+                          }}
+                        >
+                          {isRevoked ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
+                          {isRevoked ? 'View Official Revocation Ledger' : 'Verify Credential Online'}
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1156,14 +1250,73 @@ export const CertificatesPage: React.FC = () => {
             </div>
 
             <div className="modal-body" style={{ padding: '26px', textAlign: 'center' }}>
+              {selectedCert.status === 'revoked' && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid var(--danger)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left'
+                }}>
+                  <ShieldAlert size={26} color="var(--danger)" style={{ flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 800, color: 'var(--danger)', fontSize: '0.92rem' }}>
+                      OFFICIALLY REVOKED CREDENTIAL
+                    </div>
+                    <div className="text-secondary text-xs" style={{ marginTop: '2px' }}>
+                      <strong>Administrative Reason:</strong> {selectedCert.revocationReason || 'Revoked by institution authority'}
+                      {selectedCert.revokedAt && ` • Revoked on: ${new Date(selectedCert.revokedAt).toLocaleString()}`}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{
-                border: '3px double #d97706',
+                border: selectedCert.status === 'revoked' ? '3px double #ef4444' : '3px double #d97706',
                 borderRadius: 'var(--radius-lg)',
                 padding: '30px 24px',
-                background: 'radial-gradient(ellipse at center, rgba(254, 243, 199, 0.12) 0%, transparent 80%), var(--bg-card)',
+                background: selectedCert.status === 'revoked'
+                  ? 'radial-gradient(ellipse at center, rgba(239, 68, 68, 0.12) 0%, transparent 80%), var(--bg-card)'
+                  : 'radial-gradient(ellipse at center, rgba(254, 243, 199, 0.12) 0%, transparent 80%), var(--bg-card)',
                 boxShadow: 'inset 0 0 30px rgba(0, 0, 0, 0.15)',
-                position: 'relative'
+                position: 'relative',
+                overflow: 'hidden'
               }}>
+                {selectedCert.status === 'revoked' && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 10
+                  }}>
+                    <div style={{
+                      border: '4px solid rgba(239, 68, 68, 0.9)',
+                      borderRadius: '8px',
+                      padding: '12px 36px',
+                      color: '#ef4444',
+                      fontWeight: 900,
+                      fontSize: '2.4rem',
+                      letterSpacing: '0.2em',
+                      textTransform: 'uppercase',
+                      transform: 'rotate(-15deg)',
+                      background: 'rgba(255, 255, 255, 0.94)',
+                      boxShadow: '0 8px 32px rgba(239, 68, 68, 0.3)',
+                      textAlign: 'center'
+                    }}>
+                      REVOKED &bull; VOID
+                    </div>
+                  </div>
+                )}
                 {/* Official Logo */}
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
                   <img
@@ -1287,24 +1440,40 @@ export const CertificatesPage: React.FC = () => {
             <div className="modal-footer" style={{ gap: '10px', flexWrap: 'wrap' }}>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => printCertificateDiploma(selectedCert)}
-                style={{ gap: '6px' }}
+                disabled={selectedCert.status === 'revoked'}
+                onClick={() => selectedCert.status !== 'revoked' && printCertificateDiploma(selectedCert)}
+                style={{
+                  gap: '6px',
+                  opacity: selectedCert.status === 'revoked' ? 0.5 : 1,
+                  cursor: selectedCert.status === 'revoked' ? 'not-allowed' : 'pointer'
+                }}
+                title={selectedCert.status === 'revoked' ? 'Printing is disabled for revoked credentials' : 'Print certificate'}
               >
-                <Printer size={14} /> Print / Save as PDF
+                <Printer size={14} /> {selectedCert.status === 'revoked' ? 'Print Disabled' : 'Print / Save as PDF'}
               </button>
               <button
                 className="btn btn-primary btn-sm"
-                onClick={() => handleDownloadPdf(selectedCert)}
-                style={{ gap: '6px' }}
+                disabled={selectedCert.status === 'revoked'}
+                onClick={() => selectedCert.status !== 'revoked' && handleDownloadPdf(selectedCert)}
+                style={{
+                  gap: '6px',
+                  opacity: selectedCert.status === 'revoked' ? 0.5 : 1,
+                  cursor: selectedCert.status === 'revoked' ? 'not-allowed' : 'pointer'
+                }}
+                title={selectedCert.status === 'revoked' ? 'Revoked credentials cannot be downloaded as authentic diplomas' : 'Download official PDF diploma'}
               >
-                <Download size={14} /> Download Verified PDF
+                <Download size={14} /> {selectedCert.status === 'revoked' ? 'Revoked Credential' : 'Download Verified PDF'}
               </button>
               <Link
                 to={`/verify-certificate/${selectedCert.id}`}
                 className="btn btn-secondary btn-sm"
-                style={{ gap: '6px' }}
+                style={{
+                  gap: '6px',
+                  color: selectedCert.status === 'revoked' ? '#ef4444' : undefined,
+                  borderColor: selectedCert.status === 'revoked' ? 'rgba(239, 68, 68, 0.4)' : undefined
+                }}
               >
-                <ExternalLink size={14} /> Open Verification Link
+                <ExternalLink size={14} /> {selectedCert.status === 'revoked' ? 'View Official Revocation Ledger' : 'Open Verification Link'}
               </Link>
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedCert(null)}>
                 Close

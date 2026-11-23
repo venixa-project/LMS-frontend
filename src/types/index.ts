@@ -353,6 +353,7 @@ export interface Lesson {
   content?: string;
   duration?: number;
   durationMinutes?: number;
+  durationSeconds?: number;
   order: number;
   status?: EntityStatus;
   isRequired?: boolean;
@@ -451,6 +452,7 @@ export interface LiveSession {
   endTime?: string;
   duration?: number;
   durationMinutes?: number;
+  durationSeconds?: number;
   timezone?: string;
   capacity?: number;
   enrolledCount?: number;

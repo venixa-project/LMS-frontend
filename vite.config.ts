@@ -41,6 +41,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/socket.io': {
+          target: backendTarget,
+          ws: true,
+          changeOrigin: true,
+          secure: false,
+        },
         '/ai-service': {
           target: aiTarget,
           changeOrigin: true,

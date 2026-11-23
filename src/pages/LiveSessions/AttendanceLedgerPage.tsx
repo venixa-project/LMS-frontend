@@ -4,11 +4,12 @@ import { useAuthStore } from '../../lib/store';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useCourseStore } from '../../lib/courseStore';
+import { usePeopleStore } from '../../lib/peopleStore';
 import { LiveSession } from '../../types';
 import { apiClient } from '../../lib/apiClient';
 import {
   Download, Users, Clock, Search, Calendar as CalendarIcon,
-  Video, CheckCircle2, X, RefreshCw
+  Video, CheckCircle2, X, RefreshCw, UserCheck, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 interface ParticipantParticipationRow {
@@ -39,6 +40,8 @@ export const AttendanceLedgerPage: React.FC = () => {
 
   const isTrainer = user?.activeRole === 'trainer' || user?.activeRole === 'instructor';
   const isStudent = user?.activeRole === 'student' || user?.activeRole === 'learner';
+  const isAdmin = user?.activeRole === 'org_admin' || user?.activeRole === 'platform_admin' || user?.activeRole === 'lms_admin';
+  const canManage = isTrainer || isAdmin;
 
   // 1. Fetch live sessions on mount and keep polling every 15s
   useEffect(() => {
@@ -59,16 +62,20 @@ export const AttendanceLedgerPage: React.FC = () => {
       return sessions.filter((s) => {
         const matchesInstructor = s.instructorId === user?.id || s.instructorName === user?.displayName;
         const matchesAssignedCourse = s.courseId ? trainerCourseIds.includes(s.courseId) : false;
-        return matchesInstructor || matchesAssignedCourse;
+        return matchesInstructor || matchesAssignedCourse || s.audienceScope === 'faculty';
       });
     }
 
     if (isStudent) {
-      const studentId = user?.id || 'u-007';
-      return sessions.filter((s) =>
-        s.targetStudentIds?.includes(studentId) ||
-        s.attendance?.some((a) => a.userId === studentId)
-      );
+      const studentId = user?.id;
+      const userCohortId = (user as any)?.cohortId;
+      return sessions.filter((s) => {
+        if (studentId && s.targetStudentIds?.includes(studentId)) return true;
+        if (studentId && s.attendance?.some((a) => a.userId === studentId)) return true;
+        if (userCohortId && s.cohortId === userCohortId) return true;
+        if (!s.cohortId || s.targetAudienceType === 'all_cohort' || s.audienceScope === 'students' || !s.audienceScope) return true;
+        return false;
+      });
     }
 
     // Admins have institution-wide scope
@@ -102,6 +109,7 @@ export const AttendanceLedgerPage: React.FC = () => {
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [dbRoster, setDbRoster] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
   // The active session object
   const activeSession: LiveSession | undefined = useMemo(() => {
@@ -239,8 +247,125 @@ export const AttendanceLedgerPage: React.FC = () => {
       });
     }
 
+    // Fallback 2: Load registered student scholars from store
+    const registeredStudents = usePeopleStore.getState().users.filter(
+      (u) => u.activeRole === 'student' || u.activeRole === 'learner'
+    );
+    if (registeredStudents.length > 0) {
+      return registeredStudents.map((u) => ({
+        studentId: u.id,
+        name: u.displayName || 'Scholar',
+        email: u.email || '',
+        rollNo: u.rollNo || 'STU-001',
+        department: (u as any).department || 'Computer Science & Engineering',
+        avatar: u.avatar || (u as any).avatarUrl,
+        sessionTitle: activeSession.title,
+        sessionDate,
+        courseTitle,
+        cohortName,
+        joinTime: 'Did Not Join',
+        leaveTime: 'Did Not Join',
+        durationMinutes: 0,
+        totalSessionDuration: sessionDuration,
+        participationStatus: 'absent' as const,
+      }));
+    }
+
     return [];
   }, [activeSession, dbRoster]);
+
+  // Handler for Trainers & Admins to update individual student attendance
+  const handleUpdateStudentStatus = async (studentId: string, newStatus: 'present' | 'late' | 'left_early' | 'absent') => {
+    if (!activeSession?.id) return;
+    setIsUpdating(true);
+    try {
+      // Optimistic local state update
+      setDbRoster((prev) => {
+        const idx = prev.findIndex((p) => p.userId === studentId);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            status: newStatus,
+            joinedAt: newStatus === 'present' || newStatus === 'late' ? (updated[idx].joinedAt || new Date().toISOString()) : null,
+          };
+          return updated;
+        }
+        return [
+          ...prev,
+          {
+            userId: studentId,
+            status: newStatus,
+            joinedAt: newStatus === 'present' || newStatus === 'late' ? new Date().toISOString() : null,
+          },
+        ];
+      });
+
+      await apiClient.put(`/live-sessions/${activeSession.id}/attendance`, {
+        records: [{ userId: studentId, status: newStatus }],
+      });
+      await fetchSessions();
+      setExportNotice('Student attendance record updated.');
+      setTimeout(() => setExportNotice(null), 3500);
+    } catch (err: any) {
+      console.error('Failed to update attendance:', err);
+      alert(err?.response?.data?.message || err?.message || 'Failed to update attendance record.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Handler for Trainers & Admins to mark all scholars present with 1 click
+  const handleMarkAllPresent = async () => {
+    if (!activeSession?.id || activeRosterData.length === 0) return;
+    if (!confirm(`Mark all ${activeRosterData.length} students as Present for "${activeSession.title}"?`)) return;
+    setIsUpdating(true);
+    try {
+      const records = activeRosterData.map((r) => ({
+        userId: r.studentId,
+        status: 'present' as const,
+      }));
+
+      setDbRoster(
+        activeRosterData.map((r) => ({
+          userId: r.studentId,
+          name: r.name,
+          email: r.email,
+          rollNo: r.rollNo,
+          status: 'present',
+          joinedAt: new Date().toISOString(),
+        }))
+      );
+
+      await apiClient.put(`/live-sessions/${activeSession.id}/attendance`, { records });
+      await fetchSessions();
+      setExportNotice(`All ${records.length} students successfully marked Present.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to mark all present:', err);
+      alert('Failed to mark all students present.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Handler for Student self check-in to active class
+  const handleStudentSelfCheckIn = async () => {
+    if (!activeSession?.id) return;
+    setIsUpdating(true);
+    try {
+      await apiClient.post(`/live-sessions/${activeSession.id}/join`);
+      await fetchSessions();
+      loadAttendanceRoster();
+      setExportNotice('You are checked in! Attendance recorded for today\'s class.');
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Student check-in failed:', err);
+      alert('Could not record attendance check-in.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   // Filtered roster according to UI search and status filters
   const filteredRoster = useMemo(() => {
@@ -416,6 +541,37 @@ export const AttendanceLedgerPage: React.FC = () => {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {canManage && activeSession && (
+            <button
+              onClick={handleMarkAllPresent}
+              disabled={isUpdating || activeRosterData.length === 0}
+              className="btn btn-primary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+              title="Mark all registered scholars as Present for this class"
+            >
+              <CheckCircle2 size={14} /> Mark All Present
+            </button>
+          )}
+
+          {isStudent && activeSession && (
+            <button
+              onClick={handleStudentSelfCheckIn}
+              disabled={isUpdating}
+              className="btn btn-primary btn-sm"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                borderColor: '#10b981',
+              }}
+              title="Mark your attendance check-in for this live session"
+            >
+              <CheckCircle2 size={14} /> Check-In (Mark Present)
+            </button>
+          )}
+
           <button
             onClick={loadAttendanceRoster}
             className="btn btn-secondary btn-sm"
@@ -785,23 +941,71 @@ export const AttendanceLedgerPage: React.FC = () => {
                     </td>
 
                     <td style={{ padding: '12px 18px', textAlign: 'right' }}>
-                      {row.participationStatus === 'present' ? (
-                        <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <CheckCircle2 size={12} /> Attended (Present)
-                        </span>
-                      ) : row.participationStatus === 'late' ? (
-                        <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <Clock size={12} /> Joined Late
-                        </span>
-                      ) : row.participationStatus === 'left_early' ? (
-                        <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          Left Early
-                        </span>
-                      ) : (
-                        <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          Did Not Join (Absent)
-                        </span>
-                      )}
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                        <div>
+                          {row.participationStatus === 'present' ? (
+                            <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle2 size={12} /> Present
+                            </span>
+                          ) : row.participationStatus === 'late' ? (
+                            <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Clock size={12} /> Joined Late
+                            </span>
+                          ) : row.participationStatus === 'left_early' ? (
+                            <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              Left Early
+                            </span>
+                          ) : (
+                            <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              Absent
+                            </span>
+                          )}
+                        </div>
+
+                        {canManage && (
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              gap: '4px',
+                              background: 'var(--bg-card)',
+                              padding: '2px 4px',
+                              borderRadius: '6px',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStudentStatus(row.studentId, 'present')}
+                              disabled={isUpdating}
+                              className={`btn btn-xs ${row.participationStatus === 'present' ? 'btn-primary' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Present"
+                            >
+                              Present
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStudentStatus(row.studentId, 'late')}
+                              disabled={isUpdating}
+                              className={`btn btn-xs ${row.participationStatus === 'late' ? 'btn-primary' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Late"
+                            >
+                              Late
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStudentStatus(row.studentId, 'absent')}
+                              disabled={isUpdating}
+                              className={`btn btn-xs ${row.participationStatus === 'absent' ? 'btn-danger' : 'btn-ghost'}`}
+                              style={{ padding: '2px 6px', fontSize: '0.68rem', borderRadius: '4px' }}
+                              title="Mark Absent"
+                            >
+                              Absent
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
