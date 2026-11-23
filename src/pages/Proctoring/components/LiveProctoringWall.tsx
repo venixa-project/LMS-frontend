@@ -91,7 +91,7 @@ const CandidateLiveVideoTile: React.FC<{
           Exam Terminated
         </span>
         <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-          Candidate disconnected by administrator
+          Candidate examination concluded and submitted
         </span>
       </div>
     );
@@ -121,68 +121,66 @@ const CandidateLiveVideoTile: React.FC<{
     );
   }
 
-  // 3. Fallback to real-time snapshot frame if WebRTC is not yet playing
-  if (!isPlayingWebRtc && snapshotFallback) {
-    return (
-      <img
-        src={snapshotFallback}
-        alt={`Live Frame: ${name}`}
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#0a0d14' }}>
+      {/* Permanent Video Element for Smooth 30 FPS WebRTC Stream */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'cover',
           transform: 'scaleX(-1)',
-          display: 'block',
+          display: isPlayingWebRtc ? 'block' : 'none',
           backgroundColor: '#0a0d14',
         }}
+        title={`Live Webcam Stream: ${name}`}
       />
-    );
-  }
 
-  // 4. Connecting placeholder if neither WebRTC nor snapshot is ready yet
-  if (!isPlayingWebRtc && !snapshotFallback) {
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          background: 'radial-gradient(circle at center, #151b28 0%, #090c15 100%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px',
-          color: '#94a3b8',
-        }}
-      >
-        <RefreshCw size={26} className="animate-spin" color="#38bdf8" />
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
-          Connecting Live Stream...
-        </span>
-        <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
-          Waiting for candidate camera feed
-        </span>
-      </div>
-    );
-  }
+      {/* Fast fallback frame while WebRTC connects */}
+      {!isPlayingWebRtc && snapshotFallback && (
+        <img
+          src={snapshotFallback}
+          alt={`Live Frame: ${name}`}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: 'scaleX(-1)',
+            display: 'block',
+            backgroundColor: '#0a0d14',
+          }}
+        />
+      )}
 
-  // 5. Active WebRTC live video
-  return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: 'scaleX(-1)',
-        display: 'block',
-        backgroundColor: '#0a0d14',
-      }}
-      title={`Live Webcam Stream: ${name}`}
-    />
+      {/* Connecting placeholder if neither WebRTC nor snapshot is ready */}
+      {!isPlayingWebRtc && !snapshotFallback && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(circle at center, #151b28 0%, #090c15 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            color: '#94a3b8',
+          }}
+        >
+          <RefreshCw size={26} className="animate-spin" color="#38bdf8" />
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
+            Connecting Live Stream...
+          </span>
+          <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+            Waiting for candidate camera feed
+          </span>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -242,7 +240,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const addLifecycleToast = (type: 'start' | 'end', data: Partial<ExamLifecycleToastData>) => {
+  const addLifecycleToast = (type: 'start' | 'end' | 'violation', data: Partial<ExamLifecycleToastData>) => {
     const newToast: ExamLifecycleToastData = {
       id: `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       type,
@@ -253,6 +251,12 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       assessmentId: data.assessmentId || assessmentId,
       timestamp: data.timestamp || new Date().toISOString(),
       reason: data.reason,
+      violationType: data.violationType,
+      severity: data.severity,
+      evidenceSnapshot: data.evidenceSnapshot,
+      onSendWarning: data.onSendWarning,
+      onStopExam: data.onStopExam,
+      onInspect: data.onInspect,
     };
     setLifecycleToasts((prev) => [...prev.slice(-4), newToast]);
   };
@@ -448,9 +452,88 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       }
     });
 
+    // Handler for notifying the Admin / Trainer about candidate AI integrity violations
+    const handleAiViolationNotice = (data: any) => {
+      if (!data || !data.studentId) return;
+
+      // Discreet proctor audio chime
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+        }
+      } catch {}
+
+      const allParticipants = useProctoringStore.getState().participants;
+      const targetCandidate: ProctorParticipant = allParticipants.find((p) => p.id === data.studentId) || {
+        id: data.studentId,
+        name: data.studentName || 'Student',
+        rollNo: data.rollNo || `STU-${data.studentId.slice(-4)}`,
+        assessmentId: data.assessmentId || assessmentId,
+        sessionId: data.sessionId,
+        status: 'connected',
+        cameraActive: true,
+        micActive: true,
+        audioLevel: 0.15,
+        screenShareActive: false,
+        tabFocused: true,
+        faceDetected: true,
+        joinedAt: new Date().toISOString(),
+        lastPingAt: new Date().toISOString(),
+        activeWarningCount: data.warningCount || 1,
+        remoteStream: null,
+        faceVerificationStatus: 'SCANNING',
+      };
+
+      const formattedReason = data.message || data.title || data.reason || 'AI Integrity Violation Detected';
+
+      addLifecycleToast('violation', {
+        studentId: data.studentId,
+        studentName: data.studentName || targetCandidate.name || 'Student',
+        rollNo: data.rollNo || targetCandidate.rollNo,
+        assessmentTitle,
+        assessmentId,
+        timestamp: data.timestamp || new Date().toISOString(),
+        reason: formattedReason,
+        violationType: data.eventType || 'AI_VIOLATION',
+        severity: data.severity || 'warning',
+        evidenceSnapshot: data.evidenceSnapshot,
+        onSendWarning: () => {
+          setCustomWarningReason(formattedReason);
+          setWarningModalTarget(targetCandidate);
+        },
+        onStopExam: () => {
+          setStopReason(`Exam stopped due to flagged proctoring violation: ${formattedReason}`);
+          setStopModalTarget(targetCandidate);
+        },
+        onInspect: () => {
+          setEnlargedCandidateId(data.studentId);
+        },
+      });
+    };
+
+    // Listen for AI violation alert notices for Admin / Trainer
+    const unsubAiAlert = proctoringSocket.on('AI_VIOLATION_ALERT', (data: any) => {
+      handleAiViolationNotice(data);
+    });
+
     // Listen for incoming proctoring warnings (automated or manual)
     const unsubWarning = proctoringSocket.on('PROCTORING_WARNING', (data) => {
       if (data && data.studentId) {
+        if (data.source !== 'manual') {
+          handleAiViolationNotice(data);
+        }
         upsertLiveCandidate({
           id: data.studentId,
           name: data.studentName || 'Student',
@@ -520,6 +603,10 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     // Listen for suppressed proctoring violation during cooldown
     const unsubSuppressed = proctoringSocket.on('PROCTORING_VIOLATION_SUPPRESSED', (data) => {
       if (data && data.studentId) {
+        handleAiViolationNotice({
+          ...data,
+          message: `${data.violationType || 'Integrity violation'} detected by AI`,
+        });
         upsertLiveCandidate({
           id: data.studentId,
           name: data.studentName || 'Student',
@@ -568,6 +655,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       unsubReady();
       unsubDisconnect();
       unsubReconnect();
+      unsubAiAlert();
       unsubWarning();
       unsubAck();
       unsubTerminated();
@@ -1581,7 +1669,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                       }}
                     >
                       <Send size={12} />
-                      Issue Warning
+                      Send Warning Popup
                     </button>
 
                     <button
@@ -1599,7 +1687,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                       }}
                     >
                       <UserX size={12} />
-                      {isTerminated ? 'Exam Stopped' : 'STOP EXAM'}
+                      {isTerminated ? 'Exam Submitted' : 'STOP & SUBMIT EXAM'}
                     </button>
                   </div>
                 </div>
@@ -1803,7 +1891,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                   style={{ gap: '6px' }}
                 >
                   <UserX size={14} />
-                  {enlargedCandidate.status === 'terminated' ? 'Exam Terminated' : 'STOP EXAMINATION'}
+                  {enlargedCandidate.status === 'terminated' ? 'Exam Submitted' : 'STOP & SUBMIT EXAMINATION'}
                 </button>
               </div>
             </div>
@@ -1931,7 +2019,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
             <div className="modal-header">
               <h3 style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)' }}>
                 <ShieldAlert size={20} color="var(--danger)" />
-                Confirm Force Stop Examination
+                Confirm Force Stop & Submit Examination
               </h3>
               <button
                 type="button"

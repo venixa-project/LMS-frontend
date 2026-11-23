@@ -891,15 +891,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
       return;
     }
 
-    // Automatically launch Google Meet room for the student if manual or combined mode
-    if (!hasOpenedMeetRef.current && isMeetProctoring) {
-      hasOpenedMeetRef.current = true;
-      const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
-      const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
-      launchJitsiConference(finalUrl);
-    }
-
-    // Mark transition to live exam to protect media streams from unmount cleanup
+    // Direct transition to live exam: Do not navigate away to external Google Meet
     isTransitioningToExamRef.current = true;
 
     // Ensure fullscreen is active when student starts the exam

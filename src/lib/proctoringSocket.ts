@@ -281,8 +281,12 @@ export class ProctoringSocketClient {
     try {
       const pcKey = `admin-wall-${assessmentId}`;
       let pc = this.peerConnections.get(pcKey);
+      if (pc && pc.connectionState === 'connected') {
+        // Already connected and transmitting smooth 30 FPS live video
+        return;
+      }
       if (pc && pc.connectionState !== 'closed' && pc.connectionState !== 'failed') {
-        pc.close();
+        try { pc.close(); } catch {}
       }
 
       pc = new RTCPeerConnection({ iceServers: this.iceServers });

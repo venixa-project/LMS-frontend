@@ -2177,6 +2177,7 @@ export const ExamPlayerPage: React.FC = () => {
           <StudentProctorWidget
             assessmentId={assessment.id}
             sessionId={serverSessionId || currentSessionId || undefined}
+            proctoringMode={assessment.proctoringMode || (assessment as any).mode || 'automated'}
             mediaStream={activeUserMediaStream || userMediaStreamRef.current}
             screenStream={screenStreamRef.current}
             isScreenSharing={isScreenSharing}

@@ -16,6 +16,7 @@ import { proctoringSocket } from '../../../lib/proctoringSocket';
 interface StudentProctorWidgetProps {
   assessmentId: string;
   sessionId?: string;
+  proctoringMode?: string;
   mediaStream?: MediaStream | null;
   screenStream?: MediaStream | null;
   isScreenSharing?: boolean;
@@ -31,6 +32,7 @@ interface StudentProctorWidgetProps {
 export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   assessmentId,
   sessionId,
+  proctoringMode = 'automated',
   mediaStream,
   screenStream,
   isScreenSharing = false,
@@ -42,6 +44,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   onForceSubmit,
   onStreamChange,
 }) => {
+  const isManualProctoring = proctoringMode === 'manual';
   const { user } = useAuthStore();
   const currentLearnerId = user?.id || learnerId;
   const currentLearnerName = user?.displayName || learnerName;
@@ -452,10 +455,29 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     } catch (e) {}
   };
 
+  const audioLevelRef = useRef<number>(0);
+
   // Automated Proctoring Violation Dispatcher
   // Forwards violation to backend; backend strictly validates server-side cooldown interval
   // and issues confirmed warnings/strikes back via WebSocket
   const triggerAutomatedStrike = (category: string, title: string, message: string) => {
+    // In manual proctoring mode, automated strikes are strictly disabled for the student;
+    // Only messages/warnings explicitly issued by the admin or trainer should reach the student.
+    if (isManualProctoring) {
+      proctoringSocket.emit('PROCTORING_TELEMETRY', {
+        studentId: currentLearnerId,
+        studentName: currentLearnerName,
+        assessmentId,
+        sessionId,
+        eventType: category,
+        title,
+        message,
+        source: 'automated',
+        clientTimestamp: Date.now(),
+      });
+      return;
+    }
+
     // If audio or speech violation, record audio proof clip immediately
     if (category.startsWith('audio_') || category.startsWith('speech_')) {
       captureAudioProof(title, message);
@@ -501,6 +523,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     // Listen for confirmed proctoring warnings (automated or manual) from server
     const unsubWarning = proctoringSocket.on('PROCTORING_WARNING', (data: any) => {
       if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+        // In manual proctoring mode, automated warnings are suppressed from student view
+        if (isManualProctoring && data.source !== 'manual') {
+          return;
+        }
+
         // Prevent duplicate popups for the exact same event ID
         if (data.eventId && lastSeenEventIdRef.current === data.eventId) {
           return;
@@ -524,11 +551,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           totalAllowed,
           remainingWarnings: remaining,
           warningIntervalSeconds: data.warningIntervalSeconds || 120,
-          title: `Warning ${strikeNum} of ${totalAllowed}`,
+          title: data.source === 'manual' ? (data.title || 'Notice from Exam Proctor / Trainer') : `Warning ${strikeNum} of ${totalAllowed}`,
           message: data.reason || data.message || 'Proctoring violation detected. Please adhere to examination integrity guidelines.',
           category: data.eventType || 'proctoring_warning',
           source: data.source || 'automated',
-          adminName: data.issuedBy || (data.source === 'manual' ? 'Exam Proctor' : undefined),
+          adminName: data.issuedBy || data.adminName || (data.source === 'manual' ? 'Exam Proctor / Trainer' : undefined),
           timestamp: data.timestamp || new Date().toISOString(),
           autoSubmitted: Boolean(data.autoSubmitted || strikeNum >= totalAllowed),
         });
@@ -559,7 +586,26 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     // Listen for manual proctor warnings issued by the administrator
     const unsubManual = proctoringSocket.on('MANUAL_WARNING', (data: any) => {
       if (data && (data.studentId === currentLearnerId || !data.studentId)) {
-        // Handled through unified PROCTORING_WARNING handler with exact strike counts
+        const strikeNum = Number(data.warningNumber || data.warningCount || 1);
+        const totalAllowed = Number(data.totalAllowed || 3);
+        const remaining = typeof data.remainingWarnings === 'number' ? data.remainingWarnings : Math.max(0, totalAllowed - strikeNum);
+
+        setAutomatedStrikes(strikeNum);
+        playAlertChime(strikeNum);
+
+        setActiveStrikeModal({
+          strike: strikeNum,
+          totalAllowed,
+          remainingWarnings: remaining,
+          warningIntervalSeconds: 0,
+          title: data.title || 'Direct Message from Proctor / Trainer',
+          message: data.reason || data.message || 'Please adhere to examination integrity guidelines.',
+          category: 'manual_proctor_warning',
+          source: 'manual',
+          adminName: data.issuedBy || data.adminName || 'Exam Proctor / Trainer',
+          timestamp: data.timestamp || new Date().toISOString(),
+          autoSubmitted: false,
+        });
       }
     });
 
@@ -572,21 +618,20 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         });
         setTimeout(() => {
           onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
-        }, 3000);
+        }, 1500);
       }
     });
 
-    // Listen for admin force-stop examination
+    // Listen for admin force-stop examination: immediately submit exam
     const unsubTerminated = proctoringSocket.on('EXAM_TERMINATED', (data: any) => {
       if (data && (data.studentId === currentLearnerId || !data.studentId)) {
         setTerminatedState({
           isTerminated: true,
-          reason: data.reason || 'Your examination was concluded by the examination administrator.',
-          adminName: data.adminName || 'Exam Proctor',
+          reason: data.reason || 'Your examination was concluded and submitted by the administrator / trainer.',
+          adminName: data.adminName || 'Exam Proctor / Trainer',
         });
-        setTimeout(() => {
-          onForceSubmitRef.current?.(data.reason || 'Exam terminated by administrator.');
-        }, 1500);
+        // Immediately submit student exam
+        onForceSubmitRef.current?.(data.reason || 'Exam stopped and submitted by administrator.');
       }
     });
 
@@ -604,7 +649,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       unsubTerminated();
       unsubAdminRequest();
     };
-  }, [assessmentId, currentLearnerId, isExamActive, sessionId]);
+  }, [assessmentId, currentLearnerId, isExamActive, sessionId, isManualProctoring]);
 
   // Initialize MediaStream (Camera & Mic) - reuse passed mediaStream if present
   useEffect(() => {
@@ -779,6 +824,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             }
 
             if (timestamp - lastUpdate > 120) {
+              audioLevelRef.current = smoothedLevel;
               setAudioLevel(smoothedLevel);
               lastUpdate = timestamp;
 
@@ -828,6 +874,13 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     };
 
     const hasLiveVideoTrack = mediaStream && isVideoTrackLive(mediaStream);
+    const existingIsLive = activeStreamRef.current && isVideoTrackLive(activeStreamRef.current);
+
+    if (existingIsLive) {
+      // Existing camera stream is already running smoothly; do NOT re-initialize or kill tracks
+      return;
+    }
+
     if (mediaStream && hasLiveVideoTrack) {
       setupStream(mediaStream, false);
     } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -848,8 +901,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
     }
 
     return () => {
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+      // Component re-renders must NEVER stop live camera tracks during an active exam!
+      if (!isExamActive && activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => track.stop());
       }
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
@@ -1155,12 +1209,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           consecutiveMultiFaceSecondsRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0; // Do NOT issue false absence strike
           setFaceStatus('camera_covered');
-        } else {
-          consecutiveBlackFramesRef.current = 0;
         }
         // Priority 1: Candidate Absence (Student is away from camera / empty chair > 5 seconds)
         // If effectiveFaceCount === 0 (candidate absent), NEVER trigger mobile phone warning!
         else if (effectiveFaceCount === 0) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           consecutiveAbsentSecondsRef.current += 0.8;
@@ -1179,6 +1232,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 2: Unauthorized Mobile Phone (Strictly after temporal confirmation 8/12 frames)
         else if (isDeviceVisible) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           setFaceStatus('device_detected');
@@ -1187,6 +1241,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 3: Multiple Persons (Candidate IS present and another person is confirmed)
         else if (confirmedFaces.length > 1) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
           setFaceStatus('multiple_faces');
@@ -1195,6 +1250,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 4: Candidate Seated & Normal (Single Face)
         else {
+          consecutiveBlackFramesRef.current = 0;
           setFaceStatus('single_face');
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
@@ -1253,7 +1309,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           rollingVideoBufferRef.current = rollingVideoBufferRef.current.filter((c) => c.timestamp >= cutoff);
 
           // 1. Instant zero-latency local broadcast (< 10ms memory transfer)
-          broadcastLiveVideoChunk(currentLearnerId, assessmentId, blobUrl, audioLevel);
+          broadcastLiveVideoChunk(currentLearnerId, assessmentId, blobUrl, audioLevelRef.current);
           updateParticipantTelemetry(currentLearnerId, {
             latestVideoUrl: blobUrl,
             cameraActive: true,
@@ -1267,7 +1323,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             formData.append('assessmentId', assessmentId);
             formData.append('learnerId', currentLearnerId);
             formData.append('learnerName', currentLearnerName);
-            formData.append('audioLevel', String(audioLevel));
+            formData.append('audioLevel', String(audioLevelRef.current));
 
             apiClient
               .post(`/proctoring/sessions/${sessionId}/video-chunk`, formData)
@@ -1289,7 +1345,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         } catch (e) {}
       }
     };
-  }, [mediaStream, stream, isExamActive, sessionId, currentLearnerId, currentLearnerName, assessmentId, audioLevel]);
+  }, [mediaStream, stream, isExamActive, sessionId, currentLearnerId, currentLearnerName, assessmentId]);
 
   // High-frequency live video streaming loop (8 FPS for fluid real-time camera)
   useEffect(() => {
@@ -1315,8 +1371,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             const frame = canvas.toDataURL('image/jpeg', 0.55);
             lastValidSnapshotRef.current = frame;
 
+            const curAudioLevel = audioLevelRef.current;
+
             // 1. Ultra-fast local broadcast (8-10 FPS, instantaneous memory transfer)
-            broadcastLiveFrame(currentLearnerId, assessmentId, frame, audioLevel);
+            broadcastLiveFrame(currentLearnerId, assessmentId, frame, curAudioLevel);
 
             // 2. Real-time WebSocket live camera frame broadcast (continuous, sub-second latency)
             proctoringSocket.emit('STUDENT_VIDEO_FRAME', {
@@ -1324,7 +1382,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               assessmentId,
               sessionId,
               frame,
-              audioLevel,
+              audioLevel: curAudioLevel,
               timestamp: new Date().toISOString(),
             });
 
@@ -1365,7 +1423,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
                   learnerId: currentLearnerId,
                   learnerName: currentLearnerName,
                   frame,
-                  audioLevel,
+                  audioLevel: curAudioLevel,
                 })
                 .catch(() => {});
             }
@@ -1376,7 +1434,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
     const streamTimer = setInterval(captureFrame, 125);
     return () => clearInterval(streamTimer);
-  }, [isExamActive, currentLearnerId, currentLearnerName, assessmentId, sessionId, audioLevel]);
+  }, [isExamActive, currentLearnerId, currentLearnerName, assessmentId, sessionId]);
 
   // Sync telemetry to proctor store periodically (presence & audit log checkpoints)
   useEffect(() => {
