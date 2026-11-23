@@ -909,6 +909,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
     }
     const userMediaStream = combinedTracks.length > 0 ? new MediaStream(combinedTracks) : undefined;
 
+    // Release the setup video element sink cleanly before handing off to active exam
+    if (webcamVideoElementRef.current) {
+      webcamVideoElementRef.current.srcObject = null;
+    }
+
     onReadyToStart({
       screenStream: screenStreamRef.current || undefined,
       userMediaStream,

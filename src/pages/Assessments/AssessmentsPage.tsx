@@ -8,6 +8,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { CreateAssessmentModal } from './components/CreateAssessmentModal';
 import { ExamPaperPreviewModal } from './components/ExamPaperPreviewModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { AssignmentGradingModal, CourseAssignment, StudentSubmissionRecord } from './components/AssignmentGradingModal';
 import {
   ClipboardCheck, Plus, Clock, Award, Shield, Eye,
   Play, CheckCircle2, X, AlertTriangle, Sparkles, HelpCircle,
@@ -16,26 +17,6 @@ import {
 
 interface Props {
   defaultTab?: 'assessments' | 'assignments' | 'results';
-}
-
-interface CourseAssignment {
-  id: string;
-  title: string;
-  description: string;
-  courseId: string;
-  cohortId: string;
-  dueDate: string;
-  totalMarks: number;
-  submissionFormat: 'file' | 'repo' | 'text';
-  submissionsCount: number;
-  gradedCount: number;
-  status: 'active' | 'closed' | 'draft';
-  // Learner-specific metadata
-  learnerStatus?: 'pending' | 'submitted' | 'graded';
-  learnerScore?: number;
-  learnerFeedback?: string;
-  learnerSubmissionUrl?: string;
-  learnerSubmittedAt?: string;
 }
 
 export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' }) => {
@@ -97,6 +78,7 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
   // Student assignment submission modal state
   const [submittingAssignment, setSubmittingAssignment] = useState<CourseAssignment | null>(null);
   const [viewingAssignment, setViewingAssignment] = useState<CourseAssignment | null>(null);
+  const [gradingAssignment, setGradingAssignment] = useState<CourseAssignment | null>(null);
   const [submissionDeliverable, setSubmissionDeliverable] = useState('');
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [honorCodeAgreed, setHonorCodeAgreed] = useState(false);
@@ -209,13 +191,37 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
 
     const nextAssignments = assignments.map((a) => {
       if (a.id === submittingAssignment.id) {
+        const existingSubs: StudentSubmissionRecord[] = a.submissions ? [...a.submissions] : [];
+        const studentSubIndex = existingSubs.findIndex(
+          (s) => s.studentId === (user?.id || 'u-007') || s.studentName === (user?.displayName || 'Alex Thompson')
+        );
+        const newRecord: StudentSubmissionRecord = {
+          id: studentSubIndex >= 0 ? existingSubs[studentSubIndex].id : `sub-${a.id}-${user?.id || 'alex'}`,
+          studentId: user?.id || 'u-007',
+          studentName: user?.displayName || 'Alex Thompson',
+          studentEmail: user?.email || 'student@lms.demo',
+          studentRollNo: user?.rollNo || 'STU-2026-007',
+          submittedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          submissionUrl: submissionDeliverable.trim(),
+          submissionNotes: submissionNotes.trim() || undefined,
+          status: 'pending',
+          maxScore: a.totalMarks,
+        };
+
+        if (studentSubIndex >= 0) {
+          existingSubs[studentSubIndex] = newRecord;
+        } else {
+          existingSubs.unshift(newRecord);
+        }
+
         return {
           ...a,
           learnerStatus: 'submitted' as const,
           learnerSubmissionUrl: submissionDeliverable.trim(),
           learnerSubmittedAt: new Date().toISOString().split('T')[0],
-          submissionsCount: a.submissionsCount + 1,
-          learnerFeedback: 'Deliverable submitted successfully. Awaiting faculty review and scoring.'
+          submissionsCount: Math.max(a.submissionsCount + 1, existingSubs.length),
+          submissions: existingSubs,
+          learnerFeedback: 'Deliverable submitted successfully. Awaiting faculty review and scoring.',
         };
       }
       return a;
@@ -231,6 +237,84 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     setSubmissionDeliverable('');
     setSubmissionNotes('');
     setHonorCodeAgreed(false);
+  };
+
+  const handleSaveAssignmentGrade = (
+    assignmentId: string,
+    submissionId: string,
+    score: number,
+    letterGrade: string,
+    feedback: string
+  ) => {
+    const nextAssignments = assignments.map((a) => {
+      if (a.id === assignmentId) {
+        const existingSubs: StudentSubmissionRecord[] = a.submissions ? [...a.submissions] : [];
+        const subIndex = existingSubs.findIndex((s) => s.id === submissionId);
+        const updatedRecord: StudentSubmissionRecord = subIndex >= 0
+          ? {
+              ...existingSubs[subIndex],
+              status: 'graded' as const,
+              score,
+              letterGrade,
+              feedback,
+              gradedBy: user?.displayName || 'Faculty Grader',
+              gradedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            }
+          : {
+              id: submissionId,
+              studentId: 'u-007',
+              studentName: 'Alex Thompson',
+              studentEmail: 'student@lms.demo',
+              studentRollNo: 'STU-2026-007',
+              submittedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              submissionUrl: a.learnerSubmissionUrl || 'https://github.com/alex-thompson/hero-capstone-project',
+              status: 'graded' as const,
+              score,
+              maxScore: a.totalMarks,
+              letterGrade,
+              feedback,
+              gradedBy: user?.displayName || 'Faculty Grader',
+              gradedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            };
+
+        if (subIndex >= 0) {
+          existingSubs[subIndex] = updatedRecord;
+        } else {
+          existingSubs.push(updatedRecord);
+        }
+
+        const totalGraded = existingSubs.filter((s) => s.status === 'graded').length;
+        const newGradedCount = Math.max(a.gradedCount, totalGraded);
+
+        // Check if this graded submission applies to the student view
+        const isStudentSub = submissionId.includes('alex') || submissionId.includes(user?.id || '');
+
+        return {
+          ...a,
+          gradedCount: newGradedCount,
+          submissions: existingSubs,
+          ...(isStudentSub
+            ? {
+                learnerStatus: 'graded' as const,
+                learnerScore: score,
+                learnerFeedback: feedback,
+              }
+            : {}),
+        };
+      }
+      return a;
+    });
+
+    setAssignments(nextAssignments);
+    try {
+      localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
+    } catch {}
+
+    const updatedCurrent = nextAssignments.find((a) => a.id === assignmentId);
+    if (updatedCurrent) {
+      setGradingAssignment(updatedCurrent);
+    }
+    showNotice(`Grade published successfully for deliverable!`);
   };
 
   // Form states for Assignment
@@ -570,9 +654,14 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                           <span>Submissions: <strong>{asg.submissionsCount} Students</strong></span>
                           <span className="text-muted">Graded: {asg.gradedCount}/{asg.submissionsCount}</span>
                         </div>
-                        <Link to="/grading" className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center', gap: '6px' }}>
-                          <PenTool size={13} /> Grade Submissions ({asg.submissionsCount - asg.gradedCount} Pending)
-                        </Link>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ width: '100%', justifyContent: 'center', gap: '6px' }}
+                          onClick={() => setGradingAssignment(asg)}
+                        >
+                          <PenTool size={13} /> Grade Submissions ({Math.max(0, asg.submissionsCount - asg.gradedCount)} Pending)
+                        </button>
                       </>
                     )}
                   </div>
@@ -1449,8 +1538,10 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
                     {viewingAssignment.learnerFeedback}
                   </p>
                   <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                    <span className="text-muted">Graded by: <strong>Dr. James Wilson</strong></span>
-                    <span style={{ fontWeight: 700, color: 'var(--success)' }}>Letter Grade: A (92.0%)</span>
+                    <span className="text-muted">Graded by: <strong>{viewingAssignment.submissions?.find((s) => s.status === 'graded')?.gradedBy || 'Faculty Lead'}</strong></span>
+                    <span style={{ fontWeight: 700, color: 'var(--success)' }}>
+                      Letter Grade: {viewingAssignment.submissions?.find((s) => s.status === 'graded')?.letterGrade || (viewingAssignment.learnerScore && viewingAssignment.learnerScore >= 90 ? 'A (Outstanding)' : 'B (Proficient)')} ({viewingAssignment.learnerScore ? Math.round((viewingAssignment.learnerScore / viewingAssignment.totalMarks) * 100) : 92}%)
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -1704,6 +1795,16 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
             </div>
           </div>
         </div>
+      )}
+
+      {/* Faculty: Assignment Submissions & Grading Modal */}
+      {gradingAssignment && (
+        <AssignmentGradingModal
+          assignment={gradingAssignment}
+          onClose={() => setGradingAssignment(null)}
+          onSaveGrade={handleSaveAssignmentGrade}
+          currentGraderName={user?.displayName || 'Marcus Johnson (Org Admin)'}
+        />
       )}
 
       {/* Styled Confirmation Popup Modal */}

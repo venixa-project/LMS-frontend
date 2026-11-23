@@ -259,17 +259,17 @@ export const GradingPage: React.FC = () => {
 
       {/* Tab 1: AI Evaluation Queue */}
       {activeTab === 'queue' && (
-        <div className="card" style={{ margin: 0, padding: 0 }}>
-          <div className="table-container">
-            <table className="table" style={{ fontSize: '0.85rem' }}>
+        <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+          <div className="table-container" style={{ overflowX: 'hidden' }}>
+            <table className="table" style={{ fontSize: '0.82rem', width: '100%', tableLayout: 'fixed', margin: 0 }}>
               <thead>
                 <tr>
-                  <th>Student Name</th>
-                  <th>Assessment & Course</th>
-                  <th>Submitted Date</th>
-                  <th>AI Evaluation & Score</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Action</th>
+                  <th style={{ width: '22%' }}>Student Name</th>
+                  <th style={{ width: '28%' }}>Assessment & Course</th>
+                  <th style={{ width: '12%' }}>Submitted</th>
+                  <th style={{ width: '18%' }}>AI Evaluation</th>
+                  <th style={{ width: '10%' }}>Status</th>
+                  <th style={{ width: '10%', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,68 +295,93 @@ export const GradingPage: React.FC = () => {
                 ) : (
                   scopedTasks.map((t) => (
                     <tr key={t.id}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{t.learnerName}</div>
-                        <div className="text-muted text-xs">ID: {t.learnerRollNo || t.submissionId || 'STU-ID'}</div>
-                        {t.learnerEmail && <div className="text-muted text-xs">{t.learnerEmail}</div>}
+                      <td style={{ overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div
+                            style={{
+                              width: '26px',
+                              height: '26px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                              color: '#fff',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(t.learnerName || 'S').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t.learnerName}
+                            </div>
+                            <div className="text-muted text-xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              ID: {t.learnerRollNo || t.submissionId || 'STU-ID'}
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{t.assessmentTitle}</div>
-                        <div className="text-muted text-xs">{t.courseTitle || 'Enrolled Course'}</div>
+                      <td style={{ overflow: 'hidden' }}>
+                        <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                          <div
+                            style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)' }}
+                            title={t.assessmentTitle}
+                          >
+                            {t.assessmentTitle}
+                          </div>
+                          <div className="text-muted text-xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.courseTitle || 'Enrolled Course'}>
+                            {t.courseTitle || 'Enrolled Course'}
+                          </div>
+                        </div>
                       </td>
-                      <td>{t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Recent'}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {t.submittedAt ? new Date(t.submittedAt).toLocaleDateString() : 'Recent'}
+                      </td>
                       <td>
                         {t.aiPreliminaryScore !== undefined || t.aiSuggestion ? (
-                          <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Sparkles size={12} /> {t.aiPreliminaryScore !== undefined ? t.aiPreliminaryScore : t.aiSuggestion?.score} / {t.totalMarks}{' '}
-                            <span className="text-muted text-xs">
-                              ({Math.round((t.aiSuggestion?.confidence || 0.92) * 100)}% Conf.)
+                          <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 6px', fontSize: '0.75rem' }}>
+                            <Sparkles size={11} /> {t.aiPreliminaryScore !== undefined ? t.aiPreliminaryScore : t.aiSuggestion?.score}/{t.totalMarks}{' '}
+                            <span className="text-muted text-xs" style={{ opacity: 0.85 }}>
+                              ({Math.round((t.aiSuggestion?.confidence || 0.92) * 100)}%)
                             </span>
                           </span>
                         ) : (t.evaluationStatus as string) === 'unsupported_type' || (t.assessmentType as string) === 'unsupported_type' ? (
-                          <span className="badge badge-secondary text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            Manual evaluation required
+                          <span className="badge badge-secondary text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 5px' }}>
+                            Manual
                           </span>
                         ) : (
-                          <span className="badge badge-warning text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            AI review required
+                          <span className="badge badge-warning text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 5px' }}>
+                            AI Review
                           </span>
                         )}
                       </td>
                       <td>
-                        <span className={`badge ${t.status === 'completed' ? 'badge-completed' : 'badge-draft'} text-xs`}>
-                          {t.status.replace('_', ' ')}
+                        <span className={`badge ${t.status === 'completed' ? 'badge-completed' : 'badge-draft'} text-xs`} style={{ padding: '2px 6px' }}>
+                          {t.status === 'completed' ? 'Completed' : t.status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                           <button
                             className="btn btn-secondary btn-sm"
-                            style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px' }}
+                            style={{ padding: '4px 7px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px' }}
                             onClick={() => handleReEvaluate(t)}
                             disabled={reEvaluatingTaskId === t.id}
                             title="Re-run AI evaluation on student submission"
                           >
-                            <RotateCcw size={12} className={reEvaluatingTaskId === t.id ? 'animate-spin' : ''} />
-                            {reEvaluatingTaskId === t.id ? 'Evaluating...' : 'Re-evaluate'}
+                            <RotateCcw size={11} className={reEvaluatingTaskId === t.id ? 'animate-spin' : ''} />
                           </button>
-                          {t.aiPreliminaryScore !== undefined && t.status !== 'completed' && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              style={{ padding: '4px 8px', fontSize: '0.75rem', gap: '4px' }}
-                              onClick={() => handleQuickAcceptAi(t)}
-                              title="Quickly approve AI score recommendation"
-                            >
-                              <Check size={12} /> Approve AI Score
-                            </button>
-                          )}
                           <button
                             className="btn btn-primary btn-sm"
-                            style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px' }}
+                            style={{ padding: '4px 10px', fontSize: '0.74rem', gap: '4px', fontWeight: 600, whiteSpace: 'nowrap' }}
                             onClick={() => handleOpenAttemptModalFromTask(t)}
+                            title={t.status === 'completed' ? 'Review & Edit Grade' : 'Review AI Evaluation'}
                           >
-                            <Sparkles size={12} />
-                            {t.status === 'completed' ? 'Review & Edit Grade' : 'Review AI Evaluation'}
+                            <Sparkles size={11} />
+                            Review
                           </button>
                         </div>
                       </td>
