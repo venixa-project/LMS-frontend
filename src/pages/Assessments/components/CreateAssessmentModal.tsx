@@ -2216,7 +2216,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       <span className="badge badge-completed text-xs" style={{ fontSize: '0.65rem' }}>Recommended</span>
                     </div>
                     <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
-                      AI telemetry + Live Google Meet invigilation.
+                      AI telemetry + Real-Time Live Video Wall invigilation.
                     </p>
                   </div>
 
@@ -2243,7 +2243,7 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     </p>
                   </div>
 
-                  {/* 3. Manual Proctoring (Google Meet) */}
+                  {/* 3. Manual Proctoring */}
                   <div
                     onClick={() => {
                       setProctoringMode('manual');
@@ -2259,10 +2259,10 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.85rem', marginBottom: '4px' }}>
-                      <GoogleMeetIcon size={14} /> Manual (Google Meet)
+                      <Video size={14} color="var(--primary)" /> Manual (Live Video Wall)
                     </div>
                     <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.3 }}>
-                      Live video room with proctor invigilation.
+                      Live 30 FPS video wall with direct proctor controls.
                     </p>
                   </div>
 

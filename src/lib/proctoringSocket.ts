@@ -374,17 +374,30 @@ export class ProctoringSocketClient {
     if (this.activeRole === 'admin' && signal?.sdp?.type === 'offer') {
       try {
         let pc = this.peerConnections.get(targetKey);
-        if (!pc || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+        if (!pc || pc.connectionState === 'closed' || pc.connectionState === 'failed' || pc.signalingState !== 'stable') {
+          if (pc) {
+            try { pc.close(); } catch {}
+          }
           pc = new RTCPeerConnection({ iceServers: this.iceServers });
           this.peerConnections.set(targetKey, pc);
           if (from) this.peerConnections.set(from, pc);
+          if (studentId) this.peerConnections.set(studentId, pc);
           this.iceCandidateQueues.set(targetKey, []);
 
           pc.ontrack = (event) => {
+            let remote: MediaStream | null = null;
             if (event.streams && event.streams[0]) {
-              const remote = event.streams[0];
+              remote = event.streams[0];
+            } else if (event.track) {
+              remote = new MediaStream([event.track]);
+            }
+            if (remote) {
               this.remoteStreams.set(targetKey, remote);
-              this.onRemoteStreamCallbacks.forEach((cb) => cb(targetKey, remote));
+              if (studentId) this.remoteStreams.set(studentId, remote);
+              this.onRemoteStreamCallbacks.forEach((cb) => {
+                cb(targetKey, remote!);
+                if (studentId && studentId !== targetKey) cb(studentId, remote!);
+              });
             }
           };
 
@@ -393,6 +406,7 @@ export class ProctoringSocketClient {
               this.emit('webrtc_signal', {
                 to: from,
                 studentId: targetKey,
+                assessmentId,
                 signal: { candidate: event.candidate },
                 type: 'candidate',
               });
@@ -425,6 +439,7 @@ export class ProctoringSocketClient {
         this.emit('webrtc_signal', {
           to: from,
           studentId: targetKey,
+          assessmentId,
           signal: { sdp: pc.localDescription },
           type: 'answer',
         });

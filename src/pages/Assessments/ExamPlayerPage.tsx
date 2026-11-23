@@ -1781,31 +1781,6 @@ export const ExamPlayerPage: React.FC = () => {
               <span>{formatTimer(timeLeftSeconds)}</span>
             </div>
 
-            {/* Google Meet Quick-Access Launcher Pill */}
-            {(assessment.proctoringMode === 'manual' || assessment.proctoringMode === 'combined' || assessment.jitsiRoomId || (assessment as any).googleMeetUrl) && (
-              <button
-                type="button"
-                onClick={() => launchJitsiConference(jitsiEndpoints.webUrl)}
-                className="btn btn-secondary btn-sm"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '0.78rem',
-                  padding: '5px 12px',
-                  borderColor: 'var(--success-border)',
-                  color: 'var(--success-text, var(--success))',
-                  background: 'var(--success-bg)',
-                  fontWeight: 700,
-                }}
-                title="Open or Rejoin Live Google Meet Invigilation Session"
-              >
-                <GoogleMeetIcon size={15} />
-                <span>Google Meet</span>
-                <ExternalLink size={12} />
-              </button>
-            )}
-
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setIsSubmitModalOpen(true)}

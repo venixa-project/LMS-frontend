@@ -1720,124 +1720,48 @@ export const VeniGuardSetup: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* 7. Google Meet Live Video Conference (Manual / Combined Proctoring) */}
+          {/* 7. Live Proctoring Wall Invigilation Status */}
           {isMeetProctoring && (
             <div
               style={{
                 gridColumn: '1 / -1',
-                padding: '16px 20px',
+                padding: '14px 18px',
                 borderRadius: 'var(--radius-md)',
                 background: 'linear-gradient(135deg, rgba(84, 71, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)',
                 border: '1px solid rgba(16, 185, 129, 0.35)',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '10px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      color: '#FFFFFF',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 2px 10px rgba(16, 185, 129, 0.25)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <GoogleMeetIcon size={22} />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.94rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Google Meet Live Video Conference
-                      <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>*Ready to Join</span>
-                    </div>
-                    <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-                      {jitsiEndpoints.webUrl === 'https://meet.google.com/new'
-                        ? 'Launch an instant Google Meet room (creates active video call with live camera & microphone).'
-                        : <span>Live meeting room: <strong style={{ color: '#34D399', fontFamily: 'monospace' }}>{jitsiEndpoints.webUrl}</strong></span>}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => {
-                      hasOpenedMeetRef.current = true;
-                      const target = customMeetInput.trim() || jitsiEndpoints.webUrl;
-                      const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
-                      launchJitsiConference(finalUrl);
-                    }}
-                    style={{
-                      fontSize: '0.8rem',
-                      padding: '7px 16px',
-                      fontWeight: 700,
-                      gap: '6px',
-                      background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                      border: 'none',
-                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                    }}
-                  >
-                    <ExternalLink size={14} /> Open in Google Meet &rarr;
-                  </button>
-                </div>
-              </div>
-
-              {/* Custom Meet Code or Link Join Bar */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: 'rgba(5, 8, 22, 0.45)',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <span style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                  Join with teacher's code:
-                </span>
-                <input
-                  type="text"
-                  value={customMeetInput}
-                  onChange={(e) => setCustomMeetInput(e.target.value)}
-                  placeholder="e.g. abc-defg-hij or meet.google.com/abc-defg-hij"
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
                   style={{
-                    flex: '1 1 200px',
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '4px',
-                    padding: '4px 8px',
-                    fontSize: '0.78rem',
-                    color: '#fff',
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    color: '#10B981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    flexShrink: 0,
                   }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    if (!customMeetInput.trim()) {
-                      launchJitsiConference('https://meet.google.com/new');
-                      return;
-                    }
-                    const target = customMeetInput.trim();
-                    const finalUrl = target.startsWith('http') ? target : `https://meet.google.com/${target.replace(/^meet\.google\.com\//, '')}`;
-                    launchJitsiConference(finalUrl);
-                  }}
-                  style={{ fontSize: '0.74rem', padding: '4px 10px', gap: '4px' }}
                 >
-                  Join Code
-                </button>
+                  <Video size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Live Invigilation & Proctoring Wall
+                    <span style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: 700 }}>• Active & Connected</span>
+                  </div>
+                  <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
+                    Your video and telemetry feed will stream smoothly directly to the trainer/invigilator live wall during this examination.
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient';
+import { proctoringSocket } from './proctoringSocket';
 // ============================================================
 // VeniLearn Proctoring Store (Hybrid Google Meet Live + VeniGuard System)
 // Manages real-time Google Meet participants, telemetry, warnings,
@@ -447,6 +448,9 @@ export interface ProctoringStoreState {
   fetchAppeals: (assessmentId?: string) => Promise<void>;
   reviewAppeal: (sessionId: string, decision: 'accepted' | 'rejected', notes?: string) => Promise<void>;
 }
+
+// Persistent module-level cache for candidate WebRTC remote video streams
+const remoteStreamCache = new Map<string, MediaStream>();
 
 export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   dashboardStats: {
@@ -1159,34 +1163,65 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   },
 
   setCandidateRemoteStream: (learnerId: string, stream: MediaStream | null) => {
-    set((state) => ({
-      participants: state.participants.map((p) =>
-        p.id === learnerId ? { ...p, remoteStream: stream, cameraActive: Boolean(stream), status: stream ? 'connected' : p.status } : p
-      ),
-    }));
-  },
-
-  upsertLiveCandidate: (candidate) => {
+    const key = learnerId.toLowerCase();
+    if (stream) {
+      remoteStreamCache.set(key, stream);
+    } else {
+      remoteStreamCache.delete(key);
+    }
     set((state) => {
-      const idx = state.participants.findIndex((p) => p.id === candidate.id && p.assessmentId === candidate.assessmentId);
+      const idx = state.participants.findIndex(
+        (p) => p.id.toLowerCase() === key || p.rollNo?.toLowerCase() === key
+      );
       if (idx >= 0) {
         const updated = [...state.participants];
         updated[idx] = {
           ...updated[idx],
+          remoteStream: stream,
+          cameraActive: Boolean(stream),
+          status: stream ? 'connected' : updated[idx].status,
+        };
+        return { participants: updated };
+      }
+      return state;
+    });
+  },
+
+  upsertLiveCandidate: (candidate) => {
+    set((state) => {
+      const key = candidate.id.toLowerCase();
+      const idx = state.participants.findIndex(
+        (p) => p.id.toLowerCase() === key && (!candidate.assessmentId || p.assessmentId === candidate.assessmentId)
+      );
+      const cachedStream = candidate.remoteStream || remoteStreamCache.get(key) || proctoringSocket.getRemoteStream(candidate.id) || null;
+
+      if (idx >= 0) {
+        const updated = [...state.participants];
+        const prev = updated[idx];
+        const effectiveStream = candidate.remoteStream !== undefined ? candidate.remoteStream : (prev.remoteStream || cachedStream);
+        if (effectiveStream) {
+          remoteStreamCache.set(key, effectiveStream);
+        }
+        updated[idx] = {
+          ...prev,
           ...candidate,
-          status: candidate.status || updated[idx].status,
-          remoteStream: candidate.remoteStream !== undefined ? candidate.remoteStream : updated[idx].remoteStream,
+          status: candidate.status || prev.status,
+          remoteStream: effectiveStream,
+          cameraActive: effectiveStream ? true : (candidate.cameraActive ?? prev.cameraActive),
           lastPingAt: candidate.lastPingAt || new Date().toISOString(),
         };
         return { participants: updated };
       } else {
+        if (cachedStream) {
+          remoteStreamCache.set(key, cachedStream);
+        }
         const fullCandidate: ProctorParticipant = {
           id: candidate.id,
           name: candidate.name,
           rollNo: candidate.rollNo || `STU-${candidate.id.slice(-4)}`,
           assessmentId: candidate.assessmentId,
           status: candidate.status || 'connected',
-          cameraActive: candidate.cameraActive ?? true,
+          cameraActive: cachedStream ? true : (candidate.cameraActive ?? true),
           micActive: candidate.micActive ?? true,
           audioLevel: candidate.audioLevel || 0.15,
           screenShareActive: candidate.screenShareActive || false,
@@ -1195,7 +1230,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           joinedAt: candidate.joinedAt || new Date().toISOString(),
           lastPingAt: candidate.lastPingAt || new Date().toISOString(),
           activeWarningCount: candidate.activeWarningCount || 0,
-          remoteStream: candidate.remoteStream || null,
+          remoteStream: cachedStream,
           faceVerificationStatus: candidate.faceVerificationStatus || 'SCANNING',
           latestEvent: candidate.latestEvent,
           latestSnapshot: candidate.latestSnapshot,
@@ -1296,33 +1331,47 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   fetchActiveCandidates: async (assessmentId: string) => {
     try {
       const res = await apiClient.get<any[]>(`/proctoring/assessments/${assessmentId}/live-candidates`);
-      if (res?.data && Array.isArray(res.data)) {
+      const now = Date.now();
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
         const activeIds = new Set(res.data.map((c: any) => (c.studentId || c.id || '').toLowerCase()));
         set((state) => {
-          // Immediately purge any participant for this assessment who is no longer active in the backend
-          const retainedParticipants = state.participants.filter(
-            (p) => p.assessmentId !== assessmentId || activeIds.has(p.id.toLowerCase())
-          );
-          // ALSO purge any sessions for this assessment whose candidate is no longer active in the backend
-          const retainedSessions = state.sessions.filter(
-            (s) => s.assessmentId !== assessmentId || activeIds.has(s.learnerId.toLowerCase())
-          );
+          // Never purge participants who have an active WebRTC remoteStream or recent activity (< 60s)
+          const retainedParticipants = state.participants.filter((p) => {
+            if (p.assessmentId !== assessmentId) return true;
+            if (activeIds.has(p.id.toLowerCase())) return true;
+            if (p.status === 'submitted' || p.status === 'terminated' || p.status === 'completed') return false;
+            if (p.remoteStream && p.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')) return true;
+            const lastPing = new Date(p.lastPingAt || 0).getTime();
+            if (!isNaN(lastPing) && (now - lastPing) < 60000) return true;
+            return false;
+          });
+
+          const retainedSessions = state.sessions.filter((s) => {
+            if (s.assessmentId !== assessmentId) return true;
+            if (activeIds.has(s.learnerId.toLowerCase())) return true;
+            if ((s.status as any) === 'submitted' || (s.status as any) === 'terminated' || (s.status as any) === 'completed') return false;
+            return true;
+          });
+
           saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, retainedParticipants);
           saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, retainedSessions);
           return { participants: retainedParticipants, sessions: retainedSessions };
         });
 
         res.data.forEach((c: any) => {
+          const studentId = c.studentId || c.id;
+          const cachedStream = remoteStreamCache.get((studentId || '').toLowerCase()) || proctoringSocket.getRemoteStream(studentId);
           get().upsertLiveCandidate({
-            id: c.studentId || c.id,
+            id: studentId,
             name: c.studentName || c.name,
             rollNo: c.rollNo,
             assessmentId: c.examId || assessmentId,
             sessionId: c.sessionId,
             status: c.status,
-            cameraActive: c.cameraActive,
+            cameraActive: cachedStream ? true : c.cameraActive,
             micActive: c.micActive,
             audioLevel: c.audioLevel,
+            remoteStream: cachedStream || undefined,
             faceVerificationStatus: c.faceStatus || c.faceVerificationStatus,
             faceStatus: c.faceStatus || c.faceVerificationStatus,
             activeWarningCount: c.warningCount || c.activeWarningCount,
@@ -1334,12 +1383,24 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           });
         });
       } else if (res?.data && Array.isArray(res.data) && res.data.length === 0) {
+        // Backend returned empty array: only clear candidates that are truly timed out (> 60s) or terminated
         set((state) => {
-          const clearedP = state.participants.filter((p) => p.assessmentId !== assessmentId);
-          const clearedS = state.sessions.filter((s) => s.assessmentId !== assessmentId);
-          saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, clearedP);
-          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, clearedS);
-          return { participants: clearedP, sessions: clearedS };
+          const retainedParticipants = state.participants.filter((p) => {
+            if (p.assessmentId !== assessmentId) return true;
+            if (p.status === 'submitted' || p.status === 'terminated' || p.status === 'completed') return false;
+            if (p.remoteStream && p.remoteStream.getVideoTracks().some((t) => t.readyState === 'live')) return true;
+            const lastPing = new Date(p.lastPingAt || 0).getTime();
+            if (!isNaN(lastPing) && (now - lastPing) < 60000) return true;
+            return false;
+          });
+          const retainedSessions = state.sessions.filter((s) => {
+            if (s.assessmentId !== assessmentId) return true;
+            if ((s.status as any) === 'submitted' || (s.status as any) === 'terminated' || (s.status as any) === 'completed') return false;
+            return true;
+          });
+          saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, retainedParticipants);
+          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, retainedSessions);
+          return { participants: retainedParticipants, sessions: retainedSessions };
         });
       }
     } catch (e) {}

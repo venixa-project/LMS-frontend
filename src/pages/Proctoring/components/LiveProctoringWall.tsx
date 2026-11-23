@@ -44,27 +44,57 @@ const CandidateLiveVideoTile: React.FC<{
     if (!v) return;
 
     if (stream && hasLiveVideoTrack) {
+      v.muted = true;
+      v.defaultMuted = true;
+      (v as any).playsInline = true;
       if (v.srcObject !== stream) {
         v.src = '';
         v.srcObject = stream;
-        v.play()
-          .then(() => setIsPlayingWebRtc(true))
-          .catch(() => setIsPlayingWebRtc(false));
       }
+      v.play()
+        .then(() => setIsPlayingWebRtc(true))
+        .catch(() => {
+          // Retry playback on user interaction or next microtask
+          setTimeout(() => {
+            if (v && v.srcObject) {
+              v.play().then(() => setIsPlayingWebRtc(true)).catch(() => {});
+            }
+          }, 200);
+        });
     } else if (videoUrl) {
+      v.muted = true;
+      v.defaultMuted = true;
       if (v.src !== videoUrl) {
         v.srcObject = null;
         v.src = videoUrl;
-        v.play()
-          .then(() => setIsPlayingWebRtc(true))
-          .catch(() => setIsPlayingWebRtc(false));
       }
+      v.play()
+        .then(() => setIsPlayingWebRtc(true))
+        .catch(() => setIsPlayingWebRtc(false));
     } else {
       setIsPlayingWebRtc(false);
       v.srcObject = null;
       v.src = '';
     }
   }, [stream, hasLiveVideoTrack, videoUrl]);
+
+  useEffect(() => {
+    if (!stream) return;
+    const handleTrack = () => {
+      const v = videoRef.current;
+      if (v && v.srcObject === stream) {
+        v.muted = true;
+        v.play().then(() => setIsPlayingWebRtc(true)).catch(() => {});
+      }
+    };
+    stream.addEventListener('addtrack', handleTrack);
+    stream.getVideoTracks().forEach((t) => {
+      t.addEventListener('unmute', handleTrack);
+    });
+    return () => {
+      stream.removeEventListener('addtrack', handleTrack);
+    };
+  }, [stream]);
 
   const isTerminated = status === 'terminated';
 
@@ -411,6 +441,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     // Listen for candidates ready with video stream
     const unsubReady = proctoringSocket.on('STUDENT_VIDEO_STREAM_READY', (data) => {
       if (data && data.studentId) {
+        proctoringSocket.requestCandidateStreams(assessmentId);
         upsertLiveCandidate({
           id: data.studentId,
           name: data.studentName || 'Student',
