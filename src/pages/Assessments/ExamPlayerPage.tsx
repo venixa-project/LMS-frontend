@@ -205,6 +205,8 @@ export const ExamPlayerPage: React.FC = () => {
 
   // Smart Pause & Recovery State
   const [isExamPaused, setIsExamPaused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const transitionGracePeriodRef = useRef<number>(Date.now() + 3000);
   const [pauseReason, setPauseReason] = useState<{ title: string; message: string }>({
     title: 'Assessment Paused',
     message: 'A required monitoring stream was interrupted.',
@@ -291,6 +293,7 @@ export const ExamPlayerPage: React.FC = () => {
     // 1. Tab Visibility Change (Student switched tabs or minimized window)
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        if (Date.now() < transitionGracePeriodRef.current) return;
         setIsExamPaused(true);
         setPauseReason({
           title: 'Assessment Locked: Tab Switch Detected',
@@ -332,6 +335,7 @@ export const ExamPlayerPage: React.FC = () => {
     // 2. Window Blur (Lost OS Focus / Clicked on external window or dual screen / Alt+Tab)
     const handleWindowBlur = () => {
       if (stage === 'in_exam') {
+        if (Date.now() < transitionGracePeriodRef.current) return;
         setIsExamPaused(true);
         setPauseReason({
           title: 'Assessment Locked: Window Focus Lost / Alt+Tab Detected',
@@ -384,7 +388,15 @@ export const ExamPlayerPage: React.FC = () => {
 
       if (nowFullscreen) {
         lockKeyboard().catch(() => {});
+        // If candidate re-entered full-screen, automatically unpause and resume!
+        if (isExamPaused) {
+          setIsExamPaused(false);
+          if (currentSessionId) {
+            setSessionStatus(currentSessionId, 'in_progress');
+          }
+        }
       } else {
+        if (Date.now() < transitionGracePeriodRef.current) return;
         unlockKeyboard();
         // Immediately pause exam and lock questions behind overlay
         setIsExamPaused(true);
@@ -771,6 +783,7 @@ export const ExamPlayerPage: React.FC = () => {
     candidatePhoto?: string;
     candidateEmbedding?: Float32Array;
   }) => {
+    transitionGracePeriodRef.current = Date.now() + 3000;
     // Save streams in ref
     if (streams.screenStream) {
       screenStreamRef.current = streams.screenStream;
@@ -1036,102 +1049,82 @@ export const ExamPlayerPage: React.FC = () => {
     }
 
     setIsSubmitModalOpen(false);
+    setIsSubmitting(true);
 
-    // Stop streams cleanly
-    stopAllMediaTracks(screenStreamRef.current);
-    stopAllMediaTracks(userMediaStreamRef.current);
-    setActiveUserMediaStream(null);
-    setIsScreenSharing(false);
-    setIsMicActive(false);
-    setIsWebcamActive(false);
-
-    // Finalize Proctoring Session in store
-    if (currentSessionId) {
-      setSessionStatus(currentSessionId, 'submitted');
-      logEvent(currentSessionId, {
-        category: 'timing_event',
-        severity: 'informational',
-        title: 'Assessment Submitted',
-        description: `Student finalized and submitted attempt (${answeredCount} answered of ${questions.length}).`,
-      });
-
-      // Attach simulated or real recording metadata
-      attachRecording(currentSessionId, {
-        recordingUrl: `https://storage.venilearn.org/recordings/${currentSessionId}.webm`,
-        duration: recordingSeconds,
-        isSimulated: true,
-      });
-    }
-
-    // Persist attempt & answers in PostgreSQL if active
-    let calculatedScore = Math.round((answeredCount / (questions.length || 1)) * 100);
-    const passThreshold = assessment.passingMarks || assessment.passmark || 70;
-    let isExamPassed = calculatedScore >= passThreshold;
-
-    if (pgAttemptId) {
-      // 1. Await saving all selected answers
-      const entries = Object.entries(selectedAnswers);
-      if (entries.length > 0) {
-        await Promise.all(
-          entries.map(([qId, ansVal]) =>
-            saveAnswerApi(pgAttemptId, qId, String(ansVal)).catch((e) => {
-              console.warn(`Failed to save answer for ${qId}:`, e);
-            })
-          )
-        );
-      }
-
-      // 2. Submit attempt to backend and receive real evaluation
-      try {
-        const submitRes = await submitAttemptApi(pgAttemptId);
-        if (submitRes) {
-          calculatedScore = submitRes.percentage ?? submitRes.score ?? calculatedScore;
-          isExamPassed = Boolean(submitRes.passed);
+    try {
+      // Flush pending text answer if any
+      if (textSaveTimeoutRef.current && currentQ && pgAttemptId) {
+        clearTimeout(textSaveTimeoutRef.current);
+        const lastAns = selectedAnswers[currentQ.id];
+        if (lastAns !== undefined) {
+          await saveAnswerApi(pgAttemptId, currentQ.id, String(lastAns)).catch(() => {});
         }
-      } catch (err) {
-        console.warn('Backend attempt submit warning:', err);
       }
 
-      // 3. Log submission telemetry to backend proctoring session
-      recordTelemetryEvent(
-        'timing_event',
-        'informational',
-        'Assessment Submitted',
-        `Student finalized and submitted attempt (${answeredCount} answered of ${questions.length}). Score: ${calculatedScore}%.`
-      );
+      // Stop streams cleanly
+      stopAllMediaTracks(screenStreamRef.current);
+      stopAllMediaTracks(userMediaStreamRef.current);
+      setActiveUserMediaStream(null);
+      setIsScreenSharing(false);
+      setIsMicActive(false);
+      setIsWebcamActive(false);
 
-      // 4. Refresh assessment attempts and proctoring sessions in stores
-      await Promise.all([
-        useAssessmentStore.getState().fetchMyAttempts(),
-        useProctoringStore.getState().fetchMySessions(),
-      ]);
-    }
+      // Finalize Proctoring Session in store
+      if (currentSessionId) {
+        setSessionStatus(currentSessionId, 'submitted');
+        logEvent(currentSessionId, {
+          category: 'timing_event',
+          severity: 'informational',
+          title: 'Assessment Submitted',
+          description: `Student finalized and submitted attempt (${answeredCount} answered of ${questions.length}).`,
+        });
 
-    setFinalScore(calculatedScore);
-    setPassed(isExamPassed);
-
-    // Automatic Certificate Generation if candidate passed
-    if (isExamPassed) {
-      // 1. Dedicated Assessment Certificate
-      if (assessment.certificateConfig?.enabled !== false) {
-        useCertificateStore.getState().issueAssessmentCertificate({
-          assessment,
-          learner: {
-            id: candidateId,
-            name: candidateName,
-            email: candidateEmail,
-          },
-          scoreAchieved: calculatedScore,
-          completionPercentage: 100,
+        attachRecording(currentSessionId, {
+          recordingUrl: `https://storage.venilearn.org/recordings/${currentSessionId}.webm`,
+          duration: recordingSeconds,
+          isSimulated: true,
         });
       }
 
-      // 2. Course Certificate if part of an enrolled course
-      if (assessment.courseId) {
-        const course = useCourseStore.getState().getCourseById(assessment.courseId);
-        if (course && course.certificateConfig?.enabled !== false) {
-          useCertificateStore.getState().issueCourseCertificate({
-            course,
+      // Persist attempt & answers in PostgreSQL if active
+      let calculatedScore = Math.round((answeredCount / (questions.length || 1)) * 100);
+      const passThreshold = assessment.passingMarks || assessment.passmark || 70;
+      let isExamPassed = calculatedScore >= passThreshold;
+
+      if (pgAttemptId) {
+        // Submit attempt to backend with a fast network race (max 5s timeout)
+        try {
+          const submitPromise = submitAttemptApi(pgAttemptId);
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+          const submitRes = await Promise.race([submitPromise, timeoutPromise]);
+          if (submitRes) {
+            calculatedScore = submitRes.percentage ?? submitRes.score ?? calculatedScore;
+            isExamPassed = Boolean(submitRes.passed);
+          }
+        } catch (err) {
+          console.warn('Backend attempt submit warning:', err);
+        }
+
+        // Fire-and-forget background sync
+        recordTelemetryEvent(
+          'timing_event',
+          'informational',
+          'Assessment Submitted',
+          `Student finalized and submitted attempt (${answeredCount} answered of ${questions.length}). Score: ${calculatedScore}%.`
+        );
+        useAssessmentStore.getState().fetchMyAttempts().catch(() => {});
+        useProctoringStore.getState().fetchMySessions().catch(() => {});
+      }
+
+      setFinalScore(calculatedScore);
+      setPassed(isExamPassed);
+
+      // Automatic Certificate Generation if candidate passed
+      if (isExamPassed) {
+        // 1. Dedicated Assessment Certificate
+        if (assessment.certificateConfig?.enabled !== false) {
+          useCertificateStore.getState().issueAssessmentCertificate({
+            assessment,
             learner: {
               id: candidateId,
               name: candidateName,
@@ -1141,43 +1134,65 @@ export const ExamPlayerPage: React.FC = () => {
             completionPercentage: 100,
           });
         }
+
+        // 2. Course Certificate if part of an enrolled course
+        if (assessment.courseId) {
+          const course = useCourseStore.getState().getCourseById(assessment.courseId);
+          if (course && course.certificateConfig?.enabled !== false) {
+            useCertificateStore.getState().issueCourseCertificate({
+              course,
+              learner: {
+                id: candidateId,
+                name: candidateName,
+                email: candidateEmail,
+              },
+              scoreAchieved: calculatedScore,
+              completionPercentage: 100,
+            });
+          }
+        }
       }
-    }
 
-    // Gamification Quiz Points calculation with deduplication
-    try {
-      const reward = useGamificationStore.getState().recordQuizSubmission(
-        candidateId,
-        assessment.id,
-        assessment.title,
-        calculatedScore
-      );
-      setQuizReward(reward);
+      // Gamification Quiz Points calculation with deduplication
+      try {
+        const reward = useGamificationStore.getState().recordQuizSubmission(
+          candidateId,
+          assessment.id,
+          assessment.title,
+          calculatedScore
+        );
+        setQuizReward(reward);
+      } catch (e) {
+        console.warn('Gamification quiz award error:', e);
+      }
+
+      // Automatically release browser fullscreen upon completing examination
+      exitFullscreen().catch(() => {});
+      stopAllMediaTracks(screenStreamRef.current);
+      stopAllMediaTracks(userMediaStreamRef.current);
+
+      // Notify real-time proctoring wall that candidate has ended and submitted the exam
+      try {
+        proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
+          studentId: candidateId,
+          studentName: candidateName,
+          rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+          assessmentId: assessment.id,
+          sessionId: serverSessionId || currentSessionId || '',
+          reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
+          submittedAt: new Date().toISOString(),
+        });
+        useProctoringStore.getState().removeLiveCandidate(candidateId, assessment.id);
+        proctoringSocket.disconnect();
+      } catch (e) {}
+
+      setStage('results');
     } catch (e) {
-      console.warn('Gamification quiz award error:', e);
+      console.error('Submission error fallback:', e);
+      setStage('results');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Automatically release browser fullscreen upon completing examination
-    exitFullscreen().catch(() => {});
-    stopAllMediaTracks(screenStreamRef.current);
-    stopAllMediaTracks(userMediaStreamRef.current);
-
-    // Notify real-time proctoring wall that candidate has ended and submitted the exam
-    try {
-      proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
-        studentId: candidateId,
-        studentName: candidateName,
-        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
-        assessmentId: assessment.id,
-        sessionId: serverSessionId || currentSessionId || '',
-        reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
-        submittedAt: new Date().toISOString(),
-      });
-      useProctoringStore.getState().removeLiveCandidate(candidateId, assessment.id);
-      proctoringSocket.disconnect();
-    } catch (e) {}
-
-    setStage('results');
   };
 
   // Ensure fullscreen and media tracks are automatically released when leaving exam or arriving at results
@@ -2098,12 +2113,61 @@ export const ExamPlayerPage: React.FC = () => {
             isFullscreenActive={isFullscreen}
             isRecovering={false}
             onRetryScreenShare={handleRestoreScreenShare}
-            onRetryFullscreen={() => enterFullscreen().then((ok) => setIsFullscreen(ok))}
+            onRetryFullscreen={async () => {
+              const ok = await enterFullscreen();
+              setIsFullscreen(ok);
+              if (ok) {
+                await lockKeyboard().catch(() => {});
+                try { window.focus(); } catch (e) {}
+                setIsExamPaused(false);
+                if (currentSessionId) {
+                  setSessionStatus(currentSessionId, 'in_progress');
+                }
+              }
+            }}
             onRetryConnection={() => probeConnectionHealth().then(({ online }) => setIsOnline(online))}
             onResumeExam={handleResumeExam}
             answeredCount={answeredCount}
             totalQuestions={questions.length}
           />
+        )}
+
+        {/* Dedicated Full-Screen Submission & Finalizing Overlay */}
+        {isSubmitting && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(5, 8, 22, 0.92)',
+              backdropFilter: 'blur(10px)',
+              zIndex: 10002,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              padding: '24px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '52px',
+                height: '52px',
+                border: '4px solid rgba(99, 102, 241, 0.25)',
+                borderTopColor: '#6366f1',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginBottom: '20px',
+              }}
+            />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 8px', color: '#f8fafc' }}>
+              Finalizing & Submitting Assessment
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: 0, maxWidth: '420px', lineHeight: 1.5 }}>
+              Securing answers in PostgreSQL database, synchronizing biometric audit telemetry, and generating performance results...
+            </p>
+          </div>
         )}
 
         {/* Confirmation Modal */}
