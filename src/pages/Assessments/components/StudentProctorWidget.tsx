@@ -1155,12 +1155,11 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           consecutiveMultiFaceSecondsRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0; // Do NOT issue false absence strike
           setFaceStatus('camera_covered');
-        } else {
-          consecutiveBlackFramesRef.current = 0;
         }
         // Priority 1: Candidate Absence (Student is away from camera / empty chair > 5 seconds)
         // If effectiveFaceCount === 0 (candidate absent), NEVER trigger mobile phone warning!
         else if (effectiveFaceCount === 0) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           consecutiveAbsentSecondsRef.current += 0.8;
@@ -1179,6 +1178,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 2: Unauthorized Mobile Phone (Strictly after temporal confirmation 8/12 frames)
         else if (isDeviceVisible) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveMultiFaceSecondsRef.current = 0;
           setFaceStatus('device_detected');
@@ -1187,6 +1187,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 3: Multiple Persons (Candidate IS present and another person is confirmed)
         else if (confirmedFaces.length > 1) {
+          consecutiveBlackFramesRef.current = 0;
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
           setFaceStatus('multiple_faces');
@@ -1195,6 +1196,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         }
         // Priority 4: Candidate Seated & Normal (Single Face)
         else {
+          consecutiveBlackFramesRef.current = 0;
           setFaceStatus('single_face');
           consecutiveAbsentSecondsRef.current = 0;
           consecutiveDeviceSecondsRef.current = 0;
