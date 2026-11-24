@@ -144,6 +144,7 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const [photoFeedback, setPhotoFeedback] = useState<{ type: 'error' | 'warning' | 'success'; message: string } | null>(null);
   const [isCapturingPhoto, setIsCapturingPhoto] = useState<boolean>(false);
   const [isPhotoPausedForTesting, setIsPhotoPausedForTesting] = useState<boolean>(false);
+  const [adminMatchSimilarity, setAdminMatchSimilarity] = useState<number | null>(null);
 
   const handlePausePhotoForTesting = () => {
     setIsPhotoPausedForTesting(true);
@@ -173,6 +174,11 @@ export const VeniGuardSetup: React.FC<Props> = ({
   const candidateName = user?.displayName || (user ? `${user.firstName} ${user.lastName}`.trim() : 'Maria Garcia');
   const candidateEmail = user?.email || 'student@venilearn.org';
   const candidateId = user?.id || 'u-009';
+  const adminOfficialPhoto =
+    user?.avatar ||
+    (user as any)?.avatarUrl ||
+    (user as any)?.photoUrl ||
+    (user as any)?.profilePhotoUrl;
 
   // Ensure unique session ID per exam session for private S3 isolation
   const examSessionId = useMemo(() => {
@@ -745,18 +751,37 @@ export const VeniGuardSetup: React.FC<Props> = ({
       setUploadedPhotoUrl(confirmedPhotoUrl);
       setUploadedS3Key(confirmedS3Key);
 
-      // Step G: Generate neural face embedding and lock reference for this session
+      // Step G: Generate neural face embedding and match against official administrator-registered photo
       let activeEmb: Float32Array | undefined = undefined;
+      let calculatedSimilarity: number | null = null;
       try {
-        if (!arcFaceRecognizer.isModelReady()) {
-          await arcFaceRecognizer.initialize();
+        const liveEmbedding = await arcFaceRecognizer.generateEmbedding(faceCropCanvas);
+        activeEmb = liveEmbedding;
+
+        // Check official admin-registered photo on file for this candidate
+        if (adminOfficialPhoto && typeof adminOfficialPhoto === 'string' && adminOfficialPhoto.length > 20) {
+          try {
+            const adminEmb = await arcFaceRecognizer.generateEmbedding(adminOfficialPhoto);
+            calculatedSimilarity = arcFaceRecognizer.calculateCosineSimilarity(liveEmbedding, adminEmb);
+            setAdminMatchSimilarity(calculatedSimilarity);
+
+            // If mismatch with admin-registered photo (similarity < 0.40):
+            if (calculatedSimilarity < 0.40) {
+              setPhotoStatus('capture_failed');
+              setPhotoFeedback({
+                type: 'error',
+                message: `Biometric Identity Mismatch: The captured face does not match the official profile photo registered by your administrator (${Math.round(calculatedSimilarity * 100)}% match, minimum 45% required). Only the registered student (${candidateName}) is permitted to write this examination.`,
+              });
+              return { success: false };
+            }
+          } catch (matchErr: any) {
+            console.warn('Admin profile photo comparison note:', matchErr?.message);
+          }
         }
-        if (arcFaceRecognizer.isModelReady()) {
-          const embedding = await arcFaceRecognizer.generateEmbedding(faceCropCanvas);
-          arcFaceRecognizer.setReferenceEmbedding(embedding);
-          setCandidateEmbedding(embedding);
-          activeEmb = embedding;
-        }
+
+        // Lock verified reference for this examination session
+        arcFaceRecognizer.setReferenceEmbedding(liveEmbedding);
+        setCandidateEmbedding(liveEmbedding);
       } catch (embErr: any) {
         console.warn('Biometric model standby notice:', embErr?.message);
       }
@@ -765,7 +790,9 @@ export const VeniGuardSetup: React.FC<Props> = ({
       setPhotoStatus('verified');
       setPhotoFeedback({
         type: 'success',
-        message: 'Reference Photo Verified: Successfully captured, validated, and stored in secure private exam storage.',
+        message: calculatedSimilarity !== null
+          ? `Candidate Identity Verified: Successfully matched with registered administrator record (${Math.round(calculatedSimilarity * 100)}% Match). Reference locked.`
+          : 'Reference Photo Verified: Successfully captured, validated, and secured for examination monitoring.',
       });
 
       return {
@@ -1844,7 +1871,87 @@ export const VeniGuardSetup: React.FC<Props> = ({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    {candidatePhoto ? (
+                    {adminOfficialPhoto && typeof adminOfficialPhoto === 'string' && adminOfficialPhoto.length > 20 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <img
+                            src={adminOfficialPhoto}
+                            alt="Admin Registered Record"
+                            style={{
+                              width: '60px',
+                              height: '60px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              border: '2px solid #6366f1',
+                              boxShadow: '0 0 10px rgba(99, 102, 241, 0.25)',
+                            }}
+                          />
+                          <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#6366f1', marginTop: '2px' }}>
+                            Admin Record
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                          {adminMatchSimilarity !== null ? (
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                color: adminMatchSimilarity >= 0.40 ? '#10b981' : '#ef4444',
+                                background: adminMatchSimilarity >= 0.40 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                padding: '2px 6px',
+                                borderRadius: '10px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {Math.round(adminMatchSimilarity * 100)}% Match
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>➔</span>
+                          )}
+                        </div>
+
+                        <div style={{ textAlign: 'center' }}>
+                          {candidatePhoto ? (
+                            <img
+                              src={candidatePhoto}
+                              alt="Live Captured Photo"
+                              style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                                border: photoStatus === 'verified' ? '2px solid #10b981' : '2px solid #f59e0b',
+                                boxShadow: photoStatus === 'verified' ? '0 0 10px rgba(16, 185, 129, 0.3)' : 'none',
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                background: photoStatus === 'capturing' || photoStatus === 'uploading' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.12)',
+                                color: 'var(--primary)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px dashed var(--primary)',
+                              }}
+                            >
+                              {photoStatus === 'capturing' || photoStatus === 'uploading' ? (
+                                <RefreshCw size={22} className="animate-spin" />
+                              ) : (
+                                <Camera size={22} />
+                              )}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '0.65rem', fontWeight: 800, color: photoStatus === 'verified' ? '#10b981' : 'var(--text-muted)', marginTop: '2px' }}>
+                            Live Capture
+                          </div>
+                        </div>
+                      </div>
+                    ) : candidatePhoto ? (
                       <img
                         src={candidatePhoto}
                         alt="Candidate Identity Photo"

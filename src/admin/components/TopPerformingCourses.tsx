@@ -319,23 +319,24 @@ export const TopPerformingCourses: React.FC = () => {
                   }}
                 >
                   {/* Real Course Cover Image */}
-                  {crs.thumbnail && (
-                    <img
-                      src={crs.thumbnail}
-                      alt={crs.title}
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        zIndex: 1,
-                      }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  )}
+                  <img
+                    src={crs.thumbnail || getDefaultCourseCover(crs.category, crs.title)}
+                    alt={crs.title}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      zIndex: 1,
+                    }}
+                    onError={(e) => {
+                      const fallback = getDefaultCourseCover(crs.category, crs.title);
+                      if (e.currentTarget.src !== fallback) {
+                        e.currentTarget.src = fallback;
+                      }
+                    }}
+                  />
 
                   {/* Visual Icon & Glyph Watermark (Fallback when image isn't loaded) */}
                   <div

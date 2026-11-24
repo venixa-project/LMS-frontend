@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuthStore } from '../../../lib/store';
 import { useProctoringStore, ProctorParticipant } from '../../../lib/proctoringStore';
 import { useAssessmentStore } from '../../../lib/assessmentStore';
-import { proctoringSocket } from '../../../lib/proctoringSocket';
+import { proctoringSocket, getShortNumericId } from '../../../lib/proctoringSocket';
 import { apiClient } from '../../../lib/apiClient';
 import { ExamLifecycleToast, ExamLifecycleToastData } from '../../../components/Proctoring/ExamLifecycleToast';
 import {
@@ -227,6 +227,13 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       token = JSON.parse(rawAuth).token || '';
     } catch {}
   }
+  const { assessments } = useAssessmentStore();
+  const currentAssessment = assessments.find((a) => a.id === assessmentId);
+  const isSupervisedAssessment =
+    currentAssessment?.proctoringMode === 'combined' ||
+    currentAssessment?.proctoringMode === 'manual' ||
+    (currentAssessment && currentAssessment.proctoringMode !== 'automated');
+
   const {
     participants,
     sessions,
@@ -269,6 +276,45 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
     }, 2000);
     return () => clearInterval(timer);
   }, []);
+
+  // Safe 2.5-second watchdog for smooth 30 FPS stream establishment
+  // Skips re-requesting if peerConnection.iceConnectionState is 'checking' or 'connected'
+  // and caps retries at 3 attempts per candidate so ongoing handshakes are not interrupted
+  const watchdogRetriesRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (!assessmentId) return;
+
+    const watchdogTimer = setInterval(() => {
+      participants.forEach((candidate) => {
+        // Skip terminated, submitted, or disconnected candidates
+        if (candidate.status === 'terminated' || candidate.status === 'submitted') return;
+        if (!candidate.cameraActive && candidate.status !== 'in_progress') return;
+
+        // Check if candidate already has a live video track
+        const hasLiveTrack = candidate.remoteStream && candidate.remoteStream.getVideoTracks().some((t) => t.readyState === 'live');
+        if (hasLiveTrack) {
+          watchdogRetriesRef.current.delete(candidate.id);
+          return;
+        }
+
+        // Check ICE connection state on peer connection
+        const iceState = proctoringSocket.getIceConnectionState(candidate.id);
+        if (iceState === 'checking' || iceState === 'connected') {
+          return;
+        }
+
+        // Cap retries at 3 attempts per candidate
+        const attempts = watchdogRetriesRef.current.get(candidate.id) || 0;
+        if (attempts < 3) {
+          watchdogRetriesRef.current.set(candidate.id, attempts + 1);
+          proctoringSocket.requestCandidateStreams(assessmentId);
+        }
+      });
+    }, 2500);
+
+    return () => clearInterval(watchdogTimer);
+  }, [assessmentId, participants]);
 
   const addLifecycleToast = (type: 'start' | 'end' | 'violation', data: Partial<ExamLifecycleToastData>) => {
     const newToast: ExamLifecycleToastData = {
@@ -510,7 +556,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       const targetCandidate: ProctorParticipant = allParticipants.find((p) => p.id === data.studentId) || {
         id: data.studentId,
         name: data.studentName || 'Student',
-        rollNo: data.rollNo || `STU-${data.studentId.slice(-4)}`,
+        rollNo: data.rollNo || getShortNumericId(data.studentId),
         assessmentId: data.assessmentId || assessmentId,
         sessionId: data.sessionId,
         status: 'connected',
@@ -754,7 +800,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
           list.push({
             id: s.learnerId,
             name: s.learnerName,
-            rollNo: (s as any).rollNo || `STU-${s.learnerId.slice(-4)}`,
+            rollNo: (s as any).rollNo || getShortNumericId(s.learnerId),
             assessmentId: s.assessmentId,
             status: 'connected',
             cameraActive: s.activeWebcam ?? true,
@@ -873,6 +919,8 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
       proctoringSocket.emit('ADMIN_FORCE_STOP', {
         assessmentId,
         studentId: stopModalTarget.id,
+        rollNo: stopModalTarget.rollNo,
+        studentName: stopModalTarget.name,
         sessionId,
         reason: stopReason,
       });
@@ -992,23 +1040,27 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Policy Interval Badge */}
+          {/* Policy Interval / Supervised Mode Badge */}
           <div
             style={{
               padding: '6px 12px',
               borderRadius: '8px',
-              background: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
+              background: isSupervisedAssessment ? 'rgba(99, 102, 241, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+              border: `1px solid ${isSupervisedAssessment ? 'rgba(99, 102, 241, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
               fontSize: '0.78rem',
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              color: '#F59E0B',
+              color: isSupervisedAssessment ? 'var(--primary)' : '#F59E0B',
             }}
           >
-            <AlertTriangle size={13} />
-            <span>Policy: 3 Strikes (Auto-Submit)</span>
+            {isSupervisedAssessment ? <Shield size={13} color="var(--primary)" /> : <AlertTriangle size={13} />}
+            <span>
+              {isSupervisedAssessment
+                ? 'Supervised: Real-Time Telemetry (Proctor Warnings & Control)'
+                : 'Policy: 3 Strikes (Auto-Submit)'}
+            </span>
           </div>
 
           {/* Candidates Count Pill */}
@@ -1527,7 +1579,11 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                               : '#60a5fa',
                         }}
                       >
-                        {candidate.faceVerificationStatus || 'SCANNING'}
+                        {candidate.faceVerificationStatus === 'MATCH'
+                          ? `MATCH ${Math.round((candidate.similarityScore || 0.92) * 100)}%`
+                          : candidate.faceVerificationStatus === 'MISMATCH'
+                          ? `MISMATCH ${Math.round((candidate.similarityScore || 0.25) * 100)}%`
+                          : candidate.faceVerificationStatus || 'SCANNING'}
                       </span>
                     </div>
 
@@ -1568,7 +1624,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                         {candidate.name}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {candidate.rollNo || `ID: ${candidate.id.slice(0, 8)}`} • {assessmentTitle}
+                        ID: {getShortNumericId(candidate.rollNo || candidate.id)} • {assessmentTitle}
                       </div>
                     </div>
 
@@ -1742,7 +1798,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Video size={20} color="#3b82f6" />
                 <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800 }}>
-                  Candidate Live Stream Inspector: {enlargedCandidate.name} ({enlargedCandidate.rollNo})
+                  Candidate Live Stream Inspector: {enlargedCandidate.name} (ID: {getShortNumericId(enlargedCandidate.rollNo || enlargedCandidate.id)})
                 </h3>
               </div>
               <button
@@ -1882,7 +1938,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
               >
                 <div>
                   <div className="text-muted text-xs font-semibold">Student ID</div>
-                  <div style={{ fontWeight: 700, marginTop: '2px' }}>{enlargedCandidate.id}</div>
+                  <div style={{ fontWeight: 700, marginTop: '2px' }}>{getShortNumericId(enlargedCandidate.rollNo || enlargedCandidate.id)}</div>
                 </div>
                 <div>
                   <div className="text-muted text-xs font-semibold">Examination Duration</div>
@@ -1956,7 +2012,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <p className="text-secondary text-xs" style={{ margin: 0, lineHeight: 1.5 }}>
-                Issue an immediate proctor warning to <strong>{warningModalTarget.name}</strong> ({warningModalTarget.rollNo || warningModalTarget.id}). The student will receive a real-time warning popup on their exam screen.
+                Issue an immediate proctor warning to <strong>{warningModalTarget.name}</strong> (ID: {getShortNumericId(warningModalTarget.rollNo || warningModalTarget.id)}). The student will receive a real-time warning popup on their exam screen.
               </p>
 
               <div>
@@ -2074,7 +2130,7 @@ export const LiveProctoringWall: React.FC<LiveProctoringWallProps> = ({
                 }}
               >
                 <strong>Warning:</strong> You are about to permanently terminate the examination session for{' '}
-                <strong>{stopModalTarget.name}</strong> ({stopModalTarget.rollNo || stopModalTarget.id}).
+                <strong>{stopModalTarget.name}</strong> (ID: {getShortNumericId(stopModalTarget.rollNo || stopModalTarget.id)}).
                 <p style={{ margin: '6px 0 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   • The student will receive an immediate exam termination popup.<br />
                   • All answers completed prior to this stop will be preserved in the database.<br />

@@ -910,9 +910,7 @@ const CoursesManagementPage: React.FC = () => {
                     style={{
                       height: '140px',
                       borderRadius: 'var(--radius-md)',
-                      background: c.thumbnail
-                        ? `url(${c.thumbnail}) center/cover no-repeat`
-                        : `url(${getDefaultCourseCover(c.category, c.title)}) center/cover no-repeat`,
+                      background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 100%)',
                       marginBottom: '14px',
                       display: 'flex',
                       alignItems: 'center',
@@ -921,7 +919,24 @@ const CoursesManagementPage: React.FC = () => {
                       overflow: 'hidden'
                     }}
                   >
-                    {!c.thumbnail && <BookOpen size={44} color="#ffffff" style={{ opacity: 0.85 }} />}
+                    <img
+                      src={c.thumbnail || getDefaultCourseCover(c.category, c.title)}
+                      alt={c.title}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        zIndex: 1,
+                      }}
+                      onError={(e) => {
+                        const fallback = getDefaultCourseCover(c.category, c.title);
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
+                    />
 
                     {/* Category pill */}
                     <div

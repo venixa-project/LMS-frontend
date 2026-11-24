@@ -1243,15 +1243,17 @@ export const CreateAssessmentModal: React.FC<Props> = ({
       ? (jitsiRoomId && !jitsiRoomId.startsWith('vl-exam-') ? jitsiRoomId : handleGenerateMeetLink())
       : undefined;
 
-    const effectiveWarningInterval = isCustomInterval
-      ? Math.max(10, Math.min(3600, customIntervalUnit === 'minutes' ? (customIntervalValue || 2) * 60 : (customIntervalValue || 120)))
-      : (warningIntervalSeconds || 120);
+    const effectiveWarningInterval = proctoringMode === 'automated'
+      ? (isCustomInterval
+          ? Math.max(10, Math.min(3600, customIntervalUnit === 'minutes' ? (customIntervalValue || 2) * 60 : (customIntervalValue || 120)))
+          : (warningIntervalSeconds || 120))
+      : 0;
 
     const mergedProctoringSettings: ProctoringSettings = {
       ...proctoringSettings,
       warningIntervalSeconds: effectiveWarningInterval,
-      maxProctoringWarnings: 3,
-      thirdWarningAction: 'auto_submit',
+      maxProctoringWarnings: proctoringMode === 'automated' ? 3 : 0,
+      thirdWarningAction: proctoringMode === 'automated' ? 'auto_submit' : 'flag_review',
     };
 
     const newAssessment: Assessment = {
@@ -2346,98 +2348,128 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                       </label>
                     </div>
 
-                    {/* Auto-Proctoring Warning Interval & Three-Strike Configuration */}
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        paddingTop: '10px',
-                        borderTop: '1px solid var(--border-subtle)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <AlertTriangle size={14} color="#F59E0B" /> Warning Interval (Time Between Warnings)
-                        </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                            Max Warnings: 3
+                    {/* Auto-Proctoring Warning Interval (Automated Only Mode) */}
+                    {proctoringMode === 'automated' && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          paddingTop: '10px',
+                          borderTop: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <AlertTriangle size={14} color="#F59E0B" /> Warning Interval (Time Between Warnings)
                           </span>
-                          <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                            Action After 3rd Strike: Auto-Submit
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-muted text-xs" style={{ margin: '0 0 8px 0', lineHeight: 1.35 }}>
-                        Minimum cooldown enforced between consecutive proctoring warnings. Strikes increment only after this interval has elapsed.
-                      </p>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <select
-                          className="input input-sm"
-                          value={isCustomInterval ? 'custom' : String(warningIntervalSeconds)}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'custom') {
-                              setIsCustomInterval(true);
-                            } else {
-                              setIsCustomInterval(false);
-                              setWarningIntervalSeconds(Number(val));
-                            }
-                          }}
-                          style={{
-                            maxWidth: '220px',
-                            fontWeight: 600,
-                            fontSize: '0.82rem',
-                            background: 'var(--bg-card)',
-                            borderColor: 'rgba(245, 158, 11, 0.4)',
-                          }}
-                        >
-                          <option value="30">30 Seconds</option>
-                          <option value="60">1 Minute</option>
-                          <option value="120">2 Minutes (Default)</option>
-                          <option value="180">3 Minutes</option>
-                          <option value="300">5 Minutes</option>
-                          <option value="600">10 Minutes</option>
-                          <option value="custom">Custom Interval</option>
-                        </select>
-
-                        {isCustomInterval && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <input
-                              type="number"
-                              min={customIntervalUnit === 'minutes' ? 1 : 10}
-                              max={customIntervalUnit === 'minutes' ? 60 : 3600}
-                              className="input input-sm"
-                              value={customIntervalValue}
-                              onChange={(e) => {
-                                const num = Math.max(1, parseInt(e.target.value, 10) || 1);
-                                setCustomIntervalValue(num);
-                                const totalSec = customIntervalUnit === 'minutes' ? num * 60 : num;
-                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
-                              }}
-                              style={{ width: '85px', fontSize: '0.82rem' }}
-                            />
-                            <select
-                              className="input input-sm"
-                              value={customIntervalUnit}
-                              onChange={(e) => {
-                                const unit = e.target.value as 'minutes' | 'seconds';
-                                setCustomIntervalUnit(unit);
-                                const totalSec = unit === 'minutes' ? customIntervalValue * 60 : customIntervalValue;
-                                setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
-                              }}
-                              style={{ fontSize: '0.82rem' }}
-                            >
-                              <option value="minutes">Minutes</option>
-                              <option value="seconds">Seconds</option>
-                            </select>
-                            <span className="text-muted text-xs">
-                              (Min 10s, Max 60m)
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="badge badge-secondary" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                              Max Warnings: 3
+                            </span>
+                            <span className="badge badge-warning" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                              Action After 3rd Strike: Auto-Submit
                             </span>
                           </div>
-                        )}
+                        </div>
+                        <p className="text-muted text-xs" style={{ margin: '0 0 8px 0', lineHeight: 1.35 }}>
+                          Minimum cooldown enforced between consecutive proctoring warnings. Strikes increment only after this interval has elapsed.
+                        </p>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <select
+                            className="input input-sm"
+                            value={isCustomInterval ? 'custom' : String(warningIntervalSeconds)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setIsCustomInterval(true);
+                              } else {
+                                setIsCustomInterval(false);
+                                setWarningIntervalSeconds(Number(val));
+                              }
+                            }}
+                            style={{
+                              maxWidth: '220px',
+                              fontWeight: 600,
+                              fontSize: '0.82rem',
+                              background: 'var(--bg-card)',
+                              borderColor: 'rgba(245, 158, 11, 0.4)',
+                            }}
+                          >
+                            <option value="30">30 Seconds</option>
+                            <option value="60">1 Minute</option>
+                            <option value="120">2 Minutes (Default)</option>
+                            <option value="180">3 Minutes</option>
+                            <option value="300">5 Minutes</option>
+                            <option value="600">10 Minutes</option>
+                            <option value="custom">Custom Interval</option>
+                          </select>
+
+                          {isCustomInterval && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <input
+                                type="number"
+                                min={customIntervalUnit === 'minutes' ? 1 : 10}
+                                max={customIntervalUnit === 'minutes' ? 60 : 3600}
+                                className="input input-sm"
+                                value={customIntervalValue}
+                                onChange={(e) => {
+                                  const num = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                  setCustomIntervalValue(num);
+                                  const totalSec = customIntervalUnit === 'minutes' ? num * 60 : num;
+                                  setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                                }}
+                                style={{ width: '85px', fontSize: '0.82rem' }}
+                              />
+                              <select
+                                className="input input-sm"
+                                value={customIntervalUnit}
+                                onChange={(e) => {
+                                  const unit = e.target.value as 'minutes' | 'seconds';
+                                  setCustomIntervalUnit(unit);
+                                  const totalSec = unit === 'minutes' ? customIntervalValue * 60 : customIntervalValue;
+                                  setWarningIntervalSeconds(Math.max(10, Math.min(3600, totalSec)));
+                                }}
+                                style={{ fontSize: '0.82rem' }}
+                              >
+                                <option value="minutes">Minutes</option>
+                                <option value="seconds">Seconds</option>
+                              </select>
+                              <span className="text-muted text-xs">
+                                (Min 10s, Max 60m)
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* AI + Manual Supervised Mode Information (No Warning Interval) */}
+                    {proctoringMode === 'combined' && (
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          padding: '12px 14px',
+                          borderRadius: '8px',
+                          background: 'rgba(99, 102, 241, 0.08)',
+                          border: '1px solid rgba(99, 102, 241, 0.25)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Shield size={15} color="var(--primary)" /> Supervised Mode (No Warning Interval)
+                          </span>
+                          <span className="badge badge-info" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                            Admin / Trainer Control
+                          </span>
+                        </div>
+                        <p className="text-muted text-xs" style={{ margin: 0, lineHeight: 1.45 }}>
+                          In AI + Manual mode, automated student strikes and cooldown intervals are disabled. All AI telemetry violations are streamed directly to the <strong>Admin & Trainer Live Proctoring Wall</strong> in real-time. The invigilator reviews alerts, sends manual warning popups to the student, and can stop and submit the exam at any time.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -5492,9 +5524,6 @@ export const CreateAssessmentModal: React.FC<Props> = ({
                           }}
                         >
                           <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="distinction">Distinction Honors (VeniLearn Blue & Gold)</option>
-                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="technical">Technical Achievement (Modern Slate & Teal)</option>
-                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="executive">Executive Minimal (Classic Navy)</option>
-                          <option style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }} value="standard">Standard Academic (Institutional)</option>
                         </select>
                       </div>
 

@@ -36,7 +36,15 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
 
   // Maximum value for scaling Y axis
   const maxDataVal = Math.max(...enrollmentStatsData.map((d) => Math.max(d.enrollments, d.completions)), 0);
-  const yMax = maxDataVal === 0 ? 100 : Math.ceil((maxDataVal * 1.15) / 50) * 50;
+  const yMax = useMemo(() => {
+    if (maxDataVal === 0) return 20;
+    if (maxDataVal <= 5) return 6;
+    if (maxDataVal <= 10) return 12;
+    if (maxDataVal <= 25) return 30;
+    if (maxDataVal <= 50) return 60;
+    if (maxDataVal <= 100) return 120;
+    return Math.ceil((maxDataVal * 1.15) / 50) * 50;
+  }, [maxDataVal]);
 
   // Bar width adjusted based on density
   const barWidth = numItems > 8 ? 8 : numItems > 5 ? 14 : 20;

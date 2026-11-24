@@ -3016,3 +3016,19 @@ select.form-select option {
     transition: none !important;
   }
 }
+
+/* Optimized Instant Date Picker Interactions */
+input[type="date"] {
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  padding: 2px;
+  filter: invert(0.5);
+  transition: opacity 0.15s, transform 0.1s;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}

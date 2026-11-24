@@ -11,7 +11,7 @@ import { byteObjectTracker, TrackedObject } from '../../../lib/objectTracker';
 import { aiEventEngine, ProctoringAIEvent, MobilePhoneDetectedEvent } from '../../../lib/aiEventEngine';
 import { arcFaceRecognizer, ArcFaceVerificationResult } from '../../../lib/arcFaceRecognizer';
 import { proctoringSuites, PROCTORING_MODEL_SUITES, ProctoringSuiteType } from '../../../lib/proctoringSuites';
-import { proctoringSocket } from '../../../lib/proctoringSocket';
+import { proctoringSocket, getShortNumericId } from '../../../lib/proctoringSocket';
 
 interface StudentProctorWidgetProps {
   assessmentId: string;
@@ -44,6 +44,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   onForceSubmit,
   onStreamChange,
 }) => {
+  const isSupervisedProctoring = proctoringMode === 'manual' || proctoringMode === 'combined' || proctoringMode === 'automated_manual';
   const isManualProctoring = proctoringMode === 'manual';
   const { user } = useAuthStore();
   const currentLearnerId = user?.id || learnerId;
@@ -461,9 +462,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   // Forwards violation to backend; backend strictly validates server-side cooldown interval
   // and issues confirmed warnings/strikes back via WebSocket
   const triggerAutomatedStrike = (category: string, title: string, message: string) => {
-    // In manual proctoring mode, automated strikes are strictly disabled for the student;
-    // Only messages/warnings explicitly issued by the admin or trainer should reach the student.
-    if (isManualProctoring) {
+    // In supervised proctoring mode (manual or AI+manual), automated strikes and time intervals are disabled for the student.
+    // Telemetry violations are streamed immediately to the Admin & Trainer live proctoring wall in real-time.
+    // The Admin or Trainer reviews violations, gives manual warning popups to the student, and can stop and submit the exam.
+    if (isSupervisedProctoring) {
       proctoringSocket.emit('PROCTORING_TELEMETRY', {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
@@ -473,6 +475,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         title,
         message,
         source: 'automated',
+        evidenceSnapshot: lastValidSnapshotRef.current,
         clientTimestamp: Date.now(),
       });
       return;
@@ -513,7 +516,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       proctoringSocket.emit('STUDENT_EXAM_STARTED', {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
-        rollNo: (user as any)?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+        rollNo: (user as any)?.rollNo || getShortNumericId(currentLearnerId),
         assessmentId,
         sessionId,
         startedAt: new Date().toISOString(),
@@ -522,11 +525,17 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
     // Listen for confirmed proctoring warnings (automated or manual) from server
     const unsubWarning = proctoringSocket.on('PROCTORING_WARNING', (data: any) => {
-      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
-        // In manual proctoring mode, automated warnings are suppressed from student view
-        if (isManualProctoring && data.source !== 'manual') {
-          return;
-        }
+      const targetId = String(data?.studentId || data?.learnerId || '').toLowerCase().trim();
+      const myId = String(currentLearnerId || '').toLowerCase().trim();
+      const myRoll = String((user as any)?.rollNo || '').toLowerCase().trim();
+      const isMatch = !targetId || targetId === myId || targetId === myRoll || (targetId.length >= 3 && myId.includes(targetId)) || (myId.length >= 3 && targetId.includes(myId));
+      if (!isMatch) return;
+
+      // In supervised proctoring mode (manual or AI+manual / combined), automated warnings are suppressed from student view;
+      // only warnings explicitly issued by the admin or trainer reach the student.
+      if ((isSupervisedProctoring || proctoringMode !== 'automated') && data.source !== 'manual') {
+        return;
+      }
 
         // Prevent duplicate popups for the exact same event ID
         if (data.eventId && lastSeenEventIdRef.current === data.eventId) {
@@ -580,7 +589,6 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
             onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
           }, 3500);
         }
-      }
     });
 
     // Listen for manual proctor warnings issued by the administrator
@@ -624,7 +632,12 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
     // Listen for admin force-stop examination: immediately submit exam
     const unsubTerminated = proctoringSocket.on('EXAM_TERMINATED', (data: any) => {
-      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+      const targetId = String(data?.studentId || data?.learnerId || '').toLowerCase().trim();
+      const myId = String(currentLearnerId || '').toLowerCase().trim();
+      const myRoll = String((user as any)?.rollNo || '').toLowerCase().trim();
+      const isMatch = !targetId || targetId === myId || targetId === myRoll || (targetId.length >= 3 && myId.includes(targetId)) || (myId.length >= 3 && targetId.includes(myId));
+
+      if (isMatch) {
         setTerminatedState({
           isTerminated: true,
           reason: data.reason || 'Your examination was concluded and submitted by the administrator / trainer.',
@@ -649,7 +662,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       unsubTerminated();
       unsubAdminRequest();
     };
-  }, [assessmentId, currentLearnerId, isExamActive, sessionId, isManualProctoring]);
+  }, [assessmentId, currentLearnerId, isExamActive, sessionId, isSupervisedProctoring, isManualProctoring]);
 
   // Initialize MediaStream (Camera & Mic) - reuse passed mediaStream if present
   useEffect(() => {
@@ -679,6 +692,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       proctoringSocket.registerLocalMediaStream(s, {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
+        rollNo: (user as any)?.rollNo || getShortNumericId(currentLearnerId),
         assessmentId,
         sessionId,
       });
@@ -1470,15 +1484,34 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       updateParticipantTelemetry(currentLearnerId, {
         assessmentId,
         name: currentLearnerName,
-        rollNo: user?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+        rollNo: user?.rollNo || getShortNumericId(currentLearnerId),
         cameraActive: cameraActive || Boolean(currentActiveStream?.getVideoTracks()?.some((t) => t.enabled)),
         micActive: micActive || Boolean(currentActiveStream?.getAudioTracks()?.some((t) => t.enabled)),
         audioLevel,
         tabFocused,
         screenShareActive: hasLiveScreen,
         status: 'connected',
+        faceVerificationStatus,
+        similarityScore,
         ...(latestScreenSnapshotRef.current ? { latestScreenSnapshot: latestScreenSnapshotRef.current } : {}),
         ...(effectiveSnapshot ? { latestSnapshot: effectiveSnapshot } : {}),
+      });
+
+      // Transmit live face biometric telemetry to proctoring hub and wall
+      proctoringSocket.emit('PROCTORING_TELEMETRY', {
+        studentId: currentLearnerId,
+        studentName: currentLearnerName,
+        rollNo: user?.rollNo || getShortNumericId(currentLearnerId),
+        assessmentId,
+        sessionId,
+        eventType: faceVerificationStatus === 'MISMATCH' ? 'face_mismatch' : 'face_verified',
+        title: faceVerificationStatus === 'MISMATCH' ? 'Face Identity Mismatch' : 'Face Biometric Verified',
+        message: `Biometric similarity: ${Math.round(similarityScore * 100)}% (${faceVerificationStatus})`,
+        faceStatus: faceVerificationStatus,
+        similarityScore,
+        source: 'automated',
+        evidenceSnapshot: effectiveSnapshot,
+        clientTimestamp: Date.now(),
       });
 
       // Transmit to backend live telemetry API if session is active

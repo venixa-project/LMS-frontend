@@ -99,33 +99,236 @@ if (typeof window !== 'undefined') {
   } catch { }
 }
 
-// Curated high-resolution royalty-free educational course cover images
+function escapeXml(str: string): string {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function buildSvgCourseBanner(params: {
+  title: string;
+  category: string;
+  gradStart: string;
+  gradEnd: string;
+  accent: string;
+  iconType: 'code' | 'ai' | 'data' | 'cloud' | 'security' | 'web' | 'academic';
+}): string {
+  const { title, category, gradStart, gradEnd, accent, iconType } = params;
+  const safeTitle = escapeXml(title || 'Academic Course');
+  const safeCat = escapeXml((category || 'Curriculum').toUpperCase());
+  const displayTitle = safeTitle.length > 28 ? safeTitle.slice(0, 26) + '...' : safeTitle;
+
+  let iconGraphic = '';
+  if (iconType === 'code') {
+    // Terminal / Code brackets
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <path d="M 26 28 L 14 40 L 26 52" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 54 28 L 66 40 L 54 52" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 44 24 L 36 56" fill="none" stroke="${accent}" stroke-width="3.5" stroke-linecap="round"/>
+    `;
+  } else if (iconType === 'ai') {
+    // Neural atom / AI nodes
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <circle cx="40" cy="40" r="10" fill="${accent}"/>
+      <ellipse cx="40" cy="40" rx="28" ry="12" fill="none" stroke="#FFFFFF" stroke-width="2" transform="rotate(30 40 40)"/>
+      <ellipse cx="40" cy="40" rx="28" ry="12" fill="none" stroke="#FFFFFF" stroke-width="2" transform="rotate(-30 40 40)"/>
+      <ellipse cx="40" cy="40" rx="28" ry="12" fill="none" stroke="${accent}" stroke-width="1.5" transform="rotate(90 40 40)"/>
+      <circle cx="20" cy="28" r="3" fill="#FFFFFF"/>
+      <circle cx="60" cy="52" r="3" fill="#FFFFFF"/>
+    `;
+  } else if (iconType === 'data') {
+    // Analytics & Data Charts
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <rect x="18" y="44" width="8" height="22" rx="2" fill="rgba(255,255,255,0.6)"/>
+      <rect x="32" y="32" width="8" height="34" rx="2" fill="rgba(255,255,255,0.85)"/>
+      <rect x="46" y="22" width="8" height="44" rx="2" fill="${accent}"/>
+      <rect x="60" y="14" width="8" height="52" rx="2" fill="#FFFFFF"/>
+      <path d="M 16 38 Q 36 28 48 18 T 68 8" fill="none" stroke="#FDE047" stroke-width="3" stroke-linecap="round"/>
+    `;
+  } else if (iconType === 'cloud') {
+    // Cloud & Infrastructure
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <path d="M 24 50 A 12 12 0 0 1 34 32 A 16 16 0 0 1 58 34 A 12 12 0 0 1 60 50 Z" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+      <line x1="26" y1="58" x2="54" y2="58" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>
+      <line x1="32" y1="64" x2="48" y2="64" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" stroke-linecap="round"/>
+    `;
+  } else if (iconType === 'security') {
+    // Shield & Cyber Security
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <path d="M 40 18 L 62 26 C 62 48 40 62 40 62 C 40 62 18 48 18 26 Z" fill="rgba(255,255,255,0.15)" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 32 38 L 38 44 L 50 32" fill="none" stroke="${accent}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
+  } else if (iconType === 'web') {
+    // Web Layout / Frontend
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <rect x="14" y="18" width="52" height="44" rx="4" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+      <line x1="14" y1="28" x2="66" y2="28" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+      <circle cx="20" cy="23" r="2" fill="${accent}"/>
+      <circle cx="26" cy="23" r="2" fill="#FDE047"/>
+      <circle cx="32" cy="23" r="2" fill="#4ADE80"/>
+      <rect x="20" y="34" width="16" height="22" rx="2" fill="rgba(255,255,255,0.3)"/>
+      <rect x="40" y="34" width="20" height="8" rx="2" fill="${accent}"/>
+      <rect x="40" y="46" width="20" height="10" rx="2" fill="rgba(255,255,255,0.5)"/>
+    `;
+  } else {
+    // Academic Book & Cap
+    iconGraphic = `
+      <rect x="0" y="0" width="80" height="80" rx="16" fill="rgba(255,255,255,0.12)" stroke="${accent}" stroke-width="1.5"/>
+      <path d="M 40 22 L 64 32 L 40 42 L 16 32 Z" fill="${accent}" stroke="#FFFFFF" stroke-width="2"/>
+      <path d="M 24 38 L 24 50 Q 40 58 56 50 L 56 38" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+      <line x1="60" y1="34" x2="60" y2="52" stroke="#FDE047" stroke-width="2"/>
+    `;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <defs>
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${gradStart}"/>
+      <stop offset="60%" stop-color="${gradEnd}"/>
+      <stop offset="100%" stop-color="#090D1A"/>
+    </linearGradient>
+    <linearGradient id="overlayVig" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="rgba(0,0,0,0.7)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.15)"/>
+    </linearGradient>
+    <pattern id="dotGrid" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.2" fill="rgba(255,255,255,0.12)"/>
+    </pattern>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="30" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="100%" height="100%" fill="url(#mainGrad)"/>
+  <rect width="100%" height="100%" fill="url(#dotGrid)"/>
+  
+  <!-- Ambient Atmospheric Glows -->
+  <circle cx="680" cy="120" r="130" fill="${accent}" opacity="0.25" filter="url(#glow)"/>
+  <circle cx="120" cy="360" r="100" fill="${gradStart}" opacity="0.3" filter="url(#glow)"/>
+
+  <!-- Subtle Vignette Layer -->
+  <rect width="100%" height="100%" fill="url(#overlayVig)"/>
+
+  <!-- Top Category Chip -->
+  <g transform="translate(60, 50)">
+    <rect x="0" y="0" width="${Math.max(130, safeCat.length * 11 + 32)}" height="34" rx="17" fill="rgba(15,23,42,0.75)" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+    <circle cx="16" cy="17" r="5" fill="${accent}"/>
+    <text x="30" y="22" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="800" letter-spacing="1.4">${safeCat}</text>
+  </g>
+
+  <!-- Central Graphic Watermark Right Side -->
+  <g transform="translate(640, 185)">
+    ${iconGraphic}
+  </g>
+
+  <!-- Course Title Header -->
+  <text x="60" y="240" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="900" letter-spacing="-0.8">
+    ${displayTitle}
+  </text>
+
+  <!-- Curriculum Subtitle -->
+  <text x="60" y="280" fill="rgba(255,255,255,0.8)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" letter-spacing="0.5">
+    RAPA TECH ACADEMIC EXCELLENCE &amp; PROFESSIONAL CERTIFICATION
+  </text>
+
+  <!-- Accent Bottom Bar -->
+  <rect x="60" y="315" width="100" height="5" rx="2.5" fill="${accent}"/>
+  <rect x="170" y="315" width="30" height="5" rx="2.5" fill="rgba(255,255,255,0.4)"/>
+  <rect x="210" y="315" width="12" height="5" rx="2.5" fill="rgba(255,255,255,0.2)"/>
+
+  <!-- Footer Tag -->
+  <text x="60" y="390" fill="rgba(255,255,255,0.55)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" letter-spacing="1.2">
+    OFFICIAL ENTERPRISE COURSE CURRICULUM
+  </text>
+</svg>`;
+
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+// Guaranteed-to-load high-resolution educational course cover generator
 export function getDefaultCourseCover(category?: string, title?: string): string {
   const t = (title || '').toLowerCase();
   const c = (category || '').toLowerCase();
 
   if (t.includes('java') || t.includes('spring') || t.includes('backend') || c.includes('backend')) {
-    return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80'; // Laptop coding
+    return buildSvgCourseBanner({
+      title: title || 'Backend Engineering',
+      category: category || 'Backend Development',
+      gradStart: '#312E81',
+      gradEnd: '#4F46E5',
+      accent: '#818CF8',
+      iconType: 'code',
+    });
   }
-  if (t.includes('ai') || t.includes('deep') || t.includes('ml') || t.includes('neural') || c.includes('ai') || c.includes('deep')) {
-    return 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80'; // AI Futuristic
+  if (t.includes('ai') || t.includes('deep') || t.includes('neural') || c.includes('ai') || c.includes('deep')) {
+    return buildSvgCourseBanner({
+      title: title || 'AI & Deep Learning',
+      category: category || 'Artificial Intelligence',
+      gradStart: '#1E1B4B',
+      gradEnd: '#7C3AED',
+      accent: '#F43F5E',
+      iconType: 'ai',
+    });
   }
-  if (t.includes('data') || t.includes('analytics') || t.includes('india') || c.includes('data')) {
-    return 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=600&q=80'; // Data analytics & charts
-  }
-  if (t.includes('python') || t.includes('django') || t.includes('flask')) {
-    return 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80'; // Python code matrix
-  }
-  if (t.includes('react') || t.includes('web') || t.includes('frontend') || c.includes('web')) {
-    return 'https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=600&q=80'; // Modern UI/Web design
+  if (t.includes('data') || t.includes('analytics') || t.includes('india') || t.includes('science') || c.includes('data')) {
+    return buildSvgCourseBanner({
+      title: title || 'Data Science & ML',
+      category: category || 'Data Science & Analytics',
+      gradStart: '#064E3B',
+      gradEnd: '#059669',
+      accent: '#34D399',
+      iconType: 'data',
+    });
   }
   if (t.includes('cloud') || t.includes('devops') || t.includes('aws') || c.includes('cloud')) {
-    return 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80'; // Cloud network
+    return buildSvgCourseBanner({
+      title: title || 'Cloud & DevOps Architecture',
+      category: category || 'Cloud Computing',
+      gradStart: '#0F172A',
+      gradEnd: '#1D4ED8',
+      accent: '#38BDF8',
+      iconType: 'cloud',
+    });
   }
   if (t.includes('security') || t.includes('cyber') || c.includes('security')) {
-    return 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=600&q=80'; // Cyber security
+    return buildSvgCourseBanner({
+      title: title || 'Cyber Security & Defence',
+      category: category || 'Cyber Security',
+      gradStart: '#450A0A',
+      gradEnd: '#991B1B',
+      accent: '#F87171',
+      iconType: 'security',
+    });
   }
-  return 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80'; // Technology desk workspace
+  if (t.includes('react') || t.includes('web') || t.includes('frontend') || c.includes('web')) {
+    return buildSvgCourseBanner({
+      title: title || 'Frontend & Web Development',
+      category: category || 'Web Development',
+      gradStart: '#3B0764',
+      gradEnd: '#9333EA',
+      accent: '#F472B6',
+      iconType: 'web',
+    });
+  }
+  return buildSvgCourseBanner({
+    title: title || 'Curriculum Syllabus',
+    category: category || 'General Education',
+    gradStart: '#1E3A8A',
+    gradEnd: '#2563EB',
+    accent: '#60A5FA',
+    iconType: 'academic',
+  });
 }
 
 // Helper to normalize and map backend API course record into frontend Course object

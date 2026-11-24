@@ -7,7 +7,7 @@ import { StudentProctorWidget } from './components/StudentProctorWidget';
 import { useProctoringStore, DEFAULT_PROCTORING_POLICIES } from '../../lib/proctoringStore';
 import { getAssessmentApi, startAttemptApi, saveAnswerApi, submitAttemptApi } from '../../api/assessment.api';
 import { apiClient } from '../../lib/apiClient';
-import { proctoringSocket } from '../../lib/proctoringSocket';
+import { proctoringSocket, getShortNumericId } from '../../lib/proctoringSocket';
 import {
   Clock, Shield, AlertTriangle, CheckCircle2, Circle, Flag,
   ChevronLeft, ChevronRight, Save, Eye, EyeOff, ArrowLeft, Award, HelpCircle, X,
@@ -221,8 +221,26 @@ export const ExamPlayerPage: React.FC = () => {
   const [passed, setPassed] = useState(true);
 
   // Proctoring mode resolution
-  const isProctored = Boolean(assessment?.proctoringRequired || (assessment?.proctoringMode && assessment.proctoringMode !== 'none'));
-  const proctorMode = assessment?.proctoringMode || (assessment?.proctoringRequired ? 'combined' : 'none');
+  const isProctored = Boolean(
+    assessment?.proctoringRequired ||
+    (assessment?.proctoringMode && assessment.proctoringMode !== 'none') ||
+    ((assessment as any)?.certificateConfig?.proctoringMode && (assessment as any)?.certificateConfig?.proctoringMode !== 'none')
+  );
+  const proctorMode: 'combined' | 'manual' | 'automated' | 'none' = (() => {
+    const cfgMode = (assessment as any)?.certificateConfig?.proctoringMode;
+    if (cfgMode === 'combined' || cfgMode === 'automated_manual' || cfgMode === 'manual' || cfgMode === 'automated') {
+      return cfgMode === 'automated_manual' ? 'combined' : cfgMode;
+    }
+    const directMode = assessment?.proctoringMode;
+    if (directMode && directMode !== 'none') {
+      return directMode === 'automated_manual' ? 'combined' : directMode;
+    }
+    const topMode = (assessment as any)?.mode;
+    if (topMode === 'combined' || topMode === 'automated_manual') return 'combined';
+    if (topMode === 'manual') return 'manual';
+    if (assessment?.proctoringRequired || (assessment as any)?.invigilationLink) return 'combined';
+    return topMode || 'combined';
+  })();
   const proctorSettings = assessment?.proctoringSettings || {
     camera: true,
     mic: true,
@@ -942,7 +960,7 @@ export const ExamPlayerPage: React.FC = () => {
       proctoringSocket.emit('STUDENT_EXAM_STARTED', {
         studentId: candidateId,
         studentName: candidateName,
-        rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+        rollNo: user?.rollNo || getShortNumericId(candidateId),
         assessmentId: assessment.id,
         sessionId: serverSessionId || currentSessionId || '',
         startedAt: new Date().toISOString(),
@@ -1176,7 +1194,7 @@ export const ExamPlayerPage: React.FC = () => {
         proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
           studentId: candidateId,
           studentName: candidateName,
-          rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+          rollNo: user?.rollNo || getShortNumericId(candidateId),
           assessmentId: assessment.id,
           sessionId: serverSessionId || currentSessionId || '',
           reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
@@ -1195,6 +1213,40 @@ export const ExamPlayerPage: React.FC = () => {
     }
   };
 
+  // Immediate reaction when proctor/administrator force stops exam
+  useEffect(() => {
+    if (stage !== 'in_exam') return;
+
+    const handleTerminatedSignal = (data: any) => {
+      if (!data) return;
+      const targetId = String(data.studentId || data.learnerId || data.targetStudentId || '').toLowerCase().trim();
+      const myId = String(candidateId || user?.id || '').toLowerCase().trim();
+      const myRoll = String(user?.rollNo || '').toLowerCase().trim();
+
+      const isTarget =
+        !targetId ||
+        targetId === myId ||
+        targetId === myRoll ||
+        (targetId.length >= 3 && myId.includes(targetId)) ||
+        (myId.length >= 3 && targetId.includes(myId)) ||
+        (targetId.length >= 3 && myRoll.includes(targetId)) ||
+        (myRoll.length >= 3 && targetId.includes(myRoll));
+
+      if (isTarget) {
+        console.warn('[ExamPlayer] Admin force-stopped examination session:', data);
+        setForcedSubmissionReason(data.reason || 'Examination session was concluded and submitted by administrator.');
+        handleSubmitExam();
+      }
+    };
+
+    const unsubTerm = proctoringSocket.on('EXAM_TERMINATED', handleTerminatedSignal);
+    const unsubStop = proctoringSocket.on('ADMIN_FORCE_STOP', handleTerminatedSignal);
+    return () => {
+      unsubTerm?.();
+      unsubStop?.();
+    };
+  }, [stage, candidateId, user?.id, user?.rollNo]);
+
   // Ensure fullscreen and media tracks are automatically released when leaving exam or arriving at results
   useEffect(() => {
     if (stage === 'results') {
@@ -1212,7 +1264,7 @@ export const ExamPlayerPage: React.FC = () => {
           proctoringSocket.emit('STUDENT_EXAM_SUBMITTED', {
             studentId: candidateId,
             studentName: candidateName,
-            rollNo: user?.rollNo || `STU-${candidateId.slice(-4)}`,
+            rollNo: user?.rollNo || getShortNumericId(candidateId),
             assessmentId: assessment?.id,
             sessionId: serverSessionId || currentSessionId || '',
             reason: 'Candidate navigated away or closed exam tab',
@@ -2216,7 +2268,7 @@ export const ExamPlayerPage: React.FC = () => {
           <StudentProctorWidget
             assessmentId={assessment.id}
             sessionId={serverSessionId || currentSessionId || undefined}
-            proctoringMode={assessment.proctoringMode || (assessment as any).mode || 'automated'}
+            proctoringMode={proctorMode || assessment.proctoringMode || (assessment.proctoringRequired ? 'combined' : 'none')}
             mediaStream={activeUserMediaStream || userMediaStreamRef.current}
             screenStream={screenStreamRef.current}
             isScreenSharing={isScreenSharing}

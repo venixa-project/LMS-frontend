@@ -34,8 +34,9 @@ export const LearnerActivityGrowthChart: React.FC = () => {
   // Maximum value for scaling Y axis
   const maxActive = useMemo(() => {
     const maxVal = Math.max(...monthlyGrowthData.map((d) => d.activeLearners), 0);
-    if (maxVal === 0) return 100;
-    // Round up to nearest nice interval
+    if (maxVal === 0) return 20;
+    if (maxVal <= 10) return 12;
+    if (maxVal <= 25) return 30;
     if (maxVal <= 50) return 60;
     if (maxVal <= 150) return 200;
     if (maxVal <= 400) return 500;
@@ -320,7 +321,7 @@ export const LearnerActivityGrowthChart: React.FC = () => {
         }}
       >
         <span>
-          Period: <strong style={{ color: 'var(--text-main)' }}>{monthlyGrowthData.length} recorded months</strong>
+          Period: <strong style={{ color: 'var(--text-main)' }}>{monthlyGrowthData.length} recorded intervals</strong>
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--primary)', display: 'inline-block' }} />

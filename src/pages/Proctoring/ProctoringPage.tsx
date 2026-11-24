@@ -121,7 +121,7 @@ export const ProctoringPage: React.FC = () => {
       });
     }, 150);
     return () => clearTimeout(timer);
-  }, [searchQuery, assessmentFilter, severityFilter, statusFilter, categoryFilter]);
+  }, [activeTab, searchQuery, assessmentFilter, severityFilter, statusFilter, categoryFilter]);
 
   const isLearner =
     user?.activeRole === 'student' ||
@@ -184,9 +184,9 @@ export const ProctoringPage: React.FC = () => {
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesLearner = s.learnerName.toLowerCase().includes(q);
-        const matchesTitle = s.assessmentTitle.toLowerCase().includes(q);
-        const matchesId = s.id.toLowerCase().includes(q);
+        const matchesLearner = (s.learnerName || '').toLowerCase().includes(q);
+        const matchesTitle = (s.assessmentTitle || '').toLowerCase().includes(q);
+        const matchesId = (s.id || '').toLowerCase().includes(q);
         if (!matchesLearner && !matchesTitle && !matchesId) return false;
       }
 
@@ -203,16 +203,17 @@ export const ProctoringPage: React.FC = () => {
 
       // Category
       if (categoryFilter !== 'all') {
-        const hasCategory = s.events.some((e) => e.category === categoryFilter);
+        const catLower = categoryFilter.toLowerCase();
+        const hasCategory = s.events.some((e) => (e.category || '').toLowerCase().includes(catLower));
         if (!hasCategory) return false;
       }
 
       // Review Status
       if (statusFilter !== 'all') {
         if (statusFilter === 'pending') {
-          if (s.status === 'reviewed') return false;
+          if (s.status === 'reviewed' || s.reviewDecision?.outcome) return false;
         } else if (statusFilter === 'reviewed') {
-          if (s.status !== 'reviewed') return false;
+          if (s.status !== 'reviewed' && !s.reviewDecision?.outcome) return false;
         } else if (statusFilter === 'appealed') {
           if (!s.studentAppeal) return false;
         }

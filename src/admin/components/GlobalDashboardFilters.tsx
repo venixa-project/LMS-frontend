@@ -25,6 +25,26 @@ export const GlobalDashboardFilters: React.FC = () => {
   } = useDashboardFilters();
 
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const startInputRef = React.useRef<HTMLInputElement>(null);
+  const endInputRef = React.useRef<HTMLInputElement>(null);
+
+  const triggerStartCalendar = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      startInputRef.current?.showPicker?.();
+    } catch {
+      startInputRef.current?.focus();
+    }
+  };
+
+  const triggerEndCalendar = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      endInputRef.current?.showPicker?.();
+    } catch {
+      endInputRef.current?.focus();
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -98,13 +118,22 @@ export const GlobalDashboardFilters: React.FC = () => {
             padding: '4px 14px',
             fontSize: '0.8rem',
             boxShadow: 'var(--shadow-sm)',
+            userSelect: 'none',
           }}
         >
-          <Calendar size={13} color="var(--primary)" />
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>From:</span>
+          <div
+            onClick={triggerStartCalendar}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
+            title="Open Start Date Calendar"
+          >
+            <Calendar size={13} color="var(--primary)" />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>From:</span>
+          </div>
           <input
+            ref={startInputRef}
             type="date"
             value={startDate}
+            onClick={triggerStartCalendar}
             onChange={(e) => setStartDate(e.target.value)}
             style={{
               fontSize: '0.78rem',
@@ -114,12 +143,20 @@ export const GlobalDashboardFilters: React.FC = () => {
               color: 'var(--text-main)',
               cursor: 'pointer',
             }}
-            title="Start Date"
+            title="Click to open calendar"
           />
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>To:</span>
+          <div
+            onClick={triggerEndCalendar}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
+            title="Open End Date Calendar"
+          >
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>To:</span>
+          </div>
           <input
+            ref={endInputRef}
             type="date"
             value={endDate}
+            onClick={triggerEndCalendar}
             onChange={(e) => setEndDate(e.target.value)}
             style={{
               fontSize: '0.78rem',
@@ -129,7 +166,7 @@ export const GlobalDashboardFilters: React.FC = () => {
               color: 'var(--text-main)',
               cursor: 'pointer',
             }}
-            title="End Date"
+            title="Click to open calendar"
           />
         </div>
 

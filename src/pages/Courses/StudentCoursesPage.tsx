@@ -137,14 +137,17 @@ export const StudentCoursesPage: React.FC = () => {
               <article className="card" key={course.id} style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
                 {/* 16:9 Course Cover Page */}
                 <div style={{ width: '100%', height: '140px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #2563EB 0%, #EC4899 100%)' }}>
-                  {courseCover && (
-                    <img
-                      src={courseCover}
-                      alt={course.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  )}
+                  <img
+                    src={courseCover || getDefaultCourseCover(course.category, course.title)}
+                    alt={course.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    onError={(e) => {
+                      const fallback = getDefaultCourseCover(course.category, course.title);
+                      if (e.currentTarget.src !== fallback) {
+                        e.currentTarget.src = fallback;
+                      }
+                    }}
+                  />
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 2 }}>
                     <span className="badge badge-secondary" style={{ background: 'rgba(5, 8, 22, 0.75)', backdropFilter: 'blur(6px)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.25)', fontSize: '0.68rem', fontWeight: 700 }}>
                       {course.category}

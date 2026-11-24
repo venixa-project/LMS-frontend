@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import { proctoringSocket } from './proctoringSocket';
+import { proctoringSocket, getShortNumericId } from './proctoringSocket';
 // ============================================================
 // VeniLearn Proctoring Store (Hybrid Google Meet Live + VeniGuard System)
 // Manages real-time Google Meet participants, telemetry, warnings,
@@ -56,6 +56,7 @@ export interface ProctorParticipant {
   remoteStream?: MediaStream | null;
   faceVerificationStatus?: 'MATCH' | 'MISMATCH' | 'UNCERTAIN' | 'INCONCLUSIVE' | 'SCANNING' | 'no_face' | 'multiple_faces' | 'single_face';
   faceStatus?: string;
+  similarityScore?: number;
   warningCount?: number;
   latestEvent?: {
     type: string;
@@ -530,6 +531,59 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
             : raw.learnerId;
           const assessmentTitle = raw.attempt?.assessment?.title || (raw.assessmentId ? `Assessment (${raw.assessmentId.slice(0, 8)})` : 'Proctored Assessment');
 
+          const rawEvents = (raw.events || []).map((e: any) => ({
+            id: e.id,
+            sessionId: e.sessionId || raw.id,
+            assessmentId: raw.assessmentId,
+            learnerId: raw.learnerId,
+            category: e.category,
+            severity: e.severity || 'warning',
+            title: e.title,
+            description: e.description,
+            timestamp: e.createdAt ? new Date(e.createdAt).toISOString() : new Date().toISOString(),
+            clientTimestamp: Number(e.clientTimestamp || 0),
+            relativeSeconds: e.relativeSeconds || 0,
+            evidenceSnapshot: e.evidenceSnapshot,
+            studentExplanation: e.studentExplanation,
+          }));
+
+          const rawIncidents = (raw.incidents || []).map((inc: any) => ({
+            id: inc.id,
+            sessionId: inc.sessionId || raw.id,
+            attemptId: inc.attemptId || raw.attemptId || raw.id,
+            assessmentId: raw.assessmentId,
+            learnerId: inc.learnerId || raw.learnerId,
+            eventType: inc.eventType,
+            severity: inc.severity,
+            description: inc.description,
+            status: inc.status,
+            reviewerId: inc.reviewerId,
+            reviewerNotes: inc.reviewerNotes,
+            decision: inc.decision,
+            studentExplanation: inc.studentExplanation,
+            createdAt: inc.createdAt ? new Date(inc.createdAt).toISOString() : new Date().toISOString(),
+          }));
+
+          // Merge incidents as signal events if they aren't already represented in events
+          const incidentEvents = rawIncidents
+            .filter((inc: any) => !rawEvents.some((e: any) => e.title === inc.eventType || e.category === (inc.eventType || '').toLowerCase()))
+            .map((inc: any) => ({
+              id: `inc-ev-${inc.id}`,
+              sessionId: inc.sessionId || raw.id,
+              assessmentId: raw.assessmentId,
+              learnerId: inc.learnerId,
+              category: (inc.eventType || 'incident').toLowerCase(),
+              severity: (inc.severity as any) || 'critical',
+              title: inc.eventType || 'Proctoring Incident',
+              description: inc.description || 'Flagged security violation',
+              timestamp: inc.createdAt,
+              clientTimestamp: new Date(inc.createdAt).getTime() || Date.now(),
+              relativeSeconds: 0,
+              studentExplanation: inc.studentExplanation,
+            }));
+
+          const combinedEvents = [...rawEvents, ...incidentEvents];
+
           return {
             id: raw.id,
             attemptId: raw.attemptId || raw.id,
@@ -565,21 +619,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
               submittedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : new Date().toISOString(),
               status: (raw.appealStatus as any) || 'pending',
             } : undefined,
-            events: (raw.events || []).map((e: any) => ({
-              id: e.id,
-              sessionId: e.sessionId || raw.id,
-              assessmentId: raw.assessmentId,
-              learnerId: raw.learnerId,
-              category: e.category,
-              severity: e.severity || 'warning',
-              title: e.title,
-              description: e.description,
-              timestamp: e.createdAt ? new Date(e.createdAt).toISOString() : new Date().toISOString(),
-              clientTimestamp: Number(e.clientTimestamp || 0),
-              relativeSeconds: e.relativeSeconds || 0,
-              evidenceSnapshot: e.evidenceSnapshot,
-              studentExplanation: e.studentExplanation,
-            })),
+            events: combinedEvents,
             warnings: (raw.warnings || []).map((w: any) => ({
               id: w.id,
               sessionId: w.sessionId || raw.id,
@@ -589,22 +629,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
               timestamp: w.createdAt ? new Date(w.createdAt).toISOString() : new Date().toISOString(),
               acknowledged: Boolean(w.acknowledged),
             })),
-            incidents: (raw.incidents || []).map((inc: any) => ({
-              id: inc.id,
-              sessionId: inc.sessionId || raw.id,
-              attemptId: inc.attemptId || raw.attemptId || raw.id,
-              assessmentId: raw.assessmentId,
-              learnerId: inc.learnerId || raw.learnerId,
-              eventType: inc.eventType,
-              severity: inc.severity,
-              description: inc.description,
-              status: inc.status,
-              reviewerId: inc.reviewerId,
-              reviewerNotes: inc.reviewerNotes,
-              decision: inc.decision,
-              studentExplanation: inc.studentExplanation,
-              createdAt: inc.createdAt ? new Date(inc.createdAt).toISOString() : new Date().toISOString(),
-            })),
+            incidents: rawIncidents,
           };
         });
 
@@ -613,8 +638,18 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
           queueTotal: total,
           queuePage: page,
         });
-        saveToStorage(STORAGE_KEY_PROCTORING_QUEUE_CACHE, mapped);
-        saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, mapped);
+
+        // Safely cache a lightweight version without base64 strings to prevent localStorage QuotaExceededError
+        const storageCleaned = mapped.map((s) => ({
+          ...s,
+          events: s.events.map((e) => ({
+            ...e,
+            evidenceSnapshot:
+              e.evidenceSnapshot && e.evidenceSnapshot.startsWith('data:') ? undefined : e.evidenceSnapshot,
+          })),
+        }));
+        saveToStorage(STORAGE_KEY_PROCTORING_QUEUE_CACHE, storageCleaned);
+        saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, storageCleaned);
       }
     } catch (e) {
       console.warn('Failed to fetch proctoring queue sessions:', e);
@@ -824,7 +859,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
             activeParticipants.push({
               id: fs.learnerId,
               name: fs.learnerName,
-              rollNo: (fs as any).rollNo || `STU-${fs.learnerId.slice(-4)}`,
+              rollNo: (fs as any).rollNo || getShortNumericId(fs.learnerId),
               assessmentId: fs.assessmentId,
               status: 'connected',
               cameraActive: fs.activeWebcam ?? true,
@@ -1097,7 +1132,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
         const newP: ProctorParticipant = {
           id: participantId,
           name: (telemetry as any).name || 'Student Candidate',
-          rollNo: (telemetry as any).rollNo || `STU-${participantId.slice(-4)}`,
+          rollNo: (telemetry as any).rollNo || getShortNumericId(participantId),
           assessmentId: (telemetry as any).assessmentId || 'asm-001',
           status: 'connected',
           cameraActive: telemetry.cameraActive ?? true,
@@ -1170,9 +1205,18 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       remoteStreamCache.delete(key);
     }
     set((state) => {
-      const idx = state.participants.findIndex(
-        (p) => p.id.toLowerCase() === key || p.rollNo?.toLowerCase() === key
-      );
+      const idx = state.participants.findIndex((p) => {
+        const pId = p.id.toLowerCase();
+        const pRoll = (p.rollNo || '').toLowerCase();
+        return (
+          pId === key ||
+          pRoll === key ||
+          (pId.length > 4 && key.includes(pId)) ||
+          (key.length > 4 && pId.includes(key)) ||
+          (pRoll.length > 4 && key.includes(pRoll)) ||
+          (key.length > 4 && pRoll.includes(key))
+        );
+      });
       if (idx >= 0) {
         const updated = [...state.participants];
         updated[idx] = {
@@ -1190,10 +1234,26 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
   upsertLiveCandidate: (candidate) => {
     set((state) => {
       const key = candidate.id.toLowerCase();
-      const idx = state.participants.findIndex(
-        (p) => p.id.toLowerCase() === key && (!candidate.assessmentId || p.assessmentId === candidate.assessmentId)
-      );
-      const cachedStream = candidate.remoteStream || remoteStreamCache.get(key) || proctoringSocket.getRemoteStream(candidate.id) || null;
+      const rollKey = (candidate.rollNo || '').toLowerCase();
+      const idx = state.participants.findIndex((p) => {
+        const pId = p.id.toLowerCase();
+        const pRoll = (p.rollNo || '').toLowerCase();
+        const idMatches =
+          pId === key ||
+          pRoll === key ||
+          (rollKey && (pId === rollKey || pRoll === rollKey)) ||
+          (pId.length > 4 && key.includes(pId)) ||
+          (key.length > 4 && pId.includes(key));
+        return idMatches && (!candidate.assessmentId || p.assessmentId === candidate.assessmentId);
+      });
+
+      const cachedStream =
+        candidate.remoteStream ||
+        remoteStreamCache.get(key) ||
+        (rollKey ? remoteStreamCache.get(rollKey) : null) ||
+        proctoringSocket.getRemoteStream(candidate.id) ||
+        (candidate.rollNo ? proctoringSocket.getRemoteStream(candidate.rollNo) : null) ||
+        null;
 
       if (idx >= 0) {
         const updated = [...state.participants];
@@ -1201,6 +1261,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
         const effectiveStream = candidate.remoteStream !== undefined ? candidate.remoteStream : (prev.remoteStream || cachedStream);
         if (effectiveStream) {
           remoteStreamCache.set(key, effectiveStream);
+          if (rollKey) remoteStreamCache.set(rollKey, effectiveStream);
         }
         updated[idx] = {
           ...prev,
@@ -1214,11 +1275,12 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
       } else {
         if (cachedStream) {
           remoteStreamCache.set(key, cachedStream);
+          if (rollKey) remoteStreamCache.set(rollKey, cachedStream);
         }
         const fullCandidate: ProctorParticipant = {
           id: candidate.id,
           name: candidate.name,
-          rollNo: candidate.rollNo || `STU-${candidate.id.slice(-4)}`,
+          rollNo: candidate.rollNo || getShortNumericId(candidate.id),
           assessmentId: candidate.assessmentId,
           status: candidate.status || 'connected',
           cameraActive: cachedStream ? true : (candidate.cameraActive ?? true),
@@ -1346,16 +1408,8 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
             return false;
           });
 
-          const retainedSessions = state.sessions.filter((s) => {
-            if (s.assessmentId !== assessmentId) return true;
-            if (activeIds.has(s.learnerId.toLowerCase())) return true;
-            if ((s.status as any) === 'submitted' || (s.status as any) === 'terminated' || (s.status as any) === 'completed') return false;
-            return true;
-          });
-
           saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, retainedParticipants);
-          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, retainedSessions);
-          return { participants: retainedParticipants, sessions: retainedSessions };
+          return { participants: retainedParticipants };
         });
 
         res.data.forEach((c: any) => {
@@ -1393,14 +1447,8 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
             if (!isNaN(lastPing) && (now - lastPing) < 60000) return true;
             return false;
           });
-          const retainedSessions = state.sessions.filter((s) => {
-            if (s.assessmentId !== assessmentId) return true;
-            if ((s.status as any) === 'submitted' || (s.status as any) === 'terminated' || (s.status as any) === 'completed') return false;
-            return true;
-          });
           saveToStorage(STORAGE_KEY_PROCTORING_PARTICIPANTS, retainedParticipants);
-          saveToStorage(STORAGE_KEY_PROCTORING_SESSIONS, retainedSessions);
-          return { participants: retainedParticipants, sessions: retainedSessions };
+          return { participants: retainedParticipants };
         });
       }
     } catch (e) {}
@@ -1482,7 +1530,7 @@ export const useProctoringStore = create<ProctoringStoreState>((set, get) => ({
     const newParticipant: ProctorParticipant = {
       id: learnerId,
       name: learnerName,
-      rollNo: `STU-${learnerId.slice(-4)}`,
+      rollNo: getShortNumericId(learnerId),
       assessmentId,
       status: 'connected',
       cameraActive: true,

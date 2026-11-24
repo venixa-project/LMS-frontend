@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore } from '../../lib/courseStore';
+import { useCourseStore, getDefaultCourseCover } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
 import { ShareCourseModal } from '../../components/ShareCourseModal';
@@ -624,9 +624,7 @@ export const PublicCourseDetailsPage: React.FC = () => {
               style={{
                 height: '160px',
                 borderRadius: 'var(--radius-md)',
-                background: course.thumbnail
-                  ? `url(${course.thumbnail}) center/cover no-repeat`
-                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.45) 100%)',
+                background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -635,7 +633,24 @@ export const PublicCourseDetailsPage: React.FC = () => {
                 overflow: 'hidden'
               }}
             >
-              {!course.thumbnail && <BookOpen size={54} color="#ffffff" style={{ opacity: 0.9 }} />}
+              <img
+                src={course.thumbnail || getDefaultCourseCover(course.category, course.title)}
+                alt={course.title}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  zIndex: 1,
+                }}
+                onError={(e) => {
+                  const fallback = getDefaultCourseCover(course.category, course.title);
+                  if (e.currentTarget.src !== fallback) {
+                    e.currentTarget.src = fallback;
+                  }
+                }}
+              />
               <div style={{
                 position: 'absolute',
                 bottom: '10px',

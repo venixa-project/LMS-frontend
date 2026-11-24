@@ -111,42 +111,58 @@ export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ chi
     enrollmentStatsData: CourseStatBarItem[];
   }>(() => generateFallbackAnalytics(17));
 
+  const initialLoadedRef = React.useRef(false);
+
+  // Fetch static course catalog and user directory only once on initial mount
+  useEffect(() => {
+    fetchCourses().catch(() => {});
+    fetchPeople().catch(() => {});
+  }, [fetchCourses, fetchPeople]);
+
   const loadDashboardData = useCallback(async () => {
-    setIsLoading(true);
+    if (!initialLoadedRef.current) {
+      setIsLoading(true);
+    }
     try {
-      await Promise.all([
-        fetchCourses().catch(() => {}),
-        fetchPeople().catch(() => {}),
-      ]);
+      const params = new URLSearchParams();
+      if (dateRange) params.append('dateRange', dateRange);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (courseId && courseId !== 'all') params.append('courseId', courseId);
+      if (departmentId && departmentId !== 'all') params.append('departmentId', departmentId);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
 
       const [kpiRes, analyticsRes] = await Promise.all([
-        apiClient.get<any>('/reports/kpis').catch(() => null),
-        apiClient.get<any>(`/reports/dashboard-analytics?dateRange=${dateRange}&courseId=${courseId}&departmentId=${departmentId}`).catch(() => null),
+        apiClient.get<any>(`/reports/kpis${queryStr}`).catch(() => null),
+        apiClient.get<any>(`/reports/dashboard-analytics${queryStr}`).catch(() => null),
       ]);
 
       if (kpiRes && kpiRes.data) {
         setBackendKpis(kpiRes.data);
       }
 
-      if (analyticsRes && analyticsRes.data && analyticsRes.data.monthlyGrowthData?.length > 0) {
+      if (analyticsRes && analyticsRes.data && Array.isArray(analyticsRes.data.monthlyGrowthData) && analyticsRes.data.monthlyGrowthData.length > 0) {
         setAnalyticsData({
-          monthlyGrowthData: analyticsRes.data.monthlyGrowthData || [],
+          monthlyGrowthData: analyticsRes.data.monthlyGrowthData,
           enrollmentStatsData: analyticsRes.data.enrollmentStatsData || [],
         });
-      } else {
+      } else if (!analyticsRes || !analyticsRes.data) {
         const enrolledCount = backendKpis?.totalEnrolledStudents || (courses.length > 0 ? courses.reduce((s, c) => s + (c.enrolledLearners || c.learnerCount || 0), 0) : 17);
         setAnalyticsData(generateFallbackAnalytics(enrolledCount || 17));
       }
     } catch (err) {
       console.warn('Failed to load dashboard backend data:', err);
-      setAnalyticsData(generateFallbackAnalytics(17));
     } finally {
       setIsLoading(false);
+      initialLoadedRef.current = true;
     }
-  }, [dateRange, courseId, departmentId, fetchCourses, fetchPeople, backendKpis?.totalEnrolledStudents, courses]);
+  }, [dateRange, startDate, endDate, courseId, departmentId, backendKpis?.totalEnrolledStudents, courses]);
 
   useEffect(() => {
-    void loadDashboardData();
+    const timer = setTimeout(() => {
+      void loadDashboardData();
+    }, initialLoadedRef.current ? 200 : 0);
+    return () => clearTimeout(timer);
   }, [loadDashboardData]);
 
   // Clean genuine courses available in current scope
