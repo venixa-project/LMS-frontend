@@ -136,7 +136,7 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
       setIsLoading(true);
       if (videoRef.current) {
         videoRef.current.load();
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
       }
     }
   };
@@ -147,7 +147,7 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
     if (isPlaying) {
       videoRef.current.pause();
     } else {
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch(() => { });
     }
   };
 
@@ -218,9 +218,9 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => {});
+      containerRef.current.requestFullscreen().catch(() => { });
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
   };
 
@@ -412,7 +412,7 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
             videoRef.current.currentTime = targetSeekTimeRef.current;
             targetSeekTimeRef.current = 0;
             if (wasPlayingBeforeSwitchRef.current) {
-              videoRef.current.play().catch(() => {});
+              videoRef.current.play().catch(() => { });
             }
           }
         }}
@@ -430,7 +430,7 @@ export const LearnerVideoPlayer: React.FC<Props> = ({
               videoRef.current.currentTime = targetSeekTimeRef.current;
               targetSeekTimeRef.current = 0;
               if (wasPlayingBeforeSwitchRef.current) {
-                videoRef.current.play().catch(() => {});
+                videoRef.current.play().catch(() => { });
               }
             }
           }

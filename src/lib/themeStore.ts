@@ -1,32 +1,15 @@
 // ============================================================
 // VeniLearn LMS - Global Theme Management Store
-// Supports: Light, Dark, System (Device) preferences with
-// LocalStorage persistence, zero-flicker initialization, and
-// dynamic OS media query listeners.
+// Supports: Light and Dark themes with LocalStorage persistence,
+// zero-flicker initialization, and instant DOM updates.
 // ============================================================
 
 import { create } from 'zustand';
 
-export type ThemePreference = 'light' | 'dark' | 'system';
+export type ThemePreference = 'light' | 'dark';
 export type ResolvedTheme = 'light' | 'dark';
 
 export const THEME_STORAGE_KEY = 'venilearn_theme_preference';
-
-// Helper to detect device/OS color scheme preference
-export const getSystemTheme = (): ResolvedTheme => {
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return 'light'; // Default fallback: Light Theme (with Deep Navy Sidebar) matching reference design
-};
-
-// Helper to resolve the effective theme given a preference
-export const resolveEffectiveTheme = (pref: ThemePreference): ResolvedTheme => {
-  if (pref === 'system') {
-    return getSystemTheme();
-  }
-  return pref;
-};
 
 // Helper to apply the resolved theme to the DOM
 export const applyThemeToDOM = (theme: ResolvedTheme): void => {
@@ -40,8 +23,13 @@ export const getStoredThemePreference = (): ThemePreference => {
   if (typeof window === 'undefined') return 'light';
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+    if (stored === 'light' || stored === 'dark') {
       return stored;
+    }
+    // If legacy 'system' was stored, normalize to 'light'
+    if (stored === 'system') {
+      localStorage.setItem(THEME_STORAGE_KEY, 'light');
+      return 'light';
     }
   } catch (err) {
     console.warn('Failed to read theme preference from localStorage:', err);
@@ -53,11 +41,12 @@ interface ThemeState {
   preference: ThemePreference;
   resolvedTheme: ResolvedTheme;
   setTheme: (pref: ThemePreference) => void;
+  toggleTheme: () => void;
 }
 
 // Read initial preference and compute initial resolved theme
 const initialPreference = getStoredThemePreference();
-const initialResolved = resolveEffectiveTheme(initialPreference);
+const initialResolved = initialPreference;
 
 // Immediately apply on module load
 applyThemeToDOM(initialResolved);
@@ -73,44 +62,24 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       console.warn('Failed to write theme preference to localStorage:', err);
     }
 
-    const resolved = resolveEffectiveTheme(pref);
-    applyThemeToDOM(resolved);
+    applyThemeToDOM(pref);
+    set({ preference: pref, resolvedTheme: pref });
+  },
 
-    set({ preference: pref, resolvedTheme: resolved });
+  toggleTheme: () => {
+    const current = get().preference;
+    const next: ThemePreference = current === 'dark' ? 'light' : 'dark';
+    get().setTheme(next);
   }
 }));
 
-// Set up dynamic OS listener (runs once in browser environment)
-if (typeof window !== 'undefined' && window.matchMedia) {
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-  const handleSystemThemeChange = (e: MediaQueryListEvent | MediaQueryList) => {
-    const currentPreference = useThemeStore.getState().preference;
-    if (currentPreference === 'system') {
-      const newResolved: ResolvedTheme = e.matches ? 'dark' : 'light';
-      applyThemeToDOM(newResolved);
-      useThemeStore.setState({ resolvedTheme: newResolved });
-    }
-  };
-
-  if (typeof mediaQuery.addEventListener === 'function') {
-    mediaQuery.addEventListener('change', handleSystemThemeChange);
-  } else if (typeof (mediaQuery as any).addListener === 'function') {
-    // Safari / older browser fallback
-    (mediaQuery as any).addListener(handleSystemThemeChange);
-  }
-}
-
-// Set up cross-tab synchronization listener (runs once in browser environment)
+// Listen for theme preference changes across browser tabs
 if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (event: StorageEvent) => {
+  window.addEventListener('storage', (event) => {
     if (event.key === THEME_STORAGE_KEY && event.newValue) {
-      const newPref = event.newValue as ThemePreference;
-      if (newPref === 'light' || newPref === 'dark' || newPref === 'system') {
-        const resolved = resolveEffectiveTheme(newPref);
-        applyThemeToDOM(resolved);
-        useThemeStore.setState({ preference: newPref, resolvedTheme: resolved });
-      }
+      const newPref = (event.newValue === 'dark' ? 'dark' : 'light') as ThemePreference;
+      applyThemeToDOM(newPref);
+      useThemeStore.setState({ preference: newPref, resolvedTheme: newPref });
     }
   });
 }

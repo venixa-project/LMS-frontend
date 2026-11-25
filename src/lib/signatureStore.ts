@@ -4,6 +4,7 @@
 // approved institution signatories, and certificate snapshotting.
 // ============================================================
 import { create } from 'zustand';
+import { apiClient } from './apiClient';
 import { UserSignatureSettings, User } from '../types';
 
 const STORAGE_KEY_SIGNATURES = 'venilearn_user_signatures';
@@ -115,6 +116,16 @@ export const useSignatureStore = create<SignatureStoreState>((set, get) => ({
       localStorage.setItem(STORAGE_KEY_SIGNATURES, JSON.stringify(updated));
     } catch (err) {
       console.warn('Failed to persist signature to storage:', err);
+    }
+
+    if (settings.signatoryName && settings.designationTitle) {
+      apiClient
+        .post('/auth/signature', {
+          signatoryName: settings.signatoryName,
+          designationTitle: settings.designationTitle,
+          signatureImageUrl: settings.signatureImage,
+        })
+        .catch(() => {});
     }
   },
 

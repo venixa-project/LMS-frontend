@@ -1059,8 +1059,14 @@ export const ExamPlayerPage: React.FC = () => {
     }
   };
 
-  const handleSubmitExam = async () => {
-    if (isAfterEnd && isStudent) {
+  const handleSubmitExam = async (submissionReason?: any) => {
+    const cleanReason = typeof submissionReason === 'string' ? submissionReason : undefined;
+    const effectiveReason = cleanReason || forcedSubmissionReason;
+    if (effectiveReason) {
+      setForcedSubmissionReason(effectiveReason);
+    }
+
+    if (isAfterEnd && isStudent && !effectiveReason) {
       alert('Assessment closed: Access period has ended and no further submissions are accepted.');
       setIsSubmitModalOpen(false);
       return;
@@ -1197,7 +1203,7 @@ export const ExamPlayerPage: React.FC = () => {
           rollNo: user?.rollNo || getShortNumericId(candidateId),
           assessmentId: assessment.id,
           sessionId: serverSessionId || currentSessionId || '',
-          reason: forcedSubmissionReason ? `Auto-submitted: ${forcedSubmissionReason}` : 'Completed and submitted examination',
+          reason: effectiveReason ? `Auto-submitted: ${effectiveReason}` : 'Completed and submitted examination',
           submittedAt: new Date().toISOString(),
         });
         useProctoringStore.getState().removeLiveCandidate(candidateId, assessment.id);
@@ -1233,17 +1239,25 @@ export const ExamPlayerPage: React.FC = () => {
         (myRoll.length >= 3 && targetId.includes(myRoll));
 
       if (isTarget) {
-        console.warn('[ExamPlayer] Admin force-stopped examination session:', data);
-        setForcedSubmissionReason(data.reason || 'Examination session was concluded and submitted by administrator.');
-        handleSubmitExam();
+        console.warn('[ExamPlayer] Termination / Auto-submit signal received:', data);
+        const reason = data.reason || 'PROCTORING_THIRD_WARNING';
+        setForcedSubmissionReason(reason);
+        handleSubmitExam(reason);
       }
     };
 
     const unsubTerm = proctoringSocket.on('EXAM_TERMINATED', handleTerminatedSignal);
     const unsubStop = proctoringSocket.on('ADMIN_FORCE_STOP', handleTerminatedSignal);
+    const unsubAuto = proctoringSocket.on('EXAM_AUTO_SUBMITTED', (data: any) => {
+      handleTerminatedSignal({
+        ...data,
+        reason: data?.reason || 'PROCTORING_THIRD_WARNING',
+      });
+    });
     return () => {
       unsubTerm?.();
       unsubStop?.();
+      unsubAuto?.();
     };
   }, [stage, candidateId, user?.id, user?.rollNo]);
 
@@ -2283,7 +2297,7 @@ export const ExamPlayerPage: React.FC = () => {
             }}
             onForceSubmit={(reason) => {
               setForcedSubmissionReason(reason);
-              handleSubmitExam();
+              handleSubmitExam(reason);
             }}
           />
         )}

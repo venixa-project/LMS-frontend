@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
-import { useThemeStore, ThemePreference } from '../lib/themeStore';
+import { useThemeStore } from '../lib/themeStore';
+import { ThemeToggleSwitch } from './ThemeToggleSwitch';
 
 import {
-  Search, Bell, Sun, Moon, Monitor, Check, Shield, ChevronDown, User, LogOut,
+  Search, Bell, Shield, ChevronDown, User, LogOut,
   Settings, Menu, Building, HelpCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -29,8 +30,6 @@ export const Navbar: React.FC<Props> = ({
   const { preference, resolvedTheme, setTheme } = useThemeStore();
   const [selectedOrgId, setSelectedOrgId] = useState(() => sessionStorage.getItem('venilearn_active_org_id') || user?.organizationId || (typeof window !== 'undefined' ? localStorage.getItem('venilearn_active_tenant_id') : null) || 'org-001');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const themeMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const isPlatformAdmin = user?.activeRole === 'platform_admin';
@@ -40,21 +39,6 @@ export const Navbar: React.FC<Props> = ({
   useEffect(() => {
     setNavbarLogoSrc(companyLogo || '/logo.png');
   }, [companyLogo]);
-
-  // Close theme menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) {
-        setShowThemeMenu(false);
-      }
-    };
-    if (showThemeMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showThemeMenu]);
 
   const handleLogout = () => {
     sessionStorage.setItem('venilearn_logged_out', 'true');
@@ -168,18 +152,11 @@ export const Navbar: React.FC<Props> = ({
         <button
           onClick={onOpenSearch}
           className="nav-search-btn"
+          title="Search"
+          aria-label="Search"
         >
-          <Search size={14} />
-          <span className="nav-search-text">Search everything...</span>
-          <kbd className="nav-search-kbd" style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '4px',
-            padding: '1px 5px',
-            fontSize: '0.65rem'
-          }}>
-            ⌘K
-          </kbd>
+          <Search size={15} style={{ color: '#94A3B8', strokeWidth: 2, flexShrink: 0 }} />
+          <span className="nav-search-text">Search...</span>
         </button>
 
         {/* Quick Role Switcher pill */}
@@ -215,103 +192,8 @@ export const Navbar: React.FC<Props> = ({
           <ChevronDown size={12} />
         </button>
 
-        {/* Theme Selector (Light, Dark, System) */}
-        <div style={{ position: 'relative' }} ref={themeMenuRef}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setShowThemeMenu(!showThemeMenu)}
-            style={{
-              padding: '6px 8px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
-            title={`Theme: ${preference === 'system' ? `System (${resolvedTheme})` : preference === 'light' ? 'Light' : 'Dark'}`}
-            aria-label="Select color theme"
-            aria-haspopup="true"
-            aria-expanded={showThemeMenu}
-          >
-            {preference === 'light' ? (
-              <Sun size={15} color="var(--warning)" />
-            ) : preference === 'dark' ? (
-              <Moon size={15} color="var(--primary)" />
-            ) : (
-              <Monitor size={15} color="var(--accent-cyan)" />
-            )}
-            <ChevronDown size={11} className="text-muted" />
-          </button>
-
-          {showThemeMenu && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '6px',
-                width: '190px',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-lg)',
-                padding: '6px',
-                zIndex: 60,
-                animation: 'scaleUp 0.15s ease'
-              }}
-            >
-              <div style={{ padding: '6px 10px 4px', fontSize: '0.675rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Appearance Theme
-              </div>
-
-              {[
-                { id: 'dark', label: 'Dark', desc: 'Cosmic midnight theme', icon: Moon, color: 'var(--brand-indigo)' },
-                { id: 'light', label: 'Light', desc: 'Crisp day theme', icon: Sun, color: 'var(--brand-pink-soft)' },
-                { id: 'system', label: 'System (Device)', desc: `Follow OS (${resolvedTheme})`, icon: Monitor, color: 'var(--brand-blue-sky)' }
-              ].map((opt) => {
-                const IconComp = opt.icon;
-                const isSelected = preference === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      setTheme(opt.id as ThemePreference);
-                      setShowThemeMenu(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '7px 10px',
-                      fontSize: '0.8rem',
-                      borderRadius: 'var(--radius-md)',
-                      border: 'none',
-                      background: isSelected ? 'var(--primary-light)' : 'transparent',
-                      color: isSelected ? 'var(--primary)' : 'var(--text-main)',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.15s ease',
-                      marginBottom: '2px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <IconComp size={15} color={opt.color} />
-                      <div>
-                        <div style={{ fontWeight: isSelected ? 700 : 500, lineHeight: 1.2 }}>
-                          {opt.label}
-                        </div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                          {opt.desc}
-                        </div>
-                      </div>
-                    </div>
-                    {isSelected && <Check size={14} color="var(--primary)" strokeWidth={2.5} />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Neumorphic Light / Dark Mode Toggle Switch */}
+        <ThemeToggleSwitch size="md" />
 
         {/* Liquid Glass Notification Bell */}
         <button

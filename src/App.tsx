@@ -108,6 +108,7 @@ const GradingPage = lazyPage(() => import('./pages/Grading/GradingPage'), 'Gradi
 
 // Proctoring
 const ProctoringPage = lazyPage(() => import('./pages/Proctoring/ProctoringPage'), 'ProctoringPage');
+const ProctoringVideosPage = lazyPage(() => import('./pages/Proctoring/ProctoringVideosPage'), 'ProctoringVideosPage');
 
 // Certificates & Reports
 const CertificatesPage = lazyPage(() => import('./pages/Certificates/CertificatesPage'), 'CertificatesPage');
@@ -301,6 +302,8 @@ export const App: React.FC = () => {
               <Route path="question-banks" element={<QuestionBanksPage />} />
               <Route path="grading" element={<GradingPage />} />
               <Route path="proctoring" element={<ProctoringPage />} />
+              <Route path="proctoring-videos" element={<ProctoringVideosPage />} />
+              <Route path="proctoring/videos" element={<ProctoringVideosPage />} />
               <Route path="reports" element={<ReportsPage />} />
             </Route>
 

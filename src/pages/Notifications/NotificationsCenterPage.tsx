@@ -306,7 +306,7 @@ const NotificationsManagementPage: React.FC = () => {
     try {
       // Micro-async pause to show loading state and prevent duplicate clicks
       await new Promise((resolve) => setTimeout(resolve, 350));
-      const res = deleteAnnouncement(announcementToDelete.id);
+      const res = await deleteAnnouncement(announcementToDelete.id);
       if (res && res.success === false) {
         setDeleteError(res.message || 'Failed to delete announcement.');
         setIsDeleting(false);
@@ -547,7 +547,7 @@ const NotificationsManagementPage: React.FC = () => {
   };
 
   // Save Announcement (Draft or Published/Scheduled)
-  const handleSaveAnnouncement = (targetStatus: 'published' | 'draft') => {
+  const handleSaveAnnouncement = async (targetStatus: 'published' | 'draft') => {
     if (!formTitle.trim() || !formContent.trim()) {
       alert('Please enter both an Announcement Title and Message Content.');
       return;
@@ -622,10 +622,10 @@ const NotificationsManagementPage: React.FC = () => {
     };
 
     if (editingAnnouncementId) {
-      updateAnnouncement(editingAnnouncementId, payload);
+      await updateAnnouncement(editingAnnouncementId, payload);
       showToast('Announcement updated successfully.');
     } else {
-      createAnnouncement(payload);
+      await createAnnouncement(payload);
       showToast(
         finalStatus === 'published'
           ? 'Announcement published to target audience!'

@@ -808,6 +808,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
 
+    if (hasBackendAccessToken() && invitation.recipientIds.length > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: invitation.recipientIds,
+          title: `Course Invitation: ${invitation.courseTitle}`,
+          message: `${invitation.inviterName} (${invitation.inviterRole}) invited you to join "${invitation.courseTitle}".`,
+          category: 'course',
+          linkUrl: `/course/${invitation.courseId}`,
+        })
+        .catch(() => {});
+    }
+
     const currentUser = get().user;
     if (currentUser) {
       const refreshed = getUserNotifications(currentUser);
@@ -915,6 +927,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
 
+    if (hasBackendAccessToken() && recipients.length > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: recipients,
+          title: `New Assessment: ${assessmentTitle}`,
+          message: `A new assessment "${assessmentTitle}" has been published${courseSuffix}. Total Marks: ${marks}, Duration: ${dur} mins. Good luck!`,
+          category: 'assessment',
+          linkUrl: `/exam/${assessmentId}`,
+        })
+        .catch(() => {});
+    }
+
     const currentUser = get().user;
     if (currentUser) {
       const refreshed = getUserNotifications(currentUser);
@@ -967,6 +991,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Live Proctoring Alert: ${studentName} started exam`,
+          message: `${studentName} started "${assessmentTitle}".`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
 
     const currentUser = get().user;
     if (currentUser) {
@@ -1031,6 +1067,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
 
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Upcoming Proctored Exam: "${assessmentTitle}" Starts in 30 Mins`,
+          message: `The scheduled exam "${assessmentTitle}" begins ${timeLabel}.`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
+
     const currentUser = get().user;
     if (currentUser) {
       const refreshed = getUserNotifications(currentUser);
@@ -1084,6 +1132,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Exam Started: "${assessmentTitle}" Schedule Reached`,
+          message: `The scheduled exam "${assessmentTitle}" has started.`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
 
     const currentUser = get().user;
     if (currentUser) {

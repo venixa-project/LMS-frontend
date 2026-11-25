@@ -6,7 +6,7 @@ import { useSignatureStore } from '../../lib/signatureStore';
 import {
   User, Mail, Phone, Globe, Clock, Shield, Bell,
   Sliders, Save, KeyRound, CheckCircle2, Lock,
-  Sun, Moon, Monitor, Check, Sparkles, CheckCheck,
+  Sun, Moon, Check, Sparkles, CheckCheck,
   PenTool, RotateCcw, Upload, AlertTriangle, CheckCircle,
   Trophy
 } from 'lucide-react';
@@ -794,7 +794,7 @@ export const ProfilePage: React.FC = () => {
           <div className="card">
             <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>Interface Theme</h3>
             <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-              Choose your preferred appearance or sync with your operating system settings
+              Choose your preferred appearance for the LMS platform
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
@@ -812,13 +812,6 @@ export const ProfilePage: React.FC = () => {
                   description: 'Eye-comfort dark palette for low-light environments',
                   icon: Moon,
                   color: 'var(--primary)'
-                },
-                {
-                  id: 'system' as ThemePreference,
-                  label: 'System (Device)',
-                  description: `Automatically follows OS scheme (currently ${resolvedTheme})`,
-                  icon: Monitor,
-                  color: 'var(--accent-cyan)'
                 }
               ].map((opt) => {
                 const IconComp = opt.icon;
