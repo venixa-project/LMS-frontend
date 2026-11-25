@@ -237,9 +237,9 @@ function getStoredTenantId(): string | null {
       if (parsed.tenantId) return parsed.tenantId;
       if (parsed.user?.tenantId) return parsed.user.tenantId;
     }
-    return '871abf8a-e563-4d0f-afc7-416d8da3df14';
+    return 'ac807a3b-9a16-463c-9bc6-242e2c00d550';
   } catch {
-    return '871abf8a-e563-4d0f-afc7-416d8da3df14';
+    return 'ac807a3b-9a16-463c-9bc6-242e2c00d550';
   }
 }
 
@@ -260,8 +260,9 @@ async function request<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const isAuthRoute = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
   const tenantId = getStoredTenantId();
-  if (tenantId && !headers['X-Tenant-Id']) {
+  if (tenantId && !headers['X-Tenant-Id'] && !isAuthRoute) {
     headers['X-Tenant-Id'] = tenantId;
   }
 
