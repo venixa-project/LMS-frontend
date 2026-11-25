@@ -919,15 +919,15 @@ export const PeoplePage: React.FC<Props> = ({ initialMode = 'all' }) => {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
                       <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>96.2%</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>{(selectedUserDetail as any).attendanceRate ?? '0.0%'}</div>
                         <div className="text-muted text-xs">Attendance Rate</div>
                       </div>
                       <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>3</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>{(selectedUserDetail as any).enrolledCoursesCount ?? 0}</div>
                         <div className="text-muted text-xs">Enrolled Courses</div>
                       </div>
                       <div style={{ background: 'var(--bg-input)', padding: '10px', borderRadius: 'var(--radius-md)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>92 / 100</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>{(selectedUserDetail as any).avgExamScore ? `${(selectedUserDetail as any).avgExamScore} / 100` : '—'}</div>
                         <div className="text-muted text-xs">Avg Exam Score</div>
                       </div>
                     </div>

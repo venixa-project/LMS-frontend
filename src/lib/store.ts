@@ -153,6 +153,8 @@ function clearPersistedSession() {
 }
 
 const STORAGE_KEY_NOTIFICATIONS = 'venilearn_notifications';
+const STORAGE_KEY_NOTIFICATIONS_VERSION = 'venilearn_notifications_version';
+const CURRENT_NOTIFICATIONS_VERSION = 'v5_fresh_reset';
 const NOTIFICATION_BROADCAST_CHANNEL = 'venilearn_notifications_broadcast_v1';
 
 let notificationBroadcastChannel: BroadcastChannel | null = null;
@@ -193,11 +195,25 @@ if (typeof window !== 'undefined') {
 
 function loadStoredNotifications(): Notification[] {
   try {
+    const version = localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_VERSION);
+    if (version !== CURRENT_NOTIFICATIONS_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_NOTIFICATIONS);
+      localStorage.removeItem('venilearn_read_notification_ids');
+      localStorage.setItem(STORAGE_KEY_NOTIFICATIONS_VERSION, CURRENT_NOTIFICATIONS_VERSION);
+      return [];
+    }
     const raw = localStorage.getItem(STORAGE_KEY_NOTIFICATIONS);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter(
+          (n: any) =>
+            n &&
+            typeof n === 'object' &&
+            !n.id?.startsWith('mock-') &&
+            !n.id?.startsWith('sys-') &&
+            !n.id?.startsWith('legacy-')
+        );
       }
     }
   } catch (e) {
@@ -208,6 +224,10 @@ function loadStoredNotifications(): Notification[] {
 
 function loadReadNotificationIds(): Set<string> {
   try {
+    const version = localStorage.getItem(STORAGE_KEY_NOTIFICATIONS_VERSION);
+    if (version !== CURRENT_NOTIFICATIONS_VERSION) {
+      return new Set();
+    }
     const raw = localStorage.getItem('venilearn_read_notification_ids');
     if (raw) {
       const parsed = JSON.parse(raw);

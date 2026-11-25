@@ -13,6 +13,7 @@ import { useCourseStore } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
+import { useOrganisationBranding } from '../../lib/useOrganisationBranding';
 import { Certificate, Course } from '../../types';
 import { generateCertificatePdf, printCertificateDiploma } from '../../lib/certificatePdf';
 import {
@@ -24,6 +25,7 @@ import {
 
 export const CertificatesPage: React.FC = () => {
   const { user } = useAuthStore();
+  const { companyName } = useOrganisationBranding();
   const {
     certificates,
     revokeCertificate,
@@ -268,7 +270,7 @@ export const CertificatesPage: React.FC = () => {
             <span className="badge badge-primary">
               {isAdmin ? 'Institution Administration' : isTrainer ? 'Faculty & Grading' : 'Verified Credentials'}
             </span>
-            <span className="text-muted text-xs">{(user as any)?.organizationName || 'RAPA TECH'} &bull; Official Credentials Registry</span>
+            <span className="text-muted text-xs">{(user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'} &bull; Official Credentials Registry</span>
             {isLearner && <span className="badge badge-active">{user?.displayName || (user as any)?.name || 'Enrolled Student'}</span>}
           </div>
           <h1 style={{ fontSize: '1.75rem', marginBottom: '4px' }}>
@@ -362,7 +364,14 @@ export const CertificatesPage: React.FC = () => {
             <div className="card" style={{ padding: '18px' }}>
               <span className="text-muted text-xs font-semibold uppercase">Avg Qualification Score</span>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-purple, #a855f7)', marginTop: '4px' }}>
-                93.2%
+                {(() => {
+                  const validScores = certificates
+                    .map((c: any) => c.scoreAchieved ?? c.score)
+                    .filter((s: any) => typeof s === 'number' && !isNaN(s));
+                  return validScores.length > 0
+                    ? `${(validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length).toFixed(1)}%`
+                    : '0.0%';
+                })()}
               </div>
               <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
                 Exam & assessment average
@@ -508,7 +517,7 @@ export const CertificatesPage: React.FC = () => {
                             <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {cert.courseTitle || cert.courseName}
                             </div>
-                            <div className="text-muted text-xs">{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</div>
+                            <div className="text-muted text-xs">{cert.issuingOrganization || (user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'}</div>
                           </td>
                           <td style={{ padding: '12px 16px' }}>
                             {new Date(cert.issuedAt || cert.issueDate || '').toLocaleDateString()}
@@ -601,7 +610,7 @@ export const CertificatesPage: React.FC = () => {
 
                       <div style={{ background: 'var(--bg-input)', padding: '12px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div><strong>Title:</strong> {cfg?.title || 'Certificate of Course Completion'}</div>
-                        <div><strong>Template:</strong> {cfg?.templateId || 'standard'} &bull; <strong>Issuing Org:</strong> {cfg?.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</div>
+                        <div><strong>Template:</strong> {cfg?.templateId || 'standard'} &bull; <strong>Issuing Org:</strong> {cfg?.issuingOrganization || (user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'}</div>
                         <div style={{ color: 'var(--text-secondary)' }}>
                           Requirements: {cfg?.requireAllLessons ?? true ? 'All lessons required' : 'Lessons optional'} &bull; Min Exam Score: {cfg?.minimumAssessmentScore || 70}%
                         </div>
@@ -1018,7 +1027,7 @@ export const CertificatesPage: React.FC = () => {
 
                         <h3 style={{ fontSize: '1.15rem', marginBottom: '6px' }}>{cert.courseTitle || cert.courseName}</h3>
                         <p className="text-muted text-xs" style={{ marginBottom: '14px' }}>
-                          Issuing Organization: <strong>{cert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}</strong>
+                          Issuing Organization: <strong>{cert.issuingOrganization || (user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'}</strong>
                         </p>
 
                         {/* Revocation Warning Box for Student */}
@@ -1180,7 +1189,7 @@ export const CertificatesPage: React.FC = () => {
                             {c.title}
                           </h3>
                           <p className="text-muted text-xs">
-                            {c.certificateConfig?.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'}
+                            {c.certificateConfig?.issuingOrganization || (user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'}
                           </p>
                         </div>
                         {isReadyToClaim ? <Award size={20} color="var(--success)" /> : <Lock size={18} color="var(--text-muted)" />}
@@ -1333,7 +1342,7 @@ export const CertificatesPage: React.FC = () => {
                 </div>
 
                 <div style={{ fontSize: '0.725rem', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                  {selectedCert.issuingOrganization || (user as any)?.organizationName || 'RAPA TECH'} &bull; Official Credentials Registry
+                  {selectedCert.issuingOrganization || (user as any)?.organizationName || companyName || 'VeniLearn Academic Institution'} &bull; Official Credentials Registry
                 </div>
                 <div style={{ width: '90px', height: '2px', background: 'linear-gradient(90deg, transparent, #d97706, transparent)', margin: '0 auto 12px' }} />
 

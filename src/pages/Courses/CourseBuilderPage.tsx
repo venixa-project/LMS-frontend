@@ -183,7 +183,7 @@ export const CourseBuilderPage: React.FC = () => {
   // -------------------------------------------------------------
   const [certificateEnabled, setCertificateEnabled] = useState(true);
   const [certTitle, setCertTitle] = useState('Certificate of Course Completion');
-  const [certIssuingOrg, setCertIssuingOrg] = useState((user as any)?.organizationName || 'RAPA TECH');
+  const [certIssuingOrg, setCertIssuingOrg] = useState((user as any)?.organizationName || 'VeniLearn Academic Institution');
   const [certRequireAllLessons, setCertRequireAllLessons] = useState(true);
   const [certRequireAssessment, setCertRequireAssessment] = useState(true);
   const [certMinScore, setCertMinScore] = useState(70);
@@ -404,7 +404,7 @@ export const CourseBuilderPage: React.FC = () => {
     setFacultySearchQuery('');
     setCertificateEnabled(true);
     setCertTitle('Certificate of Course Completion');
-    setCertIssuingOrg((user as any)?.organizationName || 'RAPA TECH');
+    setCertIssuingOrg((user as any)?.organizationName || 'VeniLearn Academic Institution');
     setCertRequireAllLessons(true);
     setCertRequireAssessment(true);
     setCertMinScore(70);
@@ -1350,7 +1350,7 @@ export const CourseBuilderPage: React.FC = () => {
         certificateConfig: {
           enabled: certificateEnabled,
           title: certTitle.trim() || 'Certificate of Course Completion',
-          issuingOrganization: certIssuingOrg.trim() || (user as any)?.organizationName || 'RAPA TECH',
+          issuingOrganization: certIssuingOrg.trim() || (user as any)?.organizationName || 'VeniLearn Academic Institution',
           templateId: certTemplateId,
           requireAllLessons: certRequireAllLessons,
           requirePassingAssessment: certRequireAssessment,
@@ -2298,7 +2298,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       className="form-input"
                       value={certIssuingOrg}
                       onChange={(e) => setCertIssuingOrg(e.target.value)}
-                      placeholder={(user as any)?.organizationName || 'RAPA TECH'}
+                      placeholder={(user as any)?.organizationName || 'VeniLearn Academic Institution'}
                     />
                   </div>
 
