@@ -1024,12 +1024,6 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-                {portalError && (
-                  <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem' }}>
-                    {portalError}
-                  </div>
-                )}
-
                 {portalSuccess && (
                   <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--success, #10b981)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <CheckCircle2 size={16} />
@@ -1121,24 +1115,7 @@ export const ProfilePage: React.FC = () => {
               </div>
             )
           }
-
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Two-Factor Authentication (2FA / MFA)</h3>
-                <p className="text-secondary text-sm">Add an extra layer of defense using an Authenticator app (TOTP)</p>
-              </div>
-              <span className="badge badge-active">MFA Enforced</span>
-            </div>
-            <p className="text-muted text-xs">
-              Configured via Google Authenticator / Microsoft Authenticator on 2026-02-10.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button className="btn btn-secondary btn-sm">Regenerate Recovery Codes</button>
-              <button className="btn btn-secondary btn-sm">Re-pair Authenticator App</button>
-            </div>
-          </div>
-        </div >
+        </div>
       )}
 
       {

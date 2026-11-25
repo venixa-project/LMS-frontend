@@ -14,7 +14,7 @@ const STORAGE_KEY_QUESTIONS = 'venilearn_questions_store';
 const STORAGE_KEY_DRAFTS = 'venilearn_drafts_store';
 const STORAGE_KEY_DELETED_ASSESSMENTS = 'venilearn_deleted_assessment_ids';
 const STORE_VERSION_KEY = 'venilearn_assessments_store_version';
-const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+const CURRENT_STORE_VERSION = 'v5_fresh_app_init_reset';
 
 function getDeletedAssessmentIds(): Set<string> {
   try {

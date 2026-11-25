@@ -60,6 +60,7 @@ const RouteLoadingFallback: React.FC = () => (
 
 // Lazy Loaded Routes for Instant Initial Bundle
 const LoginPage = lazyPage(() => import('./pages/Auth/LoginPage'), 'LoginPage');
+const RegisterPage = lazyPage(() => import('./pages/Auth/RegisterPage'), 'RegisterPage');
 const ForgotPasswordPage = lazyPage(() => import('./pages/Auth/ForgotPasswordPage'), 'ForgotPasswordPage');
 const AcceptInvitePage = lazyPage(() => import('./pages/Auth/AcceptInvitePage'), 'AcceptInvitePage');
 const ChangePasswordPage = lazyPage(() => import('./pages/Auth/ChangePasswordPage'), 'ChangePasswordPage');
@@ -244,6 +245,7 @@ export const App: React.FC = () => {
         <Routes>
           {/* Public Authentication Routes */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/accept-invite" element={<AcceptInvitePage />} />
 

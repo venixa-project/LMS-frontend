@@ -12,7 +12,7 @@ import { useGamificationStore } from './gamificationStore';
 
 const STORAGE_KEY_CERTIFICATES = 'venilearn_certificates';
 const STORE_VERSION_KEY = 'venilearn_certificates_store_version';
-const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+const CURRENT_STORE_VERSION = 'v5_fresh_app_init_reset';
 
 // Automatically bust stale client-side caches from previous prototype/mock data
 if (typeof window !== 'undefined') {
