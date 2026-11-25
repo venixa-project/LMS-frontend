@@ -52,22 +52,25 @@ export const InstitutionDashboardPage: React.FC = () => {
           />
 
           <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 10px', borderRadius: '9999px', background: 'rgba(255, 255, 255, 0.2)', border: '1px solid rgba(255, 255, 255, 0.35)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#FFFFFF', marginBottom: '6px', backdropFilter: 'blur(6px)' }}>
+              Dashboard
+            </div>
             <h1
               style={{
-                fontSize: '2rem',
-                fontWeight: 800,
-                margin: '0 0 6px 0',
-                letterSpacing: '-0.02em',
+                fontSize: '1.45rem',
+                fontWeight: 700,
+                margin: '0 0 4px 0',
+                letterSpacing: '-0.015em',
                 color: '#FFFFFF'
               }}
             >
-              Dashboard
+              Welcome, {adminName}
             </h1>
             <p
               style={{
                 margin: 0,
-                fontSize: '0.88rem',
-                color: 'rgba(255, 255, 255, 0.94)',
+                fontSize: '0.84rem',
+                color: 'rgba(255, 255, 255, 0.92)',
                 fontWeight: 500
               }}
             >
@@ -134,7 +137,7 @@ export const InstitutionDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Top Dashboard Header & Compact Filters */}
+        {/* 2. Compact Dashboard Filters Control */}
         <div
           style={{
             display: 'flex',
@@ -145,14 +148,6 @@ export const InstitutionDashboardPage: React.FC = () => {
             paddingBottom: '2px'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Building2 size={12} /> Institution Analytics
-            </span>
-            <span className="text-muted text-xs font-medium">Logged in as {adminName}</span>
-          </div>
-
-          {/* Compact Dashboard Filters Control in Header */}
           <GlobalDashboardFilters />
         </div>
 

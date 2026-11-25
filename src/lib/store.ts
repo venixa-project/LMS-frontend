@@ -8,6 +8,7 @@ import type { Permission, PermissionAction, PermissionResource } from '../types'
 import { mockUsers } from '../data/mockUsers';
 import { apiClient, hasBackendAccessToken } from './apiClient';
 import { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
+import { playNotificationSound } from './notificationPrefs';
 
 export { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
 
@@ -273,26 +274,19 @@ function getUserNotifications(user: User): Notification[] {
     user.roles?.some((r) => ['admin', 'org_admin', 'platform_admin', 'trainer', 'instructor'].includes(r.name));
 
   // Filter notifications belonging to this user or broadcast to students/all/admins
+  // Exclude legacy 'Session Verified' (sys-1-*) notifications
   const userStored = stored.filter(
     (n) =>
-      n.userId === user.id ||
-      n.userId === user.email ||
-      (user.rollNo && n.userId === user.rollNo) ||
-      n.userId === 'all' ||
-      (isStudentUser && n.userId === 'all-students') ||
-      (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors'))
+      !n.id.startsWith('sys-1-') &&
+      (n.userId === user.id ||
+        n.userId === user.email ||
+        (user.rollNo && n.userId === user.rollNo) ||
+        n.userId === 'all' ||
+        (isStudentUser && n.userId === 'all-students') ||
+        (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors')))
   );
 
   const defaults: Notification[] = [
-    {
-      id: `sys-1-${user.id}`,
-      userId: user.id,
-      title: 'Session Verified',
-      message: `Welcome to VeniLearn LMS, ${user.displayName}!`,
-      category: 'system',
-      isRead: false,
-      timestamp: new Date().toISOString(),
-    },
     ...(isAdminOrTrainer
       ? [
           {
@@ -733,6 +727,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const localDefaults = getUserNotifications(user);
           const backendIds = new Set(mapped.map((n) => n.id));
           const merged = [...mapped, ...localDefaults.filter((l) => !backendIds.has(l.id))];
+
+          const prevIds = new Set(get().notifications.map((n) => n.id));
+          if (prevIds.size > 0 && merged.some((n) => !n.isRead && !prevIds.has(n.id))) {
+            playNotificationSound(user.id);
+          }
 
           set({
             notifications: merged,

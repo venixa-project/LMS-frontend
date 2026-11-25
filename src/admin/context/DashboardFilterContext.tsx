@@ -147,7 +147,7 @@ export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ chi
           enrollmentStatsData: analyticsRes.data.enrollmentStatsData || [],
         });
       } else if (!analyticsRes || !analyticsRes.data) {
-        const enrolledCount = backendKpis?.totalEnrolledStudents || (courses.length > 0 ? courses.reduce((s, c) => s + (c.enrolledLearners || c.learnerCount || 0), 0) : 17);
+        const enrolledCount = kpiRes?.data?.totalEnrolledStudents || 17;
         setAnalyticsData(generateFallbackAnalytics(enrolledCount || 17));
       }
     } catch (err) {
@@ -156,7 +156,7 @@ export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ chi
       setIsLoading(false);
       initialLoadedRef.current = true;
     }
-  }, [dateRange, startDate, endDate, courseId, departmentId, backendKpis?.totalEnrolledStudents, courses]);
+  }, [dateRange, startDate, endDate, courseId, departmentId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

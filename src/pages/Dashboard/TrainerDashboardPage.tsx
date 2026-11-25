@@ -28,6 +28,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { GoogleMeetIcon } from '../../components/GoogleMeet';
+import { AnimatedCounter } from '../../components/AnimatedCounter';
 
 // ============================================================================
 // Types & Helper Functions
@@ -652,111 +653,113 @@ export const TrainerDashboardPage: React.FC = () => {
       {/* 2. FIVE MEANINGFUL SUMMARY KPI CARDS                              */}
       {/* ================================================================= */}
       <div className="dashboard-kpi-grid trainer-kpi-grid">
-        {/* KPI 1: Assigned Courses */}
-        <Link to="/courses" className="stat-card stat-card-link" style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="text-muted text-xs font-semibold stat-card-title">Assigned Courses</span>
-            <BookOpen size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {filteredCourses.length}
-            </span>
-            <span className="text-success text-xs font-semibold">Active</span>
-          </div>
-          <p className="text-muted text-xs" style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Teaching modules
-          </p>
-        </Link>
-
-        {/* KPI 2: Assigned Classes / Batches */}
-        <Link to="/cohorts" className="stat-card stat-card-link" style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="text-muted text-xs font-semibold stat-card-title">Assigned Classes</span>
-            <UsersRound size={18} color="var(--accent-purple, #8b5cf6)" style={{ flexShrink: 0 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {filteredCohorts.length}
-            </span>
-            <span className="text-muted text-xs font-medium">Batches</span>
-          </div>
-          <p className="text-muted text-xs" style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Active cohorts
-          </p>
-        </Link>
-
-        {/* KPI 3: Assigned Students */}
-        <Link to="/students" className="stat-card stat-card-link" style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="text-muted text-xs font-semibold stat-card-title">Assigned Students</span>
-            <Users size={18} color="var(--accent-cyan, #06b6d4)" style={{ flexShrink: 0 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {totalStudentsEnrolled}
-            </span>
-            <span className="text-success text-xs font-semibold">Enrolled</span>
-          </div>
-          <p className="text-muted text-xs" style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Directly mentored
-          </p>
-        </Link>
-
-        {/* KPI 4: Pending Evaluations */}
-        <Link to="/grading" className="stat-card stat-card-link" style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="text-muted text-xs font-semibold stat-card-title">Pending Evaluations</span>
-            <PenTool size={18} color="var(--warning, #f59e0b)" style={{ flexShrink: 0 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span
+        {[
+          {
+            to: '/courses',
+            label: 'Assigned Courses',
+            value: filteredCourses.length,
+            badge: 'Active',
+            badgeColor: '#10B981',
+            sub: 'Teaching modules',
+            color: '#5447FF',
+            bgTint: 'linear-gradient(145deg, rgba(84, 71, 255, 0.08) 0%, var(--bg-card) 65%)',
+            iconBg: 'rgba(84, 71, 255, 0.14)',
+            borderColor: 'rgba(84, 71, 255, 0.28)',
+            icon: BookOpen,
+          },
+          {
+            to: '/cohorts',
+            label: 'Assigned Classes',
+            value: filteredCohorts.length,
+            badge: 'Batches',
+            badgeColor: '#8B5CF6',
+            sub: 'Active cohorts',
+            color: '#8B5CF6',
+            bgTint: 'linear-gradient(145deg, rgba(139, 92, 246, 0.08) 0%, var(--bg-card) 65%)',
+            iconBg: 'rgba(139, 92, 246, 0.14)',
+            borderColor: 'rgba(139, 92, 246, 0.28)',
+            icon: UsersRound,
+          },
+          {
+            to: '/students',
+            label: 'Assigned Students',
+            value: totalStudentsEnrolled,
+            badge: 'Enrolled',
+            badgeColor: '#06B6D4',
+            sub: 'Directly mentored',
+            color: '#06B6D4',
+            bgTint: 'linear-gradient(145deg, rgba(6, 182, 212, 0.08) 0%, var(--bg-card) 65%)',
+            iconBg: 'rgba(6, 182, 212, 0.14)',
+            borderColor: 'rgba(6, 182, 212, 0.28)',
+            icon: Users,
+          },
+          {
+            to: '/grading',
+            label: 'Pending Evaluations',
+            value: filteredGradingTasks.length,
+            badge: 'AI Ready',
+            badgeColor: '#F59E0B',
+            sub: 'Awaiting approval',
+            color: '#F59E0B',
+            bgTint: 'linear-gradient(145deg, rgba(245, 158, 11, 0.09) 0%, var(--bg-card) 65%)',
+            iconBg: 'rgba(245, 158, 11, 0.15)',
+            borderColor: 'rgba(245, 158, 11, 0.3)',
+            icon: PenTool,
+          },
+          {
+            to: '/live-sessions',
+            label: 'Upcoming Live Sessions',
+            value: upcomingSessionsCount,
+            badge: 'Scheduled',
+            badgeColor: '#2563EB',
+            sub: 'Synchronous classes',
+            color: '#2563EB',
+            bgTint: 'linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, var(--bg-card) 65%)',
+            iconBg: 'rgba(37, 99, 235, 0.14)',
+            borderColor: 'rgba(37, 99, 235, 0.28)',
+            icon: Video,
+          },
+        ].map((card, idx) => {
+          const Icon = card.icon;
+          return (
+            <Link
+              key={card.label}
+              to={card.to}
+              className="stat-card stat-card-link kpi-card-animated"
               style={{
-                fontSize: '1.8rem',
-                fontWeight: 800,
-                color: filteredGradingTasks.length > 0 ? 'var(--warning, #f59e0b)' : 'var(--text-main)',
-                letterSpacing: '-0.02em',
+                minWidth: 0,
+                background: card.bgTint,
+                border: `1px solid ${card.borderColor}`,
+                borderTop: `3px solid ${card.color}`,
+                borderRadius: '16px',
+                padding: '16px 18px',
+                boxShadow: `0 6px 20px -4px ${card.iconBg}`,
+                animationDelay: `${idx * 65}ms`,
               }}
             >
-              {filteredGradingTasks.length}
-            </span>
-            <span
-              className="badge"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                fontSize: '0.625rem',
-                background: 'rgba(99, 102, 241, 0.12)',
-                color: 'var(--primary)',
-                borderColor: 'var(--primary)',
-                padding: '1px 5px',
-              }}
-            >
-              <Sparkles size={9} /> AI Ready
-            </span>
-          </div>
-          <p className="text-muted text-xs" style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Awaiting approval
-          </p>
-        </Link>
-
-        {/* KPI 5: Upcoming Live Sessions */}
-        <Link to="/live-sessions" className="stat-card stat-card-link" style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-            <span className="text-muted text-xs font-semibold stat-card-title">Upcoming Live Sessions</span>
-            <Video size={18} color="var(--info, #3b82f6)" style={{ flexShrink: 0 }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {upcomingSessionsCount}
-            </span>
-            <span className="text-muted text-xs font-medium">Scheduled</span>
-          </div>
-          <p className="text-muted text-xs" style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            Synchronous classes
-          </p>
-        </Link>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }} className="stat-card-title">
+                  {card.label}
+                </span>
+                <span style={{ width: '30px', height: '30px', borderRadius: '10px', background: card.iconBg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={15} color={card.color} />
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                <span style={{ fontSize: '1.85rem', fontWeight: 800, color: card.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                  <AnimatedCounter value={card.value} />
+                </span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: card.iconBg, color: card.color }}>
+                  {card.badge}
+                </span>
+              </div>
+              <p className="text-muted text-xs" style={{ margin: '6px 0 0', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: card.color, flexShrink: 0 }} />
+                <span>{card.sub}</span>
+              </p>
+            </Link>
+          );
+        })}
       </div>
 
       {/* ================================================================= */}

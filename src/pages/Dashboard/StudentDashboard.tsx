@@ -6,6 +6,7 @@ import {
   ChevronRight, CheckCircle2, Check, Zap, Layers, HelpCircle
 } from 'lucide-react';
 import { GoogleMeetJoinButton, MeetingProviderBadge } from '../../components/GoogleMeet';
+import { AnimatedCounter } from '../../components/AnimatedCounter';
 import { apiClient, ApiError, hasBackendAccessToken } from '../../lib/apiClient';
 import { useAuthStore } from '../../lib/store';
 import { useCourseStore, getDefaultCourseCover } from '../../lib/courseStore';
@@ -551,10 +552,10 @@ export const StudentDashboard: React.FC = () => {
   const upcomingActivities = data.upcomingActivities || [];
 
   const metricCards = [
-    { label: 'Enrolled Courses', value: data.stats.enrolledCourses, detail: `${data.stats.inProgressCourses} in progress`, icon: BookOpen, color: 'var(--primary)' },
-    { label: 'In-Progress Courses', value: data.stats.inProgressCourses, detail: 'Active curriculum tracks', icon: Clock, color: 'var(--accent-cyan)' },
-    { label: 'Completed Courses', value: data.stats.completedCourses, detail: `${data.stats.completedCertificates} ${data.stats.completedCertificates === 1 ? 'certificate' : 'certificates'} earned`, icon: Award, color: 'var(--success)' },
-    { label: 'Curriculum Progress', value: `${data.stats.curriculumProgressPercentage}%`, detail: `${data.stats.completedLessons} of ${data.stats.totalLessons} lessons completed`, icon: Activity, color: 'var(--accent-purple)' },
+    { label: 'Enrolled Courses', value: data.stats.enrolledCourses, suffix: '', detail: `${data.stats.inProgressCourses} in progress`, icon: BookOpen, color: '#2563EB', bgTint: 'linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, var(--bg-card) 65%)', iconBg: 'rgba(37, 99, 235, 0.14)', borderColor: 'rgba(37, 99, 235, 0.28)' },
+    { label: 'In-Progress Courses', value: data.stats.inProgressCourses, suffix: '', detail: 'Active curriculum tracks', icon: Clock, color: '#06B6D4', bgTint: 'linear-gradient(145deg, rgba(6, 182, 212, 0.08) 0%, var(--bg-card) 65%)', iconBg: 'rgba(6, 182, 212, 0.14)', borderColor: 'rgba(6, 182, 212, 0.28)' },
+    { label: 'Completed Courses', value: data.stats.completedCourses, suffix: '', detail: `${data.stats.completedCertificates} ${data.stats.completedCertificates === 1 ? 'certificate' : 'certificates'} earned`, icon: Award, color: '#10B981', bgTint: 'linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-card) 65%)', iconBg: 'rgba(16, 185, 129, 0.14)', borderColor: 'rgba(16, 185, 129, 0.28)' },
+    { label: 'Curriculum Progress', value: data.stats.curriculumProgressPercentage, suffix: '%', detail: `${data.stats.completedLessons} of ${data.stats.totalLessons} lessons completed`, icon: Activity, color: '#8B5CF6', bgTint: 'linear-gradient(145deg, rgba(139, 92, 246, 0.09) 0%, var(--bg-card) 65%)', iconBg: 'rgba(139, 92, 246, 0.14)', borderColor: 'rgba(139, 92, 246, 0.28)' },
   ];
 
   return (
@@ -620,14 +621,39 @@ export const StudentDashboard: React.FC = () => {
 
       {/* 2. Key Metrics Row */}
       <section aria-label="Learning statistics" className="grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        {metricCards.map(({ label, value, detail, icon: Icon, color }) => (
-          <article className="stat-card" key={label} style={{ minHeight: '94px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        {metricCards.map(({ label, value, suffix, detail, icon: Icon, color, bgTint, iconBg, borderColor }, idx) => (
+          <article
+            className="stat-card kpi-card-animated"
+            key={label}
+            style={{
+              minHeight: '104px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '8px',
+              background: bgTint,
+              border: `1px solid ${borderColor}`,
+              borderTop: `3px solid ${color}`,
+              borderRadius: '16px',
+              padding: '16px 18px',
+              boxShadow: `0 6px 20px -4px ${iconBg}`,
+              transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease',
+              animationDelay: `${idx * 65}ms`,
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-muted text-xs font-semibold">{label}</span>
-              <Icon size={16} color={color} />
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{label}</span>
+              <span style={{ width: '30px', height: '30px', borderRadius: '10px', background: iconBg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={15} color={color} />
+              </span>
             </div>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color }}>{value}</div>
-            <p className="text-secondary text-xs" style={{ margin: 0 }}>{detail}</p>
+            <div style={{ fontSize: '1.85rem', fontWeight: 800, color, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+              <AnimatedCounter value={value} suffix={suffix} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, boxShadow: `0 0 6px ${color}`, flexShrink: 0 }} />
+              <span>{detail}</span>
+            </div>
           </article>
         ))}
       </section>

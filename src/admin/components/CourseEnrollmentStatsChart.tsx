@@ -54,6 +54,15 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
   const isZeroData = totalEnrollments === 0 && totalCompletions === 0;
   const hoveredItem = hoveredIndex !== null ? enrollmentStatsData[hoveredIndex] : null;
 
+  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (numItems === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * width;
+    const rawIdx = Math.floor((relX - leftMargin) / colStep);
+    const clampedIdx = Math.max(0, Math.min(numItems - 1, rawIdx));
+    setHoveredIndex(clampedIdx);
+  };
+
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header with Title and Legend */}
@@ -131,8 +140,10 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
         ) : (
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'pointer' }}
             preserveAspectRatio="none"
+            onMouseMove={handleSvgMouseMove}
+            onMouseLeave={() => setHoveredIndex(null)}
           >
             <defs>
               <linearGradient id="enrollBarGrad" x1="0" y1="0" x2="0" y2="1">
@@ -192,24 +203,23 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
                 <g
                   key={i}
                   onMouseEnter={() => setHoveredIndex(i)}
-                  onMouseLeave={() => setHoveredIndex(null)}
                   style={{ cursor: 'pointer' }}
                 >
-                  {/* Subtle column hover background highlight */}
-                  {isHovered && (
-                    <rect
-                      x={colCenterX - colStep / 2}
-                      y={chartBottomY - chartHeight - 10}
-                      width={colStep}
-                      height={chartHeight + 15}
-                      fill="var(--primary)"
-                      fillOpacity="0.06"
-                      rx="4"
-                    />
-                  )}
+                  {/* Full-column interactive hit area */}
+                  <rect
+                    x={colCenterX - colStep / 2}
+                    y={chartBottomY - chartHeight - 10}
+                    width={colStep}
+                    height={chartHeight + 30}
+                    fill="var(--primary)"
+                    fillOpacity={isHovered ? 0.07 : 0}
+                    rx="6"
+                    style={{ transition: 'fill-opacity 0.15s ease' }}
+                  />
 
                   {/* 1. Enrollments Bar */}
                   <rect
+                    className="chart-bar-animated"
                     x={groupLeft}
                     y={enrollY}
                     width={barWidth}
@@ -217,13 +227,15 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
                     fill="url(#enrollBarGrad)"
                     rx="3"
                     style={{
-                      transition: 'height 0.2s ease, y 0.2s ease',
-                      filter: isHovered ? 'drop-shadow(0 0 4px var(--primary-glow))' : 'none',
+                      animationDelay: `${i * 60}ms`,
+                      transition: 'height 0.25s ease, y 0.25s ease, filter 0.15s ease',
+                      filter: isHovered ? 'drop-shadow(0 0 6px var(--primary-glow)) brightness(1.08)' : 'none',
                     }}
                   />
 
                   {/* 2. Completions Bar */}
                   <rect
+                    className="chart-bar-animated"
                     x={groupLeft + barWidth + barSpacing}
                     y={compY}
                     width={barWidth}
@@ -231,8 +243,9 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
                     fill="url(#completeBarGrad)"
                     rx="3"
                     style={{
-                      transition: 'height 0.2s ease, y 0.2s ease',
-                      filter: isHovered ? 'drop-shadow(0 0 4px rgba(16, 185, 129, 0.4))' : 'none',
+                      animationDelay: `${i * 60 + 80}ms`,
+                      transition: 'height 0.25s ease, y 0.25s ease, filter 0.15s ease',
+                      filter: isHovered ? 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.45)) brightness(1.08)' : 'none',
                     }}
                   />
 
@@ -257,40 +270,54 @@ export const CourseEnrollmentStatsChart: React.FC = () => {
         {/* Hover Tooltip Overlay */}
         {hoveredItem && !isZeroData && (
           <div
+            className="chart-bar-tooltip-animated"
             style={{
               position: 'absolute',
-              left: `${((leftMargin + hoveredIndex! * colStep + colStep / 2) / width) * 100}%`,
-              top: '20px',
+              left: `${Math.min(84, Math.max(16, ((leftMargin + hoveredIndex! * colStep + colStep / 2) / width) * 100))}%`,
+              top: '14px',
               transform: 'translateX(-50%)',
               background: 'var(--bg-card)',
               color: 'var(--text-main)',
               border: '1px solid var(--primary)',
               borderRadius: 'var(--radius-md)',
-              padding: '8px 12px',
+              padding: '9px 12px',
               fontSize: '0.75rem',
-              boxShadow: 'var(--shadow-md)',
+              boxShadow: 'var(--shadow-lg)',
               pointerEvents: 'none',
               zIndex: 20,
               whiteSpace: 'nowrap',
             }}
           >
-            <div style={{ fontWeight: 800, color: 'var(--text-main)', marginBottom: '3px' }}>
+            <div style={{ fontWeight: 800, color: 'var(--text-main)', marginBottom: '4px' }}>
               {hoveredItem.periodName}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
               <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Enrollments:</span>
-              <strong>{hoveredItem.enrollments}</strong>
+              <strong>{hoveredItem.enrollments.toLocaleString()}</strong>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginTop: '2px' }}>
               <span style={{ color: 'var(--success)', fontWeight: 600 }}>Completions:</span>
-              <strong>{hoveredItem.completions}</strong>
+              <strong>{hoveredItem.completions.toLocaleString()}</strong>
             </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Completion Ratio:{' '}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                fontSize: '0.7rem',
+                color: 'var(--accent-cyan)',
+                fontWeight: 700,
+                marginTop: '3px',
+                paddingTop: '3px',
+                borderTop: '1px solid var(--border-subtle)',
+              }}
+            >
+              <span>Completion Rate:</span>
               <strong>
                 {hoveredItem.enrollments > 0
-                  ? `${Math.round((hoveredItem.completions / hoveredItem.enrollments) * 100)}%`
-                  : '0%'}
+                  ? `${((hoveredItem.completions / hoveredItem.enrollments) * 100).toFixed(1)}%`
+                  : '0.0%'}
               </strong>
             </div>
           </div>

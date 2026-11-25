@@ -680,6 +680,8 @@ h6 {
   gap: 10px;
   position: relative;
   overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  animation: kpiFadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .stat-card::after {
@@ -690,14 +692,61 @@ h6 {
   right: 0;
   height: 3px;
   background: var(--gradient-3-color-flow);
-  /* 3-Color Flow: #2563EB → #818CF8 → #F472B6 */
-  opacity: 0;
+  opacity: 0.92;
   transition: var(--transition);
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card:hover::after {
   opacity: 1;
+  height: 4px;
 }
+
+.stat-card:nth-child(6n + 1) {
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(37, 99, 235, 0.26);
+  animation-delay: 0ms;
+}
+.stat-card:nth-child(6n + 1)::after { background: linear-gradient(90deg, #2563EB, #60A5FA); }
+
+.stat-card:nth-child(6n + 2) {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(16, 185, 129, 0.26);
+  animation-delay: 55ms;
+}
+.stat-card:nth-child(6n + 2)::after { background: linear-gradient(90deg, #10B981, #34D399); }
+
+.stat-card:nth-child(6n + 3) {
+  background: linear-gradient(145deg, rgba(236, 72, 153, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(236, 72, 153, 0.26);
+  animation-delay: 110ms;
+}
+.stat-card:nth-child(6n + 3)::after { background: linear-gradient(90deg, #EC4899, #F472B6); }
+
+.stat-card:nth-child(6n + 4) {
+  background: linear-gradient(145deg, rgba(84, 71, 255, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(84, 71, 255, 0.26);
+  animation-delay: 165ms;
+}
+.stat-card:nth-child(6n + 4)::after { background: linear-gradient(90deg, #5447FF, #818CF8); }
+
+.stat-card:nth-child(6n + 5) {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.09) 0%, var(--bg-card) 68%);
+  border-color: rgba(245, 158, 11, 0.28);
+  animation-delay: 220ms;
+}
+.stat-card:nth-child(6n + 5)::after { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+
+.stat-card:nth-child(6n + 6) {
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.09) 0%, var(--bg-card) 68%);
+  border-color: rgba(139, 92, 246, 0.28);
+  animation-delay: 275ms;
+}
+.stat-card:nth-child(6n + 6)::after { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
 
 /* Buttons */
 .btn {
@@ -3248,4 +3297,284 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-top: 1px solid var(--border-subtle);
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* ============================================================
+   Dashboard Chart Animations & Interactive Tooltips
+   ============================================================ */
+@keyframes chartLineDraw {
+  from {
+    stroke-dashoffset: 1600;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes chartAreaFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes chartBarRise {
+  from {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes chartTooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -115%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -125%) scale(1);
+  }
+}
+
+@keyframes chartBarTooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes chartDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.28;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.14;
+  }
+}
+
+.chart-line-animated {
+  stroke-dasharray: 1600;
+  stroke-dashoffset: 0;
+  animation: chartLineDraw 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.chart-area-animated {
+  animation: chartAreaFade 0.9s ease-out forwards;
+}
+
+.chart-bar-animated {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: chartBarRise 0.65s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.chart-dot-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chartDotPulse 1.6s ease-in-out infinite;
+}
+
+.chart-tooltip-animated {
+  animation: chartTooltipIn 0.15s ease-out forwards;
+}
+
+.chart-bar-tooltip-animated {
+  animation: chartBarTooltipIn 0.15s ease-out forwards;
+}
+
+/* ============================================================
+   KPI Cards, Platform Overview & Leaderboard Animations
+   ============================================================ */
+@keyframes kpiFadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes donutRingReveal {
+  from {
+    opacity: 0;
+    transform: rotate(-120deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-90deg) scale(1);
+  }
+}
+
+@keyframes leaderboardRowIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes trophyFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.06);
+  }
+}
+
+@keyframes sparklineDrawOnEnter {
+  0% {
+    stroke-dashoffset: 1800;
+    opacity: 0.4;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes sparklineAreaReveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.15;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes sparklineDotPop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes progressRingFill {
+  0% {
+    stroke-dasharray: 0 400;
+    opacity: 0.3;
+  }
+  100% {
+    stroke-dasharray: var(--ring-dash);
+    opacity: 1;
+  }
+}
+
+@keyframes progressBarFill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.sparkline-draw-on-enter {
+  stroke-dasharray: 1800;
+  stroke-dashoffset: 1800;
+  animation: sparklineDrawOnEnter 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.sparkline-area-reveal {
+  animation: sparklineAreaReveal 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.sparkline-dot-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sparklineDotPop 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.progress-ring-segment {
+  animation: progressRingFill 1.05s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.progress-bar-fill {
+  transform-origin: left center;
+  animation: progressBarFill 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.kpi-card-animated {
+  position: relative;
+  overflow: hidden;
+  animation: kpiFadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease !important;
+}
+
+.kpi-card-animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 70%;
+  height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.kpi-card-animated:hover {
+  transform: translateY(-6px) scale(1.022) !important;
+  box-shadow: 0 16px 32px -8px rgba(79, 70, 229, 0.22), 0 6px 14px -4px rgba(15, 23, 42, 0.1) !important;
+}
+
+.kpi-card-animated:hover::after {
+  left: 140%;
+}
+
+.kpi-card-animated .kpi-icon-badge {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
+}
+
+.kpi-card-animated:hover .kpi-icon-badge {
+  transform: scale(1.15) rotate(6deg);
+}
+
+.donut-svg-animated {
+  animation: donutRingReveal 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.leaderboard-row-animated {
+  animation: leaderboardRowIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.leaderboard-row-animated:hover {
+  background: rgba(84, 71, 255, 0.055) !important;
+}
+
+.trophy-float {
+  animation: trophyFloat 2.4s ease-in-out infinite;
 }

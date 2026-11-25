@@ -520,85 +520,47 @@ export const ProctoringPage: React.FC = () => {
           <p className="text-secondary text-sm">
             Explainable telemetry verification, false-positive protection, and human evidence moderation
           </p>
-        </div >
-
-        <div
-          style={{
-            background: 'rgba(245, 158, 11, 0.12)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            color: '#fbbf24',
-            padding: '8px 16px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.8rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontWeight: 600,
-          }}
-        >
-          <AlertTriangle size={16} />
-          <span>Policy Rule: Signals are review indicators, never autonomous cheating verdicts.</span>
         </div>
-      </div >
+      </div>
 
       {/* KPI Overview Cards */}
-      < div
+      <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '16px',
         }}
       >
-        <div className="card" style={{ padding: '18px' }}>
-          <div className="text-muted text-xs font-semibold">Total Monitored Sessions</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '4px', color: 'var(--text-main)' }}>
-            {totalSessions}
+        {[
+          { label: 'Total Monitored Sessions', value: totalSessions, sub: 'Across all course cohorts', color: '#5447FF', bg: 'linear-gradient(145deg, rgba(84, 71, 255, 0.08) 0%, var(--bg-card) 65%)', border: 'rgba(84, 71, 255, 0.28)' },
+          { label: 'Sessions with Signals', value: sessionsWithEvents, sub: 'Telemetry flagged for review', color: '#EC4899', bg: 'linear-gradient(145deg, rgba(236, 72, 153, 0.08) 0%, var(--bg-card) 65%)', border: 'rgba(236, 72, 153, 0.28)' },
+          { label: 'Pending Faculty Review', value: pendingReviews, sub: 'Awaiting decision', color: '#F59E0B', bg: 'linear-gradient(145deg, rgba(245, 158, 11, 0.09) 0%, var(--bg-card) 65%)', border: 'rgba(245, 158, 11, 0.3)' },
+          { label: 'Cleared (False Positives)', value: clearedSessions, sub: 'No violation established', color: '#10B981', bg: 'linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-card) 65%)', border: 'rgba(16, 185, 129, 0.28)' },
+          { label: 'Technical Disruptions Accepted', value: acceptedTechnical, sub: 'Hardware / ISP drops excused', color: '#2563EB', bg: 'linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, var(--bg-card) 65%)', border: 'rgba(37, 99, 235, 0.28)' },
+        ].map((card, idx) => (
+          <div
+            key={card.label}
+            className="card kpi-card-animated"
+            style={{
+              padding: '16px 18px',
+              background: card.bg,
+              border: `1px solid ${card.border}`,
+              borderTop: `3px solid ${card.color}`,
+              borderRadius: '14px',
+              animationDelay: `${idx * 60}ms`,
+            }}
+          >
+            <div style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{card.label}</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '6px', color: card.color }}>
+              {card.value}
+            </div>
+            <div className="text-muted text-xs" style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: card.color, flexShrink: 0 }} />
+              <span>{card.sub}</span>
+            </div>
           </div>
-          <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-            Across all course cohorts
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '18px' }}>
-          <div className="text-muted text-xs font-semibold">Sessions with Signals</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '4px', color: '#F472B6' }}>
-            {sessionsWithEvents}
-          </div>
-          <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-            Telemetry flagged for review
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '18px' }}>
-          <div className="text-muted text-xs font-semibold">Pending Faculty Review</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '4px', color: 'var(--warning)' }}>
-            {pendingReviews}
-          </div>
-          <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-            Awaiting decision
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '18px' }}>
-          <div className="text-muted text-xs font-semibold">Cleared (False Positives)</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '4px', color: 'var(--success)' }}>
-            {clearedSessions}
-          </div>
-          <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-            No violation established
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '18px' }}>
-          <div className="text-muted text-xs font-semibold">Technical Disruptions Accepted</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '4px', color: '#3B82F6' }}>
-            {acceptedTechnical}
-          </div>
-          <div className="text-muted text-xs" style={{ marginTop: '2px' }}>
-            Hardware / ISP drops excused
-          </div>
-        </div>
-      </div >
+        ))}
+      </div>
 
       {/* Tabs */}
       <div className="tabs-nav" style={{ marginBottom: '24px' }}>

@@ -159,39 +159,6 @@ export const Navbar: React.FC<Props> = ({
           <span className="nav-search-text">Search...</span>
         </button>
 
-        {/* Quick Role Switcher pill */}
-        <button
-          onClick={onOpenRoleSwitcher}
-          className="btn btn-secondary btn-sm"
-          style={{
-            background: 'var(--primary-light)',
-            borderColor: 'var(--primary)',
-            color: 'var(--primary)',
-            gap: '6px',
-            fontWeight: 700,
-            fontSize: '0.75rem'
-          }}
-          title="Switch role perspective for testing"
-        >
-          <Shield size={14} />
-          <span className="nav-role-text" style={{ textTransform: 'capitalize' }}>
-            Role: {
-              !user
-                ? 'Guest'
-                : user.activeRole === 'trainer' || user.activeRole === 'instructor' || user.activeRole === 'assessment_author' || user.activeRole === 'grader'
-                ? 'Trainer'
-                : user.activeRole === 'student' || user.activeRole === 'learner'
-                ? 'Student'
-                : user.activeRole === 'org_admin' || user.activeRole === 'lms_admin'
-                ? 'Institution Admin'
-                : user.activeRole === 'platform_admin'
-                ? 'Platform Admin'
-                : 'User'
-            }
-          </span>
-          <ChevronDown size={12} />
-        </button>
-
         {/* Neumorphic Light / Dark Mode Toggle Switch */}
         <ThemeToggleSwitch size="md" />
 
@@ -325,6 +292,42 @@ export const Navbar: React.FC<Props> = ({
               </div>
 
               <div style={{ padding: '4px 0' }}>
+                <button
+                  type="button"
+                  onClick={() => onOpenRoleSwitcher()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '10px',
+                    padding: '8px 12px',
+                    fontSize: '0.825rem',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--primary)',
+                    fontWeight: 600,
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Shield size={15} />
+                    <span>Switch Role</span>
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                    {user?.activeRole === 'trainer' || user?.activeRole === 'instructor' || user?.activeRole === 'assessment_author' || user?.activeRole === 'grader'
+                      ? 'Trainer'
+                      : user?.activeRole === 'student' || user?.activeRole === 'learner'
+                      ? 'Student'
+                      : user?.activeRole === 'platform_admin'
+                      ? 'Platform Admin'
+                      : 'Admin'}
+                  </span>
+                </button>
+
                 <Link
                   to="/profile"
                   style={{

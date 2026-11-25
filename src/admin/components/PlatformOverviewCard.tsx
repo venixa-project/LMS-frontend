@@ -132,9 +132,9 @@ export const PlatformOverviewCard: React.FC = () => {
     },
   ];
 
-  // Circumference & Donut geometry: r = 62, viewBox = 180 x 180
-  const radius = 62;
-  const circ = 2 * Math.PI * radius; // ~389.56
+  // Circumference & Donut geometry: compact r = 46, viewBox = 136 x 136
+  const radius = 46;
+  const circ = 2 * Math.PI * radius; // ~289.03
   const activeSegmentsCount = rawCategories.filter((c) => c.count > 0).length;
   const gap = activeSegmentsCount > 1 ? 2.5 : 0;
 
@@ -268,21 +268,20 @@ export const PlatformOverviewCard: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '24px',
-            padding: '20px 18px',
+            gap: '16px',
+            padding: '12px 14px',
             background: 'var(--bg-input)',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-subtle)',
-            flex: 1,
             flexWrap: 'wrap',
           }}
         >
-          {/* Left Side: Prominent Circular Donut Chart */}
+          {/* Left Side: Compact Circular Donut Chart */}
           <div
             style={{
               position: 'relative',
-              width: '180px',
-              height: '180px',
+              width: '132px',
+              height: '132px',
               flexShrink: 0,
               margin: '0 auto',
               display: 'flex',
@@ -293,38 +292,39 @@ export const PlatformOverviewCard: React.FC = () => {
             {/* Subtle Hover Tooltip */}
             {hoveredCategory && (
               <div
+                className="chart-bar-tooltip-animated"
                 style={{
                   position: 'absolute',
-                  top: '-12px',
+                  top: '-14px',
                   left: '50%',
                   transform: 'translateX(-50%)',
                   background: 'var(--bg-card)',
                   color: 'var(--text-main)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${hoveredCategory.color}`,
                   borderRadius: 'var(--radius-md)',
-                  padding: '4px 10px',
-                  fontSize: '0.725rem',
+                  padding: '3px 8px',
+                  fontSize: '0.7rem',
                   fontWeight: 600,
                   boxShadow: 'var(--shadow-md)',
                   pointerEvents: 'none',
                   zIndex: 20,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '5px',
                   whiteSpace: 'nowrap',
                 }}
               >
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
+                    width: '7px',
+                    height: '7px',
                     borderRadius: '50%',
                     backgroundColor: hoveredCategory.color,
                   }}
                 />
                 <span>{hoveredCategory.name}:</span>
                 <strong>{hoveredCategory.count}</strong>
-                <span className="badge badge-active" style={{ fontSize: '0.625rem', padding: '1px 5px' }}>
+                <span className="badge badge-active" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>
                   {hoveredCategory.percentage}%
                 </span>
               </div>
@@ -332,45 +332,50 @@ export const PlatformOverviewCard: React.FC = () => {
 
             {/* SVG Donut */}
             <svg
-              viewBox="0 0 180 180"
+              className="donut-svg-animated"
+              viewBox="0 0 136 136"
               style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)', overflow: 'visible' }}
             >
               {/* Background Track Ring */}
               <circle
-                cx="90"
-                cy="90"
+                cx="68"
+                cy="68"
                 r={radius}
                 fill="transparent"
                 stroke="var(--border-subtle)"
-                strokeWidth="18"
-                opacity="0.6"
+                strokeWidth="14"
+                opacity="0.55"
               />
 
-              {/* Dynamic Donut Segments */}
+              {/* Dynamic Donut Segments (CSS Progress Ring Fill on Load) */}
               {totalMembers > 0 &&
-                categories.map((cat) => {
+                categories.map((cat, idx) => {
                   if (!cat.hasData) return null;
                   const isHovered = hoveredId === cat.id;
                   const isOtherHovered = hoveredId !== null && !isHovered;
 
                   return (
                     <circle
-                      key={cat.id}
-                      cx="90"
-                      cy="90"
+                      key={`${cat.id}-${totalMembers}`}
+                      className="progress-ring-segment"
+                      cx="68"
+                      cy="68"
                       r={radius}
                       fill="transparent"
                       stroke={cat.color}
-                      strokeWidth={isHovered ? 23 : 18}
+                      strokeWidth={isHovered ? 18 : 14}
                       strokeDasharray={`${cat.visibleDash} ${circ}`}
                       strokeDashoffset={-(cat.offset + gap / 2)}
                       strokeLinecap="butt"
-                      opacity={isOtherHovered ? 0.45 : 1}
+                      opacity={isOtherHovered ? 0.42 : 1}
                       onMouseEnter={() => setHoveredId(cat.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       style={{
+                        ['--ring-dash' as string]: `${cat.visibleDash} ${circ}`,
+                        animationDelay: `${idx * 120}ms`,
                         cursor: 'pointer',
-                        transition: 'stroke-width 0.2s ease, opacity 0.2s ease',
+                        filter: isHovered ? `drop-shadow(0 0 6px ${cat.color})` : 'none',
+                        transition: 'stroke-width 0.2s ease, opacity 0.2s ease, filter 0.2s ease',
                       }}
                     />
                   );
@@ -386,12 +391,12 @@ export const PlatformOverviewCard: React.FC = () => {
                 transform: 'translate(-50%, -50%)',
                 textAlign: 'center',
                 pointerEvents: 'none',
-                width: '94px',
+                width: '76px',
               }}
             >
               <div
                 style={{
-                  fontSize: '1.65rem',
+                  fontSize: '1.35rem',
                   fontWeight: 800,
                   color: hoveredCategory ? hoveredCategory.color : 'var(--text-main)',
                   lineHeight: 1.05,
@@ -402,18 +407,18 @@ export const PlatformOverviewCard: React.FC = () => {
               </div>
               <div
                 style={{
-                  fontSize: '0.625rem',
+                  fontSize: '0.58rem',
                   fontWeight: 700,
                   color: 'var(--text-muted)',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginTop: '4px',
+                  letterSpacing: '0.04em',
+                  marginTop: '3px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                 }}
               >
-                {hoveredCategory ? hoveredCategory.name : 'Total Members'}
+                {hoveredCategory ? hoveredCategory.name : 'Members'}
               </div>
             </div>
           </div>
@@ -423,39 +428,41 @@ export const PlatformOverviewCard: React.FC = () => {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
-              flex: '1 1 200px',
-              minWidth: '190px',
+              gap: '4px',
+              flex: '1 1 180px',
+              minWidth: '170px',
             }}
           >
-            {categories.map((cat) => {
+            {categories.map((cat, idx) => {
               const isHovered = hoveredId === cat.id;
               const isOtherHovered = hoveredId !== null && !isHovered;
 
               return (
                 <div
                   key={cat.id}
+                  className="leaderboard-row-animated"
                   onMouseEnter={() => setHoveredId(cat.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '7px 10px',
-                    borderRadius: 'var(--radius-md)',
+                    padding: '5px 9px',
+                    borderRadius: 'var(--radius-sm)',
                     background: isHovered ? 'var(--bg-card)' : 'transparent',
-                    border: isHovered ? '1px solid var(--border-subtle)' : '1px solid transparent',
+                    border: isHovered ? `1px solid ${cat.color}` : '1px solid transparent',
                     opacity: isOtherHovered ? 0.5 : 1,
                     transition: 'all 0.15s ease',
                     cursor: 'pointer',
+                    animationDelay: `${idx * 60}ms`,
                   }}
                 >
                   {/* Dot & Category Name */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span
                       style={{
-                        width: '9px',
-                        height: '9px',
+                        width: '8px',
+                        height: '8px',
                         borderRadius: '50%',
                         backgroundColor: cat.color,
                         flexShrink: 0,
@@ -463,27 +470,22 @@ export const PlatformOverviewCard: React.FC = () => {
                         transition: 'box-shadow 0.15s ease',
                       }}
                     />
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '0.8rem',
-                          fontWeight: isHovered ? 700 : 600,
-                          color: isHovered ? 'var(--text-main)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {cat.name}
-                      </div>
-                      <div className="text-muted" style={{ fontSize: '0.675rem' }}>
-                        {cat.description}
-                      </div>
-                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: isHovered ? 700 : 600,
+                        color: isHovered ? 'var(--text-main)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {cat.name}
+                    </span>
                   </div>
 
                   {/* Count & Percentage */}
-                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <strong
                       style={{
-                        fontSize: '0.85rem',
+                        fontSize: '0.8rem',
                         color: 'var(--text-main)',
                         fontVariantNumeric: 'tabular-nums',
                       }}
@@ -491,10 +493,12 @@ export const PlatformOverviewCard: React.FC = () => {
                       {cat.count}
                     </strong>
                     <span
-                      className="text-muted"
                       style={{
-                        fontSize: '0.675rem',
-                        fontWeight: 600,
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        color: cat.color,
+                        minWidth: '34px',
+                        textAlign: 'right',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >

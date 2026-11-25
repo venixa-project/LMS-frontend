@@ -910,11 +910,11 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         style={{
           margin: 0,
           padding: 0,
-          background: '#121214',
+          background: 'var(--bg-card)',
           borderRadius: '16px',
-          border: '1px solid #2d2d38',
+          border: '1px solid var(--border-subtle)',
           overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+          boxShadow: 'var(--shadow-md)',
           position: isFullscreenWall ? 'fixed' : 'relative',
           top: isFullscreenWall ? 0 : 'auto',
           left: isFullscreenWall ? 0 : 'auto',
@@ -930,14 +930,14 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         <div
           style={{
             padding: '12px 18px',
-            background: '#1e1f23',
-            borderBottom: '1px solid #2d2d38',
+            background: 'var(--bg-input)',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '12px',
-            color: '#fff',
+            color: 'var(--text-main)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -946,7 +946,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                background: '#fff',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -956,7 +957,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.3px', color: '#fff' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.3px', color: 'var(--text-main)' }}>
                   Live Conference Bridge & Invigilation Wall
                 </span>
                 <span
@@ -1238,56 +1239,56 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
               overflow: 'hidden',
             }}
           >
-          {/* Gallery Video Tiles Grid Container (Exact Match of Google Meet Conference Grid) */}
+          {/* Gallery Video Tiles Grid Container */}
           <div
             style={{
               padding: '14px',
               overflowY: 'auto',
               maxHeight: isFullscreenWall ? 'calc(100vh - 100px)' : '620px',
-              background: '#121214',
+              background: 'var(--bg-card)',
             }}
           >
             {displayedParticipants.length === 0 ? (
               <div
                 style={{
-                  minHeight: '380px',
+                  minHeight: '340px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '40px 20px',
+                  padding: '36px 20px',
                   textAlign: 'center',
-                  color: '#94a3b8',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 <div
                   style={{
-                    width: '68px',
-                    height: '68px',
+                    width: '64px',
+                    height: '64px',
                     borderRadius: '50%',
                     background: 'rgba(59, 130, 246, 0.12)',
-                    color: '#38bdf8',
+                    color: '#2563EB',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginBottom: '16px',
+                    marginBottom: '14px',
                   }}
                 >
-                  <Users size={34} />
+                  <Users size={30} />
                 </div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#f8fafc' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
                   No Candidates Have Joined Exam Yet
                 </h3>
-                <p style={{ maxWidth: '500px', fontSize: '0.82rem', color: '#94a3b8', marginTop: '8px', lineHeight: '1.5' }}>
+                <p style={{ maxWidth: '500px', fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '8px', lineHeight: '1.5' }}>
                   The live invigilation room is active. As enrolled candidates start this assessment from their exam portals, their live camera and screen feeds will immediately appear here.
                 </p>
-                <div style={{ marginTop: '20px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <div style={{ marginTop: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <span
                     style={{
                       fontSize: '0.74rem',
-                      background: '#1c1d24',
-                      border: '1px solid #2d2e38',
-                      color: '#cbd5e1',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-secondary)',
                       padding: '6px 14px',
                       borderRadius: '6px',
                       display: 'flex',
@@ -1302,9 +1303,9 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                     type="button"
                     onClick={() => setIsDemoCohortSimulated(true)}
                     style={{
-                      background: 'rgba(59, 130, 246, 0.18)',
+                      background: 'rgba(59, 130, 246, 0.12)',
                       border: '1px solid #3b82f6',
-                      color: '#60a5fa',
+                      color: '#2563EB',
                       fontSize: '0.74rem',
                       padding: '6px 16px',
                       borderRadius: '6px',
@@ -2223,13 +2224,13 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         <div
           style={{
             padding: '8px 18px',
-            background: '#18191d',
-            borderTop: '1px solid #2d2d38',
+            background: 'var(--bg-input)',
+            borderTop: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             fontSize: '0.72rem',
-            color: '#94a3b8',
+            color: 'var(--text-muted)',
             flexWrap: 'wrap',
             gap: '8px',
           }}
@@ -2237,7 +2238,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span>Showing <strong>{candidatesWhoStartedExam.length}</strong> joined examination candidate{candidatesWhoStartedExam.length === 1 ? '' : 's'}</span>
             <span>&bull;</span>
-            <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
               <Radio size={12} /> Ambient Audio Monitoring Active
             </span>
           </div>
@@ -2252,13 +2253,13 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
       <div
         className="card"
         style={{
-          background: '#1a1b20',
-          border: '1px solid #2d2d38',
-          borderRadius: '12px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: '14px',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+          boxShadow: 'var(--shadow-md)',
           marginTop: '16px',
         }}
       >
@@ -2266,8 +2267,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
         <div
           style={{
             padding: '12px 18px',
-            background: '#22232a',
-            borderBottom: '1px solid #2d2d38',
+            background: 'var(--bg-input)',
+            borderBottom: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -2281,8 +2282,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                background: 'rgba(34, 197, 94, 0.15)',
-                color: '#22c55e',
+                background: 'rgba(16, 185, 129, 0.14)',
+                color: '#10B981',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2292,14 +2293,14 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+                <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-main)' }}>
                   Live Candidates Joining Feed & Attendance
                 </h4>
                 <span
                   style={{
-                    background: 'rgba(34, 197, 94, 0.2)',
-                    color: '#4ade80',
-                    border: '1px solid rgba(34, 197, 94, 0.4)',
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    color: '#10B981',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
                     fontSize: '0.62rem',
                     fontWeight: 800,
                     padding: '2px 8px',
@@ -2309,11 +2310,11 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                     gap: '4px',
                   }}
                 >
-                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22c55e' }} />
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10B981' }} />
                   {candidatesWhoStartedExam.length} JOINED CANDIDATES
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '0.72rem', color: '#94a3b8' }}>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                 Real-time telemetry log of students joining the session, hardware permissions, and continuous focus status.
               </p>
             </div>
@@ -2322,7 +2323,7 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
           {/* Search & Filter Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Filter Chips */}
-            <div style={{ display: 'flex', gap: '4px', background: '#141418', padding: '3px', borderRadius: '6px', border: '1px solid #33343e' }}>
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card)', padding: '3px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
               {[
                 { id: 'all', label: `Joined (${candidatesWhoStartedExam.length})` },
                 { id: 'streaming', label: `Live Feeds (${candidatesWhoStartedExam.filter((p) => p.cameraActive).length})` },
@@ -2338,8 +2339,8 @@ export const JitsiProctorDashboard: React.FC<JitsiProctorDashboardProps> = ({
                     borderRadius: '4px',
                     border: 'none',
                     cursor: 'pointer',
-                    background: rosterFilter === f.id ? '#2563eb' : 'transparent',
-                    color: rosterFilter === f.id ? '#fff' : '#94a3b8',
+                    background: rosterFilter === f.id ? 'var(--primary)' : 'transparent',
+                    color: rosterFilter === f.id ? '#fff' : 'var(--text-muted)',
                   }}
                 >
                   {f.label}

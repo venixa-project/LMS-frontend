@@ -8,11 +8,16 @@ import {
   Sliders, Save, KeyRound, CheckCircle2, Lock,
   Sun, Moon, Check, Sparkles, CheckCheck,
   PenTool, RotateCcw, Upload, AlertTriangle, CheckCircle,
-  Trophy
+  Trophy, Pencil, X, Volume2
 } from 'lucide-react';
 import { AnimatedAvatar } from '../../components/AnimatedAvatar';
 import { useUserAvatar } from '../../lib/avatarStore';
 import { apiClient } from '../../lib/apiClient';
+import {
+  getNotificationPreferences,
+  saveNotificationPreferences,
+  playNotificationSound,
+} from '../../lib/notificationPrefs';
 
 export const ProfilePage: React.FC = () => {
   const { user, updateUserProfile } = useAuthStore();
@@ -23,6 +28,7 @@ export const ProfilePage: React.FC = () => {
   const initialTab = searchParams.get('tab') === 'security' ? 'security' : 'general';
   const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences' | 'signature'>(initialTab);
   const [avatarSuccess, setAvatarSuccess] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   // Password Management states
   const [currentPassword, setCurrentPassword] = useState('');
@@ -42,8 +48,8 @@ export const ProfilePage: React.FC = () => {
       setPasswordError('Please enter a new password.');
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -58,18 +64,21 @@ export const ProfilePage: React.FC = () => {
         newPassword,
         password: newPassword,
       });
-      const token = (res as any)?.data?.accessToken || (res as any)?.accessToken || 'token-updated';
-      completePasswordChange(token);
-      setPasswordSuccess('Password updated successfully! Your new password is now active.');
+      const token = (res as any)?.data?.accessToken || (res as any)?.accessToken;
+      if (token) {
+        completePasswordChange(token);
+      }
+      setPasswordSuccess('Password updated in database! Your new password is now active for login.');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      completePasswordChange('token-updated');
-      setPasswordSuccess('Password updated successfully!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      const message =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to update password. Please verify your current password.';
+      setPasswordError(message);
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -141,12 +150,62 @@ export const ProfilePage: React.FC = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Accessibility & Preferences
-  const [highContrast, setHighContrast] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [inAppAlerts, setInAppAlerts] = useState(true);
-  const [digestMode, setDigestMode] = useState('daily');
+  // Notification Preferences
+  const initialNotifPrefs = getNotificationPreferences(user?.id);
+  const [emailAlerts, setEmailAlerts] = useState(initialNotifPrefs.emailAlerts);
+  const [inAppAlerts, setInAppAlerts] = useState(initialNotifPrefs.inAppAlerts);
+  const [notifPrefsSaved, setNotifPrefsSaved] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient.get<{ emailAlerts: boolean; inAppAlerts: boolean }>('/auth/notification-preferences')
+      .then((res) => {
+        if (cancelled) return;
+        const prefs = (res as any)?.data || res;
+        if (typeof prefs?.emailAlerts === 'boolean' && typeof prefs?.inAppAlerts === 'boolean') {
+          setEmailAlerts(prefs.emailAlerts);
+          setInAppAlerts(prefs.inAppAlerts);
+          saveNotificationPreferences(prefs, user?.id);
+        }
+      })
+      .catch(() => {
+        // Fallback to localStorage cached preferences
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const handleToggleNotificationPref = async (key: 'emailAlerts' | 'inAppAlerts', nextValue: boolean) => {
+    const nextPrefs = {
+      emailAlerts: key === 'emailAlerts' ? nextValue : emailAlerts,
+      inAppAlerts: key === 'inAppAlerts' ? nextValue : inAppAlerts,
+    };
+    if (key === 'emailAlerts') setEmailAlerts(nextValue);
+    if (key === 'inAppAlerts') setInAppAlerts(nextValue);
+
+    saveNotificationPreferences(nextPrefs, user?.id);
+    if (key === 'inAppAlerts' && nextValue) {
+      playNotificationSound(user?.id);
+    }
+
+    try {
+      await apiClient.put('/auth/notification-preferences', nextPrefs);
+      setNotifPrefsSaved(
+        key === 'emailAlerts'
+          ? nextValue
+            ? `Email alerts enabled for ${user?.email || 'your account'}`
+            : 'Email notifications paused'
+          : nextValue
+          ? 'In-app alerts & notification sound enabled'
+          : 'In-app notification sound muted'
+      );
+      setTimeout(() => setNotifPrefsSaved(null), 3000);
+    } catch {
+      setNotifPrefsSaved('Saved locally');
+      setTimeout(() => setNotifPrefsSaved(null), 2500);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,14 +370,14 @@ export const ProfilePage: React.FC = () => {
           onClick={() => setActiveTab('security')}
         >
           <Shield size={16} />
-          Security & MFA
+          Password & Security
         </button>
         <button
           className={`tab-btn ${activeTab === 'preferences' ? 'active' : ''}`}
           onClick={() => setActiveTab('preferences')}
         >
           <Sliders size={16} />
-          Accessibility & Notifications
+          Theme & Notifications
         </button>
         <button
           className={`tab-btn ${activeTab === 'signature' ? 'active' : ''}`}
@@ -334,7 +393,7 @@ export const ProfilePage: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
             {/* User identity card */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ marginBottom: '16px', position: 'relative' }}>
+              <div style={{ marginBottom: '12px', position: 'relative' }}>
                 <AnimatedAvatar
                   size={96}
                   isCurrentUser={isStudent}
@@ -342,6 +401,26 @@ export const ProfilePage: React.FC = () => {
                   name={`${firstName} ${lastName}`}
                 />
               </div>
+              {isStudent && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowAvatarModal(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '12px',
+                    borderRadius: '999px',
+                    padding: '4px 12px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Pencil size={12} />
+                  Edit Avatar
+                </button>
+              )}
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '2px', color: '#fff' }}>
                 {firstName} {lastName}
               </h3>
@@ -383,10 +462,6 @@ export const ProfilePage: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="text-muted">Account Status:</span>
                   <span className="badge badge-active">{user?.status || 'Active'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span className="text-muted">MFA Enabled:</span>
-                  <span>{user?.mfaEnabled ? 'Yes (TOTP)' : 'Disabled'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="text-muted">Member Since:</span>
@@ -554,45 +629,84 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Animated Avatar Selector Gallery - Only displayed in Student Portal */}
-          {isStudent && (
-            <div className="card" style={{ marginTop: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={18} color="var(--primary)" />
-                  <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800 }}>
-                    Choose Your Animated Profile Avatar
-                  </h3>
-                  <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
-                    Live Persona
-                  </span>
-                </div>
-                <p className="text-secondary text-xs" style={{ margin: '4px 0 0' }}>
-                  Select an animated vector scholar archetype. Your selection immediately syncs to your personal profile, navigation header, sidebar, and the leaderboard podium.
-                </p>
-              </div>
+          {/* Animated Avatar Selector Modal - Only shown when user clicks Edit Avatar */}
+          {isStudent && showAvatarModal && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Choose Your Animated Profile Avatar"
+              onClick={() => setShowAvatarModal(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(2, 6, 23, 0.72)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px',
+                zIndex: 1000,
+              }}
+            >
+              <div
+                className="card kpi-card-animated"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%',
+                  maxWidth: '900px',
+                  maxHeight: '85vh',
+                  overflowY: 'auto',
+                  margin: 0,
+                  boxShadow: '0 24px 60px rgba(0, 0, 0, 0.45)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Sparkles size={18} color="var(--primary)" />
+                      <h3 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 800 }}>
+                        Choose Your Animated Profile Avatar
+                      </h3>
+                      <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
+                        Live Persona
+                      </span>
+                    </div>
+                    <p className="text-secondary text-xs" style={{ margin: '4px 0 0' }}>
+                      Select an animated vector scholar archetype. Your selection immediately syncs to your personal profile, navigation header, sidebar, and the leaderboard podium.
+                    </p>
+                  </div>
 
-              {avatarSuccess && (
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                    color: '#10b981',
-                    padding: '4px 12px',
-                    borderRadius: '999px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  <CheckCheck size={14} />
-                  <span>Avatar Synced Everywhere!</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {avatarSuccess && (
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          border: '1px solid rgba(16, 185, 129, 0.4)',
+                          color: '#10b981',
+                          padding: '4px 12px',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        <CheckCheck size={14} />
+                        <span>Avatar Synced Everywhere!</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowAvatarModal(false)}
+                      aria-label="Close avatar selector"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <X size={14} /> Done
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
 
             <div
               style={{
@@ -695,9 +809,10 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 );
               })}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </>
     )}
 
@@ -767,23 +882,6 @@ export const ProfilePage: React.FC = () => {
                 {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
               </button>
             </form>
-          </div>
-
-          <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Two-Factor Authentication (2FA / MFA)</h3>
-                <p className="text-secondary text-sm">Add an extra layer of defense using an Authenticator app (TOTP)</p>
-              </div>
-              <span className="badge badge-active">MFA Enforced</span>
-            </div>
-            <p className="text-muted text-xs">
-              Configured via Google Authenticator / Microsoft Authenticator on 2026-02-10.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              <button className="btn btn-secondary btn-sm">Regenerate Recovery Codes</button>
-              <button className="btn btn-secondary btn-sm">Re-pair Authenticator App</button>
-            </div>
           </div>
         </div>
       )}
@@ -867,68 +965,69 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           <div className="card">
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Accessibility Preferences</h3>
-            <p className="text-secondary text-sm" style={{ marginBottom: '16px' }}>
-              Personalize interface contrast, motion, and screen reader announcements
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>High Contrast Mode</div>
-                  <div className="text-muted text-xs">Enhances text borders and interactive elements</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={highContrast}
-                  onChange={(e) => setHighContrast(e.target.checked)}
-                  style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-                />
-              </label>
-
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Reduced Motion</div>
-                  <div className="text-muted text-xs">Disables subtle transitions and CSS animations</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={reducedMotion}
-                  onChange={(e) => setReducedMotion(e.target.checked)}
-                  style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-                />
-              </label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Notification Preferences</h3>
+              {notifPrefsSaved && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#10b981',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                }}>
+                  <CheckCircle2 size={13} /> {notifPrefsSaved}
+                </span>
+              )}
             </div>
-          </div>
-
-          <div className="card">
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>Notification Preferences</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Email Notifications</div>
-                  <div className="text-muted text-xs">Course enrollments, graded submissions, live session invites</div>
+                  <div className="text-muted text-xs">
+                    Course enrollments, graded submissions, live session invites &amp; announcements sent to <strong>{user?.email}</strong>
+                  </div>
                 </div>
                 <input
                   type="checkbox"
                   checked={emailAlerts}
-                  onChange={(e) => setEmailAlerts(e.target.checked)}
-                  style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
+                  onChange={(e) => handleToggleNotificationPref('emailAlerts', e.target.checked)}
+                  style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
                 />
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>In-App Alerts & Sound</div>
-                  <div className="text-muted text-xs">Show badge indicators and desktop toast alerts</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={inAppAlerts}
-                  onChange={(e) => setInAppAlerts(e.target.checked)}
-                  style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
-                />
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', gap: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1, cursor: 'pointer' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>In-App Alerts &amp; Sound</div>
+                    <div className="text-muted text-xs">
+                      {inAppAlerts
+                        ? 'Play notification chime and show badge indicators for incoming updates'
+                        : 'Notification sounds are muted'}
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={inAppAlerts}
+                    onChange={(e) => handleToggleNotificationPref('inAppAlerts', e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                  />
+                </label>
+                {inAppAlerts && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => playNotificationSound(user?.id)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}
+                  >
+                    <Volume2 size={14} /> Test Sound
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

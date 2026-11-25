@@ -17,10 +17,7 @@ import {
   GraduationCap,
 } from 'lucide-react';
 import { useDashboardFilters } from '../context/DashboardFilterContext';
-import { usePeopleStore } from '../../lib/peopleStore';
-import { peopleApi } from '../../lib/peopleApiService';
-import { useCourseStore } from '../../lib/courseStore';
-import { User } from '../../types';
+import { apiClient } from '../../lib/apiClient';
 import { useThemeStore } from '../../lib/themeStore';
 
 export type RankingMetricType =
@@ -38,8 +35,7 @@ interface StudentLeaderboardRow {
   avatar?: string;
   departmentId: string;
   departmentName: string;
-  courseId: string;
-  courseTitle: string;
+  enrolledCourseIds: string[];
   completedCourses: number;
   certifications: number;
   assessmentScore: number;
@@ -62,65 +58,52 @@ export const GamificationLeaderboard: React.FC = () => {
   const [viewAll, setViewAll] = useState<boolean>(false);
   const itemsPerPage = 8;
 
-  const { courses } = useCourseStore();
-  const { users: storeUsers, fetchPeople } = usePeopleStore();
-  const [realStudents, setRealStudents] = useState<User[]>([]);
+  const [leaderboardRows, setLeaderboardRows] = useState<StudentLeaderboardRow[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    fetchPeople().catch(() => {});
-    peopleApi.list({ role: 'student', limit: 100 })
+    let active = true;
+    setIsLoading(true);
+    apiClient
+      .get<any[]>('/gamification/leaderboard?limit=100')
       .then((res) => {
-        if (res.users && res.users.length > 0) {
-          setRealStudents(res.users);
-        }
+        if (!active) return;
+        const rawList = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const mapped: StudentLeaderboardRow[] = rawList.map((item: any) => ({
+          id: item.userId || item.id,
+          name: item.name || 'Scholar',
+          email: item.email || '',
+          studentId: item.rollNo || 'STU-000',
+          avatar: item.avatar || undefined,
+          departmentId: item.departmentId || 'dep-001',
+          departmentName: item.department || 'General Engineering',
+          enrolledCourseIds: Array.isArray(item.enrolledCourseIds) ? item.enrolledCourseIds : [],
+          completedCourses: Number(item.completedCourses || 0),
+          certifications: Number(item.certifications || 0),
+          assessmentScore: Number(item.assessmentScore || 0),
+          activityDays: Number(item.streakDays || 0),
+          points: Number(item.totalPoints || 0),
+          compositeScore: Number(item.totalPoints || 0),
+        }));
+        setLeaderboardRows(mapped);
       })
-      .catch(() => {});
-  }, [fetchPeople]);
+      .catch((err) => {
+        console.warn('Failed to fetch backend leaderboard:', err);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Reset pagination when department or course changes
   useEffect(() => {
     setCurrentPage(1);
   }, [departmentId, courseId]);
 
-  // -------------------------------------------------------------
-  // Master Student Records Generation from Genuine Registered Learners
-  // -------------------------------------------------------------
-  const masterStudentRows: StudentLeaderboardRow[] = useMemo(() => {
-    const candidateStudents = realStudents.length > 0
-      ? realStudents
-      : storeUsers.filter((u) => u.activeRole === 'student' || u.activeRole === 'learner');
-
-    const rawStudents = candidateStudents.filter(
-      (u) =>
-        u.status !== 'suspended' &&
-        u.status !== 'deactivated' &&
-        !u.email.toLowerCase().endsWith('@acuity.test')
-    );
-
-    return rawStudents.map((st, idx) => {
-      const deptId = st.departmentId || 'dep-001';
-      const deptName = (st as any).department?.name || (st as any).departmentName || 'General Engineering';
-      const assignedCourse = courses.find((c) => !c.id.startsWith('crs-00')) || courses[0];
-
-      return {
-        id: st.id,
-        name: st.displayName || `${st.firstName || ''} ${st.lastName || ''}`.trim() || st.email.split('@')[0],
-        email: st.email,
-        studentId: st.rollNo || `STU-${st.id.slice(0, 8).toUpperCase()}`,
-        avatar: st.avatar,
-        departmentId: deptId,
-        departmentName: deptName,
-        courseId: assignedCourse?.id || 'crs-default',
-        courseTitle: assignedCourse?.title || 'General Curriculum',
-        completedCourses: 0,
-        certifications: 0,
-        assessmentScore: 100,
-        activityDays: 1,
-        points: 100,
-        compositeScore: 100,
-      };
-    });
-  }, [realStudents, storeUsers, courses]);
+  const masterStudentRows = leaderboardRows;
 
   // -------------------------------------------------------------
   // Filter & Sort Logic
@@ -133,7 +116,7 @@ export const GamificationLeaderboard: React.FC = () => {
       }
 
       // 2. Course filter
-      if (courseId !== 'all' && item.courseId !== courseId) {
+      if (courseId !== 'all' && !item.enrolledCourseIds.includes(courseId)) {
         return false;
       }
 
@@ -234,11 +217,27 @@ export const GamificationLeaderboard: React.FC = () => {
               margin: 0,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '10px',
               color: 'var(--text-main)',
             }}
           >
-            Gamification & Leaderboard
+            <span
+              className="trophy-float"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.35)',
+                flexShrink: 0,
+              }}
+            >
+              <Trophy size={16} color="#FFFFFF" />
+            </span>
+            <span>Gamification & Leaderboard</span>
           </h2>
         </div>
 
@@ -335,7 +334,21 @@ export const GamificationLeaderboard: React.FC = () => {
       </div>
 
       {/* 3. CLEAN & PROFESSIONAL LEADERBOARD TABLE */}
-      {filteredAndSortedLearners.length === 0 ? (
+      {isLoading ? (
+        <div
+          style={{
+            padding: '28px 16px',
+            textAlign: 'center',
+            background: 'var(--bg-input)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-muted)',
+            fontSize: '0.84rem',
+          }}
+        >
+          Loading leaderboard rankings...
+        </div>
+      ) : filteredAndSortedLearners.length === 0 ? (
         <div
           style={{
             display: 'flex',
@@ -475,13 +488,46 @@ export const GamificationLeaderboard: React.FC = () => {
                   );
                 }
 
+                const deptPalette = [
+                  { bg: 'rgba(37, 99, 235, 0.12)', border: 'rgba(37, 99, 235, 0.3)', text: '#2563EB' },
+                  { bg: 'rgba(139, 92, 246, 0.12)', border: 'rgba(139, 92, 246, 0.3)', text: '#7C3AED' },
+                  { bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)', text: '#059669' },
+                  { bg: 'rgba(236, 72, 153, 0.12)', border: 'rgba(236, 72, 153, 0.3)', text: '#DB2777' },
+                  { bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)', text: '#D97706' },
+                ];
+                const deptStyle = deptPalette[
+                  learner.departmentName.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % deptPalette.length
+                ];
+                const avatarGradients = [
+                  'linear-gradient(135deg, #2563EB, #5447FF)',
+                  'linear-gradient(135deg, #EC4899, #8B5CF6)',
+                  'linear-gradient(135deg, #10B981, #06B6D4)',
+                ];
+
                 return (
                   <tr
                     key={learner.id}
+                    className="leaderboard-row-animated"
                     style={{
                       borderBottom: '1px solid var(--border-subtle)',
-                      background: rankNumber <= 3 ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
-                      transition: 'background 0.15s ease',
+                      borderLeft:
+                        rankNumber === 1
+                          ? '3px solid #F59E0B'
+                          : rankNumber === 2
+                          ? '3px solid #94A3B8'
+                          : rankNumber === 3
+                          ? '3px solid #D97706'
+                          : '3px solid transparent',
+                      background:
+                        rankNumber === 1
+                          ? 'rgba(245, 158, 11, 0.045)'
+                          : rankNumber === 2
+                          ? 'rgba(148, 163, 184, 0.04)'
+                          : rankNumber === 3
+                          ? 'rgba(217, 119, 6, 0.035)'
+                          : 'transparent',
+                      transition: 'background 0.18s ease, transform 0.18s ease',
+                      animationDelay: `${idx * 55}ms`,
                     }}
                   >
                     {/* 1. Rank */}
@@ -491,9 +537,10 @@ export const GamificationLeaderboard: React.FC = () => {
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div
+                          className={rankNumber === 1 ? 'trophy-float' : undefined}
                           style={{
-                            width: '30px',
-                            height: '30px',
+                            width: '32px',
+                            height: '32px',
                             borderRadius: '50%',
                             background:
                               rankNumber === 1
@@ -502,14 +549,14 @@ export const GamificationLeaderboard: React.FC = () => {
                                 ? 'linear-gradient(135deg, #94a3b8, #64748b)'
                                 : rankNumber === 3
                                 ? 'linear-gradient(135deg, #d97706, #b45309)'
-                                : 'var(--bg-input)',
-                            color: rankNumber <= 3 ? '#fff' : 'var(--text-secondary)',
+                                : avatarGradients[idx % avatarGradients.length],
+                            color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontSize: '0.75rem',
-                            fontWeight: 700,
-                            border: '1px solid var(--border-subtle)',
+                            fontWeight: 800,
+                            boxShadow: rankNumber <= 3 ? '0 3px 10px rgba(245, 158, 11, 0.28)' : '0 2px 6px rgba(84, 71, 255, 0.2)',
                           }}
                         >
                           {learner.name.slice(0, 2).toUpperCase()}
@@ -535,12 +582,12 @@ export const GamificationLeaderboard: React.FC = () => {
                       <span
                         style={{
                           fontSize: '0.72rem',
-                          fontWeight: 600,
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          color: 'var(--text-secondary)',
+                          fontWeight: 700,
+                          padding: '3px 9px',
+                          borderRadius: '9999px',
+                          background: deptStyle.bg,
+                          border: `1px solid ${deptStyle.border}`,
+                          color: deptStyle.text,
                         }}
                       >
                         {learner.departmentName}
@@ -549,7 +596,7 @@ export const GamificationLeaderboard: React.FC = () => {
 
                     {/* 5. Completed Courses */}
                     <td style={{ padding: '10px 14px' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                      <span style={{ fontWeight: 700, color: '#2563EB' }}>
                         {learner.completedCourses}
                       </span>{' '}
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
@@ -566,19 +613,29 @@ export const GamificationLeaderboard: React.FC = () => {
                           gap: '4px',
                           fontSize: '0.75rem',
                           fontWeight: 700,
-                          color: learner.certifications > 0 ? 'var(--success)' : 'var(--text-muted)',
+                          color: learner.certifications > 0 ? '#10B981' : 'var(--text-muted)',
                         }}
                       >
-                        <Award size={13} /> {learner.certifications}
+                        <Award size={13} color={learner.certifications > 0 ? '#10B981' : '#94A3B8'} /> {learner.certifications}
                       </span>
                     </td>
 
                     {/* 7. Score */}
                     <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                      <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--primary)' }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '3px 9px',
+                          borderRadius: '9999px',
+                          background: rankNumber === 1 ? 'linear-gradient(135deg, rgba(245,158,11,0.16), rgba(236,72,153,0.14))' : 'rgba(84, 71, 255, 0.1)',
+                          color: rankNumber === 1 ? '#D97706' : 'var(--primary)',
+                          fontWeight: 800,
+                          fontSize: '0.84rem',
+                        }}
+                      >
                         {getMetricDisplayValue(learner)}
-                      </div>
-                      <div className="text-muted text-xs" style={{ fontSize: '0.68rem' }}>
+                      </span>
+                      <div className="text-muted text-xs" style={{ fontSize: '0.68rem', marginTop: '2px' }}>
                         {rankingMetric === 'overall' ? `${learner.assessmentScore}% Avg Score` : `${learner.compositeScore.toLocaleString()} pts`}
                       </div>
                     </td>

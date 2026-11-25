@@ -81,6 +81,22 @@ export const LearnerActivityGrowthChart: React.FC = () => {
   const hoveredPoint = hoveredIndex !== null ? points[hoveredIndex] : null;
   const isZeroData = kpiSummary.activeLearners === 0;
 
+  const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (points.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * width;
+    let closestIdx = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const dist = Math.abs(points[i].x - relX);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = i;
+      }
+    }
+    setHoveredIndex(closestIdx);
+  };
+
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* 1. Header */}
@@ -145,13 +161,15 @@ export const LearnerActivityGrowthChart: React.FC = () => {
         ) : (
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            style={{ width: '100%', height: '100%', overflow: 'visible' }}
+            style={{ width: '100%', height: '100%', overflow: 'visible', cursor: 'crosshair' }}
             preserveAspectRatio="none"
+            onMouseMove={handleSvgMouseMove}
+            onMouseLeave={() => setHoveredIndex(null)}
           >
             <defs>
               <linearGradient id="learnerGrowthGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.32" />
-                <stop offset="65%" stopColor="var(--primary)" stopOpacity="0.08" />
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.34" />
+                <stop offset="65%" stopColor="var(--primary)" stopOpacity="0.09" />
                 <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
               </linearGradient>
             </defs>
@@ -181,11 +199,18 @@ export const LearnerActivityGrowthChart: React.FC = () => {
               </g>
             ))}
 
-            {/* Area Fill */}
-            <path d={areaPath} fill="url(#learnerGrowthGrad)" />
-
-            {/* Line Stroke */}
+            {/* Area Fill (Sparkline Sweep Reveal) */}
             <path
+              key={`area-${periodLabel}-${points.length}`}
+              className="sparkline-area-reveal"
+              d={areaPath}
+              fill="url(#learnerGrowthGrad)"
+            />
+
+            {/* Line Stroke (CSS Sparkline Draw-On-Enter) */}
+            <path
+              key={`line-${periodLabel}-${points.length}`}
+              className="sparkline-draw-on-enter"
               d={linePath}
               fill="none"
               stroke="var(--primary)"
@@ -202,8 +227,7 @@ export const LearnerActivityGrowthChart: React.FC = () => {
                 <g
                   key={i}
                   onMouseEnter={() => setHoveredIndex(i)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'crosshair' }}
                 >
                   {/* Subtle vertical indicator bar when hovered */}
                   {isHovered && (
@@ -213,34 +237,39 @@ export const LearnerActivityGrowthChart: React.FC = () => {
                       x2={pt.x}
                       y2={baselineY}
                       stroke="var(--primary)"
-                      strokeWidth="1"
+                      strokeWidth="1.25"
                       strokeDasharray="3 3"
-                      strokeOpacity="0.6"
+                      strokeOpacity="0.7"
                     />
                   )}
 
-                  {/* Outer glow ring on hover */}
+                  {/* Outer pulsing glow ring on hover */}
                   {isHovered && (
                     <circle
+                      className="chart-dot-pulse"
                       cx={pt.x}
                       cy={pt.y}
-                      r="9"
+                      r="10"
                       fill="var(--primary)"
-                      fillOpacity="0.25"
                     />
                   )}
 
                   {/* Data dot */}
                   <circle
+                    className="sparkline-dot-enter"
                     cx={pt.x}
                     cy={pt.y}
-                    r={isHovered ? 5.5 : 4}
+                    r={isHovered ? 6 : 4}
                     fill="var(--bg-card)"
                     stroke="var(--primary)"
                     strokeWidth={isHovered ? 3 : 2}
+                    style={{
+                      animationDelay: `${Math.min(200 + i * 95, 950)}ms`,
+                      transition: 'r 0.15s ease, stroke-width 0.15s ease',
+                    }}
                   />
 
-                    {/* X-axis month label */}
+                  {/* X-axis month label */}
                   <text
                     x={pt.x}
                     y={baselineY + 16}
@@ -261,46 +290,56 @@ export const LearnerActivityGrowthChart: React.FC = () => {
         {/* Hover Tooltip Overlay */}
         {hoveredPoint && !isZeroData && (
           <div
+            className="chart-tooltip-animated"
             style={{
               position: 'absolute',
-              left: `${(hoveredPoint.x / width) * 100}%`,
-              top: `${(hoveredPoint.y / height) * 100}%`,
+              left: `${Math.min(84, Math.max(16, (hoveredPoint.x / width) * 100))}%`,
+              top: `${Math.max(28, (hoveredPoint.y / height) * 100)}%`,
               transform: 'translate(-50%, -125%)',
               background: 'var(--bg-card)',
               color: 'var(--text-main)',
               border: '1px solid var(--primary)',
               borderRadius: 'var(--radius-md)',
-              padding: '8px 12px',
+              padding: '9px 12px',
               fontSize: '0.75rem',
-              boxShadow: 'var(--shadow-md)',
+              boxShadow: 'var(--shadow-lg)',
               pointerEvents: 'none',
               zIndex: 20,
               whiteSpace: 'nowrap',
             }}
           >
-            <div style={{ fontWeight: 800, color: 'var(--primary)', marginBottom: '3px' }}>
+            <div style={{ fontWeight: 800, color: 'var(--primary)', marginBottom: '4px' }}>
               {hoveredPoint.periodName}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
               <span>Active Learners:</span>
               <strong style={{ color: 'var(--text-main)' }}>{hoveredPoint.activeLearners.toLocaleString()}</strong>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              <span>New Enrollments:</span>
-              <strong>+{hoveredPoint.newEnrollments}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginTop: '2px' }}>
+              <span style={{ color: 'var(--text-muted)' }}>New Enrollments:</span>
+              <strong style={{ color: 'var(--primary)' }}>+{hoveredPoint.newEnrollments.toLocaleString()}</strong>
             </div>
-            {hoveredPoint.growthRatePct !== 0 && (
-              <div
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  marginTop: '3px',
-                  color: hoveredPoint.growthRatePct > 0 ? 'var(--success)' : 'var(--danger)',
-                }}
-              >
-                {hoveredPoint.growthRatePct > 0 ? `▲ +${hoveredPoint.growthRatePct}%` : `▼ ${hoveredPoint.growthRatePct}%`} vs prior period
-              </div>
-            )}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                marginTop: '3px',
+                paddingTop: '3px',
+                borderTop: '1px solid var(--border-subtle)',
+                color: hoveredPoint.growthRatePct > 0 ? 'var(--success)' : hoveredPoint.growthRatePct < 0 ? 'var(--danger)' : 'var(--text-muted)',
+              }}
+            >
+              <span>Growth Percentage:</span>
+              <span>
+                {hoveredPoint.growthRatePct > 0
+                  ? `+${hoveredPoint.growthRatePct}%`
+                  : `${hoveredPoint.growthRatePct}%`}
+              </span>
+            </div>
           </div>
         )}
       </div>

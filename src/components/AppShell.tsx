@@ -29,14 +29,19 @@ export const AppShell: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && user) {
+      // Immediate critical fetches only (deduplicated by apiClient)
       fetchNotifications();
-      usePeopleStore.getState().fetchPeople().catch(() => {});
       useCourseStore.getState().fetchCourses().catch(() => {});
-      useAssessmentStore.getState().fetchAssessments().catch(() => {});
-      useCohortStore.getState().fetchCohorts().catch(() => {});
-      useDepartmentStore.getState().fetchDepartments().catch(() => {});
-      useLearningPathStore.getState().fetchPaths().catch(() => {});
-      useAnnouncementStore.getState().fetchAnnouncements().catch(() => {});
+
+      // Defer secondary background preloads so the active page renders & loads without contention
+      const preloadTimer = setTimeout(() => {
+        usePeopleStore.getState().fetchPeople().catch(() => {});
+        useAssessmentStore.getState().fetchAssessments().catch(() => {});
+        useCohortStore.getState().fetchCohorts().catch(() => {});
+        useDepartmentStore.getState().fetchDepartments().catch(() => {});
+        useLearningPathStore.getState().fetchPaths().catch(() => {});
+        useAnnouncementStore.getState().fetchAnnouncements().catch(() => {});
+      }, 350);
 
       // Cross-tab and multi-window sync: refresh notifications on storage changes and BroadcastChannel
       const handleStorage = (e: StorageEvent) => {
@@ -45,19 +50,6 @@ export const AppShell: React.FC = () => {
         }
       };
       window.addEventListener('storage', handleStorage);
-
-      // Invalidate and refresh secondary domain stores on role switch
-      const handleRoleSwitch = () => {
-        fetchNotifications();
-        usePeopleStore.getState().fetchPeople().catch(() => {});
-        useCourseStore.getState().fetchCourses().catch(() => {});
-        useAssessmentStore.getState().fetchAssessments().catch(() => {});
-        useCohortStore.getState().fetchCohorts().catch(() => {});
-        useDepartmentStore.getState().fetchDepartments().catch(() => {});
-        useLearningPathStore.getState().fetchPaths().catch(() => {});
-        useAnnouncementStore.getState().fetchAnnouncements().catch(() => {});
-      };
-      window.addEventListener('venilearn_role_switched', handleRoleSwitch);
 
       const notifBc = typeof BroadcastChannel !== 'undefined'
         ? new BroadcastChannel('venilearn_notifications_broadcast_v1')
@@ -111,15 +103,16 @@ export const AppShell: React.FC = () => {
 
       checkScheduledExams();
 
-      // Periodic refresh for new notifications and scheduled exams
+      // Periodic refresh for new notifications and scheduled exams (paused when tab is hidden)
       const pollTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         fetchNotifications();
         checkScheduledExams();
-      }, 15000);
+      }, 30000);
 
       return () => {
+        clearTimeout(preloadTimer);
         window.removeEventListener('storage', handleStorage);
-        window.removeEventListener('venilearn_role_switched', handleRoleSwitch);
         if (notifBc) notifBc.close();
         clearInterval(pollTimer);
       };

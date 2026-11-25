@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { RotateCcw, Calendar, Building2, BookOpen, Download } from 'lucide-react';
 import { useDashboardFilters } from '../context/DashboardFilterContext';
-import { apiClient } from '../../lib/apiClient';
+import { apiClient, buildFullUrl } from '../../lib/apiClient';
+import { AUTH_SESSION_KEY } from '../../lib/authConstants';
 
 interface DepartmentItem {
   id: string;
@@ -13,6 +14,7 @@ export const GlobalDashboardFilters: React.FC = () => {
   const {
     departmentId,
     courseId,
+    dateRange,
     startDate,
     endDate,
     isFiltered,
@@ -25,6 +27,7 @@ export const GlobalDashboardFilters: React.FC = () => {
   } = useDashboardFilters();
 
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
   const startInputRef = React.useRef<HTMLInputElement>(null);
   const endInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -61,20 +64,53 @@ export const GlobalDashboardFilters: React.FC = () => {
     };
   }, []);
 
-  const handleExport = () => {
-    // Generate simple CSV of summary data
-    const rows = [
-      ['Metric', 'Filter Department', 'Filter Course', 'Start Date', 'End Date'],
-      ['Dashboard Analytics Export', departmentId, courseId, startDate || 'All', endDate || 'All'],
-    ];
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `dashboard_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('format', 'xlsx');
+      if (dateRange) params.append('dateRange', dateRange);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (departmentId && departmentId !== 'all') params.append('departmentId', departmentId);
+      if (courseId && courseId !== 'all') params.append('courseId', courseId);
+
+      const headers: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem(AUTH_SESSION_KEY) || sessionStorage.getItem(AUTH_SESSION_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const token = parsed?.token || parsed?.accessToken;
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          if (parsed?.tenantId) headers['x-tenant-id'] = parsed.tenantId;
+        }
+      } catch {}
+
+      const response = await fetch(buildFullUrl(`/reports/export/dashboard?${params.toString()}`), {
+        method: 'GET',
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `dashboard_filtered_data_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to export dashboard Excel data:', err);
+      alert('Unable to export Excel report right now. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -276,31 +312,35 @@ export const GlobalDashboardFilters: React.FC = () => {
       <button
         type="button"
         onClick={handleExport}
+        disabled={isExporting}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
           background: 'transparent',
           border: 'none',
-          color: '#64748B',
+          color: isExporting ? '#2563EB' : '#64748B',
           fontSize: '0.82rem',
           fontWeight: 600,
-          cursor: 'pointer',
+          cursor: isExporting ? 'wait' : 'pointer',
           padding: '6px 12px',
           borderRadius: '9999px',
           transition: 'all 0.2s ease',
+          opacity: isExporting ? 0.75 : 1,
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.color = '#2563EB';
           e.currentTarget.style.background = 'rgba(37, 99, 235, 0.08)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.color = '#64748B';
+          if (!isExporting) {
+            e.currentTarget.style.color = '#64748B';
+          }
           e.currentTarget.style.background = 'transparent';
         }}
       >
         <Download size={14} />
-        <span>Export Filtered Data</span>
+        <span>{isExporting ? 'Exporting Excel...' : 'Export Filtered Data'}</span>
       </button>
     </div>
   );
