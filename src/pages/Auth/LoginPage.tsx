@@ -169,9 +169,9 @@ export const LoginPage: React.FC = () => {
           width: 100%;
           height: 52px;
           padding: 14px 16px 14px 50px;
-          background: #F1F5F9;
-          border: 1.5px solid #E2E8F0;
-          border-radius: 14px;
+          background: rgba(225, 231, 249, 0.65);
+          border: 1.2px solid rgba(199, 210, 254, 0.6);
+          border-radius: 16px;
           font-size: 0.95rem;
           color: #0F172A;
           outline: none;
@@ -180,12 +180,12 @@ export const LoginPage: React.FC = () => {
         }
 
         .campus-input::placeholder {
-          color: #94A3B8;
+          color: #64748B;
           font-weight: 400;
         }
 
         .campus-input:focus {
-          background: #FFFFFF;
+          background: rgba(255, 255, 255, 0.95);
           border-color: #6366F1;
           box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16);
         }
