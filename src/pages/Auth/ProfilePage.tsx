@@ -33,6 +33,50 @@ export const ProfilePage: React.FC = () => {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const { completePasswordChange } = useAuthStore();
 
+  // Portal Switch Passwords (same email -> trainer/student portal)
+  const [allowedPortalRoles, setAllowedPortalRoles] = useState<('trainer' | 'student')[]>([]);
+  const [baseRoleLabel, setBaseRoleLabel] = useState<string>('');
+  const [currentSessionRole, setCurrentSessionRole] = useState<string>('');
+  const [configuredPortals, setConfiguredPortals] = useState<{ trainer: boolean; student: boolean }>({
+    trainer: false,
+    student: false,
+  });
+  const [selectedPortalRole, setSelectedPortalRole] = useState<'trainer' | 'student'>('student');
+  const [portalCurrentPassword, setPortalCurrentPassword] = useState('');
+  const [portalNewPassword, setPortalNewPassword] = useState('');
+  const [portalConfirmPassword, setPortalConfirmPassword] = useState('');
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalSuccess, setPortalSuccess] = useState<string | null>(null);
+  const [isUpdatingPortal, setIsUpdatingPortal] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get<{
+        baseRole: string;
+        currentSessionRole: string;
+        allowedPortalRoles: ('trainer' | 'student')[];
+        configuredPortals: { trainer: boolean; student: boolean };
+      }>('/auth/portal-passwords')
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setBaseRoleLabel(data.baseRole || '');
+        setCurrentSessionRole(data.currentSessionRole || '');
+        const roles = data.allowedPortalRoles || [];
+        setAllowedPortalRoles(roles);
+        setConfiguredPortals(data.configuredPortals || { trainer: false, student: false });
+        if (roles.length > 0 && !roles.includes(selectedPortalRole)) {
+          setSelectedPortalRole(roles[0]);
+        }
+      })
+      .catch(() => {
+        // Fallback if backend offline or student account
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
@@ -42,8 +86,8 @@ export const ProfilePage: React.FC = () => {
       setPasswordError('Please enter a new password.');
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters long.');
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -65,13 +109,80 @@ export const ProfilePage: React.FC = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      completePasswordChange('token-updated');
-      setPasswordSuccess('Password updated successfully!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      setPasswordError(err?.message || 'Unable to update password. Please verify your current password.');
     } finally {
       setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleSavePortalPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPortalError(null);
+    setPortalSuccess(null);
+
+    if (!portalCurrentPassword) {
+      setPortalError('Enter your primary account password to authorize portal password changes.');
+      return;
+    }
+    if (!portalNewPassword || portalNewPassword.length < 8) {
+      setPortalError('Portal password must be at least 8 characters long.');
+      return;
+    }
+    if (portalNewPassword !== portalConfirmPassword) {
+      setPortalError('Portal password and confirmation do not match.');
+      return;
+    }
+
+    setIsUpdatingPortal(true);
+    try {
+      const res = await apiClient.put<{
+        configuredPortals?: { trainer: boolean; student: boolean };
+      }>('/auth/portal-passwords', {
+        portalRole: selectedPortalRole,
+        currentPassword: portalCurrentPassword,
+        newPassword: portalNewPassword,
+      });
+      if (res.data?.configuredPortals) {
+        setConfiguredPortals(res.data.configuredPortals);
+      }
+      setPortalSuccess(
+        res.message ||
+          `${selectedPortalRole === 'trainer' ? 'Faculty / Trainer' : 'Student'} portal password saved! Sign in on the login page using ${user?.email} and this password.`
+      );
+      setPortalCurrentPassword('');
+      setPortalNewPassword('');
+      setPortalConfirmPassword('');
+    } catch (err: any) {
+      setPortalError(err?.message || 'Unable to save portal password.');
+    } finally {
+      setIsUpdatingPortal(false);
+    }
+  };
+
+  const handleRemovePortalPassword = async (roleToRemove: 'trainer' | 'student') => {
+    setPortalError(null);
+    setPortalSuccess(null);
+    if (!portalCurrentPassword) {
+      setPortalError('Enter your primary account password first to remove a portal switch password.');
+      return;
+    }
+    setIsUpdatingPortal(true);
+    try {
+      const res = await apiClient.post<{
+        configuredPortals?: { trainer: boolean; student: boolean };
+      }>('/auth/portal-passwords/remove', {
+        portalRole: roleToRemove,
+        currentPassword: portalCurrentPassword,
+      });
+      if (res.data?.configuredPortals) {
+        setConfiguredPortals(res.data.configuredPortals);
+      }
+      setPortalSuccess(res.message || 'Portal switch password removed.');
+      setPortalCurrentPassword('');
+    } catch (err: any) {
+      setPortalError(err?.message || 'Unable to remove portal password.');
+    } finally {
+      setIsUpdatingPortal(false);
     }
   };
 
@@ -768,6 +879,132 @@ export const ProfilePage: React.FC = () => {
               </button>
             </form>
           </div>
+
+          {allowedPortalRoles.length > 0 && (
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={17} color="var(--primary)" />
+                    Portal Switch Passwords (Same Email)
+                  </h3>
+                  <p className="text-secondary text-sm" style={{ margin: 0 }}>
+                    Sign in on the login page using <strong>{user?.email}</strong> with a separate portal password to enter another portal directly.
+                    {currentSessionRole && baseRoleLabel && currentSessionRole !== baseRoleLabel && (
+                      <span> (Currently active in <strong>{currentSessionRole}</strong> session; base role: <strong>{baseRoleLabel}</strong>)</span>
+                    )}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {allowedPortalRoles.includes('trainer') && (
+                    <span className={`badge ${configuredPortals.trainer ? 'badge-active' : 'badge-draft'}`}>
+                      Trainer Portal: {configuredPortals.trainer ? 'Configured' : 'Not Set'}
+                    </span>
+                  )}
+                  {allowedPortalRoles.includes('student') && (
+                    <span className={`badge ${configuredPortals.student ? 'badge-active' : 'badge-draft'}`}>
+                      Student Portal: {configuredPortals.student ? 'Configured' : 'Not Set'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {portalError && (
+                <div style={{ background: 'var(--danger-bg)', border: '1px solid var(--danger-border)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem' }}>
+                  {portalError}
+                </div>
+              )}
+
+              {portalSuccess && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--success, #10b981)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 size={16} />
+                  <span>{portalSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSavePortalPassword}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Target Portal</label>
+                    <select
+                      className="form-input"
+                      value={selectedPortalRole}
+                      onChange={(e) => setSelectedPortalRole(e.target.value as 'trainer' | 'student')}
+                    >
+                      {allowedPortalRoles.includes('trainer') && (
+                        <option value="trainer">Faculty / Trainer Portal</option>
+                      )}
+                      {allowedPortalRoles.includes('student') && (
+                        <option value="student">Student Portal</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Primary Account Password *</label>
+                    <input
+                      type="password"
+                      placeholder="Verify primary password"
+                      className="form-input"
+                      value={portalCurrentPassword}
+                      onChange={(e) => setPortalCurrentPassword(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      {selectedPortalRole === 'trainer' ? 'Trainer Portal Password *' : 'Student Portal Password *'}
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Min 8 chars (must differ)"
+                      className="form-input"
+                      value={portalNewPassword}
+                      onChange={(e) => setPortalNewPassword(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Confirm Portal Password *</label>
+                    <input
+                      type="password"
+                      placeholder="Repeat portal password"
+                      className="form-input"
+                      value={portalConfirmPassword}
+                      onChange={(e) => setPortalConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={isUpdatingPortal}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Lock size={14} />
+                    {isUpdatingPortal
+                      ? 'Saving Portal Password...'
+                      : configuredPortals[selectedPortalRole]
+                      ? `Update ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`
+                      : `Set ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`}
+                  </button>
+
+                  {configuredPortals[selectedPortalRole] && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={isUpdatingPortal}
+                      onClick={() => handleRemovePortalPassword(selectedPortalRole)}
+                    >
+                      Disable {selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Login
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
 
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
