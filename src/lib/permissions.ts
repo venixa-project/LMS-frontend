@@ -404,7 +404,8 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath.startsWith('/faculty/') ||
     cleanPath === '/students/new' ||
     cleanPath === '/cohorts/new' ||
-    cleanPath === '/enrollments'
+    cleanPath === '/enrollments' ||
+    cleanPath === '/support'
   ) {
     return role === 'platform_admin' || role === 'org_admin';
   }

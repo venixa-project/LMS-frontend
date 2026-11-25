@@ -41,4 +41,5 @@ export const adminNav: NavItem[] = [
 
   // 9. Account
   { id: 'profile', label: 'Admin Profile', icon: 'User', path: '/profile', group: 'Account' },
+  { id: 'support', label: 'Support', icon: 'LifeBuoy', path: '/support', group: 'Account' },
 ];

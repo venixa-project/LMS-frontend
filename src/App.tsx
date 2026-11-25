@@ -119,6 +119,7 @@ const ReportsPage = lazyPage(() => import('./pages/Reports/ReportsPage'), 'Repor
 const NotificationsCenterPage = lazyPage(() => import('./pages/Notifications/NotificationsCenterPage'), 'NotificationsCenterPage');
 const IntegrationsPage = lazyPage(() => import('./pages/System/IntegrationsPage'), 'IntegrationsPage');
 const PlatformSettingsPage = lazyPage(() => import('./pages/System/PlatformSettingsPage'), 'PlatformSettingsPage');
+const AdminSupportPage = lazyPage(() => import('./admin/pages/AdminSupportPage'), 'AdminSupportPage');
 
 // Errors
 const NotFoundPage = lazyPage(() => import('./pages/ErrorPages/NotFoundPage'), 'NotFoundPage');
@@ -283,6 +284,7 @@ export const App: React.FC = () => {
               <Route path="faculty/new" element={<PersonCreatePage />} />
               <Route path="cohorts/new" element={<CohortCreatePage />} />
               <Route path="enrollments" element={<EnrollmentsPage />} />
+              <Route path="support" element={<AdminSupportPage />} />
             </Route>
 
             {/* Cohorts & Batches (Admin, Trainer & Enrolled Student View) */}

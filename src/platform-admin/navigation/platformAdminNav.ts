@@ -22,4 +22,5 @@ export const platformAdminNav: NavItem[] = [
   { id: 'notifications', label: 'Platform Announcements', icon: 'Bell', path: '/notifications', group: 'System & Insights' },
   { id: 'settings', label: 'Platform Settings', icon: 'Settings', path: '/settings', group: 'System & Insights' },
   { id: 'profile', label: 'Admin Profile', icon: 'User', path: '/profile', group: 'Account' },
+  { id: 'support', label: 'Support', icon: 'LifeBuoy', path: '/support', group: 'Account' },
 ];

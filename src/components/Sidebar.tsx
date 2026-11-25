@@ -7,7 +7,7 @@ import {
   Plug, Settings, Building2, Building, Briefcase, MapPin, Network, Users, UsersRound,
   Shield, Search, Trophy, GraduationCap, Calendar, Clock,
   UserCheck, User, Megaphone, Compass, Library, Layers, X, Play, Flame, Zap,
-  Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle
+  Link2, Share2, ChevronDown, ChevronRight, FileText, CheckCircle, LifeBuoy
 } from 'lucide-react';
 import { getNavigationForRole, type NavItem } from '../lib/permissions';
 import { useOrganisationBranding } from '../lib/useOrganisationBranding';
@@ -33,6 +33,7 @@ const iconMap: Record<string, any> = {
   Award,
   BarChart3,
   Bell,
+  LifeBuoy,
   Plug,
   Settings,
   Search,
