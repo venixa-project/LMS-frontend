@@ -53,34 +53,24 @@ function restoreSessionFromStorage(): {
       return null;
     }
 
-    // Demo personas come from the trusted local directory; backend users retain
-    // the profile returned with their server-issued JWT for session restoration.
-    const trustedUser = mockUsers.find(
-      (u) => u.id === session.userId || u.email.toLowerCase() === session.email?.toLowerCase()
-    );
+    // Session restoration strictly from authenticated backend user snapshot or verified JWT payload
+    const sessionUser: User | null = session.userSnapshot || (session.userId ? {
+      id: session.userId,
+      email: session.email,
+      displayName: session.email?.split('@')[0] || 'User',
+      activeRole: session.activeRole,
+      status: 'active',
+      organizationId: '',
+      roles: [],
+      mfaEnabled: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as unknown as User : null);
 
-    const isServerSession = typeof session.token === 'string' && session.token.split('.').length === 3;
-    const restoredBackendUser = isServerSession
-      ? (session.userSnapshot || {
-          id: session.userId,
-          email: session.email,
-          displayName: session.email?.split('@')[0] || 'User',
-          activeRole: session.activeRole,
-          status: 'active',
-          organizationId: '',
-          roles: [],
-          mfaEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        } as unknown as User)
-      : null;
-
-    if (!trustedUser && !restoredBackendUser) {
+    if (!sessionUser) {
       localStorage.removeItem(AUTH_SESSION_KEY);
       return null;
     }
-
-    const sessionUser = restoredBackendUser || trustedUser!;
 
     // Validate account status
     if (sessionUser.status === 'suspended' || sessionUser.status === 'deactivated' || sessionUser.status !== 'active') {
@@ -286,56 +276,7 @@ function getUserNotifications(user: User): Notification[] {
         (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors')))
   );
 
-  const defaults: Notification[] = [
-    ...(isAdminOrTrainer
-      ? [
-          {
-            id: `sys-proc-admin-${user.id}`,
-            userId: user.id,
-            title: 'Proctoring Incident Center',
-            message: 'Flagged candidate telemetry events and pre-roll clips are ready for faculty review.',
-            category: 'system' as const,
-            link: '/proctoring',
-            isRead: false,
-            timestamp: new Date(Date.now() - 1800000).toISOString(),
-          },
-          {
-            id: `sys-grade-admin-${user.id}`,
-            userId: user.id,
-            title: 'AI Evaluation & Grading Queue',
-            message: 'Recent assessment submissions have been AI-evaluated and await final score approval.',
-            category: 'assessment' as const,
-            link: '/grading',
-            isRead: false,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-          },
-        ]
-      : []),
-    ...(isStudentUser
-      ? [
-          {
-            id: `sys-2-${user.id}`,
-            userId: user.id,
-            title: 'Assessment Due Soon',
-            message: 'React Fundamentals Quiz is due in 2 days.',
-            category: 'assessment' as const,
-            link: '/my-assessments',
-            isRead: false,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-          },
-          {
-            id: `sys-3-${user.id}`,
-            userId: user.id,
-            title: 'Live Class Tomorrow',
-            message: 'Advanced TypeScript Patterns session scheduled for tomorrow at 10:00 AM.',
-            category: 'live_class' as const,
-            link: '/my-sessions',
-            isRead: false,
-            timestamp: new Date(Date.now() - 7200000).toISOString(),
-          },
-        ]
-      : []),
-  ];
+  const defaults: Notification[] = [];
 
   const adjustedDefaults = defaults.map((d) => ({
     ...d,
@@ -509,91 +450,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return;
     } catch (authError: any) {
-      const isConnectionError =
-        authError.code === 'BACKEND_OFFLINE' ||
-        authError.name === 'TypeError' ||
-        authError.message?.includes('Cannot connect') ||
-        authError.message?.includes('API request failed') ||
-        authError.message?.includes('Failed to fetch') ||
-        authError.message?.includes('NetworkError') ||
-        authError.message?.includes('ECONNREFUSED');
-
-      const isDevOrDemoAccount =
-        normalizedEmail.endsWith('@lms.demo') ||
-        normalizedEmail.endsWith('@acuity.com') ||
-        normalizedEmail === 'k.ravivarma047@gmail.com' ||
-        normalizedEmail.includes('ravi') ||
-        (typeof window !== 'undefined' && window.location.hostname === 'localhost');
-
-      if (isDevOrDemoAccount && isConnectionError) {
-        let activeRole: RoleName = 'student';
-        let displayName = 'Alex Chen';
-        let firstName = 'Alex';
-        let lastName = 'Chen';
-
-        if (normalizedEmail === 'k.ravivarma047@gmail.com' || normalizedEmail.includes('ravi')) {
-          activeRole = 'student';
-          displayName = 'Ravi Varma';
-          firstName = 'Ravi';
-          lastName = 'Varma';
-        } else if (normalizedEmail.includes('trainer') || normalizedEmail.includes('faculty')) {
-          activeRole = 'trainer';
-          displayName = 'Dr. Marcus Johnson';
-          firstName = 'Marcus';
-          lastName = 'Johnson';
-        } else if (normalizedEmail.includes('orgadmin') || normalizedEmail === 'admin@acuity.com') {
-          activeRole = 'org_admin';
-          displayName = 'Arthur Pendleton (Dean / Org Admin)';
-          firstName = 'Arthur';
-          lastName = 'Pendleton';
-        } else if (normalizedEmail.includes('admin') || normalizedEmail.includes('superadmin')) {
-          activeRole = 'platform_admin';
-          displayName = 'System Superadmin';
-          firstName = 'Platform';
-          lastName = 'Superadmin';
-        }
-
-        const fallbackUser: User = {
-          id: normalizedEmail === 'k.ravivarma047@gmail.com' ? 'u-ravi-varma' : `demo-${activeRole}-user`,
-          email: normalizedEmail,
-          firstName,
-          lastName,
-          displayName,
-          activeRole,
-          organizationId: '871abf8a-e563-4d0f-afc7-416d8da3df14',
-          rollNo: normalizedEmail === 'k.ravivarma047@gmail.com' ? '26' : undefined,
-          roles: [],
-          status: 'active',
-          mustChangePassword: false,
-          mfaEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        const demoToken = `demo-token-${activeRole}-${Date.now()}`;
-        localStorage.setItem('venilearn_active_tenant_id', '871abf8a-e563-4d0f-afc7-416d8da3df14');
-        persistSession(fallbackUser, activeRole, demoToken);
-
-        const permissions = getPermissionsForRole(activeRole);
-        const navigation = getNavigationForRole(activeRole);
-        const notifications = getUserNotifications(fallbackUser);
-
-        set({
-          user: fallbackUser,
-          permissions,
-          navigation,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-          notifications,
-          unreadNotifications: notifications.filter((n) => !n.isRead).length,
-        });
-        return;
-      }
-
       set({
         isLoading: false,
-        error: authError.message || authError.response?.data?.message || 'Unable to sign in. Check your email and password.',
+        error: authError.response?.data?.message || authError.message || 'Unable to sign in. Check your email and password.',
       });
       return;
     }

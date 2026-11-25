@@ -41,6 +41,18 @@ interface PeopleState {
 }
 
 const STORAGE_KEY_PEOPLE = 'venilearn_cached_people';
+const STORE_VERSION_KEY = 'venilearn_people_store_version';
+const CURRENT_STORE_VERSION = 'v5_fresh_app_init_reset';
+
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem(STORE_VERSION_KEY);
+    if (cachedVer !== CURRENT_STORE_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_PEOPLE);
+      localStorage.setItem(STORE_VERSION_KEY, CURRENT_STORE_VERSION);
+    }
+  } catch {}
+}
 
 function getInitialUsers(): User[] {
   if (typeof window !== 'undefined') {
@@ -67,14 +79,14 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
     try {
       const res = await peopleApi.list(params);
       const fetched = res.users || [];
-      if (fetched.length > 0 && typeof window !== 'undefined') {
+      if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(STORAGE_KEY_PEOPLE, JSON.stringify(fetched));
         } catch { }
       }
       set({
-        users: fetched.length > 0 ? fetched : get().users,
-        totalUsers: res.meta?.total || (fetched.length > 0 ? fetched.length : get().totalUsers),
+        users: fetched,
+        totalUsers: res.meta?.total !== undefined ? res.meta.total : fetched.length,
         isLoading: false,
       });
     } catch (err: any) {

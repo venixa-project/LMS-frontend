@@ -76,7 +76,7 @@ const STORAGE_KEY_ENROLLED = 'venilearn_enrolled_courses';
 const STORAGE_KEY_REQUESTED = 'venilearn_requested_courses';
 const STORAGE_KEY_ENROLLMENTS = 'venilearn_enrollments';
 const STORE_VERSION_KEY = 'venilearn_courses_store_version';
-const CURRENT_STORE_VERSION = 'v4_clean_production_sync';
+const CURRENT_STORE_VERSION = 'v5_fresh_app_init_reset';
 
 // Automatically bust stale client-side caches from previous prototype/mock data
 if (typeof window !== 'undefined') {

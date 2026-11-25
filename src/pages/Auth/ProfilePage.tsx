@@ -117,16 +117,7 @@ export const ProfilePage: React.FC = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-<<<<<<< HEAD
       setPasswordError(err?.message || 'Unable to update password. Please verify your current password.');
-=======
-      const message =
-        err?.response?.data?.error?.message ||
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to update password. Please verify your current password.';
-      setPasswordError(message);
->>>>>>> 90613f803c9cee00f07dcf2d32472495408f1172
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -164,7 +155,7 @@ export const ProfilePage: React.FC = () => {
       }
       setPortalSuccess(
         res.message ||
-          `${selectedPortalRole === 'trainer' ? 'Faculty / Trainer' : 'Student'} portal password saved! Sign in on the login page using ${user?.email} and this password.`
+        `${selectedPortalRole === 'trainer' ? 'Faculty / Trainer' : 'Student'} portal password saved! Sign in on the login page using ${user?.email} and this password.`
       );
       setPortalCurrentPassword('');
       setPortalNewPassword('');
@@ -316,8 +307,8 @@ export const ProfilePage: React.FC = () => {
             ? `Email alerts enabled for ${user?.email || 'your account'}`
             : 'Email notifications paused'
           : nextValue
-          ? 'In-app alerts & notification sound enabled'
-          : 'In-app notification sound muted'
+            ? 'In-app alerts & notification sound enabled'
+            : 'In-app notification sound muted'
       );
       setTimeout(() => setNotifPrefsSaved(null), 3000);
     } catch {
@@ -827,113 +818,113 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
-                gap: '14px',
-              }}
-            >
-              {allArchetypes.map((arch) => {
-                const isSelected = arch.id === avatarId;
-                return (
-                  <div
-                    key={arch.id}
-                    onClick={() => {
-                      setAvatar(arch.id);
-                      setAvatarSuccess(true);
-                      setTimeout(() => setAvatarSuccess(false), 2500);
-                    }}
-                    style={{
-                      background: isSelected
-                        ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)'
-                        : 'var(--bg-input)',
-                      border: isSelected
-                        ? '2px solid #38bdf8'
-                        : '1.5px solid var(--border-subtle)',
-                      borderRadius: '16px',
-                      padding: '16px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isSelected
-                        ? '0 0 20px rgba(56, 189, 248, 0.3), 0 8px 20px rgba(0,0,0,0.4)'
-                        : '0 4px 12px rgba(0,0,0,0.15)',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.5)';
-                        e.currentTarget.style.transform = 'translateY(-3px)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) {
-                        e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }
-                    }}
-                  >
-                    <AnimatedAvatar
-                      avatarId={arch.id}
-                      size={60}
-                      interactive={true}
-                      ringVariant={isSelected ? 'cyan' : 'auto'}
-                    />
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))',
+                    gap: '14px',
+                  }}
+                >
+                  {allArchetypes.map((arch) => {
+                    const isSelected = arch.id === avatarId;
+                    return (
+                      <div
+                        key={arch.id}
+                        onClick={() => {
+                          setAvatar(arch.id);
+                          setAvatarSuccess(true);
+                          setTimeout(() => setAvatarSuccess(false), 2500);
+                        }}
+                        style={{
+                          background: isSelected
+                            ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, rgba(15, 23, 42, 0.9) 100%)'
+                            : 'var(--bg-input)',
+                          border: isSelected
+                            ? '2px solid #38bdf8'
+                            : '1.5px solid var(--border-subtle)',
+                          borderRadius: '16px',
+                          padding: '16px 12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                          boxShadow: isSelected
+                            ? '0 0 20px rgba(56, 189, 248, 0.3), 0 8px 20px rgba(0,0,0,0.4)'
+                            : '0 4px 12px rgba(0,0,0,0.15)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+                            e.currentTarget.style.transform = 'translateY(-3px)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }
+                        }}
+                      >
+                        <AnimatedAvatar
+                          avatarId={arch.id}
+                          size={60}
+                          interactive={true}
+                          ringVariant={isSelected ? 'cyan' : 'auto'}
+                        />
 
-                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: isSelected ? '#38bdf8' : '#fff', marginTop: '12px' }}>
-                      {arch.name}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: isSelected ? '#93c5fd' : 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
-                      {arch.title}
-                    </div>
-                    <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '6px', minHeight: '32px' }}>
-                      {arch.flavor}
-                    </div>
+                        <div style={{ fontWeight: 800, fontSize: '0.92rem', color: isSelected ? '#38bdf8' : '#fff', marginTop: '12px' }}>
+                          {arch.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: isSelected ? '#93c5fd' : 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3 }}>
+                          {arch.title}
+                        </div>
+                        <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: '6px', minHeight: '32px' }}>
+                          {arch.flavor}
+                        </div>
 
-                    <div style={{ marginTop: '10px' }}>
-                      {isSelected ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            background: 'linear-gradient(135deg, #0284c7, #2563eb)',
-                            color: '#fff',
-                            fontWeight: 800,
-                            fontSize: '0.68rem',
-                            padding: '3px 10px',
-                            borderRadius: '999px',
-                          }}
-                        >
-                          <Check size={12} strokeWidth={2.5} /> Active Avatar
-                        </span>
-                      ) : (
-                        <span
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            fontSize: '0.7rem',
-                            padding: '2px 10px',
-                            borderRadius: '999px',
-                          }}
-                        >
-                          Select
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                        <div style={{ marginTop: '10px' }}>
+                          {isSelected ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: 'linear-gradient(135deg, #0284c7, #2563eb)',
+                                color: '#fff',
+                                fontWeight: 800,
+                                fontSize: '0.68rem',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                              }}
+                            >
+                              <Check size={12} strokeWidth={2.5} /> Active Avatar
+                            </span>
+                          ) : (
+                            <span
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                fontSize: '0.7rem',
+                                padding: '2px 10px',
+                                borderRadius: '999px',
+                              }}
+                            >
+                              Select
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
-      </>
-    )}
+        </>
+      )}
 
       {activeTab === 'security' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1002,7 +993,6 @@ export const ProfilePage: React.FC = () => {
               </button>
             </form>
           </div>
-<<<<<<< HEAD
 
           {allowedPortalRoles.length > 0 && (
             <div className="card">
@@ -1111,8 +1101,8 @@ export const ProfilePage: React.FC = () => {
                     {isUpdatingPortal
                       ? 'Saving Portal Password...'
                       : configuredPortals[selectedPortalRole]
-                      ? `Update ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`
-                      : `Set ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`}
+                        ? `Update ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`
+                        : `Set ${selectedPortalRole === 'trainer' ? 'Trainer' : 'Student'} Password`}
                   </button>
 
                   {configuredPortals[selectedPortalRole] && (
@@ -1146,8 +1136,6 @@ export const ProfilePage: React.FC = () => {
               <button className="btn btn-secondary btn-sm">Re-pair Authenticator App</button>
             </div>
           </div>
-=======
->>>>>>> 90613f803c9cee00f07dcf2d32472495408f1172
         </div>
       )}
 
