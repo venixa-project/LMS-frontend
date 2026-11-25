@@ -47,6 +47,7 @@ import {
   RefreshCw,
   Check,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 
 interface StudentNotification {
@@ -65,6 +66,7 @@ const StudentNotificationsInbox: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'course' | 'assessment' | 'live' | 'announcement'>('all');
 
   useEffect(() => {
     let active = true;
@@ -127,26 +129,126 @@ const StudentNotificationsInbox: React.FC = () => {
 
   const unreadCount = (Array.isArray(notifications) ? notifications : []).filter((notification) => !notification.isRead).length;
 
+  const getCategoryTheme = (category?: string) => {
+    const key = (category || 'system').toLowerCase();
+    if (key.includes('course') || key.includes('lesson') || key.includes('enroll')) {
+      return { key: 'course', accent: '#3b82f6', bg: 'rgba(59, 130, 246, 0.14)', softBg: 'rgba(59, 130, 246, 0.06)', border: 'rgba(59, 130, 246, 0.35)', label: 'Course', icon: BookOpen };
+    }
+    if (key.includes('assess') || key.includes('exam') || key.includes('quiz') || key.includes('grad')) {
+      return { key: 'assessment', accent: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.14)', softBg: 'rgba(139, 92, 246, 0.06)', border: 'rgba(139, 92, 246, 0.35)', label: 'Assessment', icon: Award };
+    }
+    if (key.includes('live') || key.includes('session')) {
+      return { key: 'live', accent: '#10b981', bg: 'rgba(16, 185, 129, 0.14)', softBg: 'rgba(16, 185, 129, 0.06)', border: 'rgba(16, 185, 129, 0.35)', label: 'Live Session', icon: Sparkles };
+    }
+    if (key.includes('announce') || key.includes('campus') || key.includes('general')) {
+      return { key: 'announcement', accent: '#ec4899', bg: 'rgba(236, 72, 153, 0.14)', softBg: 'rgba(236, 72, 153, 0.06)', border: 'rgba(236, 72, 153, 0.35)', label: 'Announcement', icon: Megaphone };
+    }
+    return { key: 'system', accent: '#f59e0b', bg: 'rgba(245, 158, 11, 0.14)', softBg: 'rgba(245, 158, 11, 0.06)', border: 'rgba(245, 158, 11, 0.35)', label: category || 'Update', icon: Bell };
+  };
+
+  const filteredNotifications = (Array.isArray(notifications) ? notifications : []).filter((n) => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'unread') return !n.isRead;
+    return getCategoryTheme(n.category).key === activeFilter;
+  });
+
   return (
-    <section>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ marginBottom: '4px' }}>Campus Announcements &amp; Reminders</h1>
-          <p className="text-secondary text-sm">Your recent account and learning notifications.</p>
+    <section style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <header
+        className="kpi-card-animated"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '16px',
+          flexWrap: 'wrap',
+          padding: '22px 26px',
+          borderRadius: '18px',
+          background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.14) 0%, rgba(236, 72, 153, 0.10) 50%, rgba(14, 165, 233, 0.12) 100%)',
+          border: '1px solid rgba(99, 102, 241, 0.28)',
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div
+            style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, #4f46e5, #ec4899)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 20px rgba(79, 70, 229, 0.35)',
+              flexShrink: 0,
+            }}
+          >
+            <Bell size={24} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 800 }}>Campus Announcements &amp; Reminders</h1>
+              {unreadCount > 0 ? (
+                <span
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    background: 'linear-gradient(135deg, #f43f5e, #ec4899)',
+                    color: '#fff',
+                    boxShadow: '0 4px 12px rgba(244, 63, 94, 0.35)',
+                  }}
+                >
+                  {unreadCount} Unread
+                </span>
+              ) : (
+                <span
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: '999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: '#10b981',
+                  }}
+                >
+                  All Caught Up
+                </span>
+              )}
+            </div>
+            <p className="text-secondary text-sm" style={{ margin: '4px 0 0' }}>
+              Your recent course invitations, live session alerts, and campus updates.
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={unreadCount === 0 || isMarkingAllRead}
-          onClick={markAllRead}
-        >
-          <CheckCheck size={16} />
-          {isMarkingAllRead ? 'Updating…' : 'Mark all read'}
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setReloadKey((k) => k + 1)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={unreadCount === 0 || isMarkingAllRead}
+            onClick={markAllRead}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <CheckCheck size={15} />
+            {isMarkingAllRead ? 'Updating…' : 'Mark all read'}
+          </button>
+        </div>
       </header>
 
       {error && (
-        <div role="alert" className="card" style={{ color: 'var(--danger)', marginBottom: '16px' }}>
+        <div role="alert" className="card kpi-card-animated" style={{ color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>
           <p>{error}</p>
           <button type="button" className="btn btn-secondary" onClick={() => setReloadKey((key) => key + 1)}>
             <RefreshCw size={15} /> Retry
@@ -154,61 +256,229 @@ const StudentNotificationsInbox: React.FC = () => {
         </div>
       )}
 
-      <div className="card">
-        {isLoading ? (
+      {!isLoading && notifications.length > 0 && (
+        <div
+          className="kpi-card-animated"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {[
+            { id: 'all' as const, label: 'All Updates', color: '#4f46e5', count: notifications.length },
+            { id: 'unread' as const, label: 'Unread', color: '#f43f5e', count: unreadCount },
+            { id: 'course' as const, label: 'Courses', color: '#3b82f6', count: notifications.filter((n) => getCategoryTheme(n.category).key === 'course').length },
+            { id: 'assessment' as const, label: 'Assessments', color: '#8b5cf6', count: notifications.filter((n) => getCategoryTheme(n.category).key === 'assessment').length },
+            { id: 'live' as const, label: 'Live Sessions', color: '#10b981', count: notifications.filter((n) => getCategoryTheme(n.category).key === 'live').length },
+            { id: 'announcement' as const, label: 'Announcements', color: '#ec4899', count: notifications.filter((n) => getCategoryTheme(n.category).key === 'announcement').length },
+          ].map((tab) => {
+            const isSelected = activeFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveFilter(tab.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  borderRadius: '999px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: isSelected ? tab.color : 'var(--bg-card)',
+                  color: isSelected ? '#ffffff' : 'var(--text-main)',
+                  border: `1.5px solid ${isSelected ? tab.color : 'var(--border-subtle)'}`,
+                  boxShadow: isSelected ? `0 6px 16px ${tab.color}40` : 'none',
+                }}
+              >
+                <span>{tab.label}</span>
+                <span
+                  style={{
+                    padding: '1px 7px',
+                    borderRadius: '999px',
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    background: isSelected ? 'rgba(255,255,255,0.22)' : `${tab.color}18`,
+                    color: isSelected ? '#ffffff' : tab.color,
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="card" style={{ padding: '40px 24px', textAlign: 'center' }}>
           <p role="status" className="text-secondary">Loading notifications…</p>
-        ) : notifications.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '36px 16px' }}>
-            <Bell size={28} className="text-secondary" />
-            <h2 className="text-lg" style={{ marginTop: '12px' }}>You’re all caught up</h2>
-            <p className="text-secondary text-sm">New learning and account updates will appear here.</p>
+        </div>
+      ) : filteredNotifications.length === 0 ? (
+        <div
+          className="card kpi-card-animated"
+          style={{
+            textAlign: 'center',
+            padding: '48px 20px',
+            background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%)',
+          }}
+        >
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              margin: '0 auto 14px',
+              borderRadius: '16px',
+              background: 'rgba(16, 185, 129, 0.14)',
+              color: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <CheckCircle2 size={28} />
           </div>
-        ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {notifications.map((notification) => (
+          <h2 className="text-lg" style={{ margin: '0 0 6px', fontWeight: 700 }}>You’re all caught up</h2>
+          <p className="text-secondary text-sm" style={{ margin: 0 }}>New learning and account updates will appear here.</p>
+        </div>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {filteredNotifications.map((notification, index) => {
+            const theme = getCategoryTheme(notification.category);
+            const IconComp = theme.icon;
+            return (
               <li
                 key={notification.id}
+                className="leaderboard-row-animated"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 12px 28px ${theme.bg}`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = notification.isRead
+                    ? `0 4px 14px ${theme.softBg}`
+                    : `0 8px 24px ${theme.bg}`;
+                }}
                 style={{
+                  animationDelay: `${Math.min(index * 45, 360)}ms`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
                   gap: '16px',
-                  padding: '16px 0',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  opacity: notification.isRead ? 0.72 : 1,
+                  padding: '18px 20px',
+                  borderRadius: '14px',
+                  background: notification.isRead
+                    ? `linear-gradient(135deg, ${theme.softBg} 0%, var(--bg-card) 75%)`
+                    : `linear-gradient(135deg, ${theme.bg} 0%, var(--bg-card) 65%)`,
+                  border: `1.5px solid ${notification.isRead ? theme.border.replace('0.35', '0.22') : theme.border}`,
+                  borderLeft: `5px solid ${theme.accent}`,
+                  boxShadow: notification.isRead
+                    ? `0 4px 14px ${theme.softBg}`
+                    : `0 8px 24px ${theme.bg}`,
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                 }}
               >
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <Bell size={18} aria-hidden="true" />
-                  <div>
-                    <h2 className="text-sm" style={{ margin: 0, fontWeight: notification.isRead ? 500 : 700 }}>
-                      {notification.title}
-                    </h2>
-                    <p className="text-sm" style={{ margin: '6px 0' }}>{notification.message}</p>
-                    <time className="text-secondary text-xs" dateTime={notification.createdAt}>
-                      {new Date(notification.createdAt).toLocaleString()}
-                    </time>
-                    {notification.linkUrl?.startsWith('/') && !notification.linkUrl.startsWith('//') && (
-                      <p style={{ margin: '8px 0 0' }}>
-                        <a href={notification.linkUrl}>Open related item</a>
-                      </p>
-                    )}
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flex: 1 }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      background: theme.bg,
+                      border: `1px solid ${theme.border}`,
+                      color: theme.accent,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: '2px',
+                    }}
+                  >
+                    <IconComp size={19} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                      {!notification.isRead && (
+                        <span
+                          aria-label="Unread"
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: theme.accent,
+                            boxShadow: `0 0 8px ${theme.accent}`,
+                            display: 'inline-block',
+                          }}
+                        />
+                      )}
+                      <h2 className="text-sm" style={{ margin: 0, fontWeight: notification.isRead ? 600 : 800, fontSize: '0.96rem', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                        {notification.title}
+                      </h2>
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          background: theme.bg,
+                          color: theme.accent,
+                          border: `1px solid ${theme.border}`,
+                        }}
+                      >
+                        {theme.label}
+                      </span>
+                    </div>
+                    <p className="text-sm" style={{ margin: '6px 0 8px', lineHeight: 1.5, color: 'var(--text-main)' }}>
+                      {notification.message}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                      <time className="text-secondary text-xs" dateTime={notification.createdAt} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} /> {new Date(notification.createdAt).toLocaleString()}
+                      </time>
+                      {notification.linkUrl?.startsWith('/') && !notification.linkUrl.startsWith('//') && (
+                        <a
+                          href={notification.linkUrl}
+                          style={{
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            color: theme.accent,
+                            textDecoration: 'none',
+                          }}
+                        >
+                          Open related item &rarr;
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
                 {!notification.isRead && (
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => markRead(notification.id)}
+                    style={{
+                      flexShrink: 0,
+                      borderColor: theme.border,
+                      color: theme.accent,
+                      fontWeight: 700,
+                    }}
                   >
                     Mark read
                   </button>
                 )}
               </li>
-            ))}
-          </ul>
-        )}
-      </div>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 };
@@ -306,7 +576,7 @@ const NotificationsManagementPage: React.FC = () => {
     try {
       // Micro-async pause to show loading state and prevent duplicate clicks
       await new Promise((resolve) => setTimeout(resolve, 350));
-      const res = deleteAnnouncement(announcementToDelete.id);
+      const res = await deleteAnnouncement(announcementToDelete.id);
       if (res && res.success === false) {
         setDeleteError(res.message || 'Failed to delete announcement.');
         setIsDeleting(false);
@@ -547,7 +817,7 @@ const NotificationsManagementPage: React.FC = () => {
   };
 
   // Save Announcement (Draft or Published/Scheduled)
-  const handleSaveAnnouncement = (targetStatus: 'published' | 'draft') => {
+  const handleSaveAnnouncement = async (targetStatus: 'published' | 'draft') => {
     if (!formTitle.trim() || !formContent.trim()) {
       alert('Please enter both an Announcement Title and Message Content.');
       return;
@@ -622,10 +892,10 @@ const NotificationsManagementPage: React.FC = () => {
     };
 
     if (editingAnnouncementId) {
-      updateAnnouncement(editingAnnouncementId, payload);
+      await updateAnnouncement(editingAnnouncementId, payload);
       showToast('Announcement updated successfully.');
     } else {
-      createAnnouncement(payload);
+      await createAnnouncement(payload);
       showToast(
         finalStatus === 'published'
           ? 'Announcement published to target audience!'
@@ -1045,10 +1315,10 @@ const NotificationsManagementPage: React.FC = () => {
                         )}
                       </div>
 
-                      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '8px', lineHeight: 1.4, color: 'var(--text-main)' }}>
+                      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '8px', lineHeight: 1.4, color: 'var(--text-main)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                         {ann.title}
                       </h3>
-                      <p className="text-secondary text-sm" style={{ marginBottom: '16px', lineHeight: 1.5 }}>
+                      <p className="text-secondary text-sm" style={{ marginBottom: '16px', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                         {ann.content}
                       </p>
                     </div>
@@ -1341,13 +1611,15 @@ const NotificationsManagementPage: React.FC = () => {
                           marginBottom: '8px',
                           lineHeight: 1.4,
                           color: 'var(--text-main)',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
                         }}
                       >
                         {ann.title}
                       </h3>
 
                       {/* Message Content */}
-                      <p className="text-secondary text-sm" style={{ marginBottom: '16px', lineHeight: 1.55 }}>
+                      <p className="text-secondary text-sm" style={{ marginBottom: '16px', lineHeight: 1.55, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                         {ann.content}
                       </p>
 

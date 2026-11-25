@@ -680,6 +680,8 @@ h6 {
   gap: 10px;
   position: relative;
   overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+  animation: kpiFadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .stat-card::after {
@@ -690,14 +692,61 @@ h6 {
   right: 0;
   height: 3px;
   background: var(--gradient-3-color-flow);
-  /* 3-Color Flow: #2563EB → #818CF8 → #F472B6 */
-  opacity: 0;
+  opacity: 0.92;
   transition: var(--transition);
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card:hover::after {
   opacity: 1;
+  height: 4px;
 }
+
+.stat-card:nth-child(6n + 1) {
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(37, 99, 235, 0.26);
+  animation-delay: 0ms;
+}
+.stat-card:nth-child(6n + 1)::after { background: linear-gradient(90deg, #2563EB, #60A5FA); }
+
+.stat-card:nth-child(6n + 2) {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(16, 185, 129, 0.26);
+  animation-delay: 55ms;
+}
+.stat-card:nth-child(6n + 2)::after { background: linear-gradient(90deg, #10B981, #34D399); }
+
+.stat-card:nth-child(6n + 3) {
+  background: linear-gradient(145deg, rgba(236, 72, 153, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(236, 72, 153, 0.26);
+  animation-delay: 110ms;
+}
+.stat-card:nth-child(6n + 3)::after { background: linear-gradient(90deg, #EC4899, #F472B6); }
+
+.stat-card:nth-child(6n + 4) {
+  background: linear-gradient(145deg, rgba(84, 71, 255, 0.08) 0%, var(--bg-card) 68%);
+  border-color: rgba(84, 71, 255, 0.26);
+  animation-delay: 165ms;
+}
+.stat-card:nth-child(6n + 4)::after { background: linear-gradient(90deg, #5447FF, #818CF8); }
+
+.stat-card:nth-child(6n + 5) {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.09) 0%, var(--bg-card) 68%);
+  border-color: rgba(245, 158, 11, 0.28);
+  animation-delay: 220ms;
+}
+.stat-card:nth-child(6n + 5)::after { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+
+.stat-card:nth-child(6n + 6) {
+  background: linear-gradient(145deg, rgba(139, 92, 246, 0.09) 0%, var(--bg-card) 68%);
+  border-color: rgba(139, 92, 246, 0.28);
+  animation-delay: 275ms;
+}
+.stat-card:nth-child(6n + 6)::after { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
 
 /* Buttons */
 .btn {
@@ -2235,29 +2284,40 @@ select.form-select option {
 .nav-search-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: #F1F5F9;
+  gap: 8px;
+  background: #FFFFFF;
   border: 1px solid #E2E8F0;
   border-radius: 9999px;
-  padding: 8px 18px;
+  padding: 6px 16px;
   color: #94A3B8;
   font-size: 0.85rem;
   cursor: pointer;
-  min-width: 280px;
+  min-width: 200px;
+  max-width: 300px;
+  height: 36px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-search-btn .nav-search-text {
+  color: #94A3B8;
+  font-size: 0.84rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 [data-theme="dark"] .nav-search-btn {
   background: #0B0B2A;
   border-color: #242244;
   color: #94A3B8;
+  box-shadow: none;
 }
 
 .nav-search-btn:hover {
   background: #FFFFFF;
-  border-color: #818CF8;
-  color: #334155;
-  box-shadow: 0 3px 12px rgba(84, 71, 255, 0.08);
+  border-color: #CBD5E1;
+  color: #64748B;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="dark"] .nav-search-btn:hover {
@@ -3015,4 +3075,506 @@ select.form-select option {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Optimized Instant Date Picker Interactions */
+input[type="date"] {
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  padding: 2px;
+  filter: invert(0.5);
+  transition: opacity 0.15s, transform 0.1s;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+
+/* ============================================================
+   Global Command Palette / Spotlight Search Omnibar
+   ============================================================ */
+.global-search-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 70px 16px 24px;
+  z-index: 9999;
+  animation: omniFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .global-search-backdrop {
+  background: rgba(8, 10, 20, 0.72);
+}
+
+@keyframes omniFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes omniScaleIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.global-search-container {
+  width: 100%;
+  max-width: 680px;
+  background: var(--bg-card);
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: omniScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 85vh;
+}
+
+[data-theme="dark"] .global-search-container {
+  background: #111422;
+  border-color: rgba(99, 102, 241, 0.22);
+  box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(99, 102, 241, 0.15);
+}
+
+.global-search-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  position: relative;
+}
+
+.global-search-header.border-none {
+  border-bottom: none !important;
+}
+
+.global-search-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--text-main);
+  font-size: 1.08rem;
+  font-weight: 500;
+  padding: 0;
+}
+
+.global-search-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.global-search-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  font-family: inherit;
+}
+
+.global-search-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: rgba(148, 163, 184, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.global-search-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.global-search-tab {
+  padding: 4px 11px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.global-search-tab:hover {
+  color: var(--text-main);
+  background: var(--bg-surface);
+}
+
+.global-search-tab.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: rgba(99, 102, 241, 0.25);
+  font-weight: 700;
+}
+
+.global-search-body {
+  overflow-y: auto;
+  max-height: 480px;
+  padding: 8px 12px 14px;
+}
+
+.global-search-section-title {
+  padding: 10px 10px 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.global-search-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  position: relative;
+  margin-bottom: 2px;
+  user-select: none;
+}
+
+.global-search-row:hover,
+.global-search-row.selected {
+  background: var(--bg-surface);
+}
+
+[data-theme="dark"] .global-search-row:hover,
+[data-theme="dark"] .global-search-row.selected {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.global-search-row.selected {
+  outline: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.global-search-row.selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  height: 70%;
+  width: 3.5px;
+  border-radius: 0 4px 4px 0;
+  background: var(--primary);
+}
+
+.global-search-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: rgba(148, 163, 184, 0.04);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Dashboard Chart Animations & Interactive Tooltips
+   ============================================================ */
+@keyframes chartLineDraw {
+  from {
+    stroke-dashoffset: 1600;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes chartAreaFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes chartBarRise {
+  from {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes chartTooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -115%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -125%) scale(1);
+  }
+}
+
+@keyframes chartBarTooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes chartDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.28;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.14;
+  }
+}
+
+.chart-line-animated {
+  stroke-dasharray: 1600;
+  stroke-dashoffset: 0;
+  animation: chartLineDraw 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.chart-area-animated {
+  animation: chartAreaFade 0.9s ease-out forwards;
+}
+
+.chart-bar-animated {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: chartBarRise 0.65s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.chart-dot-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chartDotPulse 1.6s ease-in-out infinite;
+}
+
+.chart-tooltip-animated {
+  animation: chartTooltipIn 0.15s ease-out forwards;
+}
+
+.chart-bar-tooltip-animated {
+  animation: chartBarTooltipIn 0.15s ease-out forwards;
+}
+
+/* ============================================================
+   KPI Cards, Platform Overview & Leaderboard Animations
+   ============================================================ */
+@keyframes kpiFadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes donutRingReveal {
+  from {
+    opacity: 0;
+    transform: rotate(-120deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-90deg) scale(1);
+  }
+}
+
+@keyframes leaderboardRowIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes trophyFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.06);
+  }
+}
+
+@keyframes sparklineDrawOnEnter {
+  0% {
+    stroke-dashoffset: 1800;
+    opacity: 0.4;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes sparklineAreaReveal {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.15;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+@keyframes sparklineDotPop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes progressRingFill {
+  0% {
+    stroke-dasharray: 0 400;
+    opacity: 0.3;
+  }
+  100% {
+    stroke-dasharray: var(--ring-dash);
+    opacity: 1;
+  }
+}
+
+@keyframes progressBarFill {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+.sparkline-draw-on-enter {
+  stroke-dasharray: 1800;
+  stroke-dashoffset: 1800;
+  animation: sparklineDrawOnEnter 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.sparkline-area-reveal {
+  animation: sparklineAreaReveal 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.sparkline-dot-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sparklineDotPop 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.progress-ring-segment {
+  animation: progressRingFill 1.05s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.progress-bar-fill {
+  transform-origin: left center;
+  animation: progressBarFill 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.kpi-card-animated {
+  position: relative;
+  overflow: hidden;
+  animation: kpiFadeSlideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease !important;
+}
+
+.kpi-card-animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 70%;
+  height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.kpi-card-animated:hover {
+  transform: translateY(-6px) scale(1.022) !important;
+  box-shadow: 0 16px 32px -8px rgba(79, 70, 229, 0.22), 0 6px 14px -4px rgba(15, 23, 42, 0.1) !important;
+}
+
+.kpi-card-animated:hover::after {
+  left: 140%;
+}
+
+.kpi-card-animated .kpi-icon-badge {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
+}
+
+.kpi-card-animated:hover .kpi-icon-badge {
+  transform: scale(1.15) rotate(6deg);
+}
+
+.donut-svg-animated {
+  animation: donutRingReveal 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.leaderboard-row-animated {
+  animation: leaderboardRowIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.leaderboard-row-animated:hover {
+  background: rgba(84, 71, 255, 0.055) !important;
+}
+
+.trophy-float {
+  animation: trophyFloat 2.4s ease-in-out infinite;
 }

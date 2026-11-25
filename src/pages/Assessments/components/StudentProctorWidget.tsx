@@ -11,7 +11,7 @@ import { byteObjectTracker, TrackedObject } from '../../../lib/objectTracker';
 import { aiEventEngine, ProctoringAIEvent, MobilePhoneDetectedEvent } from '../../../lib/aiEventEngine';
 import { arcFaceRecognizer, ArcFaceVerificationResult } from '../../../lib/arcFaceRecognizer';
 import { proctoringSuites, PROCTORING_MODEL_SUITES, ProctoringSuiteType } from '../../../lib/proctoringSuites';
-import { proctoringSocket } from '../../../lib/proctoringSocket';
+import { proctoringSocket, getShortNumericId } from '../../../lib/proctoringSocket';
 
 interface StudentProctorWidgetProps {
   assessmentId: string;
@@ -44,6 +44,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   onForceSubmit,
   onStreamChange,
 }) => {
+  const isSupervisedProctoring = proctoringMode === 'manual' || proctoringMode === 'combined' || proctoringMode === 'automated_manual';
   const isManualProctoring = proctoringMode === 'manual';
   const { user } = useAuthStore();
   const currentLearnerId = user?.id || learnerId;
@@ -85,6 +86,9 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   } | null>(null);
   const lastSeenEventIdRef = useRef<string | null>(null);
   const onForceSubmitRef = useRef(onForceSubmit);
+  const localStrikesRef = useRef<number>(0);
+  const lastLocalStrikeTimestampRef = useRef<number>(0);
+  const isSubmittingAutoRef = useRef<boolean>(false);
   useEffect(() => {
     onForceSubmitRef.current = onForceSubmit;
   }, [onForceSubmit]);
@@ -461,9 +465,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
   // Forwards violation to backend; backend strictly validates server-side cooldown interval
   // and issues confirmed warnings/strikes back via WebSocket
   const triggerAutomatedStrike = (category: string, title: string, message: string) => {
-    // In manual proctoring mode, automated strikes are strictly disabled for the student;
-    // Only messages/warnings explicitly issued by the admin or trainer should reach the student.
-    if (isManualProctoring) {
+    // In supervised proctoring mode (manual or AI+manual), automated strikes and time intervals are disabled for the student.
+    // Telemetry violations are streamed immediately to the Admin & Trainer live proctoring wall in real-time.
+    // The Admin or Trainer reviews violations, gives manual warning popups to the student, and can stop and submit the exam.
+    if (isSupervisedProctoring) {
       proctoringSocket.emit('PROCTORING_TELEMETRY', {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
@@ -473,6 +478,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         title,
         message,
         source: 'automated',
+        evidenceSnapshot: lastValidSnapshotRef.current,
         clientTimestamp: Date.now(),
       });
       return;
@@ -496,6 +502,44 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       evidenceSnapshot: lastValidSnapshotRef.current,
       clientTimestamp: Date.now(),
     });
+
+    // Client-side strike advancement guarantee:
+    // When in automated proctoring mode, guarantee strikes 1 -> 2 -> 3 auto-submit even during local testing or network latency
+    const now = Date.now();
+    if (now - lastLocalStrikeTimestampRef.current >= 3500 && !isSubmittingAutoRef.current) {
+      lastLocalStrikeTimestampRef.current = now;
+      const nextStrike = Math.min(3, (localStrikesRef.current || automatedStrikes || 0) + 1);
+      localStrikesRef.current = nextStrike;
+      setAutomatedStrikes(nextStrike);
+      playAlertChime(nextStrike);
+
+      const totalAllowed = 3;
+      const remaining = Math.max(0, totalAllowed - nextStrike);
+      const isThirdStrike = nextStrike >= totalAllowed;
+
+      setActiveStrikeModal({
+        strike: nextStrike,
+        totalAllowed,
+        remainingWarnings: remaining,
+        warningIntervalSeconds: 0,
+        title: `Warning ${nextStrike} of ${totalAllowed}`,
+        message: isThirdStrike
+          ? 'Final warning (3 of 3). Maximum proctoring integrity warnings reached. Your examination will be submitted automatically.'
+          : message || `${title}. Please maintain strict adherence to examination integrity guidelines.`,
+        category,
+        source: 'automated',
+        timestamp: new Date().toISOString(),
+        autoSubmitted: isThirdStrike,
+      });
+
+      if (isThirdStrike) {
+        isSubmittingAutoRef.current = true;
+        console.warn('[StudentProctorWidget] Strike 3 reached locally: initiating auto-submit...');
+        setTimeout(() => {
+          onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
+        }, 2500);
+      }
+    }
   };
 
   // Real-time proctoring socket connection for live monitoring, WebRTC, and proctor control
@@ -513,7 +557,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       proctoringSocket.emit('STUDENT_EXAM_STARTED', {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
-        rollNo: (user as any)?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+        rollNo: (user as any)?.rollNo || getShortNumericId(currentLearnerId),
         assessmentId,
         sessionId,
         startedAt: new Date().toISOString(),
@@ -522,11 +566,17 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
 
     // Listen for confirmed proctoring warnings (automated or manual) from server
     const unsubWarning = proctoringSocket.on('PROCTORING_WARNING', (data: any) => {
-      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
-        // In manual proctoring mode, automated warnings are suppressed from student view
-        if (isManualProctoring && data.source !== 'manual') {
-          return;
-        }
+      const targetId = String(data?.studentId || data?.learnerId || '').toLowerCase().trim();
+      const myId = String(currentLearnerId || '').toLowerCase().trim();
+      const myRoll = String((user as any)?.rollNo || '').toLowerCase().trim();
+      const isMatch = !targetId || targetId === myId || targetId === myRoll || (targetId.length >= 3 && myId.includes(targetId)) || (myId.length >= 3 && targetId.includes(myId));
+      if (!isMatch) return;
+
+      // In supervised proctoring mode (manual or AI+manual / combined), automated warnings are suppressed from student view;
+      // only warnings explicitly issued by the admin or trainer reach the student.
+      if ((isSupervisedProctoring || proctoringMode !== 'automated') && data.source !== 'manual') {
+        return;
+      }
 
         // Prevent duplicate popups for the exact same event ID
         if (data.eventId && lastSeenEventIdRef.current === data.eventId) {
@@ -541,11 +591,13 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         const remaining = typeof data.remainingWarnings === 'number' ? data.remainingWarnings : Math.max(0, totalAllowed - strikeNum);
 
         setAutomatedStrikes(strikeNum);
+        localStrikesRef.current = Math.max(localStrikesRef.current, strikeNum);
         playAlertChime(strikeNum);
 
         // Upload 10-second video evidence captured right before and during THIS warning strike
         captureWarningVideoProof(strikeNum, data.title || `Warning ${strikeNum} of ${totalAllowed}`, data.reason || data.message || '');
 
+        const isThird = Boolean(data.autoSubmitted || strikeNum >= totalAllowed || strikeNum >= 3);
         setActiveStrikeModal({
           strike: strikeNum,
           totalAllowed,
@@ -557,7 +609,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           source: data.source || 'automated',
           adminName: data.issuedBy || data.adminName || (data.source === 'manual' ? 'Exam Proctor / Trainer' : undefined),
           timestamp: data.timestamp || new Date().toISOString(),
-          autoSubmitted: Boolean(data.autoSubmitted || strikeNum >= totalAllowed),
+          autoSubmitted: isThird,
         });
 
         // Record in local store for audit
@@ -575,12 +627,13 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         });
 
         // If 3rd strike reached: Execute automatic exam submission
-        if (data.autoSubmitted || strikeNum >= totalAllowed) {
+        if (isThird && !isSubmittingAutoRef.current) {
+          isSubmittingAutoRef.current = true;
+          console.warn('[StudentProctorWidget] Server 3rd strike confirmed! Auto-submitting exam...');
           setTimeout(() => {
             onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
-          }, 3500);
+          }, 2500);
         }
-      }
     });
 
     // Listen for manual proctor warnings issued by the administrator
@@ -591,8 +644,10 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         const remaining = typeof data.remainingWarnings === 'number' ? data.remainingWarnings : Math.max(0, totalAllowed - strikeNum);
 
         setAutomatedStrikes(strikeNum);
+        localStrikesRef.current = Math.max(localStrikesRef.current, strikeNum);
         playAlertChime(strikeNum);
 
+        const isThird = Boolean(strikeNum >= totalAllowed || strikeNum >= 3);
         setActiveStrikeModal({
           strike: strikeNum,
           totalAllowed,
@@ -604,13 +659,26 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           source: 'manual',
           adminName: data.issuedBy || data.adminName || 'Exam Proctor / Trainer',
           timestamp: data.timestamp || new Date().toISOString(),
-          autoSubmitted: false,
+          autoSubmitted: isThird,
         });
+
+        if (isThird && !isSubmittingAutoRef.current) {
+          isSubmittingAutoRef.current = true;
+          setTimeout(() => {
+            onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
+          }, 2500);
+        }
       }
     });
 
     const unsubAutoSubmit = proctoringSocket.on('EXAM_AUTO_SUBMITTED', (data: any) => {
-      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+      const targetId = String(data?.studentId || data?.learnerId || '').toLowerCase().trim();
+      const myId = String(currentLearnerId || '').toLowerCase().trim();
+      const myRoll = String((user as any)?.rollNo || '').toLowerCase().trim();
+      const isMatch = !targetId || targetId === myId || targetId === myRoll || (targetId.length >= 3 && myId.includes(targetId)) || (myId.length >= 3 && targetId.includes(myId));
+
+      if (isMatch && !isSubmittingAutoRef.current) {
+        isSubmittingAutoRef.current = true;
         setTerminatedState({
           isTerminated: true,
           reason: 'Your examination was automatically submitted due to reaching the maximum 3 proctoring warnings (Three-Strike Policy).',
@@ -618,13 +686,18 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
         });
         setTimeout(() => {
           onForceSubmitRef.current?.('PROCTORING_THIRD_WARNING');
-        }, 1500);
+        }, 1200);
       }
     });
 
     // Listen for admin force-stop examination: immediately submit exam
     const unsubTerminated = proctoringSocket.on('EXAM_TERMINATED', (data: any) => {
-      if (data && (data.studentId === currentLearnerId || !data.studentId)) {
+      const targetId = String(data?.studentId || data?.learnerId || '').toLowerCase().trim();
+      const myId = String(currentLearnerId || '').toLowerCase().trim();
+      const myRoll = String((user as any)?.rollNo || '').toLowerCase().trim();
+      const isMatch = !targetId || targetId === myId || targetId === myRoll || (targetId.length >= 3 && myId.includes(targetId)) || (myId.length >= 3 && targetId.includes(myId));
+
+      if (isMatch) {
         setTerminatedState({
           isTerminated: true,
           reason: data.reason || 'Your examination was concluded and submitted by the administrator / trainer.',
@@ -649,7 +722,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       unsubTerminated();
       unsubAdminRequest();
     };
-  }, [assessmentId, currentLearnerId, isExamActive, sessionId, isManualProctoring]);
+  }, [assessmentId, currentLearnerId, isExamActive, sessionId, isSupervisedProctoring, isManualProctoring]);
 
   // Initialize MediaStream (Camera & Mic) - reuse passed mediaStream if present
   useEffect(() => {
@@ -679,6 +752,7 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       proctoringSocket.registerLocalMediaStream(s, {
         studentId: currentLearnerId,
         studentName: currentLearnerName,
+        rollNo: (user as any)?.rollNo || getShortNumericId(currentLearnerId),
         assessmentId,
         sessionId,
       });
@@ -1344,6 +1418,20 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
           mediaRecorderRef.current.stop();
         } catch (e) {}
       }
+
+      // When exam ends, upload final accumulated proctoring recording to S3
+      if (rollingVideoBufferRef.current.length > 0 && sessionId) {
+        try {
+          const finalBlob = new Blob(rollingVideoBufferRef.current.map((c) => c.blob), { type: 'video/webm' });
+          const formData = new FormData();
+          formData.append('video', finalBlob, `final_session_${sessionId}.webm`);
+          formData.append('assessmentId', assessmentId);
+          formData.append('learnerId', currentLearnerId);
+          formData.append('learnerName', currentLearnerName);
+          formData.append('audioLevel', String(audioLevelRef.current));
+          apiClient.post(`/proctoring/sessions/${sessionId}/video-chunk`, formData).catch(() => {});
+        } catch (e) {}
+      }
     };
   }, [mediaStream, stream, isExamActive, sessionId, currentLearnerId, currentLearnerName, assessmentId]);
 
@@ -1470,15 +1558,34 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
       updateParticipantTelemetry(currentLearnerId, {
         assessmentId,
         name: currentLearnerName,
-        rollNo: user?.rollNo || `STU-${currentLearnerId.slice(-4)}`,
+        rollNo: user?.rollNo || getShortNumericId(currentLearnerId),
         cameraActive: cameraActive || Boolean(currentActiveStream?.getVideoTracks()?.some((t) => t.enabled)),
         micActive: micActive || Boolean(currentActiveStream?.getAudioTracks()?.some((t) => t.enabled)),
         audioLevel,
         tabFocused,
         screenShareActive: hasLiveScreen,
         status: 'connected',
+        faceVerificationStatus,
+        similarityScore,
         ...(latestScreenSnapshotRef.current ? { latestScreenSnapshot: latestScreenSnapshotRef.current } : {}),
         ...(effectiveSnapshot ? { latestSnapshot: effectiveSnapshot } : {}),
+      });
+
+      // Transmit live face biometric telemetry to proctoring hub and wall
+      proctoringSocket.emit('PROCTORING_TELEMETRY', {
+        studentId: currentLearnerId,
+        studentName: currentLearnerName,
+        rollNo: user?.rollNo || getShortNumericId(currentLearnerId),
+        assessmentId,
+        sessionId,
+        eventType: faceVerificationStatus === 'MISMATCH' ? 'face_mismatch' : 'face_verified',
+        title: faceVerificationStatus === 'MISMATCH' ? 'Face Identity Mismatch' : 'Face Biometric Verified',
+        message: `Biometric similarity: ${Math.round(similarityScore * 100)}% (${faceVerificationStatus})`,
+        faceStatus: faceVerificationStatus,
+        similarityScore,
+        source: 'automated',
+        evidenceSnapshot: effectiveSnapshot,
+        clientTimestamp: Date.now(),
       });
 
       // Transmit to backend live telemetry API if session is active
@@ -2359,16 +2466,23 @@ export const StudentProctorWidget: React.FC<StudentProctorWidgetProps> = ({
               {activeStrikeModal.strike >= (activeStrikeModal.totalAllowed || 3) ? (
                 <div
                   style={{
-                    padding: '12px',
+                    padding: '14px',
                     borderRadius: 'var(--radius-md)',
-                    background: 'var(--danger)',
-                    color: '#fff',
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    color: 'var(--danger)',
                     fontWeight: 700,
-                    fontSize: '0.9rem',
+                    fontSize: '0.92rem',
                     textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
                   }}
                 >
-                  Final Warning Reached — Auto-Submitting Exam...
+                  <span style={{ fontWeight: 800 }}>Final Warning (Strike 3 of 3) Reached</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, opacity: 0.9 }}>
+                    Submitting examination automatically now...
+                  </span>
                 </div>
               ) : (
                 <button

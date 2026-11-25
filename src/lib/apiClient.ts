@@ -370,35 +370,98 @@ async function request<T = any>(
   return body as ApiResponse<T>;
 }
 
-export const apiClient = {
-  get: <T = any>(endpoint: string, headers?: Record<string, string>) =>
-    request<T>(endpoint, { method: 'GET', headers }),
+// In-flight request deduplication map (eliminates identical concurrent requests)
+const inFlightRequests = new Map<string, Promise<ApiResponse<any>>>();
 
-  post: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-    request<T>(endpoint, {
+// Short-lived in-memory cache for fast page transitions (TTL 3000ms)
+const clientCache = new Map<string, { data: ApiResponse<any>; expiresAt: number }>();
+
+export function clearApiClientCache(): void {
+  clientCache.clear();
+}
+
+function invalidateCacheForEndpoint(endpoint: string): void {
+  const clean = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
+  const resource = clean.split('?')[0].split('/')[0] || '';
+  if (!resource) {
+    clientCache.clear();
+    return;
+  }
+  for (const key of clientCache.keys()) {
+    if (key.includes(resource)) {
+      clientCache.delete(key);
+    }
+  }
+}
+
+export const apiClient = {
+  get: <T = any>(endpoint: string, headers?: Record<string, string>, cacheTtlMs = 3000): Promise<ApiResponse<T>> => {
+    const cacheKey = `GET:${endpoint}:${getStoredToken() || ''}:${getStoredTenantId() || ''}`;
+
+    if (cacheTtlMs > 0) {
+      const cached = clientCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return Promise.resolve(cached.data as ApiResponse<T>);
+      }
+    }
+
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey)! as Promise<ApiResponse<T>>;
+    }
+
+    const promise = request<T>(endpoint, { method: 'GET', headers })
+      .then((res) => {
+        if (cacheTtlMs > 0 && res && res.success !== false) {
+          if (clientCache.size > 200) {
+            const firstKey = clientCache.keys().next().value;
+            if (firstKey) clientCache.delete(firstKey);
+          }
+          clientCache.set(cacheKey, { data: res, expiresAt: Date.now() + cacheTtlMs });
+        }
+        return res;
+      })
+      .finally(() => {
+        inFlightRequests.delete(cacheKey);
+      });
+
+    inFlightRequests.set(cacheKey, promise);
+    return promise;
+  },
+
+  post: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) => {
+    invalidateCacheForEndpoint(endpoint);
+    return request<T>(endpoint, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
       headers,
-    }),
+    });
+  },
 
-  put: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-    request<T>(endpoint, {
+  put: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) => {
+    invalidateCacheForEndpoint(endpoint);
+    return request<T>(endpoint, {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
       headers,
-    }),
+    });
+  },
 
-  patch: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-    request<T>(endpoint, {
+  patch: <T = any>(endpoint: string, body?: unknown, headers?: Record<string, string>) => {
+    invalidateCacheForEndpoint(endpoint);
+    return request<T>(endpoint, {
       method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined,
       headers,
-    }),
+    });
+  },
 
-  delete: <T = any>(endpoint: string, headers?: Record<string, string>) =>
-    request<T>(endpoint, { method: 'DELETE', headers }),
+  delete: <T = any>(endpoint: string, headers?: Record<string, string>) => {
+    invalidateCacheForEndpoint(endpoint);
+    return request<T>(endpoint, { method: 'DELETE', headers });
+  },
 
   upload: async <T = any>(endpoint: string, formData: FormData): Promise<ApiResponse<T>> => {
+    invalidateCacheForEndpoint(endpoint);
     const url = buildFullUrl(endpoint);
     const headers: Record<string, string> = {};
 

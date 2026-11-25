@@ -8,6 +8,7 @@ import type { Permission, PermissionAction, PermissionResource } from '../types'
 import { mockUsers } from '../data/mockUsers';
 import { apiClient, hasBackendAccessToken } from './apiClient';
 import { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
+import { playNotificationSound } from './notificationPrefs';
 
 export { AUTH_SESSION_KEY, LOGGED_OUT_KEY } from './authConstants';
 
@@ -273,26 +274,19 @@ function getUserNotifications(user: User): Notification[] {
     user.roles?.some((r) => ['admin', 'org_admin', 'platform_admin', 'trainer', 'instructor'].includes(r.name));
 
   // Filter notifications belonging to this user or broadcast to students/all/admins
+  // Exclude legacy 'Session Verified' (sys-1-*) notifications
   const userStored = stored.filter(
     (n) =>
-      n.userId === user.id ||
-      n.userId === user.email ||
-      (user.rollNo && n.userId === user.rollNo) ||
-      n.userId === 'all' ||
-      (isStudentUser && n.userId === 'all-students') ||
-      (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors'))
+      !n.id.startsWith('sys-1-') &&
+      (n.userId === user.id ||
+        n.userId === user.email ||
+        (user.rollNo && n.userId === user.rollNo) ||
+        n.userId === 'all' ||
+        (isStudentUser && n.userId === 'all-students') ||
+        (isAdminOrTrainer && (n.userId === 'all-admins' || n.userId === 'all-trainers' || n.userId === 'all-instructors')))
   );
 
   const defaults: Notification[] = [
-    {
-      id: `sys-1-${user.id}`,
-      userId: user.id,
-      title: 'Session Verified',
-      message: `Welcome to VeniLearn LMS, ${user.displayName}!`,
-      category: 'system',
-      isRead: false,
-      timestamp: new Date().toISOString(),
-    },
     ...(isAdminOrTrainer
       ? [
           {
@@ -734,6 +728,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const backendIds = new Set(mapped.map((n) => n.id));
           const merged = [...mapped, ...localDefaults.filter((l) => !backendIds.has(l.id))];
 
+          const prevIds = new Set(get().notifications.map((n) => n.id));
+          if (prevIds.size > 0 && merged.some((n) => !n.isRead && !prevIds.has(n.id))) {
+            playNotificationSound(user.id);
+          }
+
           set({
             notifications: merged,
             unreadNotifications: merged.filter((n) => !n.isRead).length,
@@ -807,6 +806,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken() && invitation.recipientIds.length > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: invitation.recipientIds,
+          title: `Course Invitation: ${invitation.courseTitle}`,
+          message: `${invitation.inviterName} (${invitation.inviterRole}) invited you to join "${invitation.courseTitle}".`,
+          category: 'course',
+          linkUrl: `/course/${invitation.courseId}`,
+        })
+        .catch(() => {});
+    }
 
     const currentUser = get().user;
     if (currentUser) {
@@ -915,6 +926,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
 
+    if (hasBackendAccessToken() && recipients.length > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: recipients,
+          title: `New Assessment: ${assessmentTitle}`,
+          message: `A new assessment "${assessmentTitle}" has been published${courseSuffix}. Total Marks: ${marks}, Duration: ${dur} mins. Good luck!`,
+          category: 'assessment',
+          linkUrl: `/exam/${assessmentId}`,
+        })
+        .catch(() => {});
+    }
+
     const currentUser = get().user;
     if (currentUser) {
       const refreshed = getUserNotifications(currentUser);
@@ -967,6 +990,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Live Proctoring Alert: ${studentName} started exam`,
+          message: `${studentName} started "${assessmentTitle}".`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
 
     const currentUser = get().user;
     if (currentUser) {
@@ -1031,6 +1066,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
 
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Upcoming Proctored Exam: "${assessmentTitle}" Starts in 30 Mins`,
+          message: `The scheduled exam "${assessmentTitle}" begins ${timeLabel}.`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
+
     const currentUser = get().user;
     if (currentUser) {
       const refreshed = getUserNotifications(currentUser);
@@ -1084,6 +1131,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const updatedStored = [...newNotifs, ...stored];
     persistStoredNotifications(updatedStored);
+
+    if (hasBackendAccessToken() && targets.size > 0) {
+      apiClient
+        .post('/notifications', {
+          recipientIds: Array.from(targets),
+          title: `Exam Started: "${assessmentTitle}" Schedule Reached`,
+          message: `The scheduled exam "${assessmentTitle}" has started.`,
+          category: 'proctoring',
+          linkUrl: `/proctoring?tab=live_monitor&assessmentId=${assessmentId}`,
+        })
+        .catch(() => {});
+    }
 
     const currentUser = get().user;
     if (currentUser) {

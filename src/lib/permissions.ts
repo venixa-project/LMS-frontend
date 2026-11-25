@@ -234,6 +234,7 @@ export function getNavigationForRole(role: RoleName): NavItem[] {
     { id: 'assignments', label: 'Student Assignments', icon: 'Award', path: '/assignments', group: 'Assessments & Evaluation' },
     { id: 'grading', label: 'AI Evaluation Queue', icon: 'PenTool', path: '/grading', group: 'Assessments & Evaluation', badge: 5 },
     { id: 'proctoring', label: 'Proctoring Incident Center', icon: 'Eye', path: '/proctoring', group: 'Assessments & Evaluation' },
+    { id: 'proctoring-videos', label: 'Proctoring Videos', icon: 'Video', path: '/proctoring-videos', group: 'Assessments & Evaluation' },
     { id: 'certificates', label: 'Certificates', icon: 'Award', path: '/certificates', group: 'Assessments & Evaluation' },
 
     // Learners & Insights
@@ -419,6 +420,7 @@ export function isRouteAllowedForRole(pathname: string, rawRole?: string): boole
     cleanPath === '/question-banks' ||
     cleanPath === '/grading' ||
     cleanPath === '/proctoring' ||
+    cleanPath === '/proctoring-videos' ||
     cleanPath === '/reports'
   ) {
     return role === 'platform_admin' || role === 'org_admin' || role === 'trainer';

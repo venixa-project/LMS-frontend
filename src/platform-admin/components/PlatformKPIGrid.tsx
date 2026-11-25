@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Users, GraduationCap, BookOpen, TrendingUp } from 'lucide-react';
 import { useCourseStore } from '../../lib/courseStore';
+import { AnimatedCounter } from '../../components/AnimatedCounter';
 
 interface Props {
   facultyCount?: number;
@@ -19,10 +20,10 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 0 }) => {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            1
+          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: '#2563EB', letterSpacing: '-0.02em' }}>
+            <AnimatedCounter value={1} />
           </span>
-          <Building2 size={22} color="var(--primary)" />
+          <Building2 size={22} color="#2563EB" />
         </div>
         <p className="text-muted text-xs">Active multi-tenant organizations</p>
       </Link>
@@ -35,10 +36,10 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 0 }) => {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            0
+          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: '#10B981', letterSpacing: '-0.02em' }}>
+            <AnimatedCounter value={0} />
           </span>
-          <Users size={22} color="var(--accent-cyan)" />
+          <Users size={22} color="#10B981" />
         </div>
         <p className="text-muted text-xs">Registered learners across all institutions</p>
       </Link>
@@ -51,10 +52,10 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 0 }) => {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            {facultyCount}
+          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: '#EC4899', letterSpacing: '-0.02em' }}>
+            <AnimatedCounter value={facultyCount} />
           </span>
-          <GraduationCap size={22} color="var(--accent-purple)" />
+          <GraduationCap size={22} color="#EC4899" />
         </div>
         <p className="text-muted text-xs">Certified instructors & trainers</p>
       </Link>
@@ -67,10 +68,10 @@ export const PlatformKPIGrid: React.FC<Props> = ({ facultyCount = 0 }) => {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-            {courses.filter(c => c.status === 'published').length}
+          <span style={{ fontSize: '1.85rem', fontWeight: 800, color: '#5447FF', letterSpacing: '-0.02em' }}>
+            <AnimatedCounter value={courses.filter(c => c.status === 'published').length} />
           </span>
-          <BookOpen size={22} color="var(--warning)" />
+          <BookOpen size={22} color="#5447FF" />
         </div>
         <p className="text-muted text-xs">Curriculum courses in catalog</p>
       </Link>

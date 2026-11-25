@@ -2,7 +2,7 @@ import { apiClient } from '../../lib/apiClient';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
-import { useCourseStore, mapBackendCourseToFrontend } from '../../lib/courseStore';
+import { useCourseStore, mapBackendCourseToFrontend, getDefaultCourseCover } from '../../lib/courseStore';
 import { usePeopleStore } from '../../lib/peopleStore';
 import { useCohortStore } from '../../lib/cohortStore';
 import { useDepartmentStore } from '../../lib/departmentStore';
@@ -78,46 +78,51 @@ export const CourseBuilderPage: React.FC = () => {
   const [difficultyLevel, setDifficultyLevel] = useState<'beginner' | 'intermediate' | 'advanced' | ''>('');
   const [durationHours, setDurationHours] = useState<number | ''>('');
   const [completionPolicy, setCompletionPolicy] = useState('all_lessons_and_passing_assessment');
-  const DEFAULT_COURSE_THUMBNAIL = 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&q=80';
   const [thumbnailUrl, setThumbnailUrl] = useState<string>('');
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [isDraggingThumbnail, setIsDraggingThumbnail] = useState(false);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleThumbnailFileSelect = (file: File) => {
     setThumbnailError(null);
+    setIsUploadingThumbnail(true);
 
     // Accept common image formats: PNG, JPG, JPEG, and WebP
-    const validMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const validMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
 
     if (!validMimeTypes.includes(file.type.toLowerCase()) && !validExtensions.includes(ext)) {
-      setThumbnailError('Unsupported file format. Please upload a PNG, JPG, JPEG, or WebP image.');
+      setThumbnailError('Unsupported file format. Please upload a PNG, JPG, JPEG, WebP, or SVG image.');
+      setIsUploadingThumbnail(false);
       if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
       return;
     }
 
-    // Maximum file size: 5 MB
-    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    // Maximum file size: 10 MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       const sizeInMb = (file.size / (1024 * 1024)).toFixed(2);
-      setThumbnailError(`File size exceeds 5 MB limit (selected: ${sizeInMb} MB). Please choose a smaller image.`);
+      setThumbnailError(`File size exceeds 10 MB limit (selected: ${sizeInMb} MB). Please choose a smaller image.`);
+      setIsUploadingThumbnail(false);
       if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
       return;
     }
 
-    // 1. Physically upload to backend local storage (storage/thumbnails/)
+    // 1. Physically upload to backend S3 / persistent storage
     const formData = new FormData();
     formData.append('thumbnail', file);
     apiClient.upload<any>('/courses/upload-thumbnail', formData)
       .then((uploadRes) => {
+        setIsUploadingThumbnail(false);
         if (uploadRes?.data?.url) {
           setThumbnailUrl(uploadRes.data.url);
           setThumbnailError(null);
         }
       })
       .catch((uploadErr) => {
+        setIsUploadingThumbnail(false);
         console.warn('Thumbnail upload note (falling back to preview):', uploadErr);
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -162,7 +167,7 @@ export const CourseBuilderPage: React.FC = () => {
   };
 
   const handleResetDefaultThumbnail = () => {
-    setThumbnailUrl(DEFAULT_COURSE_THUMBNAIL);
+    setThumbnailUrl(getDefaultCourseCover(category, title));
     setThumbnailError(null);
     if (thumbnailFileInputRef.current) thumbnailFileInputRef.current.value = '';
   };
@@ -1243,7 +1248,7 @@ export const CourseBuilderPage: React.FC = () => {
         level: (difficultyLevel as any) || 'beginner',
         durationHours: Number(durationHours) || 1,
         completionPolicy,
-        thumbnail: thumbnailUrl,
+        thumbnail: thumbnailUrl?.trim() || getDefaultCourseCover(category, title),
         status: 'draft',
         version: 1,
         modules,
@@ -1328,7 +1333,7 @@ export const CourseBuilderPage: React.FC = () => {
         level: (difficultyLevel as any) || 'beginner',
         durationHours: Number(durationHours) || 1,
         completionPolicy,
-        thumbnail: thumbnailUrl,
+        thumbnail: thumbnailUrl?.trim() || getDefaultCourseCover(category, title),
         status: 'published',
         version: 1,
         modules,
@@ -1905,6 +1910,26 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
               </div>
             )}
 
+            {isUploadingThumbnail && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(37, 99, 235, 0.08)',
+                  border: '1px solid var(--primary)',
+                  marginBottom: '14px',
+                  fontSize: '0.85rem',
+                  color: 'var(--primary)',
+                }}
+              >
+                <RefreshCw size={16} className="animate-spin" />
+                <span>Uploading course cover image to AWS S3 storage...</span>
+              </div>
+            )}
+
             {thumbnailUrl ? (
               /* Image Preview Box with Replace & Remove actions */
               <div
@@ -1936,7 +1961,10 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                     src={thumbnailUrl}
                     alt="Course Thumbnail Preview"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={() => setThumbnailError('Failed to display thumbnail image. Please replace with a valid image.')}
+                    onError={() => {
+                      const fallback = getDefaultCourseCover(category, title);
+                      if (thumbnailUrl !== fallback) setThumbnailUrl(fallback);
+                    }}
                   />
                   <div
                     style={{
@@ -1952,16 +1980,33 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       backdropFilter: 'blur(2px)',
                     }}
                   >
-                    Preview
+                    {thumbnailUrl.includes('amazonaws.com') ? 'AWS S3 Cover' : 'Live Preview'}
                   </div>
                 </div>
 
                 <div style={{ flex: 1, minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                    Cover Image Selected
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Cover Image Active
+                    </span>
+                    {thumbnailUrl.includes('amazonaws.com') && (
+                      <span
+                        style={{
+                          fontSize: '0.65rem',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: 'var(--success)',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Stored in S3
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    This image will appear on course catalogue cards, student learning dashboards, search results, and course overview pages.
+                    This cover image will be displayed on course catalogue cards, student dashboards, and the top performing courses overview.
                   </p>
 
                   <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -1971,7 +2016,15 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                       onClick={() => thumbnailFileInputRef.current?.click()}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem' }}
                     >
-                      <RefreshCw size={14} /> Replace Image
+                      <Upload size={14} /> Upload Custom Image to S3
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={handleResetDefaultThumbnail}
+                      style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                    >
+                      Regenerate Academic Banner
                     </button>
                     <button
                       type="button"
@@ -1990,18 +2043,8 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                         cursor: 'pointer',
                       }}
                     >
-                      <Trash2 size={14} /> Remove Image
+                      <Trash2 size={14} /> Clear
                     </button>
-                    {thumbnailUrl !== DEFAULT_COURSE_THUMBNAIL && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={handleResetDefaultThumbnail}
-                        style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
-                      >
-                        Reset to Default Cover
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -2015,7 +2058,7 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                 style={{
                   border: isDraggingThumbnail ? '2px dashed var(--primary)' : '2px dashed var(--border-subtle)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '32px 20px',
+                  padding: '28px 20px',
                   textAlign: 'center',
                   background: isDraggingThumbnail ? 'rgba(37, 99, 235, 0.06)' : 'var(--bg-input)',
                   cursor: 'pointer',
@@ -2043,28 +2086,28 @@ let errorMsg = err?.message || 'An unexpected error occurred while publishing th
                 </div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-main)', marginBottom: '3px' }}>
-                    Drag & Drop your course cover image here, or <span style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Browse Files</span>
+                    Upload Course Cover to AWS S3, or <span style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Browse Image Files</span>
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    Supports PNG, JPG, JPEG, and WebP (Max 5 MB)
+                    Supports PNG, JPG, JPEG, WebP, and SVG (Direct S3 Storage &amp; Database Persistence)
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={() => thumbnailFileInputRef.current?.click()}
-                    style={{ fontSize: '0.8rem' }}
+                    style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                   >
-                    Upload Image
+                    <Upload size={14} /> Upload Image (S3)
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={handleResetDefaultThumbnail}
-                    style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                    style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600 }}
                   >
-                    Use Default Cover
+                    Use High-Res Academic Cover
                   </button>
                 </div>
               </div>

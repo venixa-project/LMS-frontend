@@ -46,10 +46,11 @@ export class ProctoringSocketClient {
   private onRemoteStreamCallbacks: Set<(studentId: string, stream: MediaStream) => void> = new Set();
   private studentDetails: { studentId: string; studentName: string; rollNo?: string; sessionId?: string } | null = null;
   private isManuallyClosed: boolean = false;
+  private pendingEmitQueue: string[] = [];
 
   constructor() {
     // Robust STUN servers for WebRTC NAT traversal across LAN and WAN
-    this.iceServers = [
+    const defaultStunServers: RTCIceServer[] = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
@@ -57,6 +58,23 @@ export class ProctoringSocketClient {
       { urls: 'stun:stun4.l.google.com:19302' },
       { urls: 'stun:global.stun.twilio.com:3478' },
     ];
+
+    // Optional TURN credentials from environment variables for WAN & cross-NAT reliability
+    const envTurnUrl = (import.meta as any).env?.VITE_TURN_URL;
+    const envTurnUsername = (import.meta as any).env?.VITE_TURN_USERNAME;
+    const envTurnCredential = (import.meta as any).env?.VITE_TURN_CREDENTIAL;
+
+    if (envTurnUrl) {
+      const turnUrls = envTurnUrl.split(',').map((u: string) => u.trim()).filter(Boolean);
+      const turnConfig: RTCIceServer = {
+        urls: turnUrls.length === 1 ? turnUrls[0] : turnUrls,
+        ...(envTurnUsername ? { username: envTurnUsername } : {}),
+        ...(envTurnCredential ? { credential: envTurnCredential } : {}),
+      };
+      this.iceServers = [...defaultStunServers, turnConfig];
+    } else {
+      this.iceServers = defaultStunServers;
+    }
   }
 
   private iceServers: RTCIceServer[];
@@ -93,6 +111,14 @@ export class ProctoringSocketClient {
         this.startHeartbeat();
         this.trigger('connected', { role });
 
+        // Flush all pending packets queued while WebSocket was connecting
+        while (this.pendingEmitQueue.length > 0) {
+          const queued = this.pendingEmitQueue.shift();
+          if (queued && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try { this.ws.send(queued); } catch {}
+          }
+        }
+
         if (this.activeAssessmentId) {
           this.emit('join_exam_proctoring', {
             assessmentId: this.activeAssessmentId,
@@ -101,7 +127,7 @@ export class ProctoringSocketClient {
           });
 
           if (this.activeRole === 'admin') {
-            this.emit('request_candidate_streams', { assessmentId: this.activeAssessmentId });
+            this.emit('ADMIN_REQUEST_STREAM', { assessmentId: this.activeAssessmentId });
           }
         }
       };
@@ -212,9 +238,11 @@ export class ProctoringSocketClient {
   }
 
   public emit(eventName: string, payload: any): void {
+    const packet = `42${JSON.stringify([eventName, payload])}`;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const packet = `42${JSON.stringify([eventName, payload])}`;
       this.ws.send(packet);
+    } else if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+      this.pendingEmitQueue.push(packet);
     } else {
       // Local event fallback
       this.trigger(eventName, payload);
@@ -298,7 +326,7 @@ export class ProctoringSocketClient {
         pc!.addTrack(track, this.localStream!);
       });
 
-      // Adaptive video quality & framerate stabilization (maintain 30 FPS at optimal bitrate)
+      // Adaptive video quality & framerate stabilization (maintain 30 FPS at 500 kbps cap for multi-view efficiency)
       try {
         pc.getSenders().forEach((sender) => {
           if (sender.track?.kind === 'video') {
@@ -306,8 +334,9 @@ export class ProctoringSocketClient {
             if (!params.encodings || params.encodings.length === 0) {
               params.encodings = [{}];
             }
-            params.encodings[0].maxBitrate = 900000;
-            (params.encodings[0] as any).minBitrate = 200000;
+            params.encodings[0].maxBitrate = 500000; // 500 kbps cap for smooth multi-stream rendering
+            (params.encodings[0] as any).minBitrate = 150000;
+            params.encodings[0].maxFramerate = 30; // 30 FPS target
             (params as any).degradationPreference = 'maintain-framerate';
             sender.setParameters(params).catch(() => {});
           }
@@ -525,6 +554,19 @@ export class ProctoringSocketClient {
     return this.remoteStreams.get(studentId) || null;
   }
 
+  public getIceConnectionState(targetKey: string): RTCIceConnectionState | null {
+    const pc = this.peerConnections.get(targetKey) ||
+      this.peerConnections.get(targetKey.toLowerCase()) ||
+      this.peerConnections.get(`admin-wall-${this.activeAssessmentId}`);
+    return pc ? pc.iceConnectionState : null;
+  }
+
+  public getPeerConnection(targetKey: string): RTCPeerConnection | null {
+    return this.peerConnections.get(targetKey) ||
+      this.peerConnections.get(targetKey.toLowerCase()) ||
+      this.peerConnections.get(`admin-wall-${this.activeAssessmentId}`) || null;
+  }
+
   public closeAllPeers(): void {
     this.peerConnections.forEach((pc) => pc.close());
     this.peerConnections.clear();
@@ -546,6 +588,21 @@ export class ProctoringSocketClient {
     this.studentDetails = null;
     this.activeAssessmentId = null;
   }
+}
+
+export function getShortNumericId(seed?: string | number | null): string {
+  if (!seed) return String(Math.floor(100 + Math.random() * 900));
+  const str = String(seed).trim();
+  // If already 2-4 digits, return directly
+  const numMatch = str.match(/\b\d{2,4}\b/);
+  if (numMatch) return numMatch[0];
+  // Generate stable numerical ID between 100 and 9999 (2 to 4 digits)
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  const numericVal = 100 + (hash % 9900);
+  return String(numericVal);
 }
 
 export const proctoringSocket = new ProctoringSocketClient();

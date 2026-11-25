@@ -28,6 +28,7 @@ export const adminNav: NavItem[] = [
   { id: 'assignments', label: 'Student Assignments', icon: 'Award', path: '/assignments', group: 'Assessments & Evaluation' },
   { id: 'grading', label: 'AI Evaluation / Grading Oversight', icon: 'PenTool', path: '/grading', group: 'Assessments & Evaluation' },
   { id: 'proctoring', label: 'Proctoring Incident Center', icon: 'Eye', path: '/proctoring', group: 'Assessments & Evaluation' },
+  { id: 'proctoring-videos', label: 'Proctoring Videos', icon: 'Video', path: '/proctoring-videos', group: 'Assessments & Evaluation' },
 
   // 6. Reports & Analytics
   { id: 'reports', label: 'Institution Reports', icon: 'BarChart3', path: '/reports', group: 'Reports & Analytics' },
