@@ -80,81 +80,9 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
   onSaveGrade,
   currentGraderName = 'Marcus Johnson (Faculty Grader)',
 }) => {
-  // Ensure default realistic cohort submissions exist if not already populated
+  // Only load authentic submissions passed in or fetched from backend
   const initialSubmissions: StudentSubmissionRecord[] = useMemo(() => {
-    if (assignment.submissions && assignment.submissions.length > 0) {
-      return assignment.submissions;
-    }
-
-    // Generate realistic submissions matching assignment count
-    const list: StudentSubmissionRecord[] = [];
-
-    // 1. Alex Thompson (Canonical student)
-    list.push({
-      id: `sub-${assignment.id}-alex`,
-      studentId: 'u-007',
-      studentName: 'Alex Thompson',
-      studentEmail: 'student@lms.demo',
-      studentRollNo: 'STU-2026-007',
-      submittedAt: assignment.learnerSubmittedAt || '2026-11-23 09:42 AM',
-      submissionUrl:
-        assignment.learnerSubmissionUrl ||
-        (assignment.submissionFormat === 'repo'
-          ? 'https://github.com/alex-thompson/hero-capstone-project'
-          : 'https://storage.venilearn.org/submissions/hero-capstone-alex-t.zip'),
-      submissionNotes:
-        'Implemented full modular architecture, unit test suites, and Dockerized deployment. See README.md for instructions.',
-      status: assignment.learnerStatus === 'graded' ? 'graded' : 'pending',
-      score: assignment.learnerScore,
-      maxScore: assignment.totalMarks,
-      letterGrade: assignment.learnerScore ? (assignment.learnerScore >= 90 ? 'A' : 'B') : undefined,
-      feedback: assignment.learnerFeedback,
-    });
-
-    // 2. Additional cohort student submissions if count > 1
-    if (assignment.submissionsCount >= 2) {
-      list.push({
-        id: `sub-${assignment.id}-david`,
-        studentId: 'u-008',
-        studentName: 'David Miller',
-        studentEmail: 'david.m@student.demo',
-        studentRollNo: 'STU-2026-008',
-        submittedAt: '2026-11-22 04:15 PM',
-        submissionUrl:
-          assignment.submissionFormat === 'repo'
-            ? 'https://github.com/david-miller/enterprise-lms-deliverable'
-            : 'https://storage.venilearn.org/submissions/david-miller-deliverable.zip',
-        submissionNotes: 'All core features completed. Added integration tests with mock database.',
-        status: assignment.gradedCount >= 2 ? 'graded' : 'pending',
-        score: assignment.gradedCount >= 2 ? Math.round(assignment.totalMarks * 0.88) : undefined,
-        maxScore: assignment.totalMarks,
-        letterGrade: assignment.gradedCount >= 2 ? 'B+' : undefined,
-        feedback: assignment.gradedCount >= 2 ? 'Great effort and clean code layout.' : undefined,
-      });
-    }
-
-    if (assignment.submissionsCount >= 3) {
-      list.push({
-        id: `sub-${assignment.id}-priya`,
-        studentId: 'u-009',
-        studentName: 'Priya Sharma',
-        studentEmail: 'priya.s@student.demo',
-        studentRollNo: 'STU-2026-009',
-        submittedAt: '2026-11-21 11:30 AM',
-        submissionUrl:
-          assignment.submissionFormat === 'repo'
-            ? 'https://github.com/priya-sharma/cloud-capstone-deliverable'
-            : 'https://storage.venilearn.org/submissions/priya-sharma-capstone.zip',
-        submissionNotes: 'Implemented microservices and CI/CD workflow.',
-        status: assignment.gradedCount >= 3 ? 'graded' : 'pending',
-        score: assignment.gradedCount >= 3 ? Math.round(assignment.totalMarks * 0.95) : undefined,
-        maxScore: assignment.totalMarks,
-        letterGrade: assignment.gradedCount >= 3 ? 'A' : undefined,
-        feedback: assignment.gradedCount >= 3 ? 'Outstanding execution and comprehensive documentation.' : undefined,
-      });
-    }
-
-    return list;
+    return Array.isArray(assignment.submissions) ? assignment.submissions : [];
   }, [assignment]);
 
   const [submissions, setSubmissions] = useState<StudentSubmissionRecord[]>(initialSubmissions);
@@ -169,14 +97,16 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
     if (assignment.id) {
       fetchAssignmentSubmissionsApi(assignment.id)
         .then((liveSubs) => {
-          if (Array.isArray(liveSubs) && liveSubs.length > 0) {
+          if (Array.isArray(liveSubs)) {
             setSubmissions(liveSubs);
-            if (!selectedSubId || !liveSubs.some((s) => s.id === selectedSubId)) {
+            if (liveSubs.length > 0 && (!selectedSubId || !liveSubs.some((s) => s.id === selectedSubId))) {
               setSelectedSubId(liveSubs[0].id);
             }
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn('Could not fetch submissions from PostgreSQL API:', err);
+        });
     }
   }, [assignment.id]);
 
@@ -185,31 +115,30 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
     return submissions.find((s) => s.id === selectedSubId) || submissions[0];
   }, [submissions, selectedSubId]);
 
-  // Form state for active submission grading
-  const [inputScore, setInputScore] = useState<number>(() => {
-    return activeSub?.score !== undefined ? activeSub.score : Math.round(assignment.totalMarks * 0.85);
+  // Form state for active submission grading - clean empty defaults (no mock 85 or canned review text)
+  const [inputScore, setInputScore] = useState<number | ''>(() => {
+    return activeSub?.score !== undefined && activeSub?.score !== null ? activeSub.score : '';
   });
   const [inputFeedback, setInputFeedback] = useState<string>(() => {
-    return (
-      activeSub?.feedback ||
-      'Solid architecture and clean code structure. Deliverable satisfies core assignment specifications. Recommendations: expand automated test coverage for boundary cases.'
-    );
+    return activeSub?.feedback || '';
   });
 
   // Re-sync form state when activeSub changes
   React.useEffect(() => {
     if (activeSub) {
-      setInputScore(activeSub.score !== undefined ? activeSub.score : Math.round(assignment.totalMarks * 0.85));
-      setInputFeedback(
-        activeSub.feedback ||
-          'Solid architecture and clean code structure. Deliverable satisfies core assignment specifications. Recommendations: expand automated test coverage for boundary cases.'
-      );
+      setInputScore(activeSub.score !== undefined && activeSub.score !== null ? activeSub.score : '');
+      setInputFeedback(activeSub.feedback || '');
+    } else {
+      setInputScore('');
+      setInputFeedback('');
     }
-  }, [activeSub?.id, assignment.totalMarks]);
+  }, [activeSub?.id]);
 
   // Helper for letter grade calculation
-  const calculateLetterGrade = (scoreVal: number, maxScoreVal: number): string => {
-    const pct = (scoreVal / (maxScoreVal || 1)) * 100;
+  const calculateLetterGrade = (scoreVal: number | '', maxScoreVal: number): string => {
+    if (scoreVal === '' || isNaN(Number(scoreVal))) return 'Pending Evaluation';
+    const num = Number(scoreVal);
+    const pct = (num / (maxScoreVal || 1)) * 100;
     if (pct >= 90) return 'A (Outstanding)';
     if (pct >= 80) return 'B (Proficient)';
     if (pct >= 70) return 'C (Satisfactory)';
@@ -725,7 +654,8 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
                           step={1}
                           required
                           value={inputScore}
-                          onChange={(e) => setInputScore(Number(e.target.value))}
+                          onChange={(e) => setInputScore(e.target.value === '' ? '' : Math.min(assignment.totalMarks, Math.max(0, Number(e.target.value))))}
+                          placeholder="e.g. 85"
                           className="form-input"
                           style={{ fontSize: '1rem', fontWeight: 700, padding: '8px 12px' }}
                         />
@@ -750,7 +680,7 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
                           border: '1px solid var(--border-subtle)',
                           fontWeight: 700,
                           fontSize: '0.9rem',
-                          color: inputScore / assignment.totalMarks >= 0.7 ? 'var(--success)' : '#f59e0b',
+                          color: typeof inputScore === 'number' && inputScore / assignment.totalMarks >= 0.7 ? 'var(--success)' : '#f59e0b',
                         }}
                       >
                         {letterGrade}
@@ -858,10 +788,19 @@ export const AssignmentGradingModal: React.FC<AssignmentGradingModalProps> = ({
                 justifyContent: 'center',
                 flexDirection: 'column',
                 color: 'var(--text-muted)',
+                padding: '30px',
+                textAlign: 'center',
               }}
             >
-              <AlertCircle size={36} style={{ opacity: 0.3, marginBottom: '10px' }} />
-              <p style={{ margin: 0, fontSize: '0.9rem' }}>Select a student submission to evaluate</p>
+              <AlertCircle size={40} style={{ opacity: 0.35, marginBottom: '12px', color: 'var(--primary)' }} />
+              <h5 style={{ margin: '0 0 6px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {submissions.length === 0 ? 'No Submissions Yet' : 'Select a Submission'}
+              </h5>
+              <p style={{ margin: 0, fontSize: '0.85rem', maxWidth: '340px', lineHeight: 1.5 }}>
+                {submissions.length === 0
+                  ? 'No students have submitted deliverables for this assignment yet. Student submissions will appear here once uploaded.'
+                  : 'Select a candidate from the roster on the left to review their deliverable, assign scores, and submit rubric feedback.'}
+              </p>
             </div>
           )}
         </div>

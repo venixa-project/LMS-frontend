@@ -73,49 +73,50 @@ export const LoginPage: React.FC = () => {
           font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
           overflow-x: hidden;
           overflow-y: auto;
-          padding: 24px 6% 24px 24px;
           box-sizing: border-box;
           text-rendering: optimizeLegibility;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
         }
 
-        /* 4K ambient lighting vignette */
+        /* Subtle lighting vignette */
         .campus-vignette-overlay {
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 82% 50%, rgba(255,255,255,0.06) 0%, rgba(15, 23, 42, 0.08) 100%);
+          background: radial-gradient(circle at 80% 50%, rgba(255,255,255,0.04) 0%, rgba(15, 23, 42, 0.06) 100%);
           pointer-events: none;
         }
 
-        /* Responsive Mobile Header */
+        /* Mobile Header */
         .campus-mobile-branding {
           display: none;
           margin-bottom: 22px;
           text-align: center;
         }
 
-        /* 4K Ultra-Crisp Frosted Glassmorphism Card */
+        /* Form Card: Seamlessly matches the single card in the 4K illustration */
         .venilearn-glass-card {
-          width: 100%;
-          max-width: 440px;
-          background: rgba(255, 255, 255, 0.88);
-          backdrop-filter: blur(28px) saturate(190%);
-          -webkit-backdrop-filter: blur(28px) saturate(190%);
-          border: 1.5px solid rgba(255, 255, 255, 0.85);
-          border-radius: 28px;
-          padding: 44px 38px;
-          box-shadow: 0 30px 60px -12px rgba(15, 23, 42, 0.2), 0 0 1px 1px rgba(255, 255, 255, 0.9) inset;
+          width: 37%;
+          max-width: 530px;
+          min-width: 380px;
+          margin-right: 2.8%;
+          background: transparent;
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+          border: none;
+          border-radius: 0;
+          box-shadow: none;
+          padding: 24px 38px;
           z-index: 10;
           position: relative;
           box-sizing: border-box;
-          animation: cardFadeSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          animation: cardFadeSlide 0.35s ease-out;
         }
 
         @keyframes cardFadeSlide {
           from {
             opacity: 0;
-            transform: translateY(14px);
+            transform: translateY(8px);
           }
           to {
             opacity: 1;
@@ -123,21 +124,21 @@ export const LoginPage: React.FC = () => {
           }
         }
 
-        /* Typography */
+        /* Typography matching Reference Image 1 */
         .venilearn-title {
-          font-size: 2.1rem;
+          font-size: 2.25rem;
           font-weight: 800;
           color: #0F172A;
           margin: 0 0 6px 0;
-          letter-spacing: -0.03em;
+          letter-spacing: -0.035em;
           line-height: 1.2;
           text-align: center;
         }
 
         .venilearn-subtitle {
-          font-size: 0.93rem;
+          font-size: 0.95rem;
           color: #64748B;
-          margin: 0 0 28px 0;
+          margin: 0 0 26px 0;
           text-align: center;
           font-weight: 500;
           line-height: 1.45;
@@ -145,7 +146,7 @@ export const LoginPage: React.FC = () => {
 
         /* Form Controls */
         .campus-field-group {
-          margin-bottom: 20px;
+          margin-bottom: 18px;
           position: relative;
         }
 
@@ -158,7 +159,7 @@ export const LoginPage: React.FC = () => {
 
         .campus-input-icon {
           position: absolute;
-          left: 16px;
+          left: 18px;
           color: #64748B;
           pointer-events: none;
           transition: color 0.2s ease;
@@ -166,8 +167,9 @@ export const LoginPage: React.FC = () => {
 
         .campus-input {
           width: 100%;
-          padding: 14px 16px 14px 48px;
-          background: rgba(255, 255, 255, 0.76);
+          height: 52px;
+          padding: 14px 16px 14px 50px;
+          background: #F1F5F9;
           border: 1.5px solid #E2E8F0;
           border-radius: 14px;
           font-size: 0.95rem;
@@ -193,7 +195,7 @@ export const LoginPage: React.FC = () => {
         }
 
         .campus-input-password {
-          padding-right: 48px;
+          padding-right: 50px;
         }
 
         .campus-eye-toggle {
@@ -206,13 +208,13 @@ export const LoginPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 4px;
+          padding: 6px;
           border-radius: 6px;
           transition: color 0.2s ease;
         }
 
         .campus-eye-toggle:hover {
-          color: #334155;
+          color: #1E293B;
         }
 
         /* Options Row: Remember Me & Forgot Password */
@@ -220,8 +222,8 @@ export const LoginPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 24px;
-          font-size: 0.88rem;
+          margin-bottom: 22px;
+          font-size: 0.9rem;
         }
 
         .campus-remember-label {
@@ -254,16 +256,17 @@ export const LoginPage: React.FC = () => {
           text-decoration: underline;
         }
 
-        /* Ultra HD Gradient Action Button */
+        /* Prominent Sign In Button matching Image 1 */
         .campus-signin-btn {
           width: 100%;
-          padding: 14px 24px;
+          height: 52px;
+          padding: 0 24px;
           border: none;
           border-radius: 14px;
           background: linear-gradient(135deg, #6366F1 0%, #3B82F6 100%);
           color: #FFFFFF;
-          font-size: 1rem;
-          font-weight: 600;
+          font-size: 1.05rem;
+          font-weight: 700;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -288,11 +291,31 @@ export const LoginPage: React.FC = () => {
           cursor: not-allowed;
         }
 
+        /* Subtle Divider matching Image 1 */
+        .campus-divider {
+          display: flex;
+          align-items: center;
+          margin: 22px 0 18px 0;
+          gap: 12px;
+        }
+
+        .campus-divider-line {
+          flex: 1;
+          height: 1px;
+          background: #E2E8F0;
+        }
+
+        .campus-divider-text {
+          font-size: 0.82rem;
+          color: #94A3B8;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+
         /* Card Footer */
         .campus-card-footer {
-          margin-top: 24px;
           text-align: center;
-          font-size: 0.88rem;
+          font-size: 0.9rem;
           color: #475569;
         }
 
@@ -320,10 +343,10 @@ export const LoginPage: React.FC = () => {
           display: flex;
           align-items: flex-start;
           gap: 10px;
-          margin-bottom: 20px;
+          margin-bottom: 18px;
         }
 
-        /* Responsive Breakpoints */
+        /* Responsive Breakpoints: Tablet & Mobile */
         @media (max-width: 960px) {
           .venilearn-campus-login-root {
             justify-content: center;
@@ -333,19 +356,31 @@ export const LoginPage: React.FC = () => {
           .campus-mobile-branding {
             display: block;
           }
+          .venilearn-glass-card {
+            width: 100%;
+            max-width: 440px;
+            min-width: 0;
+            margin-right: 0;
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            border: 1.5px solid rgba(255, 255, 255, 0.9);
+            border-radius: 26px;
+            padding: 36px 26px;
+            box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.18);
+          }
         }
 
         @media (max-width: 480px) {
           .venilearn-glass-card {
-            padding: 32px 22px;
+            padding: 30px 20px;
             border-radius: 22px;
           }
           .venilearn-title {
-            font-size: 1.7rem;
+            font-size: 1.8rem;
           }
           .campus-options-row {
-            flex-direction: row;
-            font-size: 0.82rem;
+            font-size: 0.84rem;
           }
         }
       `}</style>
@@ -473,6 +508,13 @@ export const LoginPage: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Subtle Divider matching Image 1 */}
+        <div className="campus-divider">
+          <div className="campus-divider-line" />
+          <span className="campus-divider-text">or continue with</span>
+          <div className="campus-divider-line" />
+        </div>
 
         {/* Footer: Create Account Link */}
         <div className="campus-card-footer">

@@ -24,49 +24,14 @@ export const TeamsHierarchyView: React.FC = () => {
     (e) => e.companyId === currentCompany.id || e.companyId === 'comp-1'
   );
 
-  // Initial mock teams
-  const [teams, setTeams] = useState<TeamPod[]>([
-    {
-      id: 'team-1',
-      companyId: currentCompany.id,
-      name: 'Platform Core & Cloud Squad',
-      departmentId: departments[0]?.name || 'Engineering & Product',
-      leadId: companyEmployees[0]?.id || 'emp-sa',
-      memberIds: [companyEmployees[0]?.id, companyEmployees[1]?.id, companyEmployees[5]?.id].filter(Boolean),
-      objective: 'Scalable distributed backend services, authentication tokens, and multi-tenant isolation.',
-      status: 'Active',
-    },
-    {
-      id: 'team-2',
-      companyId: currentCompany.id,
-      name: 'Design System & UX Pod',
-      departmentId: departments[0]?.name || 'Engineering & Product',
-      leadId: companyEmployees[1]?.id || 'emp-1',
-      memberIds: [companyEmployees[1]?.id, companyEmployees[6]?.id].filter(Boolean),
-      objective: 'Enterprise UI design system tokens, responsive navigation layouts, and micro-interactions.',
-      status: 'Active',
-    },
-    {
-      id: 'team-3',
-      companyId: currentCompany.id,
-      name: 'Talent Acquisition & People Ops',
-      departmentId: departments[1]?.name || 'Human Resources & People',
-      leadId: companyEmployees[2]?.id || 'emp-2',
-      memberIds: [companyEmployees[2]?.id, companyEmployees[3]?.id].filter(Boolean),
-      objective: 'End-to-end recruitment pipelines, onboarding automation, and probation confirmation tracking.',
-      status: 'Active',
-    },
-    {
-      id: 'team-4',
-      companyId: currentCompany.id,
-      name: 'Enterprise Revenue & CRM Squad',
-      departmentId: departments[3]?.name || 'Sales & Growth',
-      leadId: companyEmployees[4]?.id || 'emp-4',
-      memberIds: [companyEmployees[4]?.id].filter(Boolean),
-      objective: 'Sales pipeline stage transitions, enterprise accounts follow-up, and deal closing analytics.',
-      status: 'Active',
-    },
-  ]);
+  // Teams state initialized clean from localStorage / empty state
+  const [teams, setTeams] = useState<TeamPod[]>(() => {
+    try {
+      const stored = localStorage.getItem('venilearn_org_teams');
+      if (stored) return JSON.parse(stored);
+    } catch { }
+    return [];
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
@@ -253,7 +218,27 @@ export const TeamsHierarchyView: React.FC = () => {
 
         {/* Card Grid of Teams */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {filteredTeams.map((team) => {
+          {filteredTeams.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '3rem 1.5rem',
+              background: 'var(--bg-input)',
+              border: '1.5px dashed var(--border-subtle)',
+              borderRadius: '16px',
+              gridColumn: '1 / -1',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Users size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }} />
+              <h4 style={{ margin: '0 0 0.35rem 0', color: 'var(--text-main)', fontSize: '1rem', fontWeight: 700 }}>No Teams or Pods Configured</h4>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.825rem', maxWidth: '420px' }}>
+                Organize your organization into agile squads, pods, and functional teams. Click "Create Team / Pod" to get started.
+              </p>
+            </div>
+          ) : (
+            filteredTeams.map((team) => {
             const lead = companyEmployees.find((e) => e.id === team.leadId) || companyEmployees[0];
             const members = companyEmployees.filter((e) => team.memberIds.includes(e.id));
 
@@ -381,7 +366,7 @@ export const TeamsHierarchyView: React.FC = () => {
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
 

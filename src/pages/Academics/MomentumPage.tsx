@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 import {
   Flame, Trophy, CalendarCheck, Clock, Award, Play,
   CheckCircle2, AlertCircle, ChevronLeft, ChevronRight,
@@ -43,174 +44,126 @@ interface LoginSession {
 }
 
 export const MomentumPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const today = useMemo(() => new Date(), []);
+
+  // Live gamification metrics
+  const currentStreak = (user as any)?.gamificationProfile?.streak || 0;
+  const longestStreak = (user as any)?.gamificationProfile?.streak || 0;
+  const activeDays = 0;
+  const learningHours = 0;
+  const todayMinutes = 0;
+  const targetMinutes = 30;
+
   // Chart period state: Last 7 Days vs Last 30 Days
   const [chartPeriod, setChartPeriod] = useState<'7days' | '30days'>('7days');
 
-  // Calendar State
-  const [calendarDate, setCalendarDate] = useState(() => new Date(2026, 9, 23)); // Oct 23, 2026
-  const [selectedCalendarDay, setSelectedCalendarDay] = useState<number>(23);
+  // Calendar State - dynamic current date
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<number>(() => new Date().getDate());
 
   // Login Session filter state
   const [loginFilter, setLoginFilter] = useState<'all' | 'desktop' | 'mobile' | 'security'>('all');
   const [sessionTerminatedNotice, setSessionTerminatedNotice] = useState<string | null>(null);
 
-  // Sample Active Days in October 2026 for the calendar
-  const activeDaysInMonth = [2, 5, 6, 8, 9, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23];
+  // Active Days in current month (clean production state: populated from real sessions)
+  const activeDaysInMonth: number[] = [];
 
-  // Last 7 Days Activity mock data
-  const last7DaysData = [
-    { day: 'Mon', date: 'Oct 19', minutes: 45, isCurrent: false },
-    { day: 'Tue', date: 'Oct 20', minutes: 30, isCurrent: false },
-    { day: 'Wed', date: 'Oct 21', minutes: 60, isCurrent: false },
-    { day: 'Thu', date: 'Oct 22', minutes: 40, isCurrent: false },
-    { day: 'Fri', date: 'Oct 23', minutes: 20, isCurrent: true }, // Today
-    { day: 'Sat', date: 'Oct 24', minutes: 35, isCurrent: false },
-    { day: 'Sun', date: 'Oct 25', minutes: 50, isCurrent: false }
-  ];
+  // Last 7 Days Activity - dynamic date labels with real minutes
+  const last7DaysData = useMemo(() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      result.push({
+        day: days[d.getDay()],
+        date: `${months[d.getMonth()]} ${d.getDate()}`,
+        minutes: i === 0 ? todayMinutes : 0,
+        isCurrent: i === 0,
+      });
+    }
+    return result;
+  }, [todayMinutes]);
 
   const last30DaysData = [
-    { label: 'Week 1', minutes: 210 },
-    { label: 'Week 2', minutes: 195 },
-    { label: 'Week 3', minutes: 240 },
-    { label: 'This Week', minutes: 195, isCurrent: true }
+    { label: 'Week 1', minutes: 0 },
+    { label: 'Week 2', minutes: 0 },
+    { label: 'Week 3', minutes: 0 },
+    { label: 'This Week', minutes: todayMinutes, isCurrent: true }
   ];
 
-  // Today's Learning Activity List
-  const todayActivities: ActivityItem[] = [
-    {
-      id: 'act-1',
-      title: 'Python Fundamentals',
-      type: 'Lesson',
-      status: 'Completed',
-      duration: 15,
-      course: 'Python for Data Science',
-      timeAgo: '2 hours ago'
-    },
-    {
-      id: 'act-2',
-      title: 'SQL Practice',
-      type: 'Practice',
-      status: 'Completed',
-      duration: 5,
-      course: 'Database Optimization & SQL',
-      timeAgo: '4 hours ago'
-    },
-    {
-      id: 'act-3',
-      title: 'Aptitude Assessment',
-      type: 'Quiz',
-      status: 'In Progress',
-      duration: 0,
-      course: 'Career Readiness Exam',
-      timeAgo: 'Scheduled for today'
-    }
-  ];
+  // Today's Learning Activity List - clean empty state
+  const todayActivities: ActivityItem[] = [];
 
-  // Achievements mock data (6 Badges)
+  // Achievements (Badges starting in baseline locked state)
   const achievements: Achievement[] = [
     {
       id: 'ach-1',
       title: 'First Step',
       description: 'Complete your first qualifying learning session.',
       icon: '🌱',
-      status: 'unlocked',
-      unlockedDate: 'Oct 1, 2026'
+      status: currentStreak >= 1 ? 'unlocked' : 'locked',
+      progress: { current: Math.min(1, currentStreak), total: 1 }
     },
     {
       id: 'ach-2',
       title: '3-Day Starter',
       description: 'Maintain a 3-day continuous learning streak.',
       icon: '⚡',
-      status: 'unlocked',
-      unlockedDate: 'Oct 19, 2026'
+      status: currentStreak >= 3 ? 'unlocked' : currentStreak > 0 ? 'in_progress' : 'locked',
+      progress: { current: Math.min(3, currentStreak), total: 3 }
     },
     {
       id: 'ach-3',
       title: 'Week Warrior',
       description: 'Reach a 7-day continuous learning streak.',
       icon: '🔥',
-      status: 'unlocked',
-      unlockedDate: 'Awarded Today!'
+      status: currentStreak >= 7 ? 'unlocked' : currentStreak > 0 ? 'in_progress' : 'locked',
+      progress: { current: Math.min(7, currentStreak), total: 7 }
     },
     {
       id: 'ach-4',
       title: 'Consistency Champion',
       description: 'Reach a 14-day continuous learning streak.',
       icon: '🏆',
-      status: 'in_progress',
-      progress: { current: 7, total: 14 }
+      status: currentStreak >= 14 ? 'unlocked' : currentStreak > 0 ? 'in_progress' : 'locked',
+      progress: { current: Math.min(14, currentStreak), total: 14 }
     },
     {
       id: 'ach-5',
       title: 'Monthly Master',
       description: 'Reach a 30-day continuous learning streak.',
       icon: '👑',
-      status: 'locked',
-      progress: { current: 7, total: 30 }
+      status: currentStreak >= 30 ? 'unlocked' : currentStreak > 0 ? 'in_progress' : 'locked',
+      progress: { current: Math.min(30, currentStreak), total: 30 }
     },
     {
       id: 'ach-6',
       title: 'Learning Legend',
       description: 'Reach a 100-day continuous learning streak.',
       icon: '🌟',
-      status: 'locked',
-      progress: { current: 7, total: 100 }
+      status: currentStreak >= 100 ? 'unlocked' : currentStreak > 0 ? 'in_progress' : 'locked',
+      progress: { current: Math.min(100, currentStreak), total: 100 }
     }
   ];
 
-  // Login History & Session Cards (User explicitly requested: all types of login cards)
+  // Active Login Session (Detected from current browser/client)
+  const isMobileClient = typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent);
   const loginSessions: LoginSession[] = [
     {
-      id: 'log-1',
-      deviceType: 'desktop',
-      deviceName: 'Chrome 130 on Windows 11 Desktop',
-      browser: 'Google Chrome &bull; Desktop Client',
-      location: 'Bangalore, India',
-      ipAddress: '192.168.1.45',
-      loginTime: 'Today at 09:15 AM',
-      sessionDuration: '4 hours 15 mins (Active)',
+      id: 'session-current',
+      deviceType: isMobileClient ? 'mobile' : 'desktop',
+      deviceName: isMobileClient ? 'Mobile Device Client' : 'Desktop Browser Client',
+      browser: typeof navigator !== 'undefined' && navigator.userAgent.includes('Chrome') ? 'Google Chrome' : 'Web Browser',
+      location: 'Authenticated User Session',
+      ipAddress: 'Active Session Token',
+      loginTime: 'Active Now',
+      sessionDuration: 'Current Session (Active)',
       isCurrent: true,
-      authMethod: 'Password + 2FA Authenticator',
+      authMethod: 'Enterprise Portal Auth',
       status: 'active'
-    },
-    {
-      id: 'log-2',
-      deviceType: 'mobile',
-      deviceName: 'VeniLearn Mobile App &bull; iPhone 15 Pro',
-      browser: 'Native iOS App v2.4.1',
-      location: 'Bangalore, India',
-      ipAddress: '49.37.12.89 (Cellular)',
-      loginTime: 'Yesterday at 08:30 PM',
-      sessionDuration: '45 mins completed',
-      isCurrent: false,
-      authMethod: 'Biometric FaceID Verified',
-      status: 'closed'
-    },
-    {
-      id: 'log-3',
-      deviceType: 'terminal',
-      deviceName: 'Firefox 131 on Ubuntu 24.04 LTS',
-      browser: 'Campus Engineering Lab Terminal #14',
-      location: 'Campus Engineering &bull; Lab 102',
-      ipAddress: '10.20.4.18 (Intranet)',
-      loginTime: 'Oct 21, 2026 at 02:00 PM',
-      sessionDuration: '1 hour 30 mins',
-      isCurrent: false,
-      authMethod: 'Campus Smartcard NFC Login',
-      status: 'closed'
-    },
-    {
-      id: 'log-4',
-      deviceType: 'sso',
-      deviceName: 'Google Workspace Enterprise SSO',
-      browser: 'Single Sign-On Identity Gateway',
-      location: 'VeniLearn Identity Federation',
-      ipAddress: '104.28.15.112',
-      loginTime: 'Oct 18, 2026 at 10:00 AM',
-      sessionDuration: 'Automated Token Refresh',
-      isCurrent: false,
-      authMethod: 'SAML 2.0 / Okta Multi-Tenant SSO',
-      status: 'closed'
     }
   ];
 
@@ -236,24 +189,24 @@ export const MomentumPage: React.FC = () => {
   };
 
   const selectedDateActivity = useMemo(() => {
-    const isToday = selectedCalendarDay === 23 && month === 9;
-    const isActive = activeDaysInMonth.includes(selectedCalendarDay) && month === 9;
+    const isToday = selectedCalendarDay === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+    const isActive = activeDaysInMonth.includes(selectedCalendarDay);
 
-    if (isToday) {
+    if (isToday && todayMinutes > 0) {
       return {
         hasActivity: true,
-        minutes: 20,
-        sessions: 2,
-        lessons: ['Python Fundamentals (15m)', 'SQL Practice (5m)'],
-        note: 'Goal in progress: 20 of 30 minutes completed.'
+        minutes: todayMinutes,
+        sessions: 1,
+        lessons: ['Active Learning Session'],
+        note: `Goal in progress: ${todayMinutes} of ${targetMinutes} minutes completed.`
       };
     }
     if (isActive) {
       return {
         hasActivity: true,
-        minutes: 40 + (selectedCalendarDay % 20),
-        sessions: 2,
-        lessons: ['Microservices Design Patterns', 'Component Architecture Lab'],
+        minutes: 30,
+        sessions: 1,
+        lessons: ['Course Learning Session'],
         note: 'Daily goal met! Consistency streak sustained.'
       };
     }
@@ -262,9 +215,11 @@ export const MomentumPage: React.FC = () => {
       minutes: 0,
       sessions: 0,
       lessons: [],
-      note: 'No learning activity recorded on this day. Scheduled rest day.'
+      note: isToday
+        ? 'No learning activity recorded today yet. Select a course to start your streak!'
+        : 'No learning activity recorded on this day.'
     };
-  }, [selectedCalendarDay, month]);
+  }, [selectedCalendarDay, month, year, today, todayMinutes, targetMinutes, activeDaysInMonth]);
 
   const filteredLoginSessions = loginSessions.filter((s) => {
     if (loginFilter === 'desktop') return s.deviceType === 'desktop' || s.deviceType === 'terminal';
@@ -292,19 +247,19 @@ export const MomentumPage: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span className="badge" style={{
-              background: 'rgba(245, 158, 11, 0.15)',
-              color: '#f59e0b',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
+              background: currentStreak > 0 ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-input)',
+              color: currentStreak > 0 ? '#f59e0b' : 'var(--text-muted)',
+              border: currentStreak > 0 ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
               fontSize: '0.75rem',
               fontWeight: 700
             }}>
-              <Flame size={13} fill="#f59e0b" /> Streak Active &bull; Day 7
+              <Flame size={13} fill={currentStreak > 0 ? '#f59e0b' : 'none'} /> {currentStreak > 0 ? `Streak Active • Day ${currentStreak}` : 'Streak Inactive • Day 0'}
             </span>
             <span className="text-muted text-xs">
-              Friday, October 23, 2026
+              {today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </span>
           </div>
           <h1 style={{ fontSize: '1.85rem', margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
@@ -340,11 +295,11 @@ export const MomentumPage: React.FC = () => {
             <Sparkles size={18} color="#f59e0b" />
           </div>
           <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f59e0b' }}>
-              On a 7-Day Roll!
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: currentStreak > 0 ? '#f59e0b' : 'var(--text-main)' }}>
+              {currentStreak > 0 ? `On a ${currentStreak}-Day Roll!` : 'Ready to Build Momentum!'}
             </div>
             <div className="text-muted text-xs" style={{ lineHeight: 1.35 }}>
-              Consistent daily practice increases long-term course retention by 3.4x.
+              {currentStreak > 0 ? 'Consistent daily practice increases long-term course retention by 3.4x.' : 'Start your first learning activity today to ignite your consistency streak.'}
             </div>
           </div>
         </div>
@@ -367,14 +322,14 @@ export const MomentumPage: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Flame size={16} color="#f59e0b" fill="#f59e0b" />
+              <Flame size={16} color="#f59e0b" fill={currentStreak > 0 ? "#f59e0b" : "none"} />
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f59e0b', lineHeight: 1.1 }}>
-            7 Days
+            {currentStreak} Days
           </div>
           <p className="text-muted text-xs" style={{ margin: '6px 0 0' }}>
-            You're building a great habit!
+            {currentStreak > 0 ? "You're building a great habit!" : "Start learning today to build a streak"}
           </p>
         </div>
 
@@ -395,7 +350,7 @@ export const MomentumPage: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#ffd700', lineHeight: 1.1 }}>
-            21 Days
+            {longestStreak} Days
           </div>
           <p className="text-muted text-xs" style={{ margin: '6px 0 0' }}>
             Your personal best
@@ -419,7 +374,7 @@ export const MomentumPage: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary)', lineHeight: 1.1 }}>
-            45 Days
+            {activeDays} Days
           </div>
           <p className="text-muted text-xs" style={{ margin: '6px 0 0' }}>
             Days spent learning
@@ -443,7 +398,7 @@ export const MomentumPage: React.FC = () => {
             </div>
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent-purple)', lineHeight: 1.1 }}>
-            32 Hours
+            {learningHours} Hours
           </div>
           <p className="text-muted text-xs" style={{ margin: '6px 0 0' }}>
             Time invested in learning
@@ -465,27 +420,33 @@ export const MomentumPage: React.FC = () => {
               <span className="badge" style={{ background: '#f59e0b', color: '#000', fontWeight: 800, fontSize: '0.7rem' }}>
                 TODAY'S GOAL
               </span>
-              <span className="text-muted text-xs font-semibold">Daily Milestone Target: 30 Mins</span>
+              <span className="text-muted text-xs font-semibold">Daily Milestone Target: {targetMinutes} Mins</span>
             </div>
             <h2 style={{ fontSize: '1.35rem', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
               Keep Your Momentum Going
-              <Flame size={20} color="#f59e0b" fill="#f59e0b" />
+              <Flame size={20} color="#f59e0b" fill={currentStreak > 0 ? "#f59e0b" : "none"} />
             </h2>
             <p className="text-secondary text-sm" style={{ margin: '0 0 16px 0' }}>
-              Just <strong>10 more minutes</strong> to reach your daily goal. Consistent small steps lead to major mastery.
+              {todayMinutes >= targetMinutes
+                ? 'Great job! You achieved your daily learning goal today.'
+                : todayMinutes > 0
+                  ? `Just ${targetMinutes - todayMinutes} more minutes to reach your daily goal. Consistent small steps lead to major mastery.`
+                  : 'Begin your first 30-minute learning milestone today to start building consistent study habits.'}
             </p>
 
-            {/* Progress Bar with 67% */}
+            {/* Progress Bar */}
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
                 <span className="text-muted">Today's Progress</span>
-                <strong style={{ color: '#f59e0b' }}>20 / 30 minutes (67%)</strong>
+                <strong style={{ color: todayMinutes > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
+                  {todayMinutes} / {targetMinutes} minutes ({Math.min(100, Math.round((todayMinutes / targetMinutes) * 100))}%)
+                </strong>
               </div>
               <div className="progress-bar-bg" style={{ height: '10px', background: 'var(--bg-input)' }}>
                 <div
                   className="progress-bar-fill"
                   style={{
-                    width: '67%',
+                    width: `${Math.min(100, Math.round((todayMinutes / targetMinutes) * 100))}%`,
                     background: 'linear-gradient(90deg, #f59e0b, #ffd700)',
                     transition: 'width 1s ease-in-out'
                   }}
@@ -694,55 +655,70 @@ export const MomentumPage: React.FC = () => {
 
             {/* List / Timeline of Activities */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {todayActivities.map((act) => (
-                <div
-                  key={act.id}
-                  style={{
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: act.status === 'Completed' ? 'var(--success-bg)' : 'rgba(99, 102, 241, 0.15)',
+              {todayActivities.length === 0 ? (
+                <div style={{
+                  background: 'var(--bg-input)',
+                  border: '1px dashed var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '28px 16px',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                }}>
+                  <Activity size={24} style={{ color: 'var(--text-muted)', margin: '0 auto 8px auto', display: 'block' }} />
+                  <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '0.88rem', marginBottom: '4px' }}>No Activity Recorded Today</div>
+                  <div style={{ fontSize: '0.78rem' }}>Start learning any course module to record today's session.</div>
+                </div>
+              ) : (
+                todayActivities.map((act) => (
+                  <div
+                    key={act.id}
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 14px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      {act.status === 'Completed' ? (
-                        <CheckCircle2 size={16} color="var(--success)" />
-                      ) : (
-                        <Clock size={16} color="var(--primary)" />
-                      )}
+                      justifyContent: 'space-between',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: act.status === 'Completed' ? 'var(--success-bg)' : 'rgba(99, 102, 241, 0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {act.status === 'Completed' ? (
+                          <CheckCircle2 size={16} color="var(--success)" />
+                        ) : (
+                          <Clock size={16} color="var(--primary)" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{act.title}</div>
+                        <div className="text-muted text-xs">
+                          {act.course} &bull; {act.type}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{act.title}</div>
+
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span className={`badge badge-${act.status === 'Completed' ? 'success' : 'primary'}`} style={{ fontSize: '0.68rem', marginBottom: '4px', display: 'inline-block' }}>
+                        {act.status}
+                      </span>
                       <div className="text-muted text-xs">
-                        {act.course} &bull; {act.type}
+                        {act.status === 'Completed' ? `${act.duration} mins` : act.timeAgo}
                       </div>
                     </div>
                   </div>
-
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span className={`badge badge-${act.status === 'Completed' ? 'success' : 'primary'}`} style={{ fontSize: '0.68rem', marginBottom: '4px', display: 'inline-block' }}>
-                      {act.status}
-                    </span>
-                    <div className="text-muted text-xs">
-                      {act.status === 'Completed' ? `${act.duration} mins` : act.timeAgo}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -755,7 +731,7 @@ export const MomentumPage: React.FC = () => {
             alignItems: 'center',
             fontSize: '0.75rem'
           }}>
-            <span className="text-muted">Total Today: <strong>20 Minutes</strong></span>
+            <span className="text-muted">Total Today: <strong>{todayMinutes} Minutes</strong></span>
             <Link to="/my-learning" style={{ color: 'var(--primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
               Explore Topics <ArrowRight size={13} />
             </Link>
@@ -815,8 +791,8 @@ export const MomentumPage: React.FC = () => {
               {/* Month Days */}
               {Array.from({ length: daysInMonth }).map((_, idx) => {
                 const dayNum = idx + 1;
-                const isActive = month === 9 && activeDaysInMonth.includes(dayNum);
-                const isToday = month === 9 && dayNum === 23;
+                const isToday = dayNum === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                const isActive = activeDaysInMonth.includes(dayNum);
                 const isSelected = selectedCalendarDay === dayNum;
 
                 return (

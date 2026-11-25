@@ -108,104 +108,27 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     fetchAllCourses();
   }, [fetchAllCourses]);
 
-  // Helper to build realistic course deliverables from active courses
-  const buildCourseAssignments = useCallback((coursesList: typeof assignedCourses): CourseAssignment[] => {
-    const savedSubmissions: Record<string, Partial<CourseAssignment>> = {};
-    try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('venilearn_assignments');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((item: CourseAssignment) => {
-              if (item?.id) savedSubmissions[item.id] = item;
-            });
-          }
-        }
-      }
-    } catch {}
-
-    const defaults: CourseAssignment[] = [];
-    coursesList.forEach((c) => {
-      const capstoneId = `asg-capstone-${c.id}`;
-      const checkpointId = `asg-checkpoint-${c.id}`;
-
-      defaults.push({
-        id: capstoneId,
-        title: `${c.title}: Comprehensive Capstone Project & Architecture Review`,
-        description: `Design, implement, and deploy a production-ready application demonstrating core mastery of ${c.title}, modular components, and test-driven architecture.`,
-        courseId: c.id,
-        cohortId: (c as any).cohortId || 'all',
-        dueDate: new Date(Date.now() + 10 * 86400000).toISOString().split('T')[0],
-        totalMarks: 100,
-        submissionFormat: 'repo',
-        submissionsCount: 1,
-        gradedCount: 0,
-        status: 'active',
-        learnerStatus: 'pending',
-        ...savedSubmissions[capstoneId],
-      });
-
-      defaults.push({
-        id: checkpointId,
-        title: `${c.title}: Module Hands-On Practical Deliverable`,
-        description: `Complete the laboratory assignments and code exercises for the first modules of ${c.title}. Submit your GitHub repository or project deliverable archive.`,
-        courseId: c.id,
-        cohortId: (c as any).cohortId || 'all',
-        dueDate: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
-        totalMarks: 50,
-        submissionFormat: 'file',
-        submissionsCount: 2,
-        gradedCount: 1,
-        status: 'active',
-        learnerStatus: 'pending',
-        ...savedSubmissions[checkpointId],
-      });
-    });
-
-    // Also preserve any custom created assignments from storage
-    Object.values(savedSubmissions).forEach((s) => {
-      if (s?.id && !defaults.some((d) => d.id === s.id)) {
-        defaults.push(s as CourseAssignment);
-      }
-    });
-
-    return defaults;
-  }, []);
-
-  const [assignments, setAssignments] = useState<CourseAssignment[]>(() => {
-    return buildCourseAssignments(assignedCourses);
-  });
-
-  // Re-synchronize assignments when assignedCourses changes
-  useEffect(() => {
-    if (assignedCourses.length > 0) {
-      setAssignments((prev) => {
-        const generated = buildCourseAssignments(assignedCourses);
-        // Merge generated with any dynamic state updates
-        return generated.map((gen) => {
-          const current = prev.find((p) => p.id === gen.id);
-          return current ? { ...gen, ...current } : gen;
-        });
-      });
-    }
-  }, [assignedCourses, buildCourseAssignments]);
+  const [assignments, setAssignments] = useState<CourseAssignment[]>([]);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
 
   const loadBackendAssignments = useCallback(async () => {
     try {
+      setIsLoadingAssignments(true);
       const data = await fetchAssignmentsApi();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setAssignments(data);
-        try {
-          localStorage.setItem('venilearn_assignments', JSON.stringify(data));
-        } catch {}
       }
     } catch (err) {
-      console.warn('Could not load assignments from backend API, using local cache:', err);
+      console.warn('Could not load assignments from backend API:', err);
+    } finally {
+      setIsLoadingAssignments(false);
     }
   }, []);
 
   useEffect(() => {
+    try {
+      localStorage.removeItem('venilearn_assignments');
+    } catch {}
     loadBackendAssignments();
   }, [loadBackendAssignments]);
 
@@ -252,17 +175,18 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     });
 
     setAssignments(nextAssignments);
-    try {
-      localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
-    } catch {}
 
     // Persist to PostgreSQL backend database asynchronously
     submitAssignmentDeliverableApi(submittingAssignment.id, {
       submissionUrl: submissionDeliverable.trim(),
       submissionNotes: submissionNotes.trim() || undefined,
-    }).catch((err) => {
-      console.warn('Failed to persist deliverable to PostgreSQL API:', err);
-    });
+    })
+      .then(() => {
+        loadBackendAssignments();
+      })
+      .catch((err) => {
+        console.warn('Failed to persist deliverable to PostgreSQL API:', err);
+      });
 
     showNotice(`Deliverable for "${submittingAssignment.title}" submitted successfully!`);
     setSubmittingAssignment(null);
@@ -338,18 +262,19 @@ export const AssessmentsPage: React.FC<Props> = ({ defaultTab = 'assessments' })
     });
 
     setAssignments(nextAssignments);
-    try {
-      localStorage.setItem('venilearn_assignments', JSON.stringify(nextAssignments));
-    } catch {}
 
     // Persist published grade to PostgreSQL backend database asynchronously
     gradeAssignmentSubmissionApi(assignmentId, submissionId, {
       score,
       letterGrade,
       feedback,
-    }).catch((err) => {
-      console.warn('Failed to publish grade to PostgreSQL API:', err);
-    });
+    })
+      .then(() => {
+        loadBackendAssignments();
+      })
+      .catch((err) => {
+        console.warn('Failed to publish grade to PostgreSQL API:', err);
+      });
 
     const updatedCurrent = nextAssignments.find((a) => a.id === assignmentId);
     if (updatedCurrent) {

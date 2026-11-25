@@ -4,12 +4,8 @@ import { useAuthStore } from '../../lib/store';
 import { useCourseStore } from '../../lib/courseStore';
 import { useLiveSessionStore } from '../../lib/liveSessionStore';
 import { useCohortStore } from '../../lib/cohortStore';
-import {
-  mockCohorts,
-  mockAssessments,
-  mockGradingTasks,
-  mockLiveSessions
-} from '../../data/mockData';
+import { useAssessmentStore } from '../../lib/assessmentStore';
+import { GradingTask } from '../../types';
 import {
   BookOpen,
   UsersRound,
@@ -115,10 +111,12 @@ export const TrainerDashboardPage: React.FC = () => {
   const allCourses = useCourseStore((s) => s.courses);
   const storeSessions = useLiveSessionStore((s) => s.sessions);
   const { cohorts, fetchCohorts } = useCohortStore();
+  const { assessments: storeAssessments, fetchAssessments } = useAssessmentStore();
 
   useEffect(() => {
     fetchCohorts();
-  }, [fetchCohorts]);
+    fetchAssessments();
+  }, [fetchCohorts, fetchAssessments]);
 
   const trainerId = user?.id || 'u-004';
   const trainerName = user?.displayName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Dr. James Wilson');
@@ -219,7 +217,7 @@ export const TrainerDashboardPage: React.FC = () => {
   }, [assignedCohorts, selectedCohort, selectedCourse]);
 
   // --- 5. Teaching Schedule & Live Sessions ---
-  const rawSessions = storeSessions?.length ? storeSessions : mockLiveSessions;
+  const rawSessions = storeSessions || [];
   const trainerSessions = useMemo(() => {
     return rawSessions.filter((s) =>
       s.instructorId === trainerId ||
@@ -238,33 +236,13 @@ export const TrainerDashboardPage: React.FC = () => {
   }, [trainerSessions, selectedCourse, selectedCohort, dateRange, customStartDate, customEndDate]);
 
   // --- 6. Pending Grading Queue ---
-  const trainerGradingTasks = useMemo(() => {
-    return mockGradingTasks.filter((t) => {
-      const assessment = mockAssessments.find((a) => a.id === t.assessmentId);
-      const isCourseMatch = assessment?.courseId ? assignedCourseIds.has(assessment.courseId) : false;
-      const isTrainerMatch = t.graderId === trainerId;
-      const isDefaultAuthorized = ['asm-001', 'asm-002', 'asm-004'].includes(t.assessmentId);
-      return (isCourseMatch || isTrainerMatch || isDefaultAuthorized) && t.status !== 'completed';
-    });
-  }, [assignedCourseIds, trainerId]);
-
-  const filteredGradingTasks = useMemo(() => {
-    return trainerGradingTasks.filter((t) => {
-      const assessment = mockAssessments.find((a) => a.id === t.assessmentId);
-      if (selectedCourse !== 'all' && assessment?.courseId !== selectedCourse) return false;
-      if (selectedCohort !== 'all') {
-        const cohort = assignedCohorts.find((c) => c.id === selectedCohort);
-        if (cohort && assessment?.courseId !== cohort.courseId) return false;
-      }
-      const taskDate = t.createdAt || t.dueDate;
-      return isDateWithinRange(taskDate, dateRange, customStartDate, customEndDate);
-    });
-  }, [trainerGradingTasks, selectedCourse, selectedCohort, assignedCohorts, dateRange, customStartDate, customEndDate]);
+  const trainerGradingTasks: GradingTask[] = [];
+  const filteredGradingTasks: GradingTask[] = [];
 
   // --- 7. Assessment Deadlines ---
   const trainerAssessments = useMemo(() => {
-    return mockAssessments.filter((a) => a.courseId && assignedCourseIds.has(a.courseId));
-  }, [assignedCourseIds]);
+    return (storeAssessments || []).filter((a) => a.courseId && assignedCourseIds.has(a.courseId));
+  }, [storeAssessments, assignedCourseIds]);
 
   const filteredAssessments = useMemo(() => {
     const list = trainerAssessments.filter((a) => {
@@ -995,7 +973,7 @@ export const TrainerDashboardPage: React.FC = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
               {filteredGradingTasks.slice(0, 4).map((t) => {
-                const assessment = mockAssessments.find((a) => a.id === t.assessmentId);
+                const assessment = (storeAssessments || []).find((a) => a.id === t.assessmentId);
                 const course = assignedCourses.find((c) => c.id === assessment?.courseId);
                 const hasAiSuggestion = !!t.aiSuggestion || t.status === 'unassigned';
 
