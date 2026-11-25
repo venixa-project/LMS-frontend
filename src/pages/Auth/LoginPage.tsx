@@ -117,19 +117,21 @@ export const LoginPage: React.FC = () => {
           text-align: center;
         }
 
-        /* Form Card: Seamlessly integrates with the 8K campus artwork on desktop */
+        /* Form Card: Authentic Apple iOS Liquid Glass Card */
         .venilearn-glass-card {
-          width: 44%;
-          max-width: 530px;
-          min-width: 380px;
-          margin-right: 2.8%;
-          background: transparent;
-          backdrop-filter: none;
-          -webkit-backdrop-filter: none;
-          border: none;
-          border-radius: 0;
-          box-shadow: none;
-          padding: 24px 38px;
+          width: 100%;
+          max-width: 425px;
+          margin-right: 6.5%;
+          background: rgba(255, 255, 255, 0.70);
+          backdrop-filter: blur(28px) saturate(190%);
+          -webkit-backdrop-filter: blur(28px) saturate(190%);
+          border: 1.5px solid rgba(255, 255, 255, 0.88);
+          border-radius: 32px;
+          box-shadow: 
+            0 24px 60px -12px rgba(15, 23, 42, 0.16),
+            0 8px 24px -4px rgba(15, 23, 42, 0.08),
+            inset 0 1px 1px 0 rgba(255, 255, 255, 0.95);
+          padding: 32px 34px;
           z-index: 10;
           position: relative;
           box-sizing: border-box;
@@ -140,11 +142,12 @@ export const LoginPage: React.FC = () => {
         .campus-role-tabs {
           display: flex;
           align-items: center;
-          gap: 8px;
-          margin-bottom: 22px;
-          background: transparent;
-          padding: 0;
-          border: none;
+          gap: 6px;
+          margin-bottom: 20px;
+          background: rgba(241, 245, 249, 0.7);
+          padding: 4px;
+          border-radius: 20px;
+          border: 1px solid rgba(226, 232, 240, 0.75);
         }
 
         .campus-role-pill {
@@ -152,13 +155,13 @@ export const LoginPage: React.FC = () => {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 7px;
-          height: 40px;
-          border: 1.5px solid #E2E8F0;
-          border-radius: 24px;
-          background: #FFFFFF;
-          color: #334155;
-          font-size: 0.88rem;
+          gap: 6px;
+          height: 38px;
+          border: none;
+          border-radius: 16px;
+          background: transparent;
+          color: #475569;
+          font-size: 0.86rem;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -166,8 +169,7 @@ export const LoginPage: React.FC = () => {
 
         .campus-role-pill:hover:not(.active) {
           color: #0F172A;
-          border-color: #CBD5E1;
-          background: #F8FAFC;
+          background: rgba(255, 255, 255, 0.8);
         }
 
         .campus-role-pill.active {
@@ -181,31 +183,32 @@ export const LoginPage: React.FC = () => {
         /* Universal Laptop Screen Calibration (1280x720, 1366x768, 1440x900) */
         @media (max-height: 800px) and (min-width: 961px) {
           .venilearn-glass-card {
-            padding: 18px 30px;
-            max-width: 460px;
+            padding: 22px 28px;
+            max-width: 405px;
+            margin-right: 5.5%;
           }
           .venilearn-title {
-            font-size: 1.95rem;
-            margin-bottom: 4px;
+            font-size: 1.85rem;
+            margin-bottom: 3px;
           }
           .venilearn-subtitle {
-            margin-bottom: 14px;
-            font-size: 0.88rem;
+            margin-bottom: 12px;
+            font-size: 0.86rem;
           }
           .campus-role-tabs {
-            margin-bottom: 14px;
-          }
-          .campus-field-group {
             margin-bottom: 12px;
           }
+          .campus-field-group {
+            margin-bottom: 10px;
+          }
           .campus-input {
-            height: 48px;
+            height: 46px !important;
           }
           .campus-options-row {
-            margin-bottom: 16px;
+            margin-bottom: 14px;
           }
           .campus-signin-btn {
-            height: 48px;
+            height: 46px;
           }
         }
 
@@ -265,31 +268,47 @@ export const LoginPage: React.FC = () => {
           width: 100%;
           height: 52px;
           padding: 14px 16px 14px 50px;
-          background: rgba(255, 255, 255, 0.68);
+          background: rgba(255, 255, 255, 0.85) !important;
+          background-color: rgba(255, 255, 255, 0.85) !important;
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          border: 1.5px solid rgba(226, 232, 240, 0.9);
-          border-radius: 16px;
-          font-size: 0.95rem;
-          color: #0F172A;
-          outline: none;
-          transition: all 0.2s ease;
-          box-sizing: border-box;
+          border: 1.5px solid rgba(226, 232, 240, 0.9) !important;
+          border-radius: 16px !important;
+          font-size: 0.95rem !important;
+          color: #0F172A !important;
+          -webkit-text-fill-color: #0F172A !important;
+          outline: none !important;
+          transition: all 0.2s ease !important;
+          box-sizing: border-box !important;
+          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04) !important;
         }
 
         .campus-input::placeholder {
-          color: #64748B;
+          color: #64748B !important;
+          -webkit-text-fill-color: #64748B !important;
           font-weight: 400;
         }
 
         .campus-input:focus {
-          background: rgba(255, 255, 255, 0.94);
-          border-color: #6366F1;
-          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16);
+          background: #FFFFFF !important;
+          background-color: #FFFFFF !important;
+          border-color: #6366F1 !important;
+          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18), 0 4px 12px rgba(99, 102, 241, 0.08) !important;
         }
 
         .campus-input:focus + .campus-input-icon {
-          color: #6366F1;
+          color: #6366F1 !important;
+        }
+
+        /* Chrome Autofill & Theme Override: prevents browser dark autofill from turning inputs black */
+        .campus-input:-webkit-autofill,
+        .campus-input:-webkit-autofill:hover,
+        .campus-input:-webkit-autofill:focus,
+        .campus-input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.96) inset !important;
+          -webkit-text-fill-color: #0F172A !important;
+          box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.96) inset !important;
+          transition: background-color 5000s ease-in-out 0s !important;
         }
 
         .campus-input-password {
@@ -630,6 +649,7 @@ export const LoginPage: React.FC = () => {
               <input
                 type="email"
                 required
+                data-allow-custom="true"
                 autoComplete="email"
                 placeholder="Email Address"
                 value={email}
@@ -653,6 +673,7 @@ export const LoginPage: React.FC = () => {
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
+                data-allow-custom="true"
                 autoComplete="current-password"
                 placeholder="Password"
                 value={password}
