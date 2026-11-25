@@ -9,10 +9,14 @@ import {
   EyeOff,
   ArrowRight,
   AlertCircle,
-  GraduationCap
+  GraduationCap,
+  User,
+  Settings
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
+  type RoleTab = 'student' | 'trainer' | 'admin';
+  const [activeRoleTab, setActiveRoleTab] = useState<RoleTab>('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,6 +56,24 @@ export const LoginPage: React.FC = () => {
       if (storeState.user.mustChangePassword) {
         navigate('/change-password', { replace: true });
         return;
+      }
+      // If user selected a specific role tab, switch to it if they possess multi-role access
+      const targetRoleName = activeRoleTab === 'student' ? 'student' : (activeRoleTab === 'trainer' ? 'trainer' : 'org_admin');
+      const hasRoleAccess =
+        storeState.user.activeRole === targetRoleName ||
+        (storeState.user as any).role === targetRoleName ||
+        ((storeState.user.roles as any[]) || []).some((r: any) => (r?.name || r) === targetRoleName || (r?.name || r) === 'platform_admin' || (r?.name || r) === 'org_admin' || (r?.name || r) === 'admin') ||
+        (storeState.user as any).role === 'admin' ||
+        (storeState.user as any).role === 'org_admin' ||
+        storeState.user.activeRole === 'platform_admin' ||
+        storeState.user.activeRole === 'org_admin';
+
+      if (storeState.user.activeRole !== targetRoleName && hasRoleAccess) {
+        try {
+          await storeState.switchRole(targetRoleName as any);
+        } catch {
+          // fallback gracefully
+        }
       }
       const target = from && from !== '/login' ? from : '/dashboard';
       navigate(target, { replace: true });
@@ -94,23 +116,96 @@ export const LoginPage: React.FC = () => {
           text-align: center;
         }
 
-        /* Form Card: Seamlessly matches the single card in the 4K illustration */
+        /* Form Card: High-end frosted glassmorphism matching Image 2 */
         .venilearn-glass-card {
-          width: 37%;
-          max-width: 530px;
-          min-width: 380px;
-          margin-right: 2.8%;
-          background: transparent;
-          backdrop-filter: none;
-          -webkit-backdrop-filter: none;
-          border: none;
-          border-radius: 0;
-          box-shadow: none;
-          padding: 24px 38px;
+          width: 38%;
+          max-width: 480px;
+          min-width: 360px;
+          margin-right: 3.5%;
+          background: rgba(255, 255, 255, 0.93);
+          backdrop-filter: blur(28px) saturate(190%);
+          -webkit-backdrop-filter: blur(28px) saturate(190%);
+          border: 1.5px solid rgba(255, 255, 255, 0.95);
+          border-radius: 28px;
+          box-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.16), 0 0 1px 1px rgba(255, 255, 255, 0.9) inset;
+          padding: 32px 34px;
           z-index: 10;
           position: relative;
           box-sizing: border-box;
           animation: cardFadeSlide 0.35s ease-out;
+        }
+
+        /* 3 Role Selection Tabs matching Image 2 (Student, Trainer, Admin) */
+        .campus-role-tabs {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 22px;
+          background: transparent;
+          padding: 0;
+          border: none;
+        }
+
+        .campus-role-pill {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          height: 40px;
+          border: 1.5px solid #E2E8F0;
+          border-radius: 24px;
+          background: #FFFFFF;
+          color: #334155;
+          font-size: 0.88rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .campus-role-pill:hover:not(.active) {
+          color: #0F172A;
+          border-color: #CBD5E1;
+          background: #F8FAFC;
+        }
+
+        .campus-role-pill.active {
+          background: linear-gradient(135deg, #6347EA 0%, #4F46E5 100%);
+          border-color: transparent;
+          color: #FFFFFF;
+          font-weight: 700;
+          box-shadow: 0 4px 14px rgba(99, 71, 234, 0.32);
+        }
+
+        /* Universal Laptop Screen Calibration (1280x720, 1366x768, 1440x900) */
+        @media (max-height: 800px) and (min-width: 961px) {
+          .venilearn-glass-card {
+            padding: 24px 28px;
+            max-width: 440px;
+          }
+          .venilearn-title {
+            font-size: 1.95rem;
+            margin-bottom: 4px;
+          }
+          .venilearn-subtitle {
+            margin-bottom: 16px;
+            font-size: 0.88rem;
+          }
+          .campus-role-tabs {
+            margin-bottom: 16px;
+          }
+          .campus-field-group {
+            margin-bottom: 14px;
+          }
+          .campus-input {
+            height: 48px;
+          }
+          .campus-options-row {
+            margin-bottom: 18px;
+          }
+          .campus-signin-btn {
+            height: 48px;
+          }
         }
 
         @keyframes cardFadeSlide {
@@ -477,6 +572,34 @@ export const LoginPage: React.FC = () => {
         <h1 className="venilearn-title">Welcome Back!</h1>
         <p className="venilearn-subtitle">Sign in to continue your learning journey</p>
 
+        {/* 3 Role Selection Tabs (Student, Trainer, Admin) */}
+        <div className="campus-role-tabs">
+          <button
+            type="button"
+            onClick={() => setActiveRoleTab('student')}
+            className={`campus-role-pill ${activeRoleTab === 'student' ? 'active' : ''}`}
+          >
+            <GraduationCap size={16} />
+            <span>Student</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveRoleTab('trainer')}
+            className={`campus-role-pill ${activeRoleTab === 'trainer' ? 'active' : ''}`}
+          >
+            <User size={16} />
+            <span>Trainer</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveRoleTab('admin')}
+            className={`campus-role-pill ${activeRoleTab === 'admin' ? 'active' : ''}`}
+          >
+            <Settings size={16} />
+            <span>Admin</span>
+          </button>
+        </div>
+
         {/* Error Alert */}
         {error && (
           <div className="campus-error-alert">
@@ -501,7 +624,7 @@ export const LoginPage: React.FC = () => {
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="Enter your email address"
+                placeholder="Email Address"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -524,7 +647,7 @@ export const LoginPage: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 required
                 autoComplete="current-password"
-                placeholder="Enter your password"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
@@ -577,15 +700,8 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Subtle Divider matching Image 1 */}
-        <div className="campus-divider">
-          <div className="campus-divider-line" />
-          <span className="campus-divider-text">or continue with</span>
-          <div className="campus-divider-line" />
-        </div>
-
         {/* Footer: Create Account Link */}
-        <div className="campus-card-footer">
+        <div className="campus-card-footer" style={{ marginTop: '22px' }}>
           Don't have an account?{' '}
           <Link to="/register" className="campus-create-link">
             Create account
