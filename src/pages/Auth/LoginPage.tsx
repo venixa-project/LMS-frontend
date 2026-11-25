@@ -346,35 +346,88 @@ export const LoginPage: React.FC = () => {
           margin-bottom: 18px;
         }
 
+        .campus-field-label-row {
+          display: none;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 6px;
+          font-size: 0.88rem;
+          font-weight: 700;
+          color: #0F172A;
+        }
+
+        .campus-mobile-wave {
+          display: none;
+        }
+
         /* Responsive Breakpoints: Tablet & Mobile */
         @media (max-width: 960px) {
           .venilearn-campus-login-root {
             justify-content: center;
-            padding: 32px 16px;
-            background-position: center;
+            padding: 24px 16px 36px 16px;
+            background: #dbeafe url('/assets/mobile_seamless_bg_4k.jpg') no-repeat center center;
+            background-size: cover;
           }
           .campus-mobile-branding {
-            display: block;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 18px;
+            width: 100%;
+          }
+          .campus-mobile-subtitle-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 6px;
+            width: 100%;
+            max-width: 340px;
+          }
+          .campus-mobile-subtitle-line {
+            flex: 1;
+            height: 1.2px;
+            background: rgba(99, 102, 241, 0.35);
+            margin: 0 8px;
+          }
+          .campus-field-label-row {
+            display: flex;
           }
           .venilearn-glass-card {
             width: 100%;
-            max-width: 440px;
+            max-width: 420px;
             min-width: 0;
             margin-right: 0;
             background: rgba(255, 255, 255, 0.94);
             backdrop-filter: blur(24px) saturate(190%);
             -webkit-backdrop-filter: blur(24px) saturate(190%);
-            border: 1.5px solid rgba(255, 255, 255, 0.9);
-            border-radius: 26px;
-            padding: 36px 26px;
-            box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.18);
+            border: 1.5px solid rgba(255, 255, 255, 0.96);
+            border-radius: 32px;
+            padding: 30px 22px;
+            box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.14);
+          }
+          .campus-mobile-wave {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 22px;
+            width: 100%;
+            max-width: 420px;
+            padding: 10px 16px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #4F46E5 0%, #2563EB 100%);
+            color: #FFFFFF;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            text-align: center;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
           }
         }
 
         @media (max-width: 480px) {
           .venilearn-glass-card {
-            padding: 30px 20px;
-            border-radius: 22px;
+            padding: 26px 18px;
+            border-radius: 28px;
           }
           .venilearn-title {
             font-size: 1.8rem;
@@ -395,22 +448,29 @@ export const LoginPage: React.FC = () => {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '50px',
-            height: '50px',
-            borderRadius: '15px',
-            background: 'linear-gradient(135deg, #4F46E5 0%, #2563EB 100%)',
+            width: '56px',
+            height: '56px',
+            borderRadius: '18px',
+            background: 'linear-gradient(135deg, #7C3AED 0%, #3B82F6 100%)',
             color: '#FFFFFF',
             boxShadow: '0 8px 18px rgba(79, 70, 229, 0.35)',
-            marginBottom: '8px'
+            marginBottom: '10px'
           }}>
             {companyLogo ? (
-              <img src={companyLogo} alt={brandTitle} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+              <img src={companyLogo} alt={brandTitle} style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
             ) : (
-              <GraduationCap size={28} strokeWidth={2.4} />
+              <GraduationCap size={30} strokeWidth={2.4} />
             )}
           </div>
-          <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0F172A' }}>{brandTitle} LMS</div>
-          <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>Learn • Grow • Achieve</div>
+          <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>{brandTitle} LMS</div>
+          <div style={{ fontSize: '0.86rem', color: '#4F46E5', fontWeight: 700, marginTop: '2px' }}>Learn • Grow • Achieve</div>
+          <div className="campus-mobile-subtitle-row">
+            <div className="campus-mobile-subtitle-line" />
+            <span style={{ fontSize: '0.74rem', color: '#475569', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              Your complete learning platform for a brighter future
+            </span>
+            <div className="campus-mobile-subtitle-line" />
+          </div>
         </div>
 
         {/* Card Title & Subtitle */}
@@ -431,13 +491,17 @@ export const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit} noValidate>
           {/* Email Address Field */}
           <div className="campus-field-group">
+            <div className="campus-field-label-row">
+              <Mail size={14} style={{ color: '#0F172A' }} />
+              <span>Email Address</span>
+            </div>
             <div className="campus-input-container">
               <Mail size={19} className="campus-input-icon" />
               <input
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="Email Address"
+                placeholder="Enter your email address"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -450,13 +514,17 @@ export const LoginPage: React.FC = () => {
 
           {/* Password Field */}
           <div className="campus-field-group">
+            <div className="campus-field-label-row">
+              <Lock size={14} style={{ color: '#0F172A' }} />
+              <span>Password</span>
+            </div>
             <div className="campus-input-container">
               <Lock size={19} className="campus-input-icon" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 autoComplete="current-password"
-                placeholder="Password"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
@@ -522,6 +590,11 @@ export const LoginPage: React.FC = () => {
           <Link to="/register" className="campus-create-link">
             Create account
           </Link>
+        </div>
+
+        {/* Mobile Curved Wave Footer */}
+        <div className="campus-mobile-wave">
+          VeniLearn LMS - Educational Excellence
         </div>
       </div>
     </div>
