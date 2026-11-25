@@ -89,8 +89,8 @@ export const LoginPage: React.FC = () => {
           position: relative;
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 40px 7% 40px 7%;
+          justify-content: flex-end;
+          padding: 0;
           background: #dbeafe url('/assets/campus_login_bg.jpg') no-repeat center center;
           background-size: cover;
           font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -110,59 +110,6 @@ export const LoginPage: React.FC = () => {
           pointer-events: none;
         }
 
-        /* Desktop Left Branding Column */
-        .campus-desktop-branding-col {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          max-width: 520px;
-          z-index: 10;
-          position: relative;
-        }
-
-        .campus-desktop-logo-wrap {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 14px;
-        }
-
-        .campus-desktop-logo-badge {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 64px;
-          height: 64px;
-          border-radius: 20px;
-          background: linear-gradient(135deg, #7C3AED 0%, #3B82F6 100%);
-          color: #FFFFFF;
-          box-shadow: 0 10px 24px rgba(79, 70, 229, 0.35);
-        }
-
-        .campus-desktop-brand-name {
-          font-size: 2.75rem;
-          font-weight: 800;
-          letter-spacing: -1px;
-          line-height: 1.1;
-        }
-
-        .campus-desktop-tagline {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: #4338CA;
-          margin-bottom: 8px;
-          letter-spacing: 0.2px;
-        }
-
-        .campus-desktop-subtitle {
-          font-size: 1.05rem;
-          color: #334155;
-          font-weight: 500;
-          line-height: 1.5;
-          margin: 0;
-          max-width: 440px;
-        }
-
         /* Mobile Header */
         .campus-mobile-branding {
           display: none;
@@ -170,18 +117,19 @@ export const LoginPage: React.FC = () => {
           text-align: center;
         }
 
-        /* Form Card: Authentic iOS Liquid Glassmorphism matching Image 2 */
+        /* Form Card: Seamlessly integrates with the 8K campus artwork on desktop */
         .venilearn-glass-card {
-          width: 38%;
-          max-width: 470px;
-          min-width: 360px;
-          background: rgba(255, 255, 255, 0.60);
-          backdrop-filter: blur(30px) saturate(190%);
-          -webkit-backdrop-filter: blur(30px) saturate(190%);
-          border: 1.5px solid rgba(255, 255, 255, 0.85);
-          border-radius: 28px;
-          box-shadow: 0 25px 60px -12px rgba(15, 23, 42, 0.16), 0 0 1px 1px rgba(255, 255, 255, 0.95) inset;
-          padding: 32px 34px;
+          width: 44%;
+          max-width: 530px;
+          min-width: 380px;
+          margin-right: 2.8%;
+          background: transparent;
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+          border: none;
+          border-radius: 0;
+          box-shadow: none;
+          padding: 24px 38px;
           z-index: 10;
           position: relative;
           box-sizing: border-box;
@@ -232,34 +180,17 @@ export const LoginPage: React.FC = () => {
 
         /* Universal Laptop Screen Calibration (1280x720, 1366x768, 1440x900) */
         @media (max-height: 800px) and (min-width: 961px) {
-          .venilearn-campus-login-root {
-            padding: 24px 6% 24px 6%;
-          }
-          .campus-desktop-brand-name {
-            font-size: 2.2rem;
-          }
-          .campus-desktop-logo-badge {
-            width: 52px;
-            height: 52px;
-          }
-          .campus-desktop-tagline {
-            font-size: 1.1rem;
-            margin-bottom: 6px;
-          }
-          .campus-desktop-subtitle {
-            font-size: 0.92rem;
-          }
           .venilearn-glass-card {
-            padding: 22px 26px;
-            max-width: 440px;
+            padding: 18px 30px;
+            max-width: 460px;
           }
           .venilearn-title {
-            font-size: 1.85rem;
+            font-size: 1.95rem;
             margin-bottom: 4px;
           }
           .venilearn-subtitle {
             margin-bottom: 14px;
-            font-size: 0.86rem;
+            font-size: 0.88rem;
           }
           .campus-role-tabs {
             margin-bottom: 14px;
@@ -268,13 +199,13 @@ export const LoginPage: React.FC = () => {
             margin-bottom: 12px;
           }
           .campus-input {
-            height: 46px;
+            height: 48px;
           }
           .campus-options-row {
             margin-bottom: 16px;
           }
           .campus-signin-btn {
-            height: 46px;
+            height: 48px;
           }
         }
 
@@ -610,28 +541,6 @@ export const LoginPage: React.FC = () => {
       `}</style>
 
       <div className="campus-vignette-overlay" />
-
-      {/* Desktop Left Branding Column */}
-      <div className="campus-desktop-branding-col">
-        <div className="campus-desktop-logo-wrap">
-          <div className="campus-desktop-logo-badge">
-            {companyLogo ? (
-              <img src={companyLogo} alt={brandTitle} style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
-            ) : (
-              <GraduationCap size={38} strokeWidth={2.4} />
-            )}
-          </div>
-          <div className="campus-desktop-brand-name">
-            <span style={{ color: '#0F172A' }}>Veni</span>
-            <span style={{ color: '#4F46E5' }}>Learn</span>
-            <span style={{ color: '#0F172A', fontSize: '2rem', fontWeight: 700 }}> LMS</span>
-          </div>
-        </div>
-        <div className="campus-desktop-tagline">Learn • Grow • Achieve</div>
-        <p className="campus-desktop-subtitle">
-          Your complete learning platform for a brighter future.
-        </p>
-      </div>
 
       {/* Main Glassmorphic Login Card */}
       <div className="venilearn-glass-card">
