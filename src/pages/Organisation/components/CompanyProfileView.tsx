@@ -843,12 +843,12 @@ export const CompanyProfileView: React.FC = () => {
             {/* Row 1 */}
             {renderField('Legal Entity Name', name, setName, 'name', {
               required: true,
-              placeholder: 'RAPA TECH',
+              placeholder: 'VeniLearn Academic Institution Ltd.',
               ref: fieldRefs.name,
             })}
 
             {renderField('Trade / DBA Name', tradeName, setTradeName, 'tradeName', {
-              placeholder: 'RAPA',
+              placeholder: 'VeniLearn LMS',
             })}
 
             {renderField('Primary Switchboard Phone', phone, setPhone, 'phone', {

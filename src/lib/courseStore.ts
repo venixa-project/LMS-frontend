@@ -239,7 +239,7 @@ function buildSvgCourseBanner(params: {
 
   <!-- Curriculum Subtitle -->
   <text x="60" y="280" fill="rgba(255,255,255,0.8)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" letter-spacing="0.5">
-    RAPA TECH ACADEMIC EXCELLENCE &amp; PROFESSIONAL CERTIFICATION
+    VENILEARN ACADEMIC EXCELLENCE &amp; PROFESSIONAL CERTIFICATION
   </text>
 
   <!-- Accent Bottom Bar -->

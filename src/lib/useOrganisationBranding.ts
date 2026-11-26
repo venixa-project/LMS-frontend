@@ -7,6 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from './store';
 
 export const STORAGE_KEY_COMPANY = 'venilearn_company';
+export const STORAGE_KEY_BRANDING_VERSION = 'venilearn_branding_version';
+export const CURRENT_BRANDING_VERSION = 'v5_fresh_reset';
 
 export interface CompanyBrandingData {
   id?: string;
@@ -20,11 +22,11 @@ export interface CompanyBrandingData {
 
 export const defaultCompanyBranding: CompanyBrandingData = {
   id: 'comp-1',
-  name: 'RAPA TECH',
-  tradeName: 'RAPA TECH',
-  code: 'RAPA',
-  logo: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=150&auto=format&fit=crop&q=80',
-  website: 'https://www.rapa.tech',
+  name: 'VeniLearn Academic Institution',
+  tradeName: 'VeniLearn Academic Institution',
+  code: 'VENI-001',
+  logo: '/logo.png',
+  website: 'https://venilearn.com',
   status: 'Active',
 };
 
@@ -32,28 +34,6 @@ export const defaultCompanyBranding: CompanyBrandingData = {
  * Returns tenant fallback branding for a given organization ID
  */
 export function getFallbackForOrg(orgId?: string): CompanyBrandingData {
-  if (orgId === 'org-002') {
-    return {
-      id: 'comp-2',
-      name: 'TechStart Academy',
-      tradeName: 'TechStart Academy',
-      code: 'TSA',
-      logo: '',
-      website: 'https://techstart.edu',
-      status: 'Active',
-    };
-  }
-  if (orgId === 'org-003') {
-    return {
-      id: 'comp-3',
-      name: 'Global Education Partners',
-      tradeName: 'Global Education Partners',
-      code: 'GEP',
-      logo: '',
-      website: 'https://gep.org',
-      status: 'Active',
-    };
-  }
   return defaultCompanyBranding;
 }
 
@@ -65,6 +45,17 @@ export function getSavedCompanyBranding(orgId?: string): CompanyBrandingData {
   const fallback = getFallbackForOrg(effectiveOrgId);
 
   try {
+    const version = localStorage.getItem(STORAGE_KEY_BRANDING_VERSION);
+    if (version !== CURRENT_BRANDING_VERSION) {
+      // Clear out legacy RAPA TECH or old demo company caches
+      localStorage.removeItem(STORAGE_KEY_COMPANY);
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith(`${STORAGE_KEY_COMPANY}_`))
+        .forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem(STORAGE_KEY_BRANDING_VERSION, CURRENT_BRANDING_VERSION);
+      return fallback;
+    }
+
     // If tenant-specific key exists, check that first
     if (effectiveOrgId && effectiveOrgId !== 'org-001') {
       const tenantKey = `${STORAGE_KEY_COMPANY}_${effectiveOrgId}`;
@@ -72,7 +63,11 @@ export function getSavedCompanyBranding(orgId?: string): CompanyBrandingData {
       if (tenantRaw) {
         const parsed = JSON.parse(tenantRaw);
         if (parsed && typeof parsed === 'object') {
-          return { ...fallback, ...parsed };
+          if (parsed.name?.includes('RAPA') || parsed.tradeName?.includes('RAPA')) {
+            localStorage.removeItem(tenantKey);
+          } else {
+            return { ...fallback, ...parsed };
+          }
         }
       }
     }
@@ -81,6 +76,10 @@ export function getSavedCompanyBranding(orgId?: string): CompanyBrandingData {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
+        if (parsed.name?.includes('RAPA') || parsed.tradeName?.includes('RAPA')) {
+          localStorage.removeItem(STORAGE_KEY_COMPANY);
+          return fallback;
+        }
         return { ...fallback, ...parsed };
       }
     }
@@ -169,11 +168,11 @@ export function useOrganisationBranding(orgIdOverride?: string): UseOrganisation
     [effectiveOrgId]
   );
 
-  const companyName = branding.tradeName || branding.name || 'RAPA TECH';
-  const legalName = branding.name || 'RAPA TECH';
-  const companyLogo = branding.logo || '';
-  const hasCustomLogo = Boolean(companyLogo && companyLogo.trim().length > 0);
-  const companyCode = branding.code || 'RAPA';
+  const companyName = branding.tradeName || branding.name || 'VeniLearn Academic Institution';
+  const legalName = branding.name || 'VeniLearn Academic Institution';
+  const companyLogo = branding.logo || '/logo.png';
+  const hasCustomLogo = Boolean(companyLogo && companyLogo.trim().length > 0 && companyLogo !== '/logo.png');
+  const companyCode = branding.code || 'VENI-001';
 
   return {
     companyName,

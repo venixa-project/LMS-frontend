@@ -179,7 +179,7 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
           authorizedSignerName: c.authorizedSignerName || 'Dr. James Wilson',
           authorizedSignerTitle: c.authorizedSignerTitle || 'Dean of Academic Affairs',
           organizationId: c.tenantId,
-          issuingOrganization: c.issuingOrganization || 'RAPA TECH',
+          issuingOrganization: c.issuingOrganization || 'VeniLearn Academic Institution',
           scoreAchieved: c.scoreAchieved ? Number(c.scoreAchieved) : 100,
           completionPercentage: c.completionPercentage || 100,
         }));
@@ -226,7 +226,7 @@ export const useCertificateStore = create<CertificateState>((set, get) => ({
           authorizedSignerName: c.authorizedSignerName || 'Dr. James Wilson',
           authorizedSignerTitle: c.authorizedSignerTitle || 'Dean of Academic Affairs',
           organizationId: c.tenantId,
-          issuingOrganization: c.issuingOrganization || 'RAPA TECH',
+          issuingOrganization: c.issuingOrganization || 'VeniLearn Academic Institution',
           scoreAchieved: c.scoreAchieved ? Number(c.scoreAchieved) : 100,
           completionPercentage: c.completionPercentage || 100,
         };
