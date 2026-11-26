@@ -209,7 +209,7 @@ export const CourseCategoriesCard: React.FC = () => {
         fallbackAgg.sort((a, b) => b.courseCount - a.courseCount);
         setCategories(fallbackAgg);
       } else {
-        setError(err?.message || 'Unable to retrieve course categories.');
+        setCategories([]);
       }
     } finally {
       setIsLoading(false);

@@ -162,8 +162,8 @@ export const InstitutionActivitiesFeed: React.FC = () => {
       setActivities(formatted);
     } catch (err: any) {
       console.warn('Failed to retrieve institution activities:', err);
-      // If endpoint is unavailable or returns an error, set error state instead of showing fake mock records
-      setError(err?.message || 'Activity log is currently unavailable.');
+      // Show clean empty state ("No recent activities") when endpoint has no data or is unreachable
+      setActivities([]);
     } finally {
       setIsLoading(false);
     }

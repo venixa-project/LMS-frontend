@@ -165,7 +165,7 @@ export const TopPerformingCourses: React.FC = () => {
         mapped.sort((a, b) => b.enrolledLearners - a.enrolledLearners);
         setCourses(mapped.slice(0, 4));
       } else {
-        setError(err?.message || 'Unable to retrieve course performance data.');
+        setCourses([]);
       }
     } finally {
       setIsLoading(false);

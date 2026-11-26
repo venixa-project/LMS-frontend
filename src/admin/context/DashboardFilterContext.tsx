@@ -66,34 +66,6 @@ const DEFAULT_END_DATE = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
 const past6m = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 const DEFAULT_START_DATE = `${past6m.getFullYear()}-${pad(past6m.getMonth() + 1)}-01`;
 
-const generateFallbackAnalytics = (activeCount: number) => {
-  const monthNames = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
-  const fullNames = ['June 2026', 'July 2026', 'August 2026', 'September 2026', 'October 2026', 'November 2026'];
-  const growth = monthNames.map((m, idx) => {
-    const factor = (idx + 1) / monthNames.length;
-    const active = Math.max(2, Math.round(activeCount * factor));
-    const enr = Math.max(1, Math.round((activeCount / 6) * (0.8 + 0.3 * Math.sin(idx))));
-    return {
-      month: `${m} 2026`,
-      monthShort: m,
-      periodName: fullNames[idx],
-      activeLearners: active,
-      newEnrollments: enr,
-      completions: Math.round(enr * 0.4),
-      growthRatePct: idx === 0 ? 0 : Math.round((enr / active) * 100),
-      x: 0,
-      y: 0,
-    };
-  });
-  const stats = growth.map((g) => ({
-    label: g.monthShort,
-    periodName: g.periodName,
-    enrollments: g.activeLearners,
-    completions: g.completions,
-  }));
-  return { monthlyGrowthData: growth, enrollmentStatsData: stats };
-};
-
 export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { courses, fetchCourses } = useCourseStore();
   const { fetchPeople, users: peopleUsers } = usePeopleStore();
@@ -109,7 +81,10 @@ export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ chi
   const [analyticsData, setAnalyticsData] = useState<{
     monthlyGrowthData: MonthlyGrowthPoint[];
     enrollmentStatsData: CourseStatBarItem[];
-  }>(() => generateFallbackAnalytics(17));
+  }>({
+    monthlyGrowthData: [],
+    enrollmentStatsData: [],
+  });
 
   const initialLoadedRef = React.useRef(false);
 
@@ -146,9 +121,11 @@ export const DashboardFilterProvider: React.FC<{ children: ReactNode }> = ({ chi
           monthlyGrowthData: analyticsRes.data.monthlyGrowthData,
           enrollmentStatsData: analyticsRes.data.enrollmentStatsData || [],
         });
-      } else if (!analyticsRes || !analyticsRes.data) {
-        const enrolledCount = kpiRes?.data?.totalEnrolledStudents || 17;
-        setAnalyticsData(generateFallbackAnalytics(enrolledCount || 17));
+      } else {
+        setAnalyticsData({
+          monthlyGrowthData: [],
+          enrollmentStatsData: [],
+        });
       }
     } catch (err) {
       console.warn('Failed to load dashboard backend data:', err);
